@@ -77,6 +77,7 @@ repos:
         entry: pixi run -e dev python scripts/verify_markdown_rules.py --fix
         language: system
         files: ^(docs/|\.agents/|README\.md)
+        exclude: ^docs/latex/concept_design/considerations/
         pass_filenames: false
 
       - id: validate-okf
