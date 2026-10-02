@@ -71,3 +71,14 @@ models/checkpoints/
 
 # UV ban
 uv.lock
+
+# LaTeX Build Artifacts
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.toc
+_minted*/
