@@ -1,0 +1,177 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "taxon-vision-mlops"
+version = "0.1.0"
+description = "Automated end-to-end MLOps pipeline for species identification from citizen-science photographs."
+authors = [{ name = "Benjamin Förster", email = "mail@benjamin-foerster.de" }]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    "timm>=1.0.14",
+    "numpy>=1.26.0",
+    "pillow>=11.0.0",
+    "polars>=1.20.0",
+    "duckdb>=1.1.0",
+    "scikit-learn>=1.6.0",
+    "scipy>=1.14.0",
+    "httpx>=0.28.0",
+    "jinja2>=3.1.5",
+    "python-multipart>=0.0.20",
+    "dvc>=3.58.0",
+    "dvc-s3>=3.2.0",
+    "onnxruntime>=1.20.0",
+    "prometheus-client>=0.21.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-cov>=6.0.0",
+    "pytest-asyncio>=0.25.0",
+    "pytest-benchmark>=5.0.0",
+    "pytest-mock>=3.14.0",
+    "hypothesis>=6.120.0",
+    "ruff>=0.9.0",
+    "mypy>=1.14.0",
+    "pre-commit>=4.0.0",
+    "zensical>=0.0.65",
+    "mkdocstrings[python]>=0.27.0",
+    "mkdocs-htmlproofer-plugin>=1.5.0",
+    "pyyaml>=6.0.2",
+    "types-PyYAML>=6.0.12",
+    "types-requests>=2.32.0",
+    "nbstripout>=0.8.0",
+    "complexipy>=8.0.1,<9",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/taxon_vision"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+force-exclude = true
+extend-exclude = [".pixi", "scratch", "notebooks", "site"]
+cache-dir = ".cache/ruff_cache"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "ARG", "TCH", "FA", "N", "RUF", "D"]
+ignore = [
+    "D100", # Missing docstring in public module
+    "D101", # Missing docstring in public class
+    "D102", # Missing docstring in public method
+    "D103", # Missing docstring in public function
+    "D104", # Missing docstring in public package
+    "D107", # Missing docstring in __init__
+    "B008", # FastAPI File/Depends in route parameters
+    "TC001", # Move type imports
+    "TC", # Type checking imports
+    "N812", # Lowercase functional as F
+    "E501", # Line length
+    "ARG001", # Unused function argument
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+known-first-party = ["taxon_vision"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = false
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_any_generics = false
+check_untyped_defs = true
+ignore_missing_imports = true
+explicit_package_bases = true
+exclude = ["scratch/", "notebooks/", "site/"]
+cache_dir = ".cache/mypy_cache"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "--cov=src/taxon_vision --cov-report=term-missing --cov-report=html --cov-report=xml"
+cache_dir = ".cache/pytest_cache"
+filterwarnings = [
+    "ignore::FutureWarning",
+    "ignore::DeprecationWarning",
+]
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.pypi-options]
+index-strategy = "unsafe-best-match"
+extra-index-urls = [
+    "https://download.pytorch.org/whl/cu121",
+    "https://download.pytorch.org/whl/cpu",
+]
+
+[tool.pixi.pypi-dependencies]
+taxon-vision-mlops = { path = ".", editable = true }
+
+[tool.pixi.dependencies]
+python = "3.12.*"
+just = ">=1.39.0"
+jupyter = "*"
+jupyterlab = "*"
+ipykernel = "*"
+pip = "*"
+matplotlib = ">=3.9.0"
+pandas = ">=2.2.0"
+pillow = ">=11.0.0"
+requests = ">=2.32.0"
+scikit-learn = ">=1.6.0"
+pynvml = ">=11.5.0"
+optuna = ">=4.1.0"
+
+[tool.pixi.feature.gpu.dependencies]
+cuda-version = "12.*"
+cuda-libraries = "12.*"
+cuda-cupti = "12.*"
+cuda-nvcc = "12.*"
+cudnn = ">=9.0,<10"
+
+[tool.pixi.feature.gpu.pypi-dependencies]
+torch = { version = "==2.5.1", index = "https://download.pytorch.org/whl/cu121" }
+torchvision = { version = "==0.20.1", index = "https://download.pytorch.org/whl/cu121" }
+torchaudio = { version = "==2.5.1", index = "https://download.pytorch.org/whl/cu121" }
+onnxruntime-gpu = ">=1.20.0"
+
+[tool.pixi.feature.cpu.pypi-dependencies]
+torch = { version = "==2.5.1", index = "https://download.pytorch.org/whl/cpu" }
+torchvision = { version = "==0.20.1", index = "https://download.pytorch.org/whl/cpu" }
+torchaudio = { version = "==2.5.1", index = "https://download.pytorch.org/whl/cpu" }
+
+[tool.pixi.environments]
+default = { features = ["gpu"], solve-group = "default" }
+dev = { features = ["dev", "gpu"], solve-group = "default" }
+ci = { features = ["cpu"], solve-group = "ci" }
+ci-dev = { features = ["dev", "cpu"], solve-group = "ci" }
+
+[tool.pixi.target.linux-64.activation.env]
+LD_LIBRARY_PATH = "$CONDA_PREFIX/lib:${LD_LIBRARY_PATH:-}"
+
+[tool.pixi.tasks]
+api = { cmd = "uvicorn taxon_vision.service.api:app --host 0.0.0.0 --port 8000 --reload" }
+train = { cmd = "python -m taxon_vision.pipelines.train" }
+pareto = { cmd = "python scripts/benchmark_pareto.py" }
+calibrate = { cmd = "python scripts/calibrate_conformal.py" }
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["D"]
+"scripts/**/*.py" = ["D"]

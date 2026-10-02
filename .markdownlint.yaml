@@ -1,0 +1,11 @@
+default: true
+
+# Rule 04-markdown-formatting.md: Use `*` for all unordered lists
+MD004:
+  style: asterisk
+
+# Ignore multiple top-level headings (Conflicts with OKF YAML Frontmatter)
+MD025: false
+
+# Disable line-length limits to allow for natural prose and math formulas
+MD013: false

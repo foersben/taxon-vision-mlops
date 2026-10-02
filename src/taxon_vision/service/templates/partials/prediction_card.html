@@ -1,0 +1,24 @@
+<div class="card result-card">
+  <h2>Classification Result</h2>
+  <div class="taxon-badge">
+    <span class="scientific-name">{{ scientific_name }}</span>
+    <span class="common-name">({{ common_name }})</span>
+  </div>
+  <div class="metrics">
+    <p>Confidence: <strong>{{ "%.1f"|format(confidence * 100) }}%</strong></p>
+    <p>Inference Latency: <strong>{{ "%.1f"|format(latency_ms) }} ms</strong></p>
+  </div>
+  <div class="conformal-box">
+    <h4>Conformal Prediction Set (Nominal Coverage 95%):</h4>
+    <div class="badges">
+      {% for species in conformal_set %}
+        <span class="badge">{{ species }}</span>
+      {% endfor %}
+    </div>
+  </div>
+  {% if requires_human_review %}
+    <div class="alert warning">
+      ⚠️ High ambiguity or out-of-distribution signal. Flagged for expert review.
+    </div>
+  {% endif %}
+</div>

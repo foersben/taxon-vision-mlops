@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "taxon-vision-orchestrator": {
+      "command": "pixi",
+      "args": ["run", "-e", "dev", "python", "-m", "taxon_vision.monitoring.telemetry"]
+    }
+  }
+}

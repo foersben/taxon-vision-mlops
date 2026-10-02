@@ -1,0 +1,7 @@
+# Conformal Prediction Invariant Configuration
+calibration:
+  method: "split-conformal"
+  nominal_coverage: 0.95
+  alpha: 0.05
+  max_set_size_for_auto_accept: 3
+  empty_set_action: "route_to_human_triage"

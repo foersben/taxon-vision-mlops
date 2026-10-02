@@ -1,0 +1,87 @@
+minimum_pre_commit_version: "3.7.0"
+default_stages: [pre-commit]
+exclude: ^(site/|docs/viz\.html|\.cache/|\.pixi/|scratch/)
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^(\.agents/|docs/)
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+        args: [--unsafe]
+      - id: check-toml
+      - id: check-added-large-files
+        args: ['--maxkb=5000']
+      - id: check-merge-conflict
+      - id: check-case-conflict
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.43.0
+    hooks:
+      - id: markdownlint
+        args: ["--fix"]
+
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.3
+    hooks:
+      - id: codespell
+        additional_dependencies: [tomli]
+        args: ["--skip", "*.lock,*.json,./site/*,./docs/viz.html", "-L", "taxa,taxon,inat,darwincore"]
+        exclude: \.ipynb$
+
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.9.1
+    hooks:
+      - id: nbstripout
+        files: ^(notebooks/|scratch/)
+
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: Ruff Linting & Quality Checks
+        entry: pixi run -e dev ruff check --fix
+        language: system
+        types: [python]
+
+      - id: ruff-format
+        name: Ruff Formatting
+        entry: pixi run -e dev ruff format
+        language: system
+        types: [python]
+
+      - id: mypy
+        name: Strict Mypy Type Checking
+        entry: pixi run -e dev mypy src scripts
+        language: system
+        files: ^(src/|scripts/|pyproject\.toml)
+        pass_filenames: false
+        types: [python]
+
+      - id: validate-okf
+        name: Enforce Google Open Knowledge Format (OKF v0.2)
+        entry: pixi run -e dev python scripts/validate_okf.py
+        language: system
+        files: ^(docs/|\.agents/).*\.md$
+        pass_filenames: true
+
+      - id: audit-license-compliance
+        name: Audit iNaturalist Open License Compliance
+        entry: pixi run -e dev python scripts/audit_license_compliance.py
+        language: system
+        files: ^src/taxon_vision/data/
+        pass_filenames: false
+
+      - id: enforce-author-identity
+        name: Enforce GPG/SSH Signed Commits
+        entry: bash -c '[ "$(git config --bool commit.gpgsign)" = "true" ]'
+        language: system
+        pass_filenames: false

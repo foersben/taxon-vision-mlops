@@ -1,0 +1,70 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[codz]
+*$py.class
+*.so
+
+# C extensions & wheels
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py.cover
+.hypothesis/
+.pytest_cache/
+.complexipy_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Jupyter Notebook & Scratch
+.ipynb_checkpoints/
+scratch/
+
+# Environments
+.env
+.envrc
+.venv/
+env/
+venv/
+
+# Pixi
+.pixi/
+
+# Site documentation
+/site/
+site/
+
+# Data & Model weights (DVC tracked)
+data/raw/
+data/processed/
+data/sample/*.jpg
+data/sample/*.jpeg
+data/sample/*.png
+models/checkpoints/
+*.onnx
+*.pth
+*.pt

@@ -1,0 +1,23 @@
+# TaxonVision-MLOps Default Application Configuration
+service:
+  name: "TaxonVision Service"
+  version: "0.1.0"
+  port: 8000
+  host: "0.0.0.0"
+  max_image_upload_bytes: 15728640  # 15 MB
+  allowed_mime_types: ["image/jpeg", "image/png", "image/webp"]
+
+model:
+  default_extractor: "bioclip-2"
+  image_size: 224
+  onnx_model_path: "models/checkpoints/taxon_vision_quantized.onnx"
+  temperature: 1.0
+
+conformal:
+  alpha: 0.05
+  k_max: 3
+  quantile_threshold: 0.85
+
+ood:
+  energy_threshold: -12.5
+  entropy_threshold: 2.8

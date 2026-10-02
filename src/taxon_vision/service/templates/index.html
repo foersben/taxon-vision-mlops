@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="upload-section">
+  <h1>Citizen Science Species Identification</h1>
+  <p class="subtitle">Submit an open-licensed observation photograph to obtain species classification with conformal confidence bounds.</p>
+
+  <form id="upload-form"
+        hx-post="/ui/predict-htmx"
+        hx-target="#prediction-result"
+        hx-swap="innerHTML"
+        enctype="multipart/form-data">
+    <div class="dropzone">
+      <input type="file" id="file" name="file" accept="image/*" required>
+      <label for="file">Drop observation photograph here or click to browse</label>
+    </div>
+    <button type="submit" class="btn primary">Classify Observation</button>
+  </form>
+</section>
+
+<section id="prediction-result" class="result-section">
+  <!-- HTMX dynamic target -->
+</section>
+{% endblock %}

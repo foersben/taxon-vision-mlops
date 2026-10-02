@@ -1,0 +1,77 @@
+[project]
+site_name = "TaxonVision-MLOps"
+site_description = "Automated End-to-End MLOps Pipeline for Species Identification from Photographs"
+site_url = "https://foersben.github.io/taxon-vision-mlops/"
+repo_name = "foersben/taxon-vision-mlops"
+repo_url = "https://github.com/foersben/taxon-vision-mlops"
+docs_dir = "docs"
+site_dir = "site"
+language = "en"
+
+extra_css = ["https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"]
+extra_javascript = [
+    "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js",
+    "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js",
+    "https://unpkg.com/mermaid@10/dist/mermaid.min.js",
+    "javascripts/katex.js",
+]
+
+[project.theme]
+variant = "modern"
+features = [
+    "navigation.tabs",
+    "navigation.sections",
+    "navigation.top",
+    "toc.integrate",
+    "search.suggest",
+    "search.highlight",
+    "content.code.copy",
+]
+
+[project.theme.palette]
+scheme = "slate"
+primary = "black"
+accent = "emerald"
+
+[project.theme.icon]
+repo = "fontawesome/brands/github"
+
+[project.markdown_extensions]
+admonition = {}
+tables = {}
+"pymdownx.details" = {}
+"pymdownx.inlinehilite" = {}
+"pymdownx.arithmatex" = { generic = true }
+"pymdownx.superfences" = { custom_fences = [
+    { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+] }
+
+[[project.nav]]
+Home = "index.md"
+
+[[project.nav]]
+"Foundations" = [
+    { "Taxonomy & DarwinCore" = "foundations/taxonomy_and_darwincore.md" },
+    { "iNaturalist Data Ecosystem" = "foundations/inaturalist_data_ecosystem.md" },
+]
+
+[[project.nav]]
+"MLOps Pipelines" = [
+    { "Ingestion & Versioning" = "mlops_pipeline/ingestion_and_versioning.md" },
+    { "Backbone Pareto Benchmarks" = "mlops_pipeline/backbone_benchmarking_pareto.md" },
+    { "ONNX Runtime Optimization" = "mlops_pipeline/onnx_optimization_and_latency.md" },
+]
+
+[[project.nav]]
+"Uncertainty & Safety" = [
+    { "Conformal Prediction Theory" = "uncertainty_and_safety/conformal_prediction_theory.md" },
+    { "OOD & Empty Frame Detection" = "uncertainty_and_safety/ood_and_empty_frame_detection.md" },
+    { "Active Learning & Human Review" = "uncertainty_and_safety/active_learning_and_hitl.md" },
+]
+
+[[project.nav]]
+"Operations" = [
+    { "API Reference" = "operations/api_reference.md" },
+    { "Prometheus Observability" = "operations/prometheus_and_observability.md" },
+    { "Deployment Runbook" = "operations/deployment_runbook.md" },
+]

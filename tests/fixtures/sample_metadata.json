@@ -1,0 +1,23 @@
+[
+  {
+    "observation_id": "inat_1001",
+    "license_code": "CC-BY",
+    "image_url": "https://inaturalist-open-data.s3.amazonaws.com/photos/1001/medium.jpg",
+    "attribution": "(c) Jane Doe",
+    "is_open_dataset_verified": true
+  },
+  {
+    "observation_id": "inat_1002",
+    "license_code": "CC0",
+    "image_url": "https://inaturalist-open-data.s3.amazonaws.com/photos/1002/medium.jpg",
+    "attribution": "Public Domain",
+    "is_open_dataset_verified": true
+  },
+  {
+    "observation_id": "inat_1003",
+    "license_code": "CC-BY-NC",
+    "image_url": "https://inaturalist-open-data.s3.amazonaws.com/photos/1003/medium.jpg",
+    "attribution": "(c) Citizen Naturalist",
+    "is_open_dataset_verified": true
+  }
+]

@@ -1,0 +1,109 @@
+name: CI & Deployment Pipeline
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  quality-gate:
+    name: Code, Security & Type Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Pixi Environment (CPU ci-dev)
+        uses: prefix-dev/setup-pixi@v0.10.2
+        with:
+          environments: ci-dev
+
+      - name: Pre-Commit Quality Checks
+        run: SKIP=enforce-author-identity pixi run --frozen -e ci-dev pre-commit run --all-files
+
+      - name: Pass 1 - Unit Tests & Coverage
+        run: |
+          pixi run --frozen -e ci-dev pytest tests/unit/ --cov=src/taxon_vision --cov-report=xml -o "addopts="
+          pixi run --frozen -e ci-dev uvx diff-cover coverage.xml --fail-under=80
+
+      - name: Pass 2 - Integration & Conformal Invariants
+        run: |
+          pixi run --frozen -e ci-dev pytest tests/integration/ tests/invariants/ -x -q -o "addopts="
+
+  cognitive-complexity:
+    name: Complexipy Cognitive Complexity
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Pixi Environment
+        uses: prefix-dev/setup-pixi@v0.10.2
+        with:
+          environments: ci-dev
+
+      - name: Run Complexipy Scan
+        run: |
+          [ -d .cache/.complexity_cache ] && mv .cache/.complexity_cache .complexipy_cache || true
+          pixi run --frozen -e ci-dev complexipy src/ --output-format sarif --output metrics-results.sarif --ignore-complexity
+          pixi run --frozen -e ci-dev complexipy src/ --failed || true
+
+      - name: Upload Bottlenecks to GitHub Code Scanning
+        if: "!env.ACT"
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: metrics-results.sarif
+
+  architectural-profiling:
+    name: Architecture & Line Count Profile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Generate SCC Report
+        run: docker run --rm -v "${{ github.workspace }}:/pwd:ro" ghcr.io/boyter/scc:master scc --exclude-dir examples,scratch /pwd
+
+  deploy-docs:
+    name: Build & Deploy Documentation
+    needs: [quality-gate, cognitive-complexity]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Pixi Environment
+        uses: prefix-dev/setup-pixi@v0.10.2
+        with:
+          environments: ci-dev
+
+      - name: Generate OKF Knowledge Graph Visualization
+        run: pixi run --frozen -e ci-dev python scripts/visualize_okf.py
+
+      - name: Build Docs with Zensical
+        run: pixi run --frozen -e ci-dev zensical build --strict
+
+      - name: Upload Pages Artifact
+        if: ${{ !env.ACT }}
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: ./site
+
+      - name: Deploy to GitHub Pages
+        if: ${{ !env.ACT }}
+        id: deployment
+        uses: actions/deploy-pages@v5

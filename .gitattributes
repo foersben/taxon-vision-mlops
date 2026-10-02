@@ -1,0 +1,8 @@
+* text=auto eol=lf
+*.ipynb filter=nbstripout
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.onnx binary
+*.pt binary
+*.pth binary
