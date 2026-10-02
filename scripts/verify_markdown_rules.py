@@ -6,7 +6,7 @@
 Enforces:
 1. Standard ASCII hyphen ('-') exclusively; ban en-dash (\u2013) and em-dash (\u2014).
 2. Unordered lists MUST use asterisk ('*').
-3. List syntax: exactly 1 space after '*', indented in multiples of 2 spaces (0 spaces at level 0).
+3. List syntax: exactly 1 space after '*', indented in multiples of 4 spaces (0 spaces at level 0).
 4. Exactly 1 blank line before/after lists, code blocks, and headings.
 5. Zero trailing whitespace at line ends.
 """
@@ -85,12 +85,14 @@ def verify_file(path: Path, fix: bool = False) -> list[str]:
                     errors.append(f"Line {i}: List marker '*' must be followed by exactly 1 space.")
                     if fix:
                         line = f"{indent}* {rest}"
-                # Indentation must be multiple of 2 spaces
-                if len(indent) % 2 != 0:
-                    errors.append(f"Line {i}: List indentation must be a multiple of 2 spaces (got {len(indent)}).")
+                # Indentation must be multiple of 4 spaces
+                if len(indent) % 4 != 0:
+                    errors.append(f"Line {i}: List indentation must be a multiple of 4 spaces (got {len(indent)}).")
                     if fix:
-                        fixed_indent = " " * (len(indent) - (len(indent) % 2))
-                        line = f"{fixed_indent}* {rest}"
+                        target_indent = round(len(indent) / 4) * 4
+                        if target_indent == 0 and len(indent) > 0:
+                            target_indent = 4
+                        line = f"{' ' * target_indent}* {rest}"
 
         new_lines.append(line)
 

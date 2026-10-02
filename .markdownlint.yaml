@@ -4,9 +4,9 @@ default: true
 MD004:
   style: asterisk
 
-# Rule 04: Indent 2 spaces per level
+# Rule 04: Indent 4 spaces per level
 MD007:
-  indent: 2
+  indent: 4
 
 # Rule 04: No trailing whitespace
 MD009: true
