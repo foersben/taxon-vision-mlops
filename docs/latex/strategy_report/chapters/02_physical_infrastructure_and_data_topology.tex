@@ -1,0 +1,40 @@
+% !TeX root = ../strategy_report.tex
+\chapter{Physical Infrastructure and Data Topology}
+\label{ch:infrastructure_topology}
+
+The computational demands of high-throughput vision architectures dictate strict physical and operational determinism. Moving beyond volatile cloud abstractions, this chapter establishes the bare-metal hardware topography, memory budgeting, and cryptographic data storage strategies necessary to sustain continuous model training and real-time inference without performance degradation or unnecessary cloud expenditures.
+
+\section{Heterogeneous Silicon and Thermal Determinism}
+Training and deploying dense Vision Foundation Models (VFMs) at high throughput necessitates deterministic physical execution. Relying on shared public cloud infrastructure introduces hypervisor virtualization overhead and variable PCIe bandwidth, which obscures true performance metrics during latency profiling. Consequently, the platform utilizes a dedicated bare-metal host architecture.
+
+The computational core relies on an Intel Core i7-14700K processor, leveraging its heterogeneous core topology to isolate workloads. High-frequency neural execution paths and PyTorch gradient calculations are pinned strictly to the Performance-cores (P-cores), preserving the L2 and L3 cache lines for the mathematical hot loops. Conversely, background asynchronous I/O operations---such as streaming HTTP requests, dataset extraction, and database indexing---are relegated to the Efficiency-cores (E-cores) to prevent CPU context switching.
+
+Neural network acceleration is driven by an NVIDIA RTX 5070 Ti possessing 16 GB of GDDR6X VRAM. Because continuous training pipelines and multi-day Pareto benchmarking suites push silicon to its thermal limits, standard thermal interfaces rapidly degrade, inducing thermal throttling that destroys execution determinism. To guarantee absolute physical stability, the GPU die and CPU integrated heat spreaders are optimized using phase-change materials (such as Thermal Grizzly PhaseSheet) and high-viscosity thermal putty (e.g., Upsiren UTP-8) on the VRAM modules. This prevents clock-speed variance during critical CI/CD latency validation tests.
+
+Storage I/O is managed across a 2 TB NVMe SSD secured via LUKS block-level encryption. To maximize read bandwidth across the PCIe bus when streaming millions of small image chunks, the underlying BTRFS filesystem utilizes transparent \texttt{zstd:3} compression. However, BTRFS is a Copy-on-Write (CoW) filesystem, which fundamentally conflicts with continuous database writes and Data Version Control (DVC) chunk caching, leading to severe disk fragmentation. To resolve this, a dedicated storage subvolume is initialized with the NOCOW attribute (\texttt{chattr +C}), ensuring contiguous physical block allocations for all local data caches.
+
+\section{Cryptographic Storage Economics}
+A primary architectural constraint for open-source and low-budget MLOps is data storage costs. The platform standardizes on DagsHub as the central management plane, which enforces a 20 GB free-tier storage limit on its DVC remote. This limit is entirely viable, provided the pipeline enforces a strict physical separation between bulk raw observation streams and versioned metadata artifacts.
+
+\subsection{Circumventing the 50 TB Trap}
+The raw citizen-science dataset hosted on the AWS Open Data registry exceeds 50 Terabytes. Mirroring this volume locally or to a Git-tracked remote is financially and computationally catastrophic. The system avoids this through zero-duplication streaming. Ingestion scripts stream the massive TAR archives directly from AWS Open Data into memory using zero-copy Apache Arrow buffers.
+
+Rather than storing the raw images, DVC tracks the cryptographically validated Parquet index manifests. These lightweight tabular files contain the observation IDs, DarwinCore taxonomic metadata, source URLs, and SHA-256 validation hashes. A Parquet manifest indexing 10 million distinct biological observations consumes less than 300 MB of disk space.
+
+\subsection{Bounded Exemplar Storage Mathematics}
+For actual visual data, the Vision RAG architecture curates a bounded Reference Exemplar Catalog, strictly capped at 50 validated environmental crops per species.
+
+For a production deployment spanning 2,000 baseline taxa, this yields exactly 100,000 curated images. Assuming a compressed WebP format averaging 60 KB per crop, the mathematical storage footprint evaluates as:
+\[
+\text{Storage}_{\text{Exemplars}} = 100{,}000 \text{ images} \times 60 \text{ KB} = 6{,}000{,}000 \text{ KB} \approx 6.0 \text{ GB}
+\]
+Furthermore, dynamic INT8 quantized ONNX model checkpoints range from 20 MB to 350 MB each. Retaining a rolling buffer of the most recent production release candidates consumes under 2.0 GB.
+
+\begin{align*}
+\text{Storage}_{\text{Total}} &= 300 \text{ MB (Manifests)} + 6.0 \text{ GB (Exemplars)} \\
+&\quad + 2.0 \text{ GB (ONNX Models)} + 1.5 \text{ GB (DVC Churn)} \approx 9.8 \text{ GB}
+\end{align*}
+This peak allocation consumes less than $50\%$ of the DagsHub free-tier allowance, leaving significant overhead for active learning annotations.
+
+\subsection{External Remote Fallback Topology}
+As the catalog scales toward 10,000 global taxa, the exemplar storage requirement will linearly increase to approximately 30 GB, breaching the native quota. In this scenario, the DVC remote backend is simply retargeted to an external, zero-egress S3-compatible bucket (such as Cloudflare R2 or a localized MinIO cluster). DagsHub seamlessly continues to render the Directed Acyclic Graphs (DAGs) and track Git-to-DVC commit diffs, decoupling the management interface from the physical storage layer.

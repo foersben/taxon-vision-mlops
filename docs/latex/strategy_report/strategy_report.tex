@@ -1,0 +1,81 @@
+\documentclass[10pt,a4paper,oneside]{book}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{geometry}
+\geometry{a4paper, margin=1.2in}
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta, shapes.geometric, calc, decorations.pathreplacing, backgrounds, fit}
+\usepackage[plainpages=false,pdfpagelabels]{hyperref}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{parskip}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{caption}
+\usepackage{minted}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{fancyhdr}
+
+% Formatting for minted code blocks
+\setminted{
+    fontsize=\footnotesize,
+    breaklines=true,
+    breakanywhere=false,
+    frame=lines,
+    framesep=2.5mm,
+    linenos=true,
+    numbersep=8pt,
+    tabsize=4
+}
+
+% Header/Footer styling
+\setlength{\headheight}{26pt}
+\addtolength{\topmargin}{-12pt}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\leftmark}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% Title Formatting
+\title{\Huge \textbf{TaxonVision-MLOps}\\[0.5cm] 
+\LARGE \textit{End-to-End Architectural and Operational Strategy Report}}
+\author{\Large Systems Engineering}
+\date{\today}
+
+\begin{document}
+
+\frontmatter
+\pagenumbering{alph}
+\maketitle
+\pagenumbering{roman}
+
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+TaxonVision-MLOps establishes an automated, production-grade Machine Learning Operations platform for fine-grained biological species identification. Transitioning away from ad-hoc, notebook-bound model development, this architecture utilizes a unified open-source toolchain (DagsHub, DVC, MLflow, Optuna) mapped to a hybrid compute topology (GitHub Actions and local bare-metal GPU runners). To comply with ethical and regulatory standards, the system enforces epistemic safety via Split Conformal Prediction and Energy-Based Out-of-Distribution (OOD) detection, ensuring mathematical coverage guarantees in production. This document outlines the end-to-end pipeline, testing strategies, and core architectural trade-offs driving the system's design.
+
+\tableofcontents
+
+\mainmatter
+
+\input{chapters/01_architectural_context_and_operational_maturity}
+\input{chapters/02_physical_infrastructure_and_data_topology}
+\input{chapters/03_toolchain_interlock}
+\input{chapters/04_dual_pipeline_architecture}
+\input{chapters/05_vision_rag_and_mmkg}
+\input{chapters/06_epistemic_safety}
+\input{chapters/07_observability_and_testing}
+\input{chapters/08_hardware_and_memory_math}
+
+\backmatter
+\nocite{*}
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}

@@ -35,7 +35,7 @@ repos:
     hooks:
       - id: codespell
         additional_dependencies: [tomli]
-        args: ["--skip", "*.lock,*.json,./site/*,./docs/viz.html", "-L", "taxa,taxon,inat,darwincore,shepard"]
+        args: ["--skip", "*.lock,*.json,./site/*,./docs/viz.html", "-L", "taxa,taxon,inat,darwincore,shepard,fpr,alph"]
         exclude: \.ipynb$
 
   - repo: https://github.com/kynan/nbstripout
