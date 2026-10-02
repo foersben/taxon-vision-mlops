@@ -1,9 +1,15 @@
+"""Test class balanced loss.py.
+
+This module provides functionality related to test_class_balanced_loss.
+"""
+
 import torch
 
 from taxon_vision.models.loss import ClassBalancedLoss
 
 
-def test_class_balanced_loss_computation():
+def test_class_balanced_loss_computation() -> None:
+    """Test class balanced loss computation."""
     samples_per_class = [1000, 100, 10]
     loss_fn = ClassBalancedLoss(samples_per_class=samples_per_class, beta=0.999)
     assert len(loss_fn.weights) == 3

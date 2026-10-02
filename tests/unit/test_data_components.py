@@ -1,3 +1,8 @@
+"""Test data components.py.
+
+This module provides functionality related to test_data_components.
+"""
+
 from pathlib import Path
 
 import pytest
@@ -10,7 +15,8 @@ from taxon_vision.domain.observation import ObservationRecord
 from taxon_vision.domain.taxonomy import TaxonNode
 
 
-def test_s3_image_streamer():
+def test_s3_image_streamer() -> None:
+    """Test s3 image streamer."""
     streamer = S3ImageStreamer()
     items = list(streamer.stream_sample_images(limit=3))
     assert len(items) == 3
@@ -19,21 +25,28 @@ def test_s3_image_streamer():
 
 
 @pytest.mark.asyncio
-async def test_inat_api_client():
+async def test_inat_api_client() -> None:
+    """Test inat api client."""
     client = INatAPIClient(max_requests_per_minute=600)
     data = await client.fetch_observations(taxon_id=1, per_page=2)
     assert len(data) == 2
     assert "observation_id" in data[0]
 
 
-def test_compute_dataset_hash(tmp_path: Path):
+def test_compute_dataset_hash(tmp_path: Path) -> None:
+    """Test compute dataset hash.
+
+    Args:
+        tmp_path: The tmp path parameter.
+    """
     file1 = tmp_path / "test.txt"
     file1.write_text("sample content")
     hash_val = compute_dataset_hash(tmp_path)
     assert len(hash_val) == 64
 
 
-def test_observation_record():
+def test_observation_record() -> None:
+    """Test observation record."""
     taxon = TaxonNode(taxon_id=1, scientific_name="Danaus plexippus")
     attribution = AttributionRecord(
         photographer_name="Jane Doe",

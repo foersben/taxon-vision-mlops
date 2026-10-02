@@ -15,11 +15,28 @@ templates = Jinja2Templates(directory=str(templates_dir))
 
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request) -> HTMLResponse:
+    """Index.
+
+    Args:
+        request: The request parameter.
+
+    Returns:
+        The resulting value from the operation.
+    """
     return templates.TemplateResponse(request=request, name="index.html", context={"title": "TaxonVision Dashboard"})
 
 
 @router.post("/ui/predict-htmx", response_class=HTMLResponse)
 async def predict_htmx(request: Request, file: UploadFile = File(...)) -> HTMLResponse:
+    """Predict htmx.
+
+    Args:
+        request: The request parameter.
+        file: The file parameter.
+
+    Returns:
+        The resulting value from the operation.
+    """
     # Render HTMX partial card
     context = {
         "filename": file.filename,

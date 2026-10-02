@@ -9,12 +9,30 @@ from typing import Any
 
 
 class INatAPIClient:
-    """Asynchronous client adhering to the 60 requests/minute rate limit."""
+    """Asynchronous client adhering to the 60 requests/minute rate limit.
+
+    Attributes:
+        Various internal state and configuration variables used by the class.
+    """
 
     def __init__(self, max_requests_per_minute: int = 60) -> None:
+        """Init  .
+
+        Args:
+            max_requests_per_minute: The max requests per minute parameter.
+        """
         self.delay_seconds = 60.0 / max_requests_per_minute
 
     async def fetch_observations(self, taxon_id: int, per_page: int = 10) -> list[dict[str, Any]]:
+        """Fetch observations.
+
+        Args:
+            taxon_id: The taxon id parameter.
+            per_page: The per page parameter.
+
+        Returns:
+            The resulting value from the operation.
+        """
         await asyncio.sleep(self.delay_seconds)
         # Mocked return for offline/CI stability
         return [

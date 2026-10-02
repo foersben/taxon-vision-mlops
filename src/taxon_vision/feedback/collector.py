@@ -8,6 +8,12 @@ from pydantic import BaseModel
 
 
 class FeedbackSubmission(BaseModel):
+    """Feedback submission.
+
+    Attributes:
+        Various internal state and configuration variables used by the class.
+    """
+
     observation_id: str
     validated_taxon_id: int
     reviewer_id: str

@@ -9,7 +9,14 @@ from pathlib import Path
 
 
 def compute_dataset_hash(directory: Path) -> str:
-    """Compute deterministic SHA-256 hash across dataset directory."""
+    """Compute deterministic SHA-256 hash across dataset directory.
+
+    Args:
+        directory: The directory parameter.
+
+    Returns:
+        The resulting value from the operation.
+    """
     sha = hashlib.sha256()
     if not directory.exists():
         return sha.hexdigest()

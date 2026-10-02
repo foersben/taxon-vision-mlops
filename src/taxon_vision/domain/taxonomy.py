@@ -8,7 +8,11 @@ from pydantic import BaseModel, Field
 
 
 class TaxonNode(BaseModel):
-    """Taxonomic rank node in the biological tree."""
+    """Taxonomic rank node in the biological tree.
+
+    Attributes:
+        Various internal state and configuration variables used by the class.
+    """
 
     taxon_id: int = Field(..., description="Unique taxonomic ID")
     scientific_name: str = Field(..., description="Binomial or uninomial scientific name")
@@ -18,11 +22,23 @@ class TaxonNode(BaseModel):
 
 
 class TaxonomyCatalog(BaseModel):
-    """Collection of supported taxa in the perimeter."""
+    """Collection of supported taxa in the perimeter.
+
+    Attributes:
+        Various internal state and configuration variables used by the class.
+    """
 
     taxa: list[TaxonNode] = Field(default_factory=list)
 
     def get_by_id(self, taxon_id: int) -> TaxonNode | None:
+        """Get by id.
+
+        Args:
+            taxon_id: The taxon id parameter.
+
+        Returns:
+            The resulting value from the operation.
+        """
         for t in self.taxa:
             if t.taxon_id == taxon_id:
                 return t

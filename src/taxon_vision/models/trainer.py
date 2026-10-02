@@ -17,7 +17,17 @@ def train_head_epoch(
     optimizer: optim.Optimizer,
     criterion: nn.Module,
 ) -> float:
-    """Run single training epoch."""
+    """Run single training epoch.
+
+    Args:
+        model: The model parameter.
+        dataloader: The dataloader parameter.
+        optimizer: The optimizer parameter.
+        criterion: The criterion parameter.
+
+    Returns:
+        The resulting value from the operation.
+    """
     model.train()
     total_loss = 0.0
     for inputs, labels in dataloader:

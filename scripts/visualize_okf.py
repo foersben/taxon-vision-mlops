@@ -24,7 +24,14 @@ MARKDOWN_LINK_PATTERN = re.compile(r"\]\(([^:\s#)]+\.md)(?:#[^)]+)?\)")
 
 
 def _extract_trust_tier(verified: Any) -> str:
-    """Determine trust tier from OKF verified metadata."""
+    """Determine trust tier from OKF verified metadata.
+
+    Args:
+        verified: The verified parameter.
+
+    Returns:
+        The resulting value from the operation.
+    """
     if not verified:
         return "Unverified"
     v_list = [verified] if isinstance(verified, dict) else verified
@@ -34,7 +41,15 @@ def _extract_trust_tier(verified: Any) -> str:
 
 
 def _parse_frontmatter_meta(content: str, default_title: str) -> tuple[str, str, str, str, str, str] | None:
-    """Parse YAML frontmatter returning (doc_type, title, status, description, trust_tier, body)."""
+    """Parse YAML frontmatter returning (doc_type, title, status, description, trust_tier, body).
+
+    Args:
+        content: The content parameter.
+        default_title: The default title parameter.
+
+    Returns:
+        The resulting value from the operation.
+    """
     if not content.startswith("---"):
         return None
     parts = content.split("---", 2)
@@ -59,7 +74,15 @@ def _parse_frontmatter_meta(content: str, default_title: str) -> tuple[str, str,
 
 
 def _parse_special_doc_meta(file_path: Path, content: str) -> tuple[str, str] | None:
-    """Determine doc_type and title for index.md or log.md."""
+    """Determine doc_type and title for index.md or log.md.
+
+    Args:
+        file_path: The file path parameter.
+        content: The content parameter.
+
+    Returns:
+        The resulting value from the operation.
+    """
     if file_path.name == "index.md":
         first_heading = next((line for line in content.splitlines() if line.startswith("#")), None)
         title = first_heading.lstrip("#").strip() if first_heading else file_path.stem
@@ -70,7 +93,16 @@ def _parse_special_doc_meta(file_path: Path, content: str) -> tuple[str, str] | 
 
 
 def _resolve_outgoing_link(link: str, file_path: Path, root_path: Path) -> str | None:
-    """Resolve a relative markdown link to a root-relative posix path."""
+    """Resolve a relative markdown link to a root-relative posix path.
+
+    Args:
+        link: The link parameter.
+        file_path: The file path parameter.
+        root_path: The root path parameter.
+
+    Returns:
+        The resulting value from the operation.
+    """
     if link.startswith(("http://", "https://", "#")):
         return None
     if link.startswith("/"):
@@ -87,7 +119,16 @@ def _resolve_outgoing_link(link: str, file_path: Path, root_path: Path) -> str |
 
 
 def _extract_outgoing_links(body: str, file_path: Path, root_path: Path) -> list[str]:
-    """Find all valid relative markdown links in document body."""
+    """Find all valid relative markdown links in document body.
+
+    Args:
+        body: The body parameter.
+        file_path: The file path parameter.
+        root_path: The root path parameter.
+
+    Returns:
+        The resulting value from the operation.
+    """
     outgoing: list[str] = []
     for link in MARKDOWN_LINK_PATTERN.findall(body):
         resolved = _resolve_outgoing_link(link, file_path, root_path)
@@ -97,7 +138,15 @@ def _extract_outgoing_links(body: str, file_path: Path, root_path: Path) -> list
 
 
 def _extract_doc_info(file_path: Path, root_path: Path) -> dict[str, Any] | None:
-    """Extract graph node info and outgoing links from a markdown document."""
+    """Extract graph node info and outgoing links from a markdown document.
+
+    Args:
+        file_path: The file path parameter.
+        root_path: The root path parameter.
+
+    Returns:
+        The resulting value from the operation.
+    """
     try:
         content = file_path.read_text(encoding="utf-8").strip()
     except Exception:
@@ -134,7 +183,15 @@ def _extract_doc_info(file_path: Path, root_path: Path) -> dict[str, Any] | None
 
 
 def _collect_markdown_files(root_path: Path, directories: list[str]) -> list[Path]:
-    """Collect valid markdown files across target directories, excluding legacy/site files."""
+    """Collect valid markdown files across target directories, excluding legacy/site files.
+
+    Args:
+        root_path: The root path parameter.
+        directories: The directories parameter.
+
+    Returns:
+        The resulting value from the operation.
+    """
     files: list[Path] = []
     for dir_name in directories:
         dir_path = root_path / dir_name
@@ -153,7 +210,14 @@ def _register_doc_elements(
     edges: list[dict[str, Any]],
     seen_nodes: set[str],
 ) -> None:
-    """Register node and outgoing edges from extracted document info."""
+    """Register node and outgoing edges from extracted document info.
+
+    Args:
+        info: The info parameter.
+        nodes: The nodes parameter.
+        edges: The edges parameter.
+        seen_nodes: The seen nodes parameter.
+    """
     node_id = info["id"]
     seen_nodes.add(node_id)
     nodes.append(
@@ -181,7 +245,15 @@ def _register_doc_elements(
 
 
 def build_graph_data(root_path: Path, directories: list[str]) -> dict[str, Any]:
-    """Scan directories and construct node/edge payload for Cytoscape.js."""
+    """Scan directories and construct node/edge payload for Cytoscape.js.
+
+    Args:
+        root_path: The root path parameter.
+        directories: The directories parameter.
+
+    Returns:
+        The resulting value from the operation.
+    """
     nodes: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
     seen_nodes: set[str] = set()

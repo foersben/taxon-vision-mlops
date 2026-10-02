@@ -11,7 +11,16 @@ import torch.nn as nn
 
 
 def export_to_onnx(model: nn.Module, output_path: Path, input_shape: tuple[int, ...] = (1, 3, 224, 224)) -> Path:
-    """Export model to ONNX graph with dynamic batch sizing."""
+    """Export model to ONNX graph with dynamic batch sizing.
+
+    Args:
+        model: The model parameter.
+        output_path: The output path parameter.
+        input_shape: The input shape parameter.
+
+    Returns:
+        The resulting value from the operation.
+    """
     model.eval()
     dummy_input = torch.randn(*input_shape)
     output_path.parent.mkdir(parents=True, exist_ok=True)

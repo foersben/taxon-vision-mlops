@@ -10,7 +10,11 @@ from pydantic import BaseModel, Field
 
 
 class OpenLicense(StrEnum):
-    """Approved open licenses for iNaturalist citizen science media."""
+    """Approved open licenses for iNaturalist citizen science media.
+
+    Attributes:
+        Various internal state and configuration variables used by the class.
+    """
 
     CC0 = "CC0"
     CC_BY = "CC-BY"
@@ -22,7 +26,11 @@ class OpenLicense(StrEnum):
 
 
 class AttributionRecord(BaseModel):
-    """Attribution metadata mandated for open-licensed media retention."""
+    """Attribution metadata mandated for open-licensed media retention.
+
+    Attributes:
+        Various internal state and configuration variables used by the class.
+    """
 
     photographer_name: str = Field(..., description="Name or username of photographer")
     license_code: OpenLicense = Field(..., description="Creative commons license variant")

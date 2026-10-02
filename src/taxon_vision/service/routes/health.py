@@ -11,9 +11,19 @@ router = APIRouter()
 
 @router.get("/health")
 def health() -> dict[str, str]:
+    """Health.
+
+    Returns:
+        The resulting value from the operation.
+    """
     return {"status": "healthy", "service": "taxon-vision-mlops"}
 
 
 @router.get("/metrics")
 def metrics() -> Response:
+    """Metrics.
+
+    Returns:
+        The resulting value from the operation.
+    """
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)

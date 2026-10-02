@@ -1,7 +1,13 @@
+"""Test taxonomy.py.
+
+This module provides functionality related to test_taxonomy.
+"""
+
 from taxon_vision.domain.taxonomy import TaxonNode, TaxonomyCatalog
 
 
-def test_taxonomy_catalog():
+def test_taxonomy_catalog() -> None:
+    """Test taxonomy catalog."""
     cat = TaxonomyCatalog(
         taxa=[
             TaxonNode(taxon_id=1, scientific_name="Danaus plexippus", common_name="Monarch"),

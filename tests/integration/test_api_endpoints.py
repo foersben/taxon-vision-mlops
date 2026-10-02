@@ -1,3 +1,8 @@
+"""Test api endpoints.py.
+
+This module provides functionality related to test_api_endpoints.
+"""
+
 import io
 
 from fastapi.testclient import TestClient
@@ -7,13 +12,15 @@ from taxon_vision.service.api import app
 client = TestClient(app)
 
 
-def test_health_endpoint():
+def test_health_endpoint() -> None:
+    """Test health endpoint."""
     resp = client.get("/health")
     assert resp.status_code == 200
     assert resp.json()["status"] == "healthy"
 
 
-def test_predict_endpoint():
+def test_predict_endpoint() -> None:
+    """Test predict endpoint."""
     dummy_img = io.BytesIO(b"fake image bytes")
     resp = client.post("/api/v1/predict", files={"file": ("test.jpg", dummy_img, "image/jpeg")})
     assert resp.status_code == 200
@@ -23,7 +30,8 @@ def test_predict_endpoint():
     assert "conformal_prediction_set" in data
 
 
-def test_feedback_endpoint():
+def test_feedback_endpoint() -> None:
+    """Test feedback endpoint."""
     resp = client.post(
         "/api/v1/feedback",
         json={

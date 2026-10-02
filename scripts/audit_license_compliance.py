@@ -28,7 +28,14 @@ ALLOWED_LICENSES = {
 
 
 def verify_observation_compliance(obs: dict[str, str | int]) -> list[str]:
-    """Verify compliance for a single observation record."""
+    """Verify compliance for a single observation record.
+
+    Args:
+        obs: The obs parameter.
+
+    Returns:
+        The resulting value from the operation.
+    """
     errors: list[str] = []
     obs_id = obs.get("observation_id", "unknown")
     license_code = str(obs.get("license_code", "")).upper()
@@ -48,7 +55,11 @@ def verify_observation_compliance(obs: dict[str, str | int]) -> list[str]:
 
 
 def main() -> int:
-    """Run license compliance audit against fixtures or ingested samples."""
+    """Run license compliance audit against fixtures or ingested samples.
+
+    Returns:
+        The resulting value from the operation.
+    """
     fixture_path = Path("tests/fixtures/sample_metadata.json")
     if not fixture_path.exists():
         print(f"Warning: {fixture_path} not found. Creating placeholder verification pass.")

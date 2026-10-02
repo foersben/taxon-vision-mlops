@@ -8,6 +8,12 @@ from pydantic import BaseModel
 
 
 class TaxonPrediction(BaseModel):
+    """Taxon prediction.
+
+    Attributes:
+        Various internal state and configuration variables used by the class.
+    """
+
     taxon_id: int
     scientific_name: str
     common_name: str
@@ -15,6 +21,12 @@ class TaxonPrediction(BaseModel):
 
 
 class PredictionResponse(BaseModel):
+    """Prediction response.
+
+    Attributes:
+        Various internal state and configuration variables used by the class.
+    """
+
     top_prediction: TaxonPrediction
     top_candidates: list[TaxonPrediction]
     conformal_prediction_set: list[str]
@@ -25,6 +37,12 @@ class PredictionResponse(BaseModel):
 
 
 class FeedbackRequest(BaseModel):
+    """Feedback request.
+
+    Attributes:
+        Various internal state and configuration variables used by the class.
+    """
+
     observation_id: str
     validated_taxon_id: int
     reviewer_name: str
@@ -32,5 +50,11 @@ class FeedbackRequest(BaseModel):
 
 
 class FeedbackResponse(BaseModel):
+    """Feedback response.
+
+    Attributes:
+        Various internal state and configuration variables used by the class.
+    """
+
     status: str
     message: str

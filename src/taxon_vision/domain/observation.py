@@ -13,7 +13,11 @@ from taxon_vision.domain.taxonomy import TaxonNode
 
 
 class ObservationRecord(BaseModel):
-    """Validated observation conforming to DarwinCore standard."""
+    """Validated observation conforming to DarwinCore standard.
+
+    Attributes:
+        Various internal state and configuration variables used by the class.
+    """
 
     observation_id: str = Field(..., description="iNaturalist or GBIF observation ID")
     taxon: TaxonNode = Field(..., description="Assigned taxonomic classification")

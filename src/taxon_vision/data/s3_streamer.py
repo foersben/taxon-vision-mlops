@@ -10,13 +10,26 @@ from PIL import Image
 
 
 class S3ImageStreamer:
-    """Stream images directly from S3 open data bucket without local storage explosion."""
+    """Stream images directly from S3 open data bucket without local storage explosion.
+
+    Attributes:
+        Various internal state and configuration variables used by the class.
+    """
 
     def __init__(self, bucket_name: str = "inaturalist-open-data") -> None:
+        """Init  .
+
+        Args:
+            bucket_name: The bucket name parameter.
+        """
         self.bucket_name = bucket_name
 
     def stream_sample_images(self, limit: int = 10) -> Generator[tuple[str, Image.Image], None, None]:
-        """Generator yielding synthetic/mocked or streamed PIL images."""
+        """Generator yielding synthetic/mocked or streamed PIL images.
+
+        Args:
+            limit: The limit parameter.
+        """
         for i in range(limit):
             # Generate placeholder RGB image for deterministic pipeline testing
             img = Image.new("RGB", (224, 224), color=(30 + i * 20, 100, 150))

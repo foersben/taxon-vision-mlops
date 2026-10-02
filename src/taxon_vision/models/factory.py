@@ -17,7 +17,15 @@ BACKBONE_REGISTRY = {
 
 
 def create_feature_extractor(model_name: str = "mobilenetv4_conv_small", pretrained: bool = False) -> nn.Module:
-    """Instantiate frozen pre-trained feature extractor."""
+    """Instantiate frozen pre-trained feature extractor.
+
+    Args:
+        model_name: The model name parameter.
+        pretrained: The pretrained parameter.
+
+    Returns:
+        The resulting value from the operation.
+    """
     resolved_name = BACKBONE_REGISTRY.get(model_name, model_name)
     try:
         model = timm.create_model(resolved_name, pretrained=pretrained, num_classes=0)

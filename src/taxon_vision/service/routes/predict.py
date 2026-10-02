@@ -16,6 +16,14 @@ conformal_engine = ConformalPredictionEngine(q_hat=0.85, alpha=0.05, k_max=3)
 
 @router.post("/predict", response_model=PredictionResponse)
 async def predict_species(file: UploadFile = File(...)) -> PredictionResponse:
+    """Predict species.
+
+    Args:
+        file: The file parameter.
+
+    Returns:
+        The resulting value from the operation.
+    """
     t0 = time.perf_counter()
     PREDICTION_COUNTER.labels(status="success").inc()
 

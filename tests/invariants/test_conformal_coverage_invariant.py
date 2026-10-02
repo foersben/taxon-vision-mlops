@@ -1,9 +1,14 @@
+"""Test conformal coverage invariant.py.
+
+This module provides functionality related to test_conformal_coverage_invariant.
+"""
+
 import numpy as np
 
 from taxon_vision.uncertainty.conformal import ConformalPredictionEngine
 
 
-def test_empirical_conformal_coverage():
+def test_empirical_conformal_coverage() -> None:
     """Assert finite-sample coverage guarantee on holdout set."""
     np.random.seed(42)
     n_samples = 500

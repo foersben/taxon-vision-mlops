@@ -6,5 +6,14 @@ from __future__ import annotations
 
 
 def reconcile_taxonomic_mutation(old_taxon_id: int, new_taxon_id: int, mapping: dict[int, int]) -> int:
-    """Resolve species splits, lumps, and reclassifications."""
+    """Resolve species splits, lumps, and reclassifications.
+
+    Args:
+        old_taxon_id: The old taxon id parameter.
+        new_taxon_id: The new taxon id parameter.
+        mapping: The mapping parameter.
+
+    Returns:
+        The resulting value from the operation.
+    """
     return mapping.get(old_taxon_id, new_taxon_id)

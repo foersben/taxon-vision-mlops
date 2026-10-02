@@ -10,10 +10,22 @@ from taxon_vision.domain.license import AttributionRecord, OpenLicense
 
 
 class LicenseFilter:
-    """Enforces open licensing constraints on citizen science imagery."""
+    """Enforces open licensing constraints on citizen science imagery.
+
+    Attributes:
+        Various internal state and configuration variables used by the class.
+    """
 
     @staticmethod
     def is_license_permitted(license_str: str) -> bool:
+        """Is license permitted.
+
+        Args:
+            license_str: The license str parameter.
+
+        Returns:
+            The resulting value from the operation.
+        """
         norm = license_str.strip().upper().replace("_", "-")
         try:
             OpenLicense(norm)
@@ -23,14 +35,29 @@ class LicenseFilter:
 
     @staticmethod
     def is_static_domain_prohibited(image_url: str, is_open_dataset_verified: bool = False) -> bool:
-        """Rejects unverified images hosted on static domain without open license."""
+        """Rejects unverified images hosted on static domain without open license.
+
+        Args:
+            image_url: The image url parameter.
+            is_open_dataset_verified: The is open dataset verified parameter.
+
+        Returns:
+            The resulting value from the operation.
+        """
         if "static.inaturalist.org" in image_url and not is_open_dataset_verified:
             return True
         return False
 
     @classmethod
     def process_record(cls, raw: dict[str, Any]) -> AttributionRecord | None:
-        """Extract attribution record if compliant, otherwise None."""
+        """Extract attribution record if compliant, otherwise None.
+
+        Args:
+            raw: The raw parameter.
+
+        Returns:
+            The resulting value from the operation.
+        """
         license_str = str(raw.get("license_code", "")).strip().upper().replace("_", "-")
         image_url = str(raw.get("image_url", ""))
         verified = bool(raw.get("is_open_dataset_verified", False))

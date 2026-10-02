@@ -4,7 +4,7 @@
 """Strict Markdown Formatting Rule Enforcer (Rule 04).
 
 Enforces:
-1. Standard ASCII hyphen ('-') exclusively; ban en-dash (\u2013) and em-dash (\u2014).
+1. Standard ASCII hyphen ('-') exclusively; ban en-dash (-) and em-dash (—).
 2. Unordered lists MUST use asterisk ('*').
 3. List syntax: exactly 1 space after '*', indented in multiples of 4 spaces (0 spaces at level 0).
 4. Exactly 1 blank line before/after lists, code blocks, and headings.
@@ -27,7 +27,15 @@ DASH_REPLACEMENTS = {
 
 
 def verify_file(path: Path, fix: bool = False) -> list[str]:
-    """Verify and optionally auto-fix a single markdown file."""
+    """Verify and optionally auto-fix a single markdown file.
+
+    Args:
+        path: The path parameter.
+        fix: The fix parameter.
+
+    Returns:
+        The resulting value from the operation.
+    """
     text = path.read_text(encoding="utf-8")
     original_text = text
     errors: list[str] = []
@@ -103,6 +111,11 @@ def verify_file(path: Path, fix: bool = False) -> list[str]:
 
 
 def main() -> int:
+    """Main.
+
+    Returns:
+        The resulting value from the operation.
+    """
     parser = argparse.ArgumentParser(description="Enforce Rule 04 Markdown formatting.")
     parser.add_argument("paths", nargs="*", type=Path, help="Files or directories to check.")
     parser.add_argument("--fix", action="store_true", help="Auto-fix violations.")
