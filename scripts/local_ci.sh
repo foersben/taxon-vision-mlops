@@ -42,6 +42,11 @@ run_sync() {
 }
 
 run_quality() {
+  echo ">>> Enforcing Pure Pixi Invariant (no .venv / uv.lock)"
+  if [ -d .venv ] || [ -f uv.lock ]; then
+    echo "ERROR: .venv/ or uv.lock detected. The project solely relies on Pixi (.pixi/)." >&2
+    exit 1
+  fi
   echo ">>> Enforcing Markdown Rule 04"
   pixi run --frozen -e dev python scripts/verify_markdown_rules.py
   echo ">>> Running Ruff lint"
@@ -54,7 +59,7 @@ run_quality() {
 
 run_tests() {
   echo ">>> Pass 1: Unit Tests & Coverage"
-  pixi run --frozen -e dev pytest tests/unit/ --cov=src/taxon_vision --cov-fail-under=80
+  pixi run --frozen -e dev pytest tests/ --cov=src/taxon_vision --cov-fail-under=80
 
   echo ">>> Pass 2: Integration & Invariants"
   pixi run --frozen -e dev pytest tests/integration/ tests/invariants/ -x -q -o "addopts="

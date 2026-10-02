@@ -154,4 +154,4 @@ lab:
 [group("utils")]
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
-	rm -rf .cache site build dist .pytest_cache .mypy_cache .ruff_cache htmlcov .pixi
+	rm -rf .cache site build dist .pytest_cache .mypy_cache .ruff_cache htmlcov .pixi .venv uv.lock

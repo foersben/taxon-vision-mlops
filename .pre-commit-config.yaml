@@ -46,6 +46,12 @@ repos:
 
   - repo: local
     hooks:
+      - id: check-pure-pixi
+        name: Assert Pure Pixi Environment (No .venv or uv.lock)
+        entry: bash -c '! test -d .venv && ! test -f uv.lock'
+        language: system
+        pass_filenames: false
+
       - id: ruff-check
         name: Ruff Linting & Quality Checks
         entry: pixi run -e dev ruff check --fix
