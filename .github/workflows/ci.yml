@@ -34,8 +34,7 @@ jobs:
 
       - name: Pass 1 - Unit Tests & Coverage
         run: |
-          pixi run --frozen -e ci-dev pytest tests/unit/ --cov=src/taxon_vision --cov-report=xml -o "addopts="
-          pixi run --frozen -e ci-dev uvx diff-cover coverage.xml --fail-under=80
+          pixi run --frozen -e ci-dev pytest tests/unit/ --cov=src/taxon_vision --cov-report=xml --cov-fail-under=80 -o "addopts="
 
       - name: Pass 2 - Integration & Conformal Invariants
         run: |

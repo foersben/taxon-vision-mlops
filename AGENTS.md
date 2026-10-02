@@ -2,7 +2,7 @@
 
 <!-- UNIVERSAL RULES: apply to all AI agents (Antigravity, Jules, Copilot, etc.) -->
 
-* All Python commands MUST use `pixi run -e dev` or `just`. Never bare `python`, `pip`, or `poetry`.
+* All Python commands MUST use `pixi run -e dev` or `just`. Never bare `python`, `pip`, `uv`, `uvx`, or `poetry`. Never create or rely on `.venv/`.
 * Never run `act` in agent sandboxes; `act` is for local workstation Docker runs only.
 * Commit signing:
   * **Local agents (Antigravity) & human developers:** Commits MUST be GPG/SSH signed (`git commit -S`). Stop and escalate if signing fails.

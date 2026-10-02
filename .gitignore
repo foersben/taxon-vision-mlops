@@ -68,3 +68,6 @@ models/checkpoints/
 *.onnx
 *.pth
 *.pt
+
+# UV ban
+uv.lock
