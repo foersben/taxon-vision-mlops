@@ -72,6 +72,10 @@ complexity:
 validate-okf:
 	pixi run --frozen -e dev python scripts/validate_okf.py
 
+[group("quality")]
+lint-md:
+	pixi run --frozen -e dev python scripts/verify_markdown_rules.py --fix
+
 # ── Testing ─────────────────────────────────────────────────────────────────
 
 [group("testing")]

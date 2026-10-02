@@ -66,6 +66,13 @@ repos:
         pass_filenames: false
         types: [python]
 
+      - id: verify-markdown-rules
+        name: Enforce Markdown Rule 04 Formatting
+        entry: pixi run -e dev python scripts/verify_markdown_rules.py --fix
+        language: system
+        files: ^(docs/|\.agents/|README\.md)
+        pass_filenames: false
+
       - id: validate-okf
         name: Enforce Google Open Knowledge Format (OKF v0.2)
         entry: pixi run -e dev python scripts/validate_okf.py

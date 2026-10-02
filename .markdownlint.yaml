@@ -1,8 +1,24 @@
 default: true
 
-# Rule 04-markdown-formatting.md: Use `*` for all unordered lists
+# Rule 04: Use '*' for all unordered lists
 MD004:
   style: asterisk
+
+# Rule 04: Indent 2 spaces per level
+MD007:
+  indent: 2
+
+# Rule 04: No trailing whitespace
+MD009: true
+
+# Rule 04: Headings surrounded by blank lines
+MD022: true
+
+# Rule 04: Code blocks surrounded by blank lines
+MD031: true
+
+# Rule 04: Lists surrounded by blank lines
+MD032: true
 
 # Ignore multiple top-level headings (Conflicts with OKF YAML Frontmatter)
 MD025: false

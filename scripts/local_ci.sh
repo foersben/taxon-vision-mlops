@@ -42,6 +42,8 @@ run_sync() {
 }
 
 run_quality() {
+  echo ">>> Enforcing Markdown Rule 04"
+  pixi run --frozen -e dev python scripts/verify_markdown_rules.py
   echo ">>> Running Ruff lint"
   pixi run --frozen -e dev ruff check .
   echo ">>> Running Ruff format check"
