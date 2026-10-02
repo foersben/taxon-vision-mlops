@@ -2,18 +2,18 @@
 \chapter{Dual Pipeline Architecture}
 \label{ch:dual_pipeline}
 
-A common anti-pattern in machine learning deployments is the monolithic pipeline, where neural network training sequences and data indexing tasks are tightly coupled into a single execution graph. The TaxonVision-MLOps architecture explicitly rejects this model, establishing a dual-pipeline topology that decouples the weight-centric classification engine from the data-centric Multimodal Knowledge Graph (MMKG). These pipelines maintain independent lifecycles, converging exclusively at the inference serving boundary.
+A common anti-pattern in machine learning deployments is the monolithic pipeline, where neural network training sequences and data indexing tasks are tightly coupled into a single execution graph. The TaxonVision-MLOps architecture explicitly rejects this model. Instead, it establishes a dual-pipeline topology that decouples the weight-centric classification engine from the data-centric Multimodal Knowledge Graph (MMKG). These pipelines maintain independent lifecycles, converging exclusively at the inference serving boundary.
 
 \section{Asymmetric Iteration and Execution Decoupling}
 \label{sec:decoupling}
 
-The necessity for architectural decoupling stems from the fundamentally asymmetric nature of biological modeling operations.
+The necessity for architectural decoupling stems directly from the fundamentally asymmetric nature of biological modelling operations.
 
-\textbf{Pipeline 1: The Classification Engine.} The primary neural backbone (e.g., an optimized BioCLIP-2 or DINOv3 transformer) is computationally expensive to train but relatively static in production. Refining its weights requires intensive GPU Tensor Core utilization, distributed gradient synchronization, and dynamic ONNX quantization calibration. However, once an optimal checkpoint is compiled, the model architecture may remain unchanged for weeks or months.
+\textbf{Pipeline 1: The Classification Engine.} The primary neural backbone (for example, an optimised BioCLIP-2 or DINOv3 transformer) is computationally expensive to train but relatively static in production. Refining its weights requires intensive GPU Tensor Core utilisation, distributed gradient synchronisation, and dynamic ONNX quantisation calibration. However, once an optimal checkpoint is compiled, the model architecture may remain unchanged for weeks or months.
 
-\textbf{Pipeline 2: The Taxonomic MMKG.} Conversely, the underlying citizen-science data stream is highly volatile. The pipeline must ingest continuous drops of new iNaturalist research-grade observations. More critically, biological taxonomies are frequently subjected to scientific realignments---species are split into novel taxonomic branches or lumped together under unified nomenclature. Pipeline 2 is an I/O-bound vector-indexing workflow responsible for parsing DarwinCore Parquet manifests, extracting zero-shot organism crops, filtering open-source licenses, and appending dense embeddings to the Hierarchical Navigable Small World (HNSW) graph. 
+\textbf{Pipeline 2: The Taxonomic MMKG.} Conversely, the underlying citizen-science data stream is highly volatile. The pipeline must ingest continuous drops of new iNaturalist research-grade observations. More critically, biological taxonomies are frequently subjected to scientific realignments -- species are split into novel taxonomic branches or lumped together under unified nomenclature. Pipeline 2 is an I/O-bound vector-indexing workflow responsible for parsing DarwinCore Parquet manifests, extracting zero-shot organism crops, filtering open-source licences, and appending dense embeddings to the Hierarchical Navigable Small World (HNSW) graph.
 
-Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely because Pipeline 2 updated an exemplar image for a specific beetle species wastes immense computational resources. Furthermore, physically separating these domains enforces strict failure isolation. If a malformed DarwinCore archive from an upstream provider induces a schema violation, Pipeline 2 will halt securely; however, Pipeline 1 remains entirely unimpeded, preserving the ability to compile, test, and deploy critical hot-fixes to the classification logic.
+Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely because Pipeline 2 updated an exemplar image for a specific beetle species wastes immense computational resources. Furthermore, physically separating these domains enforces strict failure isolation. If a malformed DarwinCore archive from an upstream provider induces a schema violation, Pipeline 2 will halt securely. However, Pipeline 1 remains entirely unimpeded, preserving our ability to compile, test, and deploy critical hot-fixes to the classification logic.
 
 \section{Automated CI/CD Orchestration and Registry Promotion}
 \label{sec:ci_cd_binding}
@@ -34,7 +34,7 @@ Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely be
 \node[box, right=of git] (gh_actions) {GitHub Actions\\(Lint \& Unit Test)};
 \node[box, right=of gh_actions] (runner) {Bare-Metal Runner\\(RTX 5070 Ti)};
 \node[db, below=of runner] (dvc) {DVC S3 Remote\\(DagsHub)};
-\node[box, below=of gh_actions] (training) {Training \& ONNX\\Quantization};
+\node[box, below=of gh_actions] (training) {Training \& ONNX\\Quantisation};
 \node[box, left=of training] (mlflow) {MLflow Registry\\(Safety Gate)};
 \node[cloud, below=of mlflow] (k8s) {Kubernetes Ingress\\(Serving \& RAG)};
 \node[box, right=of k8s] (prom) {Prometheus\\(Drift Alert)};
@@ -54,18 +54,18 @@ Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely be
 \label{fig:cicd_flow}
 \end{figure}
 
-To transition from manual experimentation to a Level 3 MLOps deployment, the independent pipelines must be strictly governed by Continuous Integration and Continuous Deployment (CI/CD) triggers.
+In order to transition from manual experimentation to a Level 3 MLOps deployment, the independent pipelines must be strictly governed by Continuous Integration and Continuous Deployment (CI/CD) triggers.
 
-When engineers push codebase modifications to the central repository, GitHub Actions cloud runners immediately execute lightweight static analysis and logical unit tests. Upon passing, a secure webhook triggers the self-hosted, bare-metal GPU runner to initiate the heavy execution graph. To authenticate with the tracking infrastructure, the GitHub Actions runner injects encrypted repository secrets (e.g., \texttt{MLFLOW\_TRACKING\_URI}) directly into the local execution environment.
+When engineers push codebase modifications to the central repository, GitHub Actions cloud runners immediately execute lightweight static analysis and logical unit tests. Upon passing, a secure webhook triggers the self-hosted, bare-metal GPU runner to initiate the heavy execution graph. In order to authenticate with the tracking infrastructure, the GitHub Actions runner injects encrypted repository secrets (for example, \texttt{MLFLOW\_TRACKING\_URI}) directly into the local execution environment.
 
-As the training pipeline initializes, it binds the MLflow telemetry directly to the exact Git commit SHA that triggered the run, ensuring absolute cryptographic provenance between the source code and the resulting model weights:
+As the training pipeline initialises, it binds the MLflow telemetry directly to the exact Git commit SHA that triggered the run, thereby ensuring absolute cryptographic provenance between the source code and the resulting model weights:
 \begin{minted}{python}
 mlflow.set_tag("git.commit", os.environ.get("GITHUB_SHA"))
 \end{minted}
 
-Crucially, the CI/CD pipeline enforces an automated epistemic safety gate prior to deployment. Before any compiled model is allowed to enter the registry, a standalone invariant test loads the candidate ONNX graph and evaluates it against a holdout calibration dataset. The script formally asserts that the empirical marginal coverage of the Split Conformal Prediction set, $|C|$, meets or exceeds the mathematical bound $1 - \alpha$ (e.g., $95\%$ coverage, where $\alpha=0.05$). If the empirical coverage falls below this strict threshold, the pipeline throws a fatal assertion error, blocking the Git merge and preventing the uncalibrated model from reaching production.
+Crucially, the CI/CD pipeline enforces an automated epistemic safety gate prior to deployment. Before any compiled model is allowed to enter the registry, a standalone invariant test loads the candidate ONNX graph and evaluates it against a holdout calibration dataset. The script formally asserts that the empirical marginal coverage of the Split Conformal Prediction set, $|C|$, meets or exceeds the mathematical bound $1 - \alpha$ (for example, $95\%$ coverage, where $\alpha=0.05$). If the empirical coverage falls below this strict threshold, the pipeline throws a fatal assertion error, blocking the Git merge and effectively preventing the uncalibrated model from reaching production.
 
-If the safety gate is cleared, the system programmatically interacts with the MLflow API to transition the newly validated artifact from a staging environment directly into production readiness:
+If the safety gate is cleared, the system programmatically interacts with the MLflow API to transition the newly validated artefact from a staging environment directly into production readiness:
 \begin{minted}{python}
 client.transition_model_version_stage(
     name="TaxonVision-Backbone", 
@@ -77,6 +77,6 @@ client.transition_model_version_stage(
 \section{Convergence at the Serving Boundary}
 \label{sec:serving_convergence}
 
-The two distinct pipelines exist in absolute isolation until the precise moment of user inference. The FastAPI serving application acts as the convergence node, simultaneously loading the INT8 quantized ONNX graph from Pipeline 1 into memory, while mounting the live IVF-HNSW vector index compiled by Pipeline 2.
+The two distinct pipelines exist in absolute isolation until the precise moment of user inference. The FastAPI serving application acts as the convergence node, simultaneously loading the INT8 quantised ONNX graph from Pipeline 1 into memory, whilst mounting the live IVF-HNSW vector index compiled by Pipeline 2.
 
-When a field photograph is submitted to the API, it is passed through the fast-path ONNX backbone. If the epistemic safety layer determines the classification is decisive---meaning the conformal prediction set yields exactly one candidate ($|C| = 1$)---the pipeline returns the prediction immediately, bypassing the vector database entirely. If, however, the model exhibits severe ambiguity ($|C| > 1$), the serving application lazy-loads Pipeline 2's HNSW index, executes a single-stage filtered traversal, and retrieves the top-$k$ reference exemplar crops to synthesize a robust, comparative visual context.
+When a field photograph is submitted to the API, it is passed through the fast-path ONNX backbone. If the epistemic safety layer determines the classification is decisive -- meaning the conformal prediction set yields exactly one candidate ($|C| = 1$) -- the pipeline returns the prediction immediately, bypassing the vector database entirely. If, however, the model exhibits severe ambiguity ($|C| > 1$), the serving application lazy-loads Pipeline 2's HNSW index, executes a single-stage filtered traversal, and retrieves the top-$k$ reference exemplar crops in order to synthesise a robust, comparative visual context.

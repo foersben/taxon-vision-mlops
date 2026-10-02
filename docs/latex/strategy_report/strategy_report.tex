@@ -45,8 +45,9 @@
 
 % Title Formatting
 \title{\Huge \textbf{TaxonVision-MLOps}\\[0.5cm] 
-\LARGE \textit{End-to-End Architectural and Operational Strategy Report}}
-\author{\Large Systems Engineering}
+\LARGE \textit{End-to-End Architectural and Operational Strategy Report}\\[0.5cm]
+\Large Systems Engineering}
+\author{\Large Benjamin Förster}
 \date{\today}
 
 \begin{document}
@@ -58,7 +59,7 @@
 
 \chapter*{Abstract}
 \addcontentsline{toc}{chapter}{Abstract}
-TaxonVision-MLOps establishes an automated, production-grade Machine Learning Operations platform for fine-grained biological species identification. Transitioning away from ad-hoc, notebook-bound model development, this architecture utilizes a unified open-source toolchain (DagsHub, DVC, MLflow, Optuna) mapped to a hybrid compute topology (GitHub Actions and local bare-metal GPU runners). To comply with ethical and regulatory standards, the system enforces epistemic safety via Split Conformal Prediction and Energy-Based Out-of-Distribution (OOD) detection, ensuring mathematical coverage guarantees in production. This document outlines the end-to-end pipeline, testing strategies, and core architectural trade-offs driving the system's design.
+TaxonVision-MLOps establishes an automated, production-grade Machine Learning Operations platform for fine-grained biological species identification. Transitioning away from ad-hoc, notebook-bound model development, this architecture utilises a unified open-source toolchain (DagsHub, DVC, MLflow, Optuna) cleanly mapped to a hybrid compute topology (GitHub Actions and local bare-metal GPU runners). In order to comply strictly with ethical and regulatory standards, the system firmly enforces epistemic safety via Split Conformal Prediction and Energy-Based Out-of-Distribution (OOD) detection, thereby ensuring mathematical coverage guarantees in production. This document carefully outlines the end-to-end pipeline, testing strategies, and core architectural trade-offs driving the system's overall design.
 
 \tableofcontents
 

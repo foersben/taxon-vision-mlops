@@ -1,36 +1,36 @@
 % !TeX root = ../strategy_report.tex
-\chapter{Hardware Optimization and Memory Mathematics}
+\chapter{Hardware Optimisation and Memory Mathematics}
 \label{ch:hardware_math}
 
-Operating a high-throughput machine learning service under strict latency service-level agreements (SLAs) requires moving beyond theoretical model performance and addressing the physical limitations of silicon. This chapter defines the mathematical transformations utilized to compress neural network memory footprints, the formal theorems governing epistemic safety thresholds, and the memory complexity equations required to bound vector database consumption.
+Operating a high-throughput machine learning service under strict latency service-level agreements (SLAs) requires moving decisively beyond theoretical model performance and addressing the physical limitations of silicon. This chapter explicitly defines the mathematical transformations utilised to compress neural network memory footprints, the formal theorems rigorously governing epistemic safety thresholds, and the memory complexity equations required to safely bound vector database consumption.
 
-\section{Dynamic Quantization and Tensor Compression}
+\section{Dynamic Quantisation and Tensor Compression}
 \label{sec:quantization_math}
 
-Deep neural networks are fundamentally composed of dense, high-dimensional weight matrices. By default, standard training frameworks construct these matrices using 32-bit floating-point (FP32) numerical representations. While FP32 provides extreme gradient precision during the backpropagation phase of training, it is highly inefficient during production inference. FP32 tensors consume vast amounts of GPU VRAM, and executing matrix multiplications at this precision bottlenecks the memory bandwidth, increasing prediction latency.
+Deep neural networks are fundamentally composed of dense, high-dimensional weight matrices. By default, standard training frameworks construct these matrices using 32-bit floating-point (FP32) numerical representations. Whilst FP32 provides extreme gradient precision during the backpropagation phase of training, it is highly inefficient during production inference. FP32 tensors consume vast amounts of GPU VRAM, and executing matrix multiplications at this precision severely bottlenecks the memory bandwidth, thereby increasing prediction latency.
 
-To optimize the deployment architecture, the PyTorch classification head and feature extractor are exported to the Open Neural Network Exchange (ONNX) format, decoupling the computational graph from Python's execution overhead. Subsequently, the ONNX Runtime applies Integer-8 (INT8) dynamic quantization. This mathematical operation maps the high-resolution continuous floating-point weights onto a discrete 8-bit integer grid.
+In order to optimise the deployment architecture, the PyTorch classification head and feature extractor are exported to the Open Neural Network Exchange (ONNX) format, cleanly decoupling the computational graph from Python's execution overhead. Subsequently, the ONNX Runtime strategically applies Integer-8 (INT8) dynamic quantisation. This mathematical operation robustly maps the high-resolution continuous floating-point weights onto a discrete 8-bit integer grid.
 
-The quantization mapping function is formally defined as:
+The quantisation mapping function is formally defined as:
 \[
 q = \text{round}\left(\frac{x}{S}\right) + Z
 \]
 In this formulation:
 \begin{itemize}
-    \item $q$ represents the resulting 8-bit quantized integer representation.
+    \item $q$ represents the resulting 8-bit quantised integer representation.
     \item $x$ denotes the original 32-bit floating-point weight or activation value from the trained network.
-    \item $S$ is the floating-point scale factor, which defines the continuous step size between discrete quantized bins.
-    \item $Z$ is the 8-bit integer zero-point offset, which aligns the real-world mathematical zero with the quantized integer zero to ensure zero-padding operations remain precise.
+    \item $S$ is the floating-point scale factor, which effectively defines the continuous step size between discrete quantised bins.
+    \item $Z$ is the 8-bit integer zero-point offset, which aligns the real-world mathematical zero with the quantised integer zero in order to ensure zero-padding operations remain absolutely precise.
 \end{itemize}
 
-By mapping 32-bit floats to 8-bit integers, the model's memory footprint is deterministically compressed by $75\%$ (e.g., reducing a 400 MB architecture to approximately 100 MB). Because INT8 operands are significantly smaller, modern hardware can pack multiple operations into single SIMD (Single Instruction, Multiple Data) registers, leveraging AVX-512 Vector Neural Network Instructions (VNNI) on CPUs or Tensor Cores on GPUs. This delivers a $2\times$ to $4\times$ acceleration in inference latency while historically yielding less than a $1\%$ degradation in top-1 accuracy.
+By mapping 32-bit floats to 8-bit integers, the model's memory footprint is deterministically compressed by $75\%$ (for example, reducing a 400 MB architecture to approximately 100 MB). Because INT8 operands are significantly smaller, modern hardware can efficiently pack multiple operations into single SIMD (Single Instruction, Multiple Data) registers, strongly leveraging AVX-512 Vector Neural Network Instructions (VNNI) on CPUs or Tensor Cores on GPUs. This delivers a $2\times$ to $4\times$ acceleration in inference latency whilst historically yielding less than a $1\%$ degradation in top-1 accuracy.
 
 \section{Marginal Coverage Guarantees in Conformal Prediction}
 \label{sec:conformal_math}
 
-Standard classification models output uncalibrated probability distributions. In a biological monitoring context, an uncalibrated model might assign a $99\%$ softmax probability to a specific species of tiger, even when presented with a heavily obscured photograph of a domestic cat. Relying on these raw probability scores introduces unacceptable epistemic risk into the data pipeline.
+Standard classification models merely output uncalibrated probability distributions. In a biological monitoring context, an uncalibrated model might confidently assign a $99\%$ softmax probability to a specific species of tiger, even when presented with a heavily obscured photograph of a domestic cat. Relying on these raw probability scores inevitably introduces unacceptable epistemic risk into the data pipeline.
 
-To mitigate this, the architecture wraps the base classifier in a Split Conformal Prediction layer. Rather than forcing the model to emit a single, highly confident (but potentially incorrect) point prediction, conformal prediction evaluates the input ambiguity and generates a dynamic \textit{set} of candidate taxa. If the visual input is clean and prototypical, the set collapses to a single species. If the image is blurry, occluded, or visually ambiguous, the set naturally expands (e.g., returning three visually similar sibling species) to maintain mathematical safety.
+In order to thoroughly mitigate this, the architecture securely wraps the base classifier in a Split Conformal Prediction layer. Rather than forcing the model to emit a single, highly confident -- yet potentially entirely incorrect -- point prediction, conformal prediction explicitly evaluates the input ambiguity and generates a dynamic \textit{set} of candidate taxa. If the visual input is clean and prototypical, the set cleanly collapses to a single species. If the image is blurry, occluded, or visually ambiguous, the set naturally expands (for instance, returning three visually similar sibling species) to maintain absolute mathematical safety.
 
 Formally, this epistemic safety is guaranteed by the marginal coverage theorem:
 \[
@@ -41,33 +41,33 @@ Where:
     \item $\mathbb{P}$ denotes the probability measure taken over the exchangeable joint distribution of images and taxonomic labels.
     \item $X_{n+1}$ represents the unseen test observation (the incoming citizen-science photograph features).
     \item $Y_{n+1}$ is the unobserved, true ground-truth taxonomic label for that test observation.
-    \item $\hat{C}(X_{n+1})$ is the dynamic prediction set generated by the conformal algorithm, containing zero, one, or multiple candidate taxa.
-    \item $\alpha$ is the user-defined nominal significance level (error tolerance). For example, setting $\alpha = 0.05$ enforces a $95\%$ coverage guarantee.
+    \item $\hat{C}(X_{n+1})$ is the dynamic prediction set systematically generated by the conformal algorithm, containing zero, one, or multiple candidate taxa.
+    \item $\alpha$ is the user-defined nominal significance level (error tolerance). For example, setting $\alpha = 0.05$ rigorously enforces a $95\%$ coverage guarantee.
 \end{itemize}
 
-This theorem provides a distribution-free guarantee, meaning that exactly $1 - \alpha$ of all future predictions will correctly contain the true species within the returned set, regardless of the underlying data distribution, lighting conditions, or base model architecture.
+This theorem provides a remarkably robust distribution-free guarantee. This means that exactly $1 - \alpha$ of all future predictions will correctly contain the true species within the returned set, completely regardless of the underlying data distribution, lighting conditions, or base model architecture.
 
 \section{Memory Complexity of Hierarchical Vector Graphs}
 \label{sec:hnsw_memory}
 
-Retrieval-augmented generation systems frequently bottleneck on disk I/O when attempting to query massive vector databases stored on solid-state drives. To guarantee sub-millisecond retrieval latency during the Single-Stage Metadata-Filtered HNSW traversal, the entire Reference Exemplar Catalog must fit completely within the host system's Random Access Memory (RAM).
+Retrieval-augmented generation systems frequently bottleneck on disk I/O when attempting to query massive vector databases stored on solid-state drives. In order to guarantee sub-millisecond retrieval latency during the Single-Stage Metadata-Filtered HNSW traversal, the entire Reference Exemplar Catalogue must clearly fit completely within the host system's Random Access Memory (RAM).
 
-To achieve this, the architecture aggressively bounds the catalog size. Assuming the system scales to support a global baseline of $10,000$ distinct taxa, and curates exactly $50$ environmental crops per taxon, the vector index reaches a deterministic upper bound of $500,000$ nodes.
+In order to achieve this, the architecture aggressively bounds the catalogue size. Assuming the system scales to support a global baseline of $10,000$ distinct taxa, and curates exactly $50$ environmental crops per taxon, the vector index reaches a safe, deterministic upper bound of $500,000$ nodes.
 
-The theoretical memory lower bound $\mathcal{M}_{\text{index}}$ required to store the raw embedding vectors in memory is calculated as:
+The theoretical memory lower bound $\mathcal{M}_{\text{index}}$ required to securely store the raw embedding vectors in memory is mathematically calculated as:
 \[
 \mathcal{M}_{\text{index}} = N_{\text{nodes}} \times D_{\text{dim}} \times B_{\text{bytes}}
 \]
 Where:
 \begin{itemize}
     \item $\mathcal{M}_{\text{index}}$ is the total theoretical memory footprint required to store the raw embedding vectors in RAM.
-    \item $N_{\text{nodes}}$ is the absolute upper bound of discrete biological exemplars in the retrieval catalog ($500,000$).
-    \item $D_{\text{dim}}$ is the feature dimensionality of the chosen Vision Foundation Model (e.g., $768$ dimensions for a standard ViT-Base backbone).
+    \item $N_{\text{nodes}}$ is the absolute upper bound of discrete biological exemplars within the retrieval catalogue ($500,000$).
+    \item $D_{\text{dim}}$ is the feature dimensionality of the chosen Vision Foundation Model (for example, $768$ dimensions for a standard ViT-Base backbone).
     \item $B_{\text{bytes}}$ is the byte-size of the numerical precision format ($4$ bytes for standard FP32).
 \end{itemize}
 
-Evaluating this expression yields:
+Evaluating this expression logically yields:
 \[
 \mathcal{M}_{\text{index}} = 500,000 \times 768 \times 4 \text{ bytes} = 1,536,000,000 \text{ bytes} \approx 1.53 \text{ GB}
 \]
-By proving that the uncompressed vector payload requires approximately $1.53 \text{ GB}$, the system guarantees that the entire HNSW graph (including navigational edge overhead) will consume less than $3 \text{ GB}$ of host memory. This allows the index to remain resident in fast RAM concurrently alongside the FastAPI worker processes, completely bypassing slow hard-drive reads and preserving the $25 \text{ ms}$ inference SLA.
+By formally proving that the uncompressed vector payload requires approximately $1.53 \text{ GB}$, the system firmly guarantees that the entire HNSW graph (including navigational edge overhead) will safely consume less than $3 \text{ GB}$ of host memory. This critically allows the index to remain resident in fast RAM concurrently alongside the FastAPI worker processes, thereby completely bypassing slow hard-drive reads and successfully preserving the $25 \text{ ms}$ inference SLA.

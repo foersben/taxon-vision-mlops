@@ -2,88 +2,88 @@
 \chapter{Observability, Testing \& Deployment}
 \label{ch:observability}
 
-Transitioning a deep learning system from a localized development environment into a production ecosystem fundamentally shifts the engineering challenge from model optimization to system verification, runtime isolation, and continuous operational health monitoring. A machine learning service rarely fails through overt code exceptions; instead, it fails silently through data distribution shift, memory leaks under continuous streaming, Translation Lookaside Buffer thrashing, and uncalibrated epistemic decay.
+Transitioning a deep learning system from a localised development environment into a production ecosystem fundamentally shifts the engineering challenge from model optimisation to system verification, runtime isolation, and continuous operational health monitoring. A machine learning service rarely fails through overt code exceptions; instead, it fails silently through data distribution shift, memory leaks under continuous streaming, Translation Lookaside Buffer thrashing, and uncalibrated epistemic decay.
 
-To maintain production integrity, the deployment architecture couples containerized runtime encapsulation with Kubernetes cluster orchestration, real-time statistical telemetry, and a multi-tiered verification framework. This chapter outlines the software engineering mechanisms governing containerization, traffic routing, automated drift alerting, and offline testing suites.
+In order to maintain production integrity, our deployment architecture rigorously couples containerised runtime encapsulation with Kubernetes cluster orchestration, real-time statistical telemetry, and a multi-tiered verification framework. This chapter outlines the software engineering mechanisms governing containerisation, traffic routing, automated drift alerting, and offline testing suites.
 
-\section{Containerization and Multi-Stage Runtimes}
+\section{Containerisation and Multi-Stage Runtimes}
 \label{sec:containerization}
 
-Standard Python environments managed via virtual environment tools are notoriously fragile in production. Differences in dynamically linked system libraries, CUDA driver mismatches on host kernels, and unversioned C-extension compilation dependencies frequently cause models to behave non-deterministically across infrastructure boundaries. 
+Standard Python environments managed via virtual environment tools are notoriously fragile in production. Differences in dynamically linked system libraries, CUDA driver mismatches on host kernels, and unversioned C-extension compilation dependencies frequently cause models to behave non-deterministically across infrastructure boundaries.
 
-To guarantee bit-exact execution determinism, the platform packages the inference engine into an immutable container image using a multi-stage Docker build pipeline. This process isolates the build environment from the final execution runtime, drastically shrinking the attack surface and image size.
+In order to guarantee bit-exact execution determinism, the platform carefully packages the inference engine into an immutable container image using a multi-stage Docker build pipeline. This process cleanly isolates the build environment from the final execution runtime, thereby drastically shrinking the attack surface and image size.
 
 \subsection{Multi-Stage Image Compilation}
-The build pipeline is partitioned into two distinct stages:
+The build pipeline is logically partitioned into two distinct stages:
 \begin{enumerate}
-    \item \textbf{The Builder Stage:} Utilizes a full Linux distribution equipped with C++ compilation toolchains, NVIDIA CUDA development toolkits, and the Pixi package manager. In this stage, Pixi resolves the exact dependency graph specified in \texttt{pyproject.toml} and locked in \texttt{pixi.lock}, compiling native C-extensions and pre-building optimized ONNX Runtime binaries.
-    \item \textbf{The Runtime Stage:} A minimal, distroless Debian-slim base image is initialized, containing strictly the shared Linux kernel interfaces and runtime CUDA execution libraries. The compiled virtual environment, static assets, and FastAPI service code are copied from the builder stage without carrying over compilers, debugging symbols, or package caches.
+    \item \textbf{The Builder Stage:} Utilises a full Linux distribution equipped with C++ compilation toolchains, NVIDIA CUDA development toolkits, and the Pixi package manager. In this stage, Pixi elegantly resolves the exact dependency graph specified in \texttt{pyproject.toml} and locked in \texttt{pixi.lock}, compiling native C-extensions and pre-building optimised ONNX Runtime binaries.
+    \item \textbf{The Runtime Stage:} A minimal, distroless Debian-slim base image is initialised, containing strictly the shared Linux kernel interfaces and runtime CUDA execution libraries. The compiled virtual environment, static assets, and FastAPI service code are subsequently copied from the builder stage without carrying over compilers, debugging symbols, or package caches.
 \end{enumerate}
 
 \subsection{Kernel-Level Process Isolation}
-At runtime, execution security and resource determinism are enforced directly through Linux kernel primitives:
+At runtime, execution security and resource determinism are enforced directly through robust Linux kernel primitives:
 \begin{itemize}
-    \item \textbf{Namespaces:} The containerized process is isolated across six discrete namespaces: Process ID (PID) isolation prevents inspection of host workloads, Network (NET) virtualization seals internal socket bindings, Mount (MNT) controls filesystem scoping, and Inter-Process Communication (IPC) prevents unauthorized shared memory access.
-    \item \textbf{Control Groups (cgroups v2):} Hardware utilization boundaries are enforced at the kernel boundary. The container runtime configures hard memory ceilings to eliminate out-of-memory cascading failures and pins CPU thread execution to prevent thread migration away from dedicated host performance cores.
-    \item \textbf{Rootless Execution:} The container runs strictly under an unprivileged user namespace (\texttt{USER appuser}), mounting the root filesystem as read-only and routing temporary scratch buffers to an ephemeral, in-memory \texttt{tmpfs} volume.
+    \item \textbf{Namespaces:} The containerised process is systematically isolated across six discrete namespaces: Process ID (PID) isolation prevents inspection of host workloads, Network (NET) virtualisation seals internal socket bindings, Mount (MNT) controls filesystem scoping, and Inter-Process Communication (IPC) strictly prevents unauthorised shared memory access.
+    \item \textbf{Control Groups (cgroups v2):} Hardware utilisation boundaries are enforced at the kernel boundary. The container runtime configures hard memory ceilings to entirely eliminate out-of-memory cascading failures and carefully pins CPU thread execution to prevent thread migration away from dedicated host performance cores.
+    \item \textbf{Rootless Execution:} The container runs strictly under an unprivileged user namespace (\texttt{USER appuser}), mounting the root filesystem as read-only and intelligently routing temporary scratch buffers to an ephemeral, in-memory \texttt{tmpfs} volume.
 \end{itemize}
 
 \section{Kubernetes Cluster Orchestration and Workload Routing}
 \label{sec:k8s_orchestration}
 
-Deploying a hybrid vision architecture---where routine queries resolve in sub-25ms hot paths while ambiguous queries trigger heavy generative multimodal retrieval---requires cluster orchestration capable of handling highly asymmetric latency profiles. The system is deployed across a managed Kubernetes cluster configured to separate lightweight inference paths from resource-intensive Vision RAG pipelines.
+Deploying a hybrid vision architecture -- where routine queries resolve in sub-25ms hot paths whilst ambiguous queries trigger heavy generative multimodal retrieval -- requires cluster orchestration capable of handling highly asymmetric latency profiles. The system is deployed across a managed Kubernetes cluster strictly configured to separate lightweight inference paths from resource-intensive Vision RAG pipelines.
 
 \subsection{Asymmetric Pod Architecture and Ingress Routing}
-Rather than packaging the fast-path ONNX classifier and the multi-gigabyte Vision-Language Model into a single monolithic pod, the cluster architecture splits the workload into two specialized microservices:
+Rather than packaging the fast-path ONNX classifier and the multi-gigabyte Vision-Language Model into a single monolithic pod, the cluster architecture deliberately splits the workload into two specialised microservices:
 \begin{enumerate}
-    \item \textbf{The Primary Classifier Service (\texttt{taxon-vision-serving}):} A high-density, horizontally scaled deployment of lightweight FastAPI pods hosting the INT8 quantized ONNX backbone and the Split Conformal Prediction engine. These pods require minimal VRAM ($\approx 1.5\text{ GB}$) and handle 100\% of initial incoming traffic, resolving 85\% of queries in under $22\text{ ms}$.
-    \item \textbf{The Multimodal RAG Service (\texttt{taxon-vision-vlm}):} A specialized, resource-allocated deployment mounting dedicated GPU Tensor Cores to host the quantized 2-billion parameter Vision-Language Model and the in-memory HNSW vector index.
+    \item \textbf{The Primary Classifier Service (\texttt{taxon-vision-serving}):} A high-density, horizontally scaled deployment of lightweight FastAPI pods hosting the INT8 quantised ONNX backbone and the Split Conformal Prediction engine. These pods require minimal VRAM ($\approx 1.5\text{ GB}$) and handle 100\% of initial incoming traffic, rapidly resolving 85\% of queries in under $22\text{ ms}$.
+    \item \textbf{The Multimodal RAG Service (\texttt{taxon-vision-vlm}):} A specialised, resource-allocated deployment mounting dedicated GPU Tensor Cores to host the quantised 2-billion parameter Vision-Language Model and the in-memory HNSW vector index.
 \end{enumerate}
 
-An ingress controller inspects incoming network payloads and load-balances observation traffic across the \texttt{taxon-vision-serving} pods. If an observation's conformal prediction set cardinality evaluates to $|C| = 1$, the primary pod returns the classification directly through the ingress to the client. If the conformal layer flags ambiguity ($|C| > 1$) or novelty ($|C| = 0$), the primary service dispatches an asynchronous internal gRPC call to the \texttt{taxon-vision-vlm} service, which executes filtered graph traversal, synthesizes the comparative diagnostic context, and returns the structured differential payload.
+An ingress controller inspects incoming network payloads and intelligently load-balances observation traffic across the \texttt{taxon-vision-serving} pods. If an observation's conformal prediction set cardinality evaluates to $|C| = 1$, the primary pod returns the classification directly through the ingress to the client. If the conformal layer flags ambiguity ($|C| > 1$) or novelty ($|C| = 0$), the primary service seamlessly dispatches an asynchronous internal gRPC call to the \texttt{taxon-vision-vlm} service. This service then executes filtered graph traversal, synthesises the comparative diagnostic context, and efficiently returns the structured differential payload.
 
 \subsection{Self-Healing and Health Probing}
-To prevent cluster degradation caused by deadlocks or memory corruption, Kubernetes enforces dual-tier health probes:
+In order to prevent cluster degradation caused by deadlocks or memory corruption, Kubernetes enforces dual-tier health probes:
 \begin{itemize}
     \item \textbf{Liveness Probes:} The kubelet periodically polls a lightweight \texttt{/healthz/liveness} HTTP endpoint. If the FastAPI event loop becomes unresponsive or encounters an unrecoverable worker thread failure, the control plane immediately terminates the failing container and instantiates a clean replica.
-    \item \textbf{Readiness Probes:} A separate \texttt{/healthz/readiness} probe verifies that internal model buffers, CUDA execution providers, and HNSW graph indexes are fully loaded into memory before the ingress controller routes live citizen-science observation traffic to the pod.
+    \item \textbf{Readiness Probes:} A separate \texttt{/healthz/readiness} probe strictly verifies that internal model buffers, CUDA execution providers, and HNSW graph indexes are fully loaded into memory before the ingress controller ever routes live citizen-science observation traffic to the pod.
 \end{itemize}
 
 \subsection{Horizontal Pod Autoscaling on Custom Telemetry}
-Standard Kubernetes autoscaling relies on CPU or system memory thresholds, which provide misleading operational signals for neural network workloads. A GPU-bound container can experience severe execution queuing while reporting low CPU utilization. 
+Standard Kubernetes autoscaling typically relies on CPU or system memory thresholds, which unfortunately provide misleading operational signals for neural network workloads. A GPU-bound container can experience severe execution queuing whilst reporting surprisingly low CPU utilisation.
 
-The cluster implements Horizontal Pod Autoscaling (HPA) driven by custom Prometheus metrics via the Kubernetes Custom Metrics API. The autoscaler monitors two primary indicators:
+The cluster implements Horizontal Pod Autoscaling (HPA) driven by custom Prometheus metrics via the Kubernetes Custom Metrics API. The autoscaler continuously monitors two primary indicators:
 \begin{enumerate}
-    \item \textbf{GPU VRAM Saturation and Compute Utilization:} Sourced directly from NVIDIA Data Center GPU Manager (DCGM) metrics.
-    \item \textbf{Conformal Ambiguity Influx:} Sourced from the application's telemetry. If an environmental event (e.g., sudden regional weather shifts causing blurred imagery) causes the proportion of multi-candidate conformal sets ($|C| > 1$) to spike, the HPA preemptively scales the \texttt{taxon-vision-vlm} pod pool to absorb the anticipated surge in heavy multimodal retrieval passes before service latency degrades.
+    \item \textbf{GPU VRAM Saturation and Compute Utilisation:} Sourced directly from NVIDIA Data Center GPU Manager (DCGM) metrics.
+    \item \textbf{Conformal Ambiguity Influx:} Sourced directly from the application's telemetry. If an environmental event (for example, sudden regional weather shifts causing blurred imagery) causes the proportion of multi-candidate conformal sets ($|C| > 1$) to spike, the HPA preemptively scales the \texttt{taxon-vision-vlm} pod pool to comfortably absorb the anticipated surge in heavy multimodal retrieval passes before service latency inevitably degrades.
 \end{enumerate}
 
 \section{Telemetry, Metric Exporters, and Concept Drift Monitoring}
 \label{sec:observability_telemetry}
 
-Unlike traditional software services that experience deterministic failure modes, machine learning systems are vulnerable to silent statistical degradation. A model endpoint can report 100\% uptime and sub-millisecond HTTP response times while outputting meaningless ecological predictions due to seasonal distribution shifts, camera sensor variations, or geographic migrations. The platform embeds comprehensive statistical telemetry into the serving runtime.
+Unlike traditional software services that experience deterministic failure modes, machine learning systems are uniquely vulnerable to silent statistical degradation. A model endpoint can report 100\% uptime and sub-millisecond HTTP response times whilst concurrently outputting meaningless ecological predictions due to seasonal distribution shifts, camera sensor variations, or geographic migrations. Thus, the platform embeds comprehensive statistical telemetry deeply into the serving runtime.
 
 \subsection{Prometheus Telemetry Instrumentation}
-The FastAPI application exposes a secure \texttt{/metrics} endpoint scraped at regular intervals by a Prometheus time-series collector. Monitored indicators span system infrastructure, computational latency, and model decision distributions:
+The FastAPI application exposes a secure \texttt{/metrics} endpoint scraped at regular intervals by a Prometheus time-series collector. Monitored indicators comprehensively span system infrastructure, computational latency, and model decision distributions:
 \begin{itemize}
-    \item \textbf{Inference Latency Histograms (\texttt{inference\_latency\_seconds\_bucket}):} High-resolution histograms tracking the duration of zero-shot cropping, ONNX backbone execution, and conformal set evaluation, generating empirical p50, p95, and p99 latency distributions.
-    \item \textbf{Conformal Prediction Set Distribution (\texttt{conformal\_set\_size}):} A sliding-window metric tracking the cardinality distribution of $\hat{C}(X)$. Under stationary distribution conditions, the average set size $\mathbb{E}[|\hat{C}|]$ remains constant. An expansion in set size indicates rising classification ambiguity.
+    \item \textbf{Inference Latency Histograms (\texttt{inference\_latency\_seconds\_bucket}):} High-resolution histograms tracking the duration of zero-shot cropping, ONNX backbone execution, and conformal set evaluation, effectively generating empirical p50, p95, and p99 latency distributions.
+    \item \textbf{Conformal Prediction Set Distribution (\texttt{conformal\_set\_size}):} A sliding-window metric tracking the cardinality distribution of $\hat{C}(X)$. Under stationary distribution conditions, the average set size $\mathbb{E}[|\hat{C}|]$ remains fundamentally constant. A measured expansion in set size mathematically indicates rising classification ambiguity.
     \item \textbf{Energy OOD Rejection Counter (\texttt{ood\_rejections\_total}):} Tracks the cumulative volume and rate of incoming images rejected by the free-energy scoring layer ($E(x; f) > \tau_{\text{OOD}}$).
     \item \textbf{Tail-Species Classification Gauge (\texttt{tail\_species\_accuracy}):} Monitors real-time identification accuracy on verified long-tail species subsets possessing fewer than 20 historical training observations.
 \end{itemize}
 
 \subsection{Mathematical Formulation of Feature Drift via Maximum Mean Discrepancy}
-To detect subtle visual distribution shifts before they manifest as catastrophic classification errors, the monitoring pipeline evaluates high-dimensional feature drift over the penultimate embedding space $\mathbb{R}^{d}$. 
+In order to detect subtle visual distribution shifts before they manifest as catastrophic classification errors, the monitoring pipeline mathematically evaluates high-dimensional feature drift over the penultimate embedding space $\mathbb{R}^{d}$.
 
-Let $\mathcal{Z}_{\text{base}} = \{z_1, \dots, z_M\}$ denote a reference baseline distribution of $M$ feature vectors extracted from the holdout validation split during model calibration. Let $\mathcal{Z}_{\text{prod}} = \{z_1', \dots, z_N'\}$ denote a streaming batch of $N$ feature vectors collected from live production inference over a rolling temporal window $W$. 
+Let $\mathcal{Z}_{\text{base}} = \{z_1, \dots, z_M\}$ denote a reference baseline distribution of $M$ feature vectors gracefully extracted from the holdout validation split during model calibration. Let $\mathcal{Z}_{\text{prod}} = \{z_1', \dots, z_N'\}$ denote a streaming batch of $N$ feature vectors collected from live production inference over a rolling temporal window $W$.
 
-The system computes the Maximum Mean Discrepancy (MMD), a non-parametric metric evaluating the distance between two probability distributions within a Reproducing Kernel Hilbert Space (RKHS). Formally, the empirical squared MMD is calculated as:
+The system formally computes the Maximum Mean Discrepancy (MMD), a non-parametric metric evaluating the distance between two probability distributions within a Reproducing Kernel Hilbert Space (RKHS). Formally, the empirical squared MMD is calculated as follows:
 \[
 \text{MMD}^2(\mathcal{Z}_{\text{base}}, \mathcal{Z}_{\text{prod}}) = \frac{1}{M^2} \sum_{i=1}^M \sum_{j=1}^M k(z_i, z_j) - \frac{2}{MN} \sum_{i=1}^M \sum_{j=1}^N k(z_i, z_j') + \frac{1}{N^2} \sum_{i=1}^N \sum_{j=1}^N k(z_i', z_j')
 \]
 Where:
 \begin{itemize}
-    \item $\mathcal{Z}_{\text{base}}$ is the set of $M$ baseline visual embeddings cached during offline calibration.
+    \item $\mathcal{Z}_{\text{base}}$ is the set of $M$ baseline visual embeddings cleanly cached during offline calibration.
     \item $\mathcal{Z}_{\text{prod}}$ is the set of $N$ production visual embeddings observed during live operation.
     \item $M$ and $N$ denote the sample cardinalities of the baseline and production splits, respectively.
     \item $z_i, z_j \in \mathcal{Z}_{\text{base}}$ represent individual reference embedding vectors.
@@ -96,33 +96,33 @@ Where:
 \end{itemize}
 
 \subsection{Automated Alerting and Continuous Retraining Triggers}
-Prometheus Alertmanager evaluates streaming metrics against hard operational invariants. Two primary conditions trigger automated intervention:
+Prometheus Alertmanager evaluates streaming metrics directly against hard operational invariants. Two primary conditions trigger automated intervention:
 \begin{enumerate}
     \item \textbf{Conformal Inflation Alert:} Triggered if the mean prediction set cardinality $\mathbb{E}[|\hat{C}|]$ expands by more than $20\%$ over a rolling 1-hour window relative to baseline calibration distributions.
-    \item \textbf{Embedding Drift Alert:} Triggered if the feature space distribution distance exceeds an empirical threshold, $\text{MMD}^2(\mathcal{Z}_{\text{base}}, \mathcal{Z}_{\text{prod}}) > \tau_{\text{drift}}$.
+    \item \textbf{Embedding Drift Alert:} Triggered if the feature space distribution distance securely exceeds an empirical threshold, $\text{MMD}^2(\mathcal{Z}_{\text{base}}, \mathcal{Z}_{\text{prod}}) > \tau_{\text{drift}}$.
 \end{enumerate}
 
-When an alert fires, Alertmanager dispatches an authenticated webhook payload to the GitHub Actions repository gateway (\texttt{repository\_dispatch} event). This initiates an automated Level 3 continuous training workflow: the local bare-metal runner pulls the newest validated DVC dataset snapshot, retrains the classification head with Class-Balanced Loss, re-calibrates the conformal quantile $\hat{q}_\alpha$, executes regression invariant tests, and opens a staging Pull Request containing the comparative telemetry plots for engineering sign-off.
+When an alert inevitably fires, Alertmanager dispatches an authenticated webhook payload to the GitHub Actions repository gateway (\texttt{repository\_dispatch} event). This initiates an automated Level 3 continuous training workflow: the local bare-metal runner pulls the newest validated DVC dataset snapshot, retrains the classification head with Class-Balanced Loss, rigidly re-calibrates the conformal quantile $\hat{q}_\alpha$, executes regression invariant tests, and finally opens a staging Pull Request containing the comparative telemetry plots for engineering sign-off.
 
 \section{Multi-Tier Verification and Testing Strategy}
 \label{sec:testing_strategy}
 
-A continuous integration pipeline for machine learning must validate more than simple syntax correctness. The TaxonVision-MLOps testing framework enforces a four-tiered verification suite executing on every commit.
+A continuous integration pipeline for machine learning must validate considerably more than simple syntax correctness. The TaxonVision-MLOps testing framework strictly enforces a four-tiered verification suite executing on every commit.
 
 \subsection{Tier 1: Upstream API Mocking}
-During automated CI builds, executing real network requests against the live iNaturalist API violates rate-limiting policies and introduces non-deterministic network latency. 
+During automated CI builds, executing real network requests against the live iNaturalist API violates rate-limiting policies and inevitably introduces non-deterministic network latency.
 
-The test harness uses the \texttt{responses} library to intercept outgoing HTTP calls at the transport layer. The test runner injects mock JSON responses simulating diverse API states: valid DarwinCore metadata payloads, rate-limited responses (HTTP 429), server timeout conditions (HTTP 504), and malformed taxonomic trees. This guarantees that ingestion, license filtering, and coordinate parsing logic are validated in under 5 seconds without network dependencies.
+The test harness uses the \texttt{responses} library to gracefully intercept outgoing HTTP calls at the transport layer. The test runner injects mock JSON responses simulating diverse API states: valid DarwinCore metadata payloads, rate-limited responses (HTTP 429), server timeout conditions (HTTP 504), and malformed taxonomic trees. This rigorously guarantees that ingestion, licence filtering, and coordinate parsing logic are safely validated in under 5 seconds without any network dependencies.
 
 \subsection{Tier 2: Object Storage and Pipeline Mocking}
-To test Data Version Control (DVC) pipelines and S3 streaming operations without incurring AWS billing or requiring live DagsHub credentials, the integration suite employs the \texttt{moto} testing library.
+In order to test Data Version Control (DVC) pipelines and S3 streaming operations without incurring AWS billing or requiring live DagsHub credentials, the integration suite happily employs the \texttt{moto} testing library.
 
-The test setup instantiates an in-memory, ephemeral AWS S3 service directly within the local pytest process. The DVC client is pointed toward this virtual endpoint, allowing the test runner to verify cryptographic hash tracking, multi-part binary streaming, and dataset version switching entirely in local memory.
+The test setup intelligently instantiates an in-memory, ephemeral AWS S3 service directly within the local pytest process. The DVC client is pointed towards this virtual endpoint, readily allowing the test runner to strictly verify cryptographic hash tracking, multi-part binary streaming, and dataset version switching entirely in local memory.
 
 \subsection{Tier 3: Mathematical Invariant Testing}
-Standard software testing relies on binary assertions (e.g., verifying an output equals a known constant). Machine learning models, however, are probabilistic. The pipeline introduces mathematical invariant tests that evaluate statistical coverage guarantees before model serialization.
+Standard software testing relies heavily on binary assertions (for example, verifying an output equals a known constant). Machine learning models, however, are inherently probabilistic. The pipeline introduces robust mathematical invariant tests that evaluate statistical coverage guarantees well before model serialisation.
 
-The test runner loads the newly trained ONNX candidate model and evaluates it against an unseen holdout test split $\mathcal{D}_{\text{test}} = \{(x_i, y_i)\}_{i=1}^{n_{\text{test}}}$. The test formally asserts that the empirical coverage satisfies the statistical bound:
+The test runner dutifully loads the newly trained ONNX candidate model and evaluates it against an unseen holdout test split $\mathcal{D}_{\text{test}} = \{(x_i, y_i)\}_{i=1}^{n_{\text{test}}}$. The test formally asserts that the empirical coverage mathematically satisfies the statistical bound:
 \[
 \text{Empirical Coverage} = \frac{1}{n_{\text{test}}} \sum_{i=1}^{n_{\text{test}}} \mathbb{I}\left(y_i \in \hat{C}(x_i)\right) \ge 1 - \alpha
 \]
@@ -131,43 +131,43 @@ Where:
     \item $n_{\text{test}}$ is the total number of evaluation observations in the holdout split.
     \item $(x_i, y_i)$ denotes the $i$-th test image and its corresponding ground-truth Linnaean label.
     \item $\hat{C}(x_i)$ is the prediction set output by the conformal engine evaluated at threshold $\hat{q}_\alpha$.
-    \item $\mathbb{I}(\cdot)$ is the indicator function, evaluating to $1$ if the true label $y_i$ is contained within $\hat{C}(x_i)$, and $0$ otherwise.
+    \item $\mathbb{I}(\cdot)$ is the indicator function, evaluating to $1$ if the true label $y_i$ is safely contained within $\hat{C}(x_i)$, and $0$ otherwise.
     \item $\alpha$ is the nominal significance error rate ($\alpha = 0.05$).
 \end{itemize}
-If the empirical coverage drops below $0.95$, the test fails with a fatal error, preventing an under-covered, uncalibrated model from being packaged into a release artifact.
+If the empirical coverage drops below $0.95$, the test fails with a fatal error. This mathematically prevents an under-covered, uncalibrated model from ever being packaged into a release artefact.
 
 \subsection{Tier 4: Statistical Metric Selection and Anomaly Verification}
-In traditional computer vision benchmarking, the Area Under the Receiver Operating Characteristic curve (AUROC) is widely utilized to quantify model discrimination. In biological species monitoring and ecological anomaly detection, however, \textbf{AUROC is fundamentally flawed and actively deceptive}.
+In traditional computer vision benchmarking, the Area Under the Receiver Operating Characteristic curve (AUROC) is widely utilised to quantify model discrimination. In biological species monitoring and ecological anomaly detection, however, \textbf{AUROC is fundamentally flawed and actively deceptive}.
 
 \subsubsection{The Failure of AUROC under Ecological Class Imbalance}
-Biological datasets are governed by extreme power-law distributions: common species possess tens of thousands of observations, while rare long-tail species and genuine out-of-distribution anomalies account for a minuscule fraction of the data. 
+Biological datasets are heavily governed by extreme power-law distributions: common species possess tens of thousands of observations, whilst rare long-tail species and genuine out-of-distribution anomalies account for a minuscule fraction of the data.
 
-The AUROC metric evaluates the trade-off between the True Positive Rate ($TPR$) and the False Positive Rate ($FPR$):
+The AUROC metric mathematically evaluates the trade-off between the True Positive Rate ($TPR$) and the False Positive Rate ($FPR$):
 \[
 TPR = \frac{TP}{TP + FN}, \quad FPR = \frac{FP}{FP + TN}
 \]
 Where $TP$, $FP$, $TN$, and $FN$ denote the counts of true positives, false positives, true negatives, and false negatives, respectively.
 
-Because the negative class (normal, common organisms or background pixels) vastly outnumbers the anomalous class, the denominator of the False Positive Rate ($FP + TN$) is dominated by $TN$. Consequently, an algorithm can generate thousands of false positive alarms ($FP$), yet the calculated $FPR$ remains near zero due to the massive $TN$ divisor. A model exhibiting an apparently stellar AUROC score of $0.98$ can simultaneously suffer a catastrophic precision collapse in production, inundating human experts with hundreds of false alerts.
+Because the negative class (normal, common organisms or background pixels) vastly outnumbers the anomalous class, the denominator of the False Positive Rate ($FP + TN$) is aggressively dominated by $TN$. Consequently, an algorithm can easily generate thousands of false positive alarms ($FP$), yet the calculated $FPR$ remains near zero due to the massive $TN$ divisor. A model exhibiting an apparently stellar AUROC score of $0.98$ can simultaneously suffer a catastrophic precision collapse in production, inundating human experts with hundreds of useless false alerts.
 
 \subsubsection{Mandating PR-AUC and AUPIMO}
-To prevent misleading verification gates, the testing suite explicitly rejects AUROC in favor of Precision-Recall Area Under the Curve (PR-AUC) and Area Under the Per-Image Overlap (AUPIMO).
+In order to permanently prevent misleading verification gates, the testing suite explicitly rejects AUROC in favour of Precision-Recall Area Under the Curve (PR-AUC) and Area Under the Per-Image Overlap (AUPIMO).
 
-For classification and global Out-of-Distribution anomaly detection, the pipeline evaluates PR-AUC:
+For classification and global Out-of-Distribution anomaly detection, the pipeline robustly evaluates PR-AUC:
 \[
 \text{PR-AUC} = \int_{0}^{1} \text{Precision}(R) \, dR
 \]
-Where Precision is defined as $\frac{TP}{TP + FP}$ and Recall ($R$) is defined as $\frac{TP}{TP + FN}$. Because PR-AUC completely excludes True Negatives ($TN$) from its formulation, it directly reflects the proportion of true biological anomalies among all flagged alerts, providing an honest measure of real-world efficacy.
+Where Precision is formally defined as $\frac{TP}{TP + FP}$ and Recall ($R$) is defined as $\frac{TP}{TP + FN}$. Because PR-AUC mathematically excludes True Negatives ($TN$) from its formulation entirely, it directly reflects the true proportion of genuine biological anomalies amongst all flagged alerts, thus providing an honest measure of real-world efficacy.
 
-For zero-shot visual cropping, bounding-box isolation, and spatial anomaly segmentation, the test harness enforces the Area Under the Per-Image Overlap (AUPIMO) metric. Unlike global pixel-level metrics that allow large contiguous background areas to distort evaluation scores, AUPIMO computes the intersection-over-union metric independently across each individual image's bounding box over varying threshold levels:
+For zero-shot visual cropping, bounding-box isolation, and spatial anomaly segmentation, the test harness enforces the Area Under the Per-Image Overlap (AUPIMO) metric. Unlike global pixel-level metrics that carelessly allow large contiguous background areas to distort evaluation scores, AUPIMO computes the intersection-over-union metric independently across each individual image's bounding box over varying threshold levels:
 \[
 \text{AUPIMO} = \frac{1}{N_{\text{images}}} \sum_{k=1}^{N_{\text{images}}} \int_{0}^{\tau_{\max}} \Omega_k(\tau) \, d\tau
 \]
 Where:
 \begin{itemize}
-    \item $N_{\text{images}}$ is the total number of test photographs evaluated in the spatial verification suite.
+    \item $N_{\text{images}}$ is the total number of test photographs carefully evaluated in the spatial verification suite.
     \item $\tau$ denotes the detection threshold, integrated from $0$ to an upper operational bound $\tau_{\max}$.
-    \item $\Omega_k(\tau)$ represents the per-image overlap rate for photograph $k$ evaluated at threshold $\tau$, defined as the ratio of correctly identified anomaly pixels within the ground-truth organism mask relative to the total organism area.
+    \item $\Omega_k(\tau)$ represents the per-image overlap rate for photograph $k$ evaluated at threshold $\tau$, defined precisely as the ratio of correctly identified anomaly pixels within the ground-truth organism mask relative to the total organism area.
 \end{itemize}
 
-By evaluating overlap per image rather than across the pooled pixel space, AUPIMO ensures that the zero-shot visual entity linking module isolates small organisms (e.g., small insects or solitary flowers) just as reliably as large organisms (e.g., large mammals or mature trees), guaranteeing that upstream cropping logic introduces zero systematic taxonomic bias into downstream retrieval.
+By thoughtfully evaluating overlap per image rather than across the pooled pixel space, AUPIMO ensures that the zero-shot visual entity linking module isolates small organisms (for example, small insects or solitary flowers) just as reliably as large organisms (such as large mammals or mature trees). This mathematical guarantee ensures that upstream cropping logic introduces zero systematic taxonomic bias into downstream retrieval.
