@@ -21,7 +21,7 @@ An automated end-to-end MLOps pipeline and high-throughput production service fo
 ## Key Capabilities
 
 * **Level 1 Closed Chain:** Ingestion of ~10 well-represented taxa, open license filtering (CC0, CC-BY, CC-BY-NC), attribution preservation, frozen feature extraction, and deployment.
-* **Level 2 Scalability & Cost:** Automated multi-backbone Pareto benchmarking (`BioCLIP-2`, `DINOv2`, `MobileNetV4`, `EfficientNet`), ONNX Runtime export with dynamic INT8/FP16 quantization, and DVC dataset versioning.
+* **Level 2 Scalability & Cost:** Automated multi-backbone Pareto benchmarking (`BioCLIP-2`, `DINOv3`, `DINOv2`, `MobileNetV4`, `EfficientNet`), ONNX Runtime export with dynamic INT8/FP16 quantization, and DVC dataset versioning.
 * **Level 3 Observability:** Automated feedback ingestion, taxonomic mutation reconciliation, and Prometheus telemetry.
 * **Level 4 Robustness & Safety:** **Split Conformal Prediction** guaranteeing distribution-free $1 - \alpha$ coverage, energy-based OOD detection, active learning triage, Class-Balanced Loss for long-tail species, and low-latency Grad-CAM heatmaps (< 25 ms).
 

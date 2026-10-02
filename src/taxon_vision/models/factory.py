@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Benjamin Förster
 # SPDX-License-Identifier: MIT
-"""Timm backbone factory supporting BioCLIP-2, DINOv2, MobileNet, and EfficientNet."""
+"""Timm backbone factory supporting BioCLIP-2, DINOv3, DINOv2, MobileNet, and EfficientNet."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import torch.nn as nn
 
 BACKBONE_REGISTRY = {
     "bioclip-2": "hf-hub:imageomics/bioclip-2",
+    "dinov3_vits14": "vit_small_patch14_dinov3",
     "dinov2_vits14": "vit_small_patch14_dinov2.lvd142m",
     "mobilenetv4_conv_small": "mobilenetv4_conv_small.e2400_r224_in1k",
     "efficientnet_b0": "efficientnet_b0.ra_in1k",

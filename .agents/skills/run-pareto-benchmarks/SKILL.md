@@ -4,7 +4,7 @@ title: Run Pareto Benchmarks
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
 version: 1.0
-description: Skill to evaluate candidate backbone accuracy vs latency vs cost.
+description: Skill to evaluate candidate backbone (DINOv3, BioCLIP-2, DINOv2, MobileNetV4) accuracy vs latency vs cost.
 tags: [skill, python]
 generated: {by: process:okf-updater, at: "2026-10-02T10:00:00Z"}
 verified: {by: process:okf-updater, at: "2026-10-02T10:00:00Z"}
@@ -16,7 +16,7 @@ sources:
 
 # Run Pareto Benchmarks
 
-Skill to evaluate candidate backbone accuracy vs latency vs cost.
+Skill to evaluate candidate backbone (DINOv3, BioCLIP-2, DINOv2, MobileNetV4) accuracy vs latency vs cost.
 
 ## Execution
 

@@ -26,6 +26,7 @@ flowchart LR
 
 ## System Tenets
 
+* **Modern Foundation Backbones:** Seamlessly supports state-of-the-art vision extractors including **DINOv3**, BioCLIP-2, DINOv2, and edge-optimized MobileNetV4 architectures.
 * **Production Chain Over Notebook Glory:** A simple, versioned, monitored, deployed, and automatically retrainable model is infinitely better than an isolated notebook model.
 * **Mathematical Safety Invariants:** Predictions are accompanied by distribution-free **Split Conformal Prediction** sets guaranteeing a user-specified error rate ($1 - \alpha$).
 * **Open Licensing & Attribution:** Adheres to DarwinCore and Creative Commons standards, strictly filtering open licenses and preserving photographer attribution.

@@ -5,6 +5,7 @@
 
 Evaluates candidate backbone extractors:
 - BioCLIP-2 (Domain-specific vision-language)
+- DINOv3-small (Newest next-gen self-supervised vision transformer)
 - DINOv2-small (Self-supervised vision transformer)
 - MobileNetV4-Conv-Small (Ultra low latency CPU edge)
 - EfficientNet-B0 (Classic balanced convolutional backbone)
@@ -42,6 +43,16 @@ def simulate_pareto_evaluation() -> list[ParetoResult]:
             throughput_fps=54.3,
             vram_peak_mb=1250.0,
             cost_per_million_usd=4.20,
+        ),
+        ParetoResult(
+            extractor="dinov3_vits14",
+            top1_accuracy=0.924,
+            top3_accuracy=0.981,
+            p50_latency_ms=13.8,
+            p95_latency_ms=18.2,
+            throughput_fps=72.5,
+            vram_peak_mb=1040.0,
+            cost_per_million_usd=2.95,
         ),
         ParetoResult(
             extractor="dinov2_vits14",

@@ -9,6 +9,7 @@ service:
 
 model:
   default_extractor: "bioclip-2"
+  available_extractors: ["bioclip-2", "dinov3_vits14", "dinov2_vits14", "mobilenetv4_conv_small", "efficientnet_b0"]
   image_size: 224
   onnx_model_path: "models/checkpoints/taxon_vision_quantized.onnx"
   temperature: 1.0
