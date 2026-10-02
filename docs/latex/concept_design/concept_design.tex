@@ -24,7 +24,7 @@ This document specifies the architectural concept design for \textbf{TaxonVision
 \end{abstract}
 
 \section{Introduction and Problem Domain}
-Ecological citizen science platforms such as iNaturalist record hundreds of millions of biodiversity observations. Developing an automated identification service for this domain presents fundamental challenges:
+Ecological citizen science platforms such as iNaturalist record hundreds of millions of biodiversity observations~\cite{vanhorn2018inaturalist}. Developing an automated identification service for this domain presents fundamental challenges:
 \begin{itemize}
     \item \textbf{Long-Tailed Taxonomic Distributions:} Taxa frequencies adhere to extreme power-law distributions where thousands of rare species possess few reference images.
     \item \textbf{Licensing and Provenance Governance:} Only observations distributed under open licenses (CC0, CC-BY, CC-BY-NC) may be ingested. Static domain assets lacking open licenses must be rejected, and attribution metadata must be preserved throughout the pipeline.
@@ -37,7 +37,7 @@ Ecological citizen science platforms such as iNaturalist record hundreds of mill
 The initial baseline establishes an automated, end-to-end chain over a representative subset of well-documented taxa:
 \begin{itemize}
     \item \textbf{Data Ingestion:} Streaming and caching open-access observation metadata and images from the iNaturalist Open Data AWS S3 bucket.
-    \item \textbf{Feature Extraction:} Fixed pre-trained feature extractors (e.g., lightweight convolutional or transformer architectures via \texttt{timm}) with a modular classification head.
+    \item \textbf{Feature Extraction:} Fixed pre-trained feature extractors (e.g., lightweight convolutional or transformer architectures via \texttt{timm}, BioCLIP~\cite{stevens2024bioclip}) with a modular classification head.
     \item \textbf{Licensing Enforcement:} Automated cryptographic validation ensuring no non-open license images enter the dataset artifact.
     \item \textbf{Unified Web Service:} Minimal FastAPI serving endpoint exposing REST predictions alongside an HTMX operator dashboard.
 \end{itemize}
@@ -45,7 +45,7 @@ The initial baseline establishes an automated, end-to-end chain over a represent
 \subsection{Level 2: Scalability, Cost, and Pareto Optimization}
 Scaling to hundreds or thousands of taxa introduces cost and latency trade-offs:
 \begin{itemize}
-    \item \textbf{Pareto Backbone Benchmarking:} Systematic evaluation of candidate backbones (DINOv3, BioCLIP-2, DINOv2, MobileNetV4) balancing Top-1 accuracy against $p95$ latency and computational cost.
+    \item \textbf{Pareto Backbone Benchmarking:} Systematic evaluation of candidate backbones (DINOv3, BioCLIP-2, DINOv2, MobileNetV4) balancing Top-1 accuracy against $p95$ latency and computational cost, trained with Class-Balanced Loss~\cite{cui2019classbalanced}.
     \item \textbf{Inference Optimization:} Exporting models to ONNX Runtime with dynamic INT8 and FP16 quantization, enforcing zero-allocation hot paths.
     \item \textbf{Large Dataset Versioning:} DVC-managed content-addressable storage maintaining reproducible dataset snapshots.
 \end{itemize}
@@ -63,12 +63,12 @@ The safety layer protects downstream users and prioritizes human expert effort:
 \begin{itemize}
     \item \textbf{Out-of-Distribution (OOD) Detection:} Energy-based scoring filters photographs devoid of organisms, corrupted images, or uncatalogued taxa.
     \item \textbf{Few-Shot \& Cold Start Protocol:} Embedding nearest-neighbor matching for rare taxa with limited photographic records.
-    \item \textbf{Active Learning Triage:} Hybrid query strategies (BADGE and CoreSet) rank ambiguous samples to maximize information gain per human annotation.
+    \item \textbf{Active Learning Triage:} Hybrid query strategies (BADGE and CoreSet)~\cite{ren2021deepactive} rank ambiguous samples to maximize information gain per human annotation.
     \item \textbf{Low-Latency Explanations:} Grad-CAM heatmap generation constrained to sub-25ms response budgets.
 \end{itemize}
 
 \section{Mathematical Invariants: Conformal Prediction}
-Rather than relying on raw softmax scores $\hat{f}(X)$, we apply Split Conformal Prediction to construct prediction sets $\hat{C}(X_{n+1}) \subseteq \mathcal{Y}$ satisfying:
+Rather than relying on raw softmax scores $\hat{f}(X)$, we apply Split Conformal Prediction~\cite{angelopoulos2021gentle} to construct prediction sets $\hat{C}(X_{n+1}) \subseteq \mathcal{Y}$ satisfying:
 \begin{equation}
     P(Y_{n+1} \in \hat{C}(X_{n+1})) \ge 1 - \alpha
 \end{equation}
@@ -87,5 +87,8 @@ If $|\hat{C}(X_{\text{test}})| = 0$ (indicating an atypical or OOD observation) 
 
 \section{Conclusion}
 The TaxonVision-MLOps concept design bridges cutting-edge representation learning and rigorous statistical guarantees within an automated, reproducible MLOps lifecycle.
+
+\bibliographystyle{plain}
+\bibliography{references}
 
 \end{document}
