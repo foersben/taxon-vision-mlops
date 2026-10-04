@@ -23,6 +23,14 @@ class TaxonomyCatalog(BaseModel):
     taxa: list[TaxonNode] = Field(default_factory=list)
 
     def get_by_id(self, taxon_id: int) -> TaxonNode | None:
+        """Find a taxonomic node by its unique identifier.
+
+        Args:
+            taxon_id: The taxon identifier to search for.
+
+        Returns:
+            The matching TaxonNode if found, or None.
+        """
         for t in self.taxa:
             if t.taxon_id == taxon_id:
                 return t

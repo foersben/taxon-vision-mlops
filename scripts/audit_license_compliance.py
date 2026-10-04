@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # SPDX-FileCopyrightText: 2026 Benjamin Förster
 # SPDX-License-Identifier: MIT
 """Audit iNaturalist open license compliance & attribution invariants.
@@ -28,7 +28,14 @@ ALLOWED_LICENSES = {
 
 
 def verify_observation_compliance(obs: dict[str, str | int]) -> list[str]:
-    """Verify compliance for a single observation record."""
+    """Verify compliance for a single observation record.
+
+    Args:
+        obs: The observation record to verify.
+
+    Returns:
+        A list of errors found in the observation record.
+    """
     errors: list[str] = []
     obs_id = obs.get("observation_id", "unknown")
     license_code = str(obs.get("license_code", "")).upper()

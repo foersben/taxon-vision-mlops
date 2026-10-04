@@ -8,7 +8,15 @@ from pathlib import Path
 
 
 def quantize_onnx_dynamic(input_onnx: Path, output_onnx: Path) -> Path:
-    """Applies dynamic INT8 quantization to reduce memory footprint and latency."""
+    """Applies dynamic INT8 quantization to reduce memory footprint and latency.
+
+    Args:
+        input_onnx: The input ONNX model to quantize.
+        output_onnx: The path to output the quantized model to.
+
+    Returns:
+        The path to the quantized model.
+    """
     try:
         from onnxruntime.quantization import QuantType, quantize_dynamic
 

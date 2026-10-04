@@ -3,6 +3,7 @@
 """Inference prediction endpoint."""
 
 import time
+from typing import Annotated
 
 from fastapi import APIRouter, File, UploadFile
 
@@ -15,7 +16,15 @@ conformal_engine = ConformalPredictionEngine(q_hat=0.85, alpha=0.05, k_max=3)
 
 
 @router.post("/predict", response_model=PredictionResponse)
-async def predict_species(file: UploadFile = File(...)) -> PredictionResponse:
+async def predict_species(file: Annotated[UploadFile, File(...)]) -> PredictionResponse:
+    """Classify species from an uploaded image with conformal uncertainty guarantees.
+
+    Args:
+        file: Multipart uploaded image file.
+
+    Returns:
+        Structured prediction response containing top candidates, conformal sets, and triage flags.
+    """
     t0 = time.perf_counter()
     PREDICTION_COUNTER.labels(status="success").inc()
 

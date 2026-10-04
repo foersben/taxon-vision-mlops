@@ -1,0 +1,241 @@
+% !TeX root = ../strategy_report.tex
+%
+% TaxonVision-MLOps Production Pipeline Overview
+% Single Full-Page A4 Architecture Overview (pdflatex compatible)
+%
+\clearpage
+
+\noindent
+\makebox[\textwidth][c]{%
+  \scalebox{0.9}{%  <-- You can now scale past textwidth cleanly
+    \begin{tikzpicture}[
+    x=1cm, y=1cm,
+    %% ---- Parametric node styles ----
+    box/.style n args={1}{
+        draw=mgrayborder, line width=0.8pt, rounded corners=2.5pt, fill=white,
+        drop shadow={shadow xshift=1.2pt, shadow yshift=-1.2pt, opacity=0.14},
+        inner sep=5.5pt, text width=#1, align=left, font=\scriptsize
+    },
+    hubbox/.style n args={1}{box={#1}, fill=mblue!12,   draw=mblueborder, line width=0.9pt},
+    servebox/.style n args={1}{box={#1}, fill=mgreen!12,  draw=mgreenborder, line width=0.9pt},
+    pipebox/.style n args={1}{box={#1}, fill=morange!12, draw=morangeborder, line width=0.9pt},
+    classbox/.style n args={1}{box={#1}, fill=mgray!8,   draw=mgrayborder, line width=0.9pt},
+    albox/.style n args={1}{box={#1}, fill=mpurple!12,  draw=mpurpleborder, line width=0.9pt},
+    ingestbox/.style n args={1}{box={#1}, fill=morange!8, draw=morangeborder, line width=0.9pt},
+    prepbox/.style n args={1}{box={#1}, fill=mblue!8,    draw=mblueborder!80!black, line width=0.9pt},
+    %% ---- Arrow styles ----
+    arrow/.style={-{Stealth[scale=1.1, length=5pt, width=3.5pt]}, line width=1.0pt, draw=black!75},
+    darrow/.style={arrow, dashed},
+    %% ---- Inline label badge ----
+    lbl/.style={font=\tiny\bfseries, fill=white, draw=black!30, line width=0.4pt, inner sep=1.8pt, rounded corners=1.5pt}
+]
+
+%% ======================================================================
+%%  TITLE BLOCK  (Y = 14.3 .. 12.8)
+%% ======================================================================
+\node[align=center] (title) at (0, 14.2) {
+    {\LARGE\bfseries Production Pipeline Architecture}\\[2.5pt]
+    {\footnotesize\color{black!70} Decoupled Dual-Pipeline Engine $\cdot$ Epistemic Safety Gates $\cdot$ Hybrid Serving Boundary $\cdot$ Active Learning Closed Loop}
+};
+
+\node[fill=black!4, draw=black!25, rounded corners=2pt, inner sep=2.5pt, font=\tiny\bfseries, align=center] at (0, 13.1) {
+    \textbf{Target:} Local Bare-Metal (RTX 5070 Ti, i7-14700K) + CI-CPU \quad$\vert$\quad
+    \textbf{Epistemic Guarantee:} Conformal Coverage $1-\alpha \ge 0.95$\\
+    \textbf{Inference SLA:} Fast Path $<25$\,ms p95
+};
+
+%% ======================================================================
+%%  ROW 1: CENTRAL ORCHESTRATION & GOVERNANCE PLANE (Y = 11.0)
+%%  Left: DagsHub (-4.7) | Right: CI/CD (+4.7), width = 6.9cm
+%% ======================================================================
+\node[hubbox={6.9cm}] (dagshub) at (-4.7, 11.0) {%
+    \textbf{\footnotesize\color{mblueborder} DagsHub Unified MLOps Hub}\\[0.8mm]
+    \rule{\linewidth}{0.4pt}\\[0.6mm]
+    \textbullet\ \textbf{Data Version Control (DVC):} Remote storage, Parquet manifests\\
+    \textbullet\ \textbf{Experiment Tracking:} MLflow metrics, hyperparameters \& Registry\\
+    \textbullet\ \textbf{Annotation Backend:} Integrated Label Studio human triage workspace
+};
+
+\node[hubbox={6.9cm}] (cicd) at (4.7, 11.0) {%
+    \textbf{\footnotesize\color{mblueborder} GitHub Actions CI/CD \& Runner}\\[0.8mm]
+    \rule{\linewidth}{0.4pt}\\[0.6mm]
+    \textbullet\ \textbf{Bare-Metal Runner:} RTX 5070 Ti (16GB), Intel i7-14700K, 64GB RAM\\
+    \textbullet\ \textbf{Quality Gates:} Ruff linting, MyPy static typing, CC open-license audit\\
+    \textbullet\ \textbf{Epistemic Safety Gate:} Empirical coverage $\ge 95\%$ on calibration holdout
+};
+
+\begin{scope}[on background layer]
+    \node[fit=(dagshub)(cicd), draw=mblueborder!30, fill=mblue!5, dashed, rounded corners=3mm, inner sep=3.5mm] (plane0) {};
+\end{scope}
+
+%% ======================================================================
+%%  ROW 2: DATA ENGINEERING & MULTIMODAL REPRESENTATION (Y = 7.3)
+%%  Left: Data Ingestion (-4.7) | Right: Data Prep (+4.7), width = 6.9cm
+%% ======================================================================
+\node[ingestbox={6.9cm}] (ingest) at (-4.7, 7.3) {%
+    \textbf{\footnotesize\color{morangeborder} 1. Data Ingestion \& Licensing}\\[0.8mm]
+    \rule{\linewidth}{0.4pt}\\[0.6mm]
+    \textbullet\ \textbf{Zero-Copy Streaming:} Apache Arrow batches from AWS Open Data\\
+    \textbullet\ \textbf{License Whitelist:} CC0, CC-BY, CC-BY-NC open access only\\
+    \textbullet\ \textbf{Spatial-Temporal Priors:} GBIF occurrence priors, GPS \& seasonal month\\
+    \textbullet\ \textbf{Data Versioning:} DVC Parquet manifests with SHA-256 integrity hashing
+};
+
+\node[prepbox={6.9cm}] (dataprep) at (4.7, 7.3) {%
+    \textbf{\footnotesize\color{mblueborder!80!black} 2. Multimodal Visual Chunking}\\[0.8mm]
+    \rule{\linewidth}{0.4pt}\\[0.6mm]
+    \textbullet\ \textbf{Parent-Child Chunking:} Zero-shot isolation $\to 224{\times}224$ child crops\\
+    \textbullet\ \textbf{Frozen Features:} Embeddings $z_{\mathrm{child}} \in \mathbb{R}^{512}$ via backbone\\
+    \textbullet\ \textbf{Habitat Context:} Uncropped parent scene preserved for environmental priors\\
+    \textbullet\ \textbf{Relational Linking:} Child embeddings mapped to parent DarwinCore IDs
+};
+
+\begin{scope}[on background layer]
+    \node[fit=(ingest)(dataprep), draw=morangeborder!30, fill=morange!5, dashed, rounded corners=3mm, inner sep=3.5mm] (plane1) {};
+\end{scope}
+
+%% ======================================================================
+%%  ROW 3: DECOUPLED DUAL-PIPELINE ENGINE (Y = 3.2)
+%%  Left: Pipeline 1 (-4.7) | Right: Pipeline 2 (+4.7), width = 6.9cm
+%% ======================================================================
+\node[classbox={6.9cm}] (pipe1) at (-4.7, 3.2) {%
+    \textbf{\footnotesize\color{mgrayborder} Pipeline 1: Offline Classification Engine}\\[0.8mm]
+    \rule{\linewidth}{0.4pt}\\[0.6mm]
+    \textbullet\ \textbf{Frozen Backbone:} BioCLIP-2 / DINOv3 (zero grad)\\
+    \textbullet\ \textbf{Head Training:} Class-Balanced Loss ($E_n = \frac{1-\beta^n}{1-\beta}$) for long-tail classes\\
+    \textbullet\ \textbf{Hyperparameter Tuning:} Optuna TPE search with ASHA pruning\\
+    \textbullet\ \textbf{Graph Compilation:} INT8 ONNX export (${<}25$\,ms latency SLA)\\
+    \textbullet\ \textbf{Interpretability:} Forward-hooked Class Activation Mapping (Grad-CAM)
+};
+
+\node[pipebox={6.9cm}] (pipe2) at (4.7, 3.2) {%
+    \textbf{\footnotesize\color{morangeborder} Pipeline 2: Continuous Taxonomic MMKG \& VLM}\\[0.8mm]
+    \rule{\linewidth}{0.4pt}\\[0.6mm]
+    \textbullet\ \textbf{Vector Indexing:} Async I/O streaming writes to HNSW graph\\
+    \textbullet\ \textbf{Metadata Filter:} Haversine distance + seasonal month $\pmod{12}$\\
+    \textbullet\ \textbf{Taxonomic Engine:} DuckDB taxon lump/split synchronization\\
+    \textbullet\ \textbf{Multimodal Diagnosis:} Qwen2-VL-2B VLM for ambiguous candidates\\
+    \textbullet\ \textbf{Zero Retraining:} Exemplars inserted dynamically without weight updates
+};
+
+\begin{scope}[on background layer]
+    \node[fit=(pipe1)(pipe2), draw=black!25, fill=black!2, dashed, rounded corners=3mm, inner sep=3.5mm] (plane2) {};
+\end{scope}
+
+%% ======================================================================
+%%  ROW 4: PRODUCTION SERVING GATEWAY & MICROSERVICES (Y = -1.4)
+%%  Left: FastAPI Serving (-3.35, w=9.8cm) | Right: K8s (+5.65, w=5.1cm)
+%% ======================================================================
+\node[servebox={9.8cm}] (serving) at (-3.35, -1.4) {%
+    \textbf{\footnotesize\color{mgreenborder} FastAPI Serving Gateway \& Conformal Routing}\\[0.8mm]
+    \rule{\linewidth}{0.4pt}\\[0.6mm]
+    \textbf{Split Conformal Prediction (SCP) Gating ($\alpha=0.05$, $95\%$ Coverage):}\\
+    \textbullet\ \textbf{Fast Path (85\%):} $|\hat{C}|=1 \implies$ Decisive INT8 ONNX (${<}25$\,ms SLA)\\
+    \textbullet\ \textbf{Vision RAG (15\%):} Ambiguity $|\hat{C}| > k_{\max}$ or $|\hat{C}|=0 \implies$ VLM triage\\
+    \textbullet\ \textbf{Rank Fusion (RRF):} $w_{\mathrm{vis}} \cdot \mathrm{Sim}_{\cos}(z) + w_{\mathrm{geo}} \cdot \mathrm{Prior}_{\mathrm{geo}}(\mathrm{coord},\,\mathrm{month})$\\[0.8mm]
+    \textbf{Observability \& Epistemic Monitoring:}\\
+    \textbullet\ Prometheus metrics: Latency histograms, conformal set size tracking, OOD rate\\
+    \textbullet\ \textbf{MMD Drift Detector:} Maximum Mean Discrepancy on $\mathbb{R}^{512}$ feature space
+};
+
+\node[box={5.1cm}] (k8s) at (5.65, -1.4) {%
+    \textbf{\footnotesize\color{black!80} Microservices (K8s + HPA)}\\[0.8mm]
+    \rule{\linewidth}{0.4pt}\\[0.6mm]
+    Asymmetric Pod Architecture:\\[0.8mm]
+    {\setlength{\tabcolsep}{2pt}%
+    \begin{tabular}{|p{2.2cm}|p{2.2cm}|}
+    \hline
+    \textbf{\tiny taxon-vision-serving} & \textbf{\tiny taxon-vision-vlm} \\
+    \tiny ONNX + Conformal & \tiny HNSW + Qwen2-VL \\
+    \tiny VRAM: $<1.5$\,GB & \tiny VRAM: $>2.2$\,GB \\
+    \tiny Scaling: CPU / GPU & \tiny Dedicated GPU RAM \\
+    \hline
+    \end{tabular}}\\[1.2mm]
+    \textbullet\ Low-latency Envoy Ingress routing\\
+    \textbullet\ Autonomous self-healing health probes
+};
+
+\begin{scope}[on background layer]
+    \node[fit=(serving)(k8s), draw=mgreenborder!30, fill=mgreen!5, dashed, rounded corners=3mm, inner sep=3.5mm] (plane3) {};
+\end{scope}
+
+%% ======================================================================
+%%  ROW 5: ACTIVE LEARNING CLOSED LOOP (Y = -5.7, full width w=16.3cm)
+%% ======================================================================
+\node[albox={16.3cm}] (activelearn) at (0, -5.7) {%
+    \textbf{\footnotesize\color{mpurpleborder} Human-in-the-Loop Active Learning \& Continuous Evolution (Label Studio via DagsHub)}\\[0.8mm]
+    \rule{\linewidth}{0.4pt}\\[0.6mm]
+    \begin{minipage}[t]{0.485\linewidth}
+    \textbf{Epistemic Triage \& Uncertainty Sampling:}\\
+    \textbullet\ \textbf{Conformal Routing:} Ambiguous sets ($|\hat{C}| > k_{\max}$) and null sets ($|\hat{C}|=0$) automatically routed to human triage queue\\
+    \textbullet\ \textbf{BADGE Strategy:} Diverse gradient embeddings maximize parameter updates
+    \end{minipage}\hfill
+    \begin{minipage}[t]{0.485\linewidth}
+    \textbf{Expert Validation \& Dataset Evolution:}\\
+    \textbullet\ \textbf{Diagnostic Review:} Taxonomists inspect VLM differential cards with overlaid Grad-CAM activation heatmaps\\
+    \textbullet\ \textbf{Manifest Recalibration:} Verified annotations expand DVC manifest \& update conformal calibration quantiles\\
+    \textbullet\ \textbf{Conflict Purging:} Automated purging via \texttt{requires\_reannotation}
+    \end{minipage}
+};
+
+\begin{scope}[on background layer]
+    \node[fit=(activelearn), draw=mpurpleborder!30, fill=mpurple!5, dashed, rounded corners=3mm, inner sep=3.5mm] (plane4) {};
+\end{scope}
+
+%% ======================================================================
+%%  CONNECTING ARROWS & FLOWS (STRICTLY NON-OVERLAPPING & ALIGNED)
+%% ======================================================================
+
+%%  (1) DagsHub -> Data Ingestion (Vertical, left axis X = -4.7)
+\draw[arrow] (dagshub.south) -- (ingest.north)
+    node[lbl, midway] {DVC Manifest Sync};
+
+%%  (2) CI/CD -> Data Prep (Vertical, right axis X = +4.7)
+\draw[arrow] (cicd.south) -- (dataprep.north)
+    node[lbl, midway] {CI Validation Trigger};
+
+%%  (3) Ingestion -> Multimodal Chunking (Horizontal between row 2 boxes)
+\draw[arrow] (ingest.east) -- (dataprep.west);
+\node[lbl, anchor=south, yshift=2pt] at (0, 7.3) {Arrow Stream};
+
+%%  (4) Ingest -> Pipeline 1 Training (Vertical, left axis X = -4.7)
+\draw[arrow] (ingest.south) -- (pipe1.north)
+    node[lbl, midway] {DVC Training Split};
+
+%%  (5) Data Prep -> Pipeline 2 MMKG (Vertical, right axis X = +4.7)
+\draw[arrow] (dataprep.south) -- (pipe2.north)
+    node[lbl, midway] {Continuous Embeddings ($z$)};
+
+%%  (6) Pipeline 1 -> Serving Gateway (Vertical, left axis X = -4.7)
+\draw[arrow] (pipe1.south) -- (pipe1.south |- serving.north)
+    node[lbl, midway] {INT8 ONNX Model ($<25$\,ms)};
+
+%%  (7) Pipeline 2 -> K8s Microservices (Vertical, right axis X = +4.7)
+\draw[arrow] (pipe2.south) -- (pipe2.south |- k8s.north)
+    node[lbl, midway] {HNSW Index \& VLM Model};
+
+%%  (8) Serving Gateway <-> K8s Microservices (Horizontal communication)
+\draw[arrow, <->] (serving.east) -- (k8s.west);
+\node[lbl, anchor=south, yshift=2pt] at ($(serving.east)!0.5!(k8s.west)$) {gRPC};
+
+%%  (9) Serving Gateway -> Active Learning (Vertical, left axis X = -4.7)
+\draw[arrow] (pipe1.south |- serving.south) -- (pipe1.south |- activelearn.north)
+    node[lbl, midway] {Epistemic Triage: Ambiguity ($|\hat{C}| > k_{\max}$) or Null Set ($|\hat{C}|=0$)};
+
+%%  (10) Left Closed-Loop Spine: Active Learning -> Ingestion
+\draw[arrow, draw=mpurpleborder, line width=1.4pt, rounded corners=3mm]
+    (activelearn.west) -- (-8.8, -5.7) -- (-8.8, 7.3) -- (ingest.west);
+\node[lbl, rotate=90, text=mpurpleborder, draw=mpurpleborder!50] at (-8.8, 0.8)
+    {Iterative Knowledge Feedback (DVC Manifest Recalibration)};
+
+%%  (11) Right Closed-Loop Spine: Serving Observability -> CI/CD
+\draw[arrow, draw=morangeborder, line width=1.4pt, rounded corners=3mm]
+    (k8s.east) -- (8.8, -1.4) -- (8.8, 11.0) -- (cicd.east);
+\node[lbl, rotate=-90, text=morangeborder, draw=morangeborder!50] at (8.8, 4.8)
+    {MMD Feature Drift Alert (Retrain Webhook)};
+
+\end{tikzpicture}%
+  }%
+}
+\par
+\clearpage

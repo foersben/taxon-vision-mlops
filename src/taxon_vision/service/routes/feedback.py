@@ -11,4 +11,12 @@ router = APIRouter(prefix="/api/v1")
 
 @router.post("/feedback", response_model=FeedbackResponse)
 async def submit_feedback(req: FeedbackRequest) -> FeedbackResponse:
+    """Ingest community or expert validation feedback for an observation.
+
+    Args:
+        req: Validated taxonomic identity and reviewer commentary payload.
+
+    Returns:
+        Acknowledgment response confirming receipt and logging for triage reconciliation.
+    """
     return FeedbackResponse(status="accepted", message=f"Observation {req.observation_id} logged for review.")

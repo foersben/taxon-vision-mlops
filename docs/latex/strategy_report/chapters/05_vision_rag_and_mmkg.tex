@@ -117,15 +117,29 @@ In order to ensure machine readability and eliminate conversational hallucinatio
 
 This structured response is rendered on the HTMX operator dashboard as a comparative differential diagnosis card. This allows human specialists to inspect aligned visual crops alongside identified discriminative keys.
 
-\section{Closed-Loop Active Learning \& Taxonomic Mutations}
-\label{sec:active_learning_rag}
+% \section{Closed-Loop Active Learning \& Taxonomic Mutations}
+% \label{sec:active_learning_rag}
+% 
+% The Vision RAG infrastructure acts as the primary data ingestion engine for human-in-the-loop active learning workflows. When the VLM returns an epistemic verdict of \texttt{HUMAN\_\allowbreak TRIAGE\_\allowbreak RECOMMENDED}, the observation and its candidate context are mirrored directly to the DagsHub Label Studio workspace. Expert annotations subsequently flow back into the system, expanding the training manifests and updating the reference exemplar index.
+% 
+% Furthermore, biological classification systems frequently undergo Linnaean realignments:
+% \begin{itemize}
+%     \item \textbf{Taxonomic Split:} When a recognised species is divided into two distinct taxa, historical vectors in the HNSW database matching the parent taxon are flagged with the metadata attribute \texttt{requires\_\allowbreak reannotation}. The system gracefully routes these exemplars to Label Studio for expert sorting, purging obsolete nodes from the active index without requiring neural network retraining.
+%     \item \textbf{Taxonomic Lump:} When two distinct taxa are combined into a single unified species, the system performs an in-place metadata alias update on the vector node payloads. The underlying embedding vectors remain mathematically valid, thereby updating the taxonomic knowledge base in milliseconds.
+% \end{itemize}
 
-The Vision RAG infrastructure acts as the primary data ingestion engine for human-in-the-loop active learning workflows. When the VLM returns an epistemic verdict of \texttt{HUMAN\_\allowbreak TRIAGE\_\allowbreak RECOMMENDED}, the observation and its candidate context are mirrored directly to the DagsHub Label Studio workspace. Expert annotations subsequently flow back into the system, expanding the training manifests and updating the reference exemplar index.
+\section{Operationalizing Taxonomic Mutations in the MMKG}
+\label{sec:taxonomic_mutations}
 
-Furthermore, biological classification systems frequently undergo Linnaean realignments:
+The Vision RAG architecture functions as the ingestion engine for human-in-the-loop active learning workflows. When the Vision-Language Model assigns an epistemic verdict of \texttt{HUMAN\_\allowbreak TRIAGE\_\allowbreak RECOMMENDED} to an ambiguous query, the observation and its retrieved visual context are mirrored to the DagsHub Label Studio workspace. Once experts validate the taxonomy, the new annotations expand the training manifests and update the reference exemplar index.
+
+However, beyond classifying new observations, the system must dynamically adapt to Linnaean taxonomic realignments. Biological taxonomies are fluid; the scientific community frequently splits a single species into multiple distinct taxa, or lumps distinct taxa into a single unified classification. Retraining a neural network or recalculating millions of vector embeddings every time a nomenclature committee publishes an update is computationally unviable. 
+
+The Multimodal Knowledge Graph resolves this by decoupling the immutable visual embedding vectors from the mutable relational metadata using DuckDB and Parquet manifests.
+
 \begin{itemize}
-    \item \textbf{Taxonomic Split:} When a recognised species is divided into two distinct taxa, historical vectors in the HNSW database matching the parent taxon are flagged with the metadata attribute \texttt{requires\_\allowbreak reannotation}. The system gracefully routes these exemplars to Label Studio for expert sorting, purging obsolete nodes from the active index without requiring neural network retraining.
-    \item \textbf{Taxonomic Lump:} When two distinct taxa are combined into a single unified species, the system performs an in-place metadata alias update on the vector node payloads. The underlying embedding vectors remain mathematically valid, thereby updating the taxonomic knowledge base in milliseconds.
+    \item \textbf{Taxonomic Lumps (Merging):} When two distinct taxa (e.g., Species A and Species B) are combined into a single valid species (Species C), the pipeline does not re-embed any visual data. Instead, it executes an $\mathcal{O}(1)$ alias mapping operation. A background DuckDB worker updates the relational Parquet mapping table, pointing the historical taxon keys for A and B to the unified key for C. The underlying dense vectors residing in the HNSW graph remain perfectly valid, instantly updating the entire taxonomic knowledge base with zero GPU inference cost.
+    \item \textbf{Taxonomic Splits (Dividing):} When a recognised species is divided into two distinct taxa, historical visual crops associated with the parent taxon become scientifically ambiguous. The DuckDB reconciliation worker flags these specific nodes in the HNSW database with a boolean metadata attribute, \texttt{requires\_reannotation}. The system programmatically purges these isolated nodes from the active traversal graph to prevent contaminated retrieval, and routes the corresponding exemplars to Label Studio. Experts visually sort the historical crops into the newly established taxonomic branches, after which the nodes are re-injected into the active graph.
 \end{itemize}
 
 \section{End-to-End Latency \& Resource Allocation}

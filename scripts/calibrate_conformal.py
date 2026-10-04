@@ -18,7 +18,15 @@ import numpy as np
 
 
 def compute_conformal_quantile(scores: np.ndarray, alpha: float) -> float:
-    """Compute distribution-free split conformal prediction quantile."""
+    """Compute distribution-free split conformal prediction quantile.
+
+    Args:
+        scores: The non-conformity scores.
+        alpha: The significance level.
+
+    Returns:
+        The conformal quantile.
+    """
     n = len(scores)
     level = np.ceil((n + 1) * (1.0 - alpha)) / n
     level = min(1.0, max(0.0, float(level)))
@@ -27,6 +35,7 @@ def compute_conformal_quantile(scores: np.ndarray, alpha: float) -> float:
 
 
 def main() -> None:
+    """Main function to calibrate conformal quantile."""
     parser = argparse.ArgumentParser(description="Calibrate conformal quantile.")
     parser.add_argument("--alpha", type=float, default=0.05, help="Significance level (default: 0.05)")
     parser.add_argument("--out", type=Path, default=Path("config/conformal_calibration.json"))

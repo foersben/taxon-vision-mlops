@@ -6,19 +6,73 @@
   <p class="subtitle">Submit an open-licensed observation photograph to obtain species classification with conformal confidence bounds.</p>
 
   <form id="upload-form"
+        method="post"
+        action="/ui/predict-htmx"
         hx-post="/ui/predict-htmx"
         hx-target="#prediction-result"
         hx-swap="innerHTML"
+        hx-indicator="#loading-indicator"
         enctype="multipart/form-data">
-    <div class="dropzone">
+    <div class="dropzone" id="dropzone">
       <input type="file" id="file" name="file" accept="image/*" required>
-      <label for="file">Drop observation photograph here or click to browse</label>
+      <label for="file" id="file-label">Drop observation photograph here or click to browse</label>
+      <div id="file-preview" class="file-preview" style="display: none;">
+        <span id="file-name"></span>
+      </div>
     </div>
-    <button type="submit" class="btn primary">Classify Observation</button>
+    <button type="submit" id="submit-btn" class="btn primary">Classify Observation</button>
+    <div id="loading-indicator" class="htmx-indicator" style="display: none; margin-top: 1rem; color: #4ade80;">
+      <span>⏳ Extracting foundation embeddings and computing conformal set...</span>
+    </div>
   </form>
 </section>
 
 <section id="prediction-result" class="result-section">
-  <!-- HTMX dynamic target -->
+  <!-- HTMX / Dynamic target -->
 </section>
+
+<script>
+  // Progressive enhancement & instant UX feedback
+  const fileInput = document.getElementById('file');
+  const fileLabel = document.getElementById('file-label');
+  const filePreview = document.getElementById('file-preview');
+  const fileName = document.getElementById('file-name');
+  const form = document.getElementById('upload-form');
+  const loadingIndicator = document.getElementById('loading-indicator');
+  const resultSection = document.getElementById('prediction-result');
+
+  if (fileInput) {
+    fileInput.addEventListener('change', function(e) {
+      if (this.files && this.files.length > 0) {
+        fileName.textContent = 'Selected: ' + this.files[0].name;
+        filePreview.style.display = 'block';
+        fileLabel.style.display = 'none';
+      }
+    });
+  }
+
+  // Fallback in case HTMX is not yet initialized
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      if (typeof htmx === 'undefined') {
+        e.preventDefault();
+        loadingIndicator.style.display = 'block';
+        const formData = new FormData(form);
+        fetch('/ui/predict-htmx', {
+          method: 'POST',
+          body: formData
+        })
+        .then(res => res.text())
+        .then(html => {
+          loadingIndicator.style.display = 'none';
+          resultSection.innerHTML = html;
+        })
+        .catch(err => {
+          loadingIndicator.style.display = 'none';
+          resultSection.innerHTML = '<div class="alert error">Classification failed: ' + err + '</div>';
+        });
+      }
+    });
+  }
+</script>
 {% endblock %}

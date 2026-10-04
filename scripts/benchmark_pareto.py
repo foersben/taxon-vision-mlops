@@ -21,6 +21,19 @@ from pathlib import Path
 
 @dataclass
 class ParetoResult:
+    """Result of a Pareto evaluation.
+
+    Args:
+        extractor: The extractor name.
+        top1_accuracy: The top-1 accuracy.
+        top3_accuracy: The top-3 accuracy.
+        p50_latency_ms: The 50th percentile latency in milliseconds.
+        p95_latency_ms: The 95th percentile latency in milliseconds.
+        throughput_fps: The throughput in frames per second.
+        vram_peak_mb: The peak VRAM usage in megabytes.
+        cost_per_million_usd: The cost per million inferences in USD.
+    """
+
     extractor: str
     top1_accuracy: float
     top3_accuracy: float
@@ -32,7 +45,11 @@ class ParetoResult:
 
 
 def simulate_pareto_evaluation() -> list[ParetoResult]:
-    """Produce empirical Pareto trade-off benchmarks."""
+    """Produce empirical Pareto trade-off benchmarks.
+
+    Returns:
+        A list of Pareto results.
+    """
     results = [
         ParetoResult(
             extractor="bioclip-2",
@@ -89,6 +106,11 @@ def simulate_pareto_evaluation() -> list[ParetoResult]:
 
 
 def main() -> None:
+    """Main function to evaluate model Pareto frontier.
+
+    Returns:
+        None
+    """
     parser = argparse.ArgumentParser(description="Evaluate model Pareto frontier.")
     parser.add_argument("--out", type=Path, default=Path("docs/assets/pareto_results.json"))
     args = parser.parse_args()

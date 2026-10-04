@@ -12,6 +12,11 @@ class ONNXInferenceEngine:
     """Executes batched inference with pre-allocated I/O bindings."""
 
     def __init__(self, model_path: str) -> None:
+        """Initialize the ONNX Runtime session with graph optimizations.
+
+        Args:
+            model_path: Filesystem path to the exported ONNX model artifact.
+        """
         opts = ort.SessionOptions()
         opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         self.session = ort.InferenceSession(model_path, opts, providers=["CPUExecutionProvider"])
@@ -19,7 +24,14 @@ class ONNXInferenceEngine:
         self.output_name = self.session.get_outputs()[0].name
 
     def predict(self, input_array: np.ndarray) -> np.ndarray:
-        """Run inference returning softmax probabilities."""
+        """Run inference returning softmax probabilities.
+
+        Args:
+            input_array: The input array to run inference on.
+
+        Returns:
+            A numpy array representing the softmax probabilities.
+        """
         raw_outputs = self.session.run([self.output_name], {self.input_name: input_array})[0]
         # Softmax
         exp = np.exp(raw_outputs - np.max(raw_outputs, axis=-1, keepdims=True))

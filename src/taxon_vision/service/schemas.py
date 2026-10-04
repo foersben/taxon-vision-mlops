@@ -8,6 +8,8 @@ from pydantic import BaseModel
 
 
 class TaxonPrediction(BaseModel):
+    """Predicted taxonomic identity with confidence score."""
+
     taxon_id: int
     scientific_name: str
     common_name: str
@@ -15,6 +17,8 @@ class TaxonPrediction(BaseModel):
 
 
 class PredictionResponse(BaseModel):
+    """Structured inference response containing top predictions, conformal sets, and flags."""
+
     top_prediction: TaxonPrediction
     top_candidates: list[TaxonPrediction]
     conformal_prediction_set: list[str]
@@ -25,6 +29,8 @@ class PredictionResponse(BaseModel):
 
 
 class FeedbackRequest(BaseModel):
+    """Payload submitted by domain experts reviewing model predictions."""
+
     observation_id: str
     validated_taxon_id: int
     reviewer_name: str
@@ -32,5 +38,7 @@ class FeedbackRequest(BaseModel):
 
 
 class FeedbackResponse(BaseModel):
+    """Confirmation response returned upon recording human review feedback."""
+
     status: str
     message: str

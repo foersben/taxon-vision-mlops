@@ -8,6 +8,8 @@ from pydantic import BaseModel
 
 
 class FeedbackSubmission(BaseModel):
+    """Submitted reviewer validation feedback for an observation."""
+
     observation_id: str
     validated_taxon_id: int
     reviewer_id: str

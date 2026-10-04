@@ -71,3 +71,18 @@ body {
   border-radius: 4px;
   margin-right: 0.5rem;
 }
+
+.file-preview {
+  font-weight: 600;
+  color: #34d399;
+  margin-top: 0.5rem;
+}
+
+.htmx-indicator {
+  display: none;
+}
+
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+  display: block !important;
+}

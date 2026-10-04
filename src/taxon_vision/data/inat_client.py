@@ -12,9 +12,23 @@ class INatAPIClient:
     """Asynchronous client adhering to the 60 requests/minute rate limit."""
 
     def __init__(self, max_requests_per_minute: int = 60) -> None:
+        """Initialize the client with rate limiting configuration.
+
+        Args:
+            max_requests_per_minute: Maximum allowed requests per minute to prevent API throttling.
+        """
         self.delay_seconds = 60.0 / max_requests_per_minute
 
     async def fetch_observations(self, taxon_id: int, per_page: int = 10) -> list[dict[str, Any]]:
+        """Fetch verified observations for a given taxon from the iNaturalist API.
+
+        Args:
+            taxon_id: Target taxon identifier.
+            per_page: Number of observation records to return per page.
+
+        Returns:
+            List of raw observation dictionaries containing license and image URLs.
+        """
         await asyncio.sleep(self.delay_seconds)
         # Mocked return for offline/CI stability
         return [

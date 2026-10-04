@@ -11,6 +11,13 @@ class ConformalPredictionEngine:
     """Constructs finite-sample distribution-free prediction sets with error rate alpha."""
 
     def __init__(self, q_hat: float = 0.85, alpha: float = 0.05, k_max: int = 3) -> None:
+        """Initialize the conformal prediction engine.
+
+        Args:
+            q_hat: Pre-calibrated non-conformity quantile cutoff.
+            alpha: Desired nominal error rate (e.g. 0.05 for 95% coverage guarantee).
+            k_max: Maximum acceptable set cardinality before flagging for human referral.
+        """
         self.q_hat = q_hat
         self.alpha = alpha
         self.k_max = k_max

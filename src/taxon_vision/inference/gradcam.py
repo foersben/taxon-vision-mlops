@@ -9,7 +9,14 @@ from PIL import Image
 
 
 def generate_heatmap(image: Image.Image) -> np.ndarray:
-    """Generates a mock/fast Grad-CAM saliency heatmap (< 20ms)."""
+    """Generates a mock/fast Grad-CAM saliency heatmap (< 20ms).
+
+    Args:
+        image: The image to generate a heatmap for.
+
+    Returns:
+        A numpy array representing the heatmap.
+    """
     w, h = image.size
     y, x = np.ogrid[:h, :w]
     cy, cx = h / 2.0, w / 2.0

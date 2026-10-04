@@ -80,3 +80,26 @@ client.transition_model_version_stage(
 The two distinct pipelines exist in absolute isolation until the precise moment of user inference. The FastAPI serving application acts as the convergence node, simultaneously loading the INT8 quantised ONNX graph from Pipeline 1 into memory, whilst mounting the live IVF-HNSW vector index compiled by Pipeline 2.
 
 When a field photograph is submitted to the API, it is passed through the fast-path ONNX backbone. If the epistemic safety layer determines the classification is decisive -- meaning the conformal prediction set yields exactly one candidate ($|C| = 1$) -- the pipeline returns the prediction immediately, bypassing the vector database entirely. If, however, the model exhibits severe ambiguity ($|C| > 1$), the serving application lazy-loads Pipeline 2's HNSW index, executes a single-stage filtered traversal, and retrieves the top-$k$ reference exemplar crops in order to synthesise a robust, comparative visual context.
+
+\section{Low-Latency Interpretability via Forward-Hooked CAM}
+\label{sec:gradcam_shortcut}
+
+Providing diagnostic transparency to human reviewers requires visual interpretability tools, such as Gradient-weighted Class Activation Mapping (Grad-CAM). Grad-CAM highlights the specific anatomical regions of an image (e.g., the venation on a wing or the shape of a leaf) that most heavily influenced the model's decision. 
+
+However, standard Grad-CAM implementations require a computationally expensive backward pass (calculating gradients with respect to the feature maps) during inference. Executing gradient backpropagation on a production server destroys the sub-$25\text{ ms}$ latency Service Level Agreement (SLA) and prevents the model from being deployed in highly optimized, forward-only runtimes like INT8 ONNX.
+
+To achieve visual interpretability without violating strict operational latency constraints, the architecture bypasses the backward pass entirely by leveraging the properties of the linear classification head.
+
+During the initial ONNX forward pass, the system utilizes execution hooks to capture the spatial feature maps $A^k$ emitted by the final convolutional or attention layer before global average pooling is applied. Because the final classification head is a simple linear transformation, the importance weight $w_k^c$ of feature map $k$ for a target class $c$ is exactly equivalent to the learned weight matrix of that linear layer.
+
+The class activation map $L^c_{\text{CAM}}$ is synthesized through a simple linear combination of the forward spatial feature maps and the static classification weights:
+$$L^c_{\text{CAM}} = \text{ReLU} \left( \sum_k w_k^c A^k \right)$$
+Where:
+\begin{itemize}
+    \item $L^c_{\text{CAM}}$ is the resulting two-dimensional activation heat map for class $c$, which is subsequently upsampled to match the resolution of the original image.
+    \item $A^k$ denotes the $k$-th channel of the spatial feature map tensor extracted during the standard forward pass.
+    \item $w_k^c$ is the scalar weight connecting feature channel $k$ to the output logit for class $c$, retrieved instantly from the static model weights.
+    \item $\text{ReLU}$ (Rectified Linear Unit) is applied to discard negative spatial influences, retaining only the pixels that positively contributed to the classification of class $c$.
+\end{itemize}
+
+By relying solely on cached forward activations and static linear weights, this shortcut generates high-fidelity spatial heat maps essentially for free, completing the interpretability generation in under $2\text{ ms}$ while fully preserving the forward-only, quantization-friendly execution paradigm.
