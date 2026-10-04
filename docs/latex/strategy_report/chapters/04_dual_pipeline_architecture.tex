@@ -2,14 +2,14 @@
 \chapter{Dual Pipeline Architecture}
 \label{ch:dual_pipeline}
 
-A common anti-pattern in machine learning deployments is the monolithic pipeline, where neural network training sequences and data indexing tasks are tightly coupled into a single execution graph. The TaxonVision-MLOps architecture explicitly rejects this model. Instead, it establishes a dual-pipeline topology that decouples the weight-centric classification engine from the data-centric Multimodal Knowledge Graph (MMKG). These pipelines maintain independent lifecycles, converging exclusively at the inference serving boundary.
+A common anti-pattern in machine learning deployments is the monolithic pipeline, where neural network training sequences and data indexing tasks are tightly coupled into a single execution graph. The TaxonVision-MLOps architecture explicitly rejects this model. Instead, as visualised in the comprehensive architectural overview following Chapter 1, it establishes a dual-pipeline topology that decouples the weight-centric classification engine from the data-centric Multimodal Knowledge Graph (MMKG). These pipelines maintain independent lifecycles, converging exclusively at the inference serving boundary.
 
 \section{Asymmetric Iteration and Execution Decoupling}
 \label{sec:decoupling}
 
 The necessity for architectural decoupling stems directly from the fundamentally asymmetric nature of biological modelling operations.
 
-\textbf{Pipeline 1: The Classification Engine.} The primary neural backbone (for example, an optimised BioCLIP-2 or DINOv3 transformer) is computationally expensive to train but relatively static in production. Refining its weights requires intensive GPU Tensor Core utilisation, distributed gradient synchronisation, and dynamic ONNX quantisation calibration. However, once an optimal checkpoint is compiled, the model architecture may remain unchanged for weeks or months.
+\textbf{Pipeline 1: The Classification Engine.} The primary neural backbone (for example, an optimised BioCLIP-2 \cite{stevens2024bioclip} or DINOv3 transformer) is computationally expensive to train but relatively static in production. Refining its weights using Class-Balanced Loss \cite{cui2019classbalanced} requires intensive GPU Tensor Core utilisation, distributed gradient synchronisation, and dynamic ONNX quantisation calibration. However, once an optimal checkpoint is compiled, the model architecture may remain unchanged for weeks or months.
 
 \textbf{Pipeline 2: The Taxonomic MMKG.} Conversely, the underlying citizen-science data stream is highly volatile. The pipeline must ingest continuous drops of new iNaturalist research-grade observations. More critically, biological taxonomies are frequently subjected to scientific realignments -- species are split into novel taxonomic branches or lumped together under unified nomenclature. Pipeline 2 is an I/O-bound vector-indexing workflow responsible for parsing DarwinCore Parquet manifests, extracting zero-shot organism crops, filtering open-source licences, and appending dense embeddings to the Hierarchical Navigable Small World (HNSW) graph.
 

@@ -61,7 +61,7 @@ Where $\hat{\pi}_j(x)$ represents the estimated probability that input $x$ belon
 \section{Distribution-Free Uncertainty via Split Conformal Prediction}
 \label{sec:conformal_prediction}
 
-Point predictions derived from $\arg\max_j \hat{\pi}_j(x)$ provide no statistical reliability guarantees. In mission-critical biodiversity intelligence, a system must convey not only its best guess, but also the statistical confidence bounded by an explicit error rate. In order to achieve this, the platform implements Split Conformal Prediction. This converts raw probability distributions into dynamic prediction sets guaranteed to contain the ground-truth taxon under exchangeability assumptions.
+Point predictions derived from $\arg\max_j \hat{\pi}_j(x)$ provide no statistical reliability guarantees. In mission-critical biodiversity intelligence, a system must convey not only its best guess, but also the statistical confidence bounded by an explicit error rate. In order to achieve this, the platform implements Split Conformal Prediction \cite{angelopoulos2021gentle}. This converts raw probability distributions into dynamic prediction sets guaranteed to contain the ground-truth taxon under exchangeability assumptions.
 
 \subsection{Calibration Protocol and Quantile Estimation}
 
@@ -117,9 +117,9 @@ The cardinality of the conformal prediction set, $|\hat{C}(X_{n+1})|$, provides 
 
 \subsection{Active Learning Query Strategies}
 
-Observations flagged with $|\hat{C}| > k_{\max}$ or $|\hat{C}| = 0$ are synchronised to a managed DagsHub Label Studio instance for human-in-the-loop review. However, because professional taxonomic annotation is an expensive operational resource, the triage queue prioritises pending samples using active learning algorithms rather than simple first-in, first-out ordering.
+Observations flagged with $|\hat{C}| > k_{\max}$ or $|\hat{C}| = 0$ are synchronised to a managed DagsHub Label Studio instance for human-in-the-loop review. However, because professional taxonomic annotation is an expensive operational resource, the triage queue prioritises pending samples using active learning algorithms \cite{ren2021deepactive} rather than simple first-in, first-out ordering.
 
-The pipeline implements Batch Active Learning by Diverse Gradient Embeddings (BADGE). For each unannotated query $x$, BADGE models epistemic uncertainty by calculating the gradient of the cross-entropy loss with respect to the parameters of the final linear classification layer, $\theta_{\text{last}}$, evaluated against the model's current predicted pseudo-label $\hat{y} = \arg\max_j \hat{\pi}_j(x)$:
+The pipeline implements Batch Active Learning by Diverse Gradient Embeddings (BADGE) \cite{ash2020deep}. For each unannotated query $x$, BADGE models epistemic uncertainty by calculating the gradient of the cross-entropy loss with respect to the parameters of the final linear classification layer, $\theta_{\text{last}}$, evaluated against the model's current predicted pseudo-label $\hat{y} = \arg\max_j \hat{\pi}_j(x)$:
 \[
 g_x = \nabla_{\theta_{\text{last}}} \mathcal{L}\left(f(x; \theta), \hat{y}\right)
 \]

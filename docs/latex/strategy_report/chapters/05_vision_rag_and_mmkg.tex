@@ -2,7 +2,7 @@
 \chapter{Vision RAG \& Multimodal Knowledge Graph}
 \label{ch:vision_rag}
 
-Standard text-centric Retrieval-Augmented Generation (RAG) paradigms typically rely on document chunking, token embedding, and semantic similarity search in order to ground large language models. In visual ecology, we must fundamentally transform this concept into multimodal equivalents. Citizen-science platforms aggregate massive volumes of environmental imagery, but we must acknowledge that raw field photographs are highly dense, noisy, and unstructured. Rather than attempting to compute and search vector embeddings across the entire 170-million-image iNaturalist corpus, the TaxonVision-MLOps architecture couples a curated Reference Exemplar Catalogue with single-stage spatial-temporal filtered graph traversal and conformal-driven lazy execution.
+Standard text-centric Retrieval-Augmented Generation (RAG) paradigms typically rely on document chunking, token embedding, and semantic similarity search in order to ground large language models. In visual ecology, we must fundamentally transform this concept into multimodal equivalents. Citizen-science platforms aggregate massive volumes of environmental imagery, but we must acknowledge that raw field photographs are highly dense, noisy, and unstructured. Rather than attempting to compute and search vector embeddings across the entire 170-million-image iNaturalist corpus \cite{vanhorn2018inaturalist}, the TaxonVision-MLOps architecture (mapped in the preceding architectural overview) couples a curated Reference Exemplar Catalogue with single-stage spatial-temporal filtered graph traversal and conformal-driven lazy execution.
 
 \section{Ingestion Engine \& Reference Exemplar Catalogue Curation}
 \label{sec:exemplar_curation}
@@ -30,7 +30,7 @@ In text-based RAG architectures, feeding an entire multi-page document into an e
 
 In order to isolate diagnostic visual signals, the system implements Parent-Child Visual Chunking:
 \begin{itemize}
-    \item \textbf{Child Visual Chunk ($I_{\text{child}}$):} An upstream zero-shot detector (YOLO-World or OWL-ViT v2) scans the raw photograph to isolate the target specimen, outputting a normalised bounding box coordinates vector $B = [x_{\min}, y_{\min}, x_{\max}, y_{\max}]$. The organism is cropped, scaled to $224 \times 224$ pixels, and forwarded to the frozen feature extractor (BioCLIP-2) to produce the dense visual query embedding $z_{\text{child}} \in \mathbb{R}^{512}$:
+    \item \textbf{Child Visual Chunk ($I_{\text{child}}$):} An upstream zero-shot detector (YOLO-World or OWL-ViT v2) scans the raw photograph to isolate the target specimen, outputting a normalised bounding box coordinates vector $B = [x_{\min}, y_{\min}, x_{\max}, y_{\max}]$. The organism is cropped, scaled to $224 \times 224$ pixels, and forwarded to the frozen feature extractor (BioCLIP-2 \cite{stevens2024bioclip}) to produce the dense visual query embedding $z_{\text{child}} \in \mathbb{R}^{512}$:
     \[
     z_{\text{child}} = f_{\text{VFM}}(I_{\text{child}}), \quad \|z_{\text{child}}\|_2 = 1
     \]

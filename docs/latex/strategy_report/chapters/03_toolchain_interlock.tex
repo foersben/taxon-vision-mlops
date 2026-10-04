@@ -28,7 +28,7 @@ Model convergence, latency minimisation, and epistemic reliability depend fundam
 
 Neural network architectures require the optimisation of external hyperparameters, such as learning rates, weight decay penalties, and conformal confidence thresholds. Traditional Grid Search algorithms evaluate these spaces exhaustively, incurring a computational cost of $\mathcal{O}(S^D)$, where $S$ represents the number of discrete steps evaluated across $D$ hyperparameter dimensions. On a single-node bare-metal architecture, this geometric explosion renders hyperparameter tuning computationally unviable.
 
-The platform replaces brute-force evaluation with Optuna, a framework driven by the Tree-structured Parzen Estimator (TPE). TPE abandons blind search grids in favour of Bayesian probability. Instead of modelling the objective function directly, it models the parameter probability distributions conditioned on historical trial performance. Formally, for a given hyperparameter configuration $\theta$ and a target loss metric $y$, TPE models the conditional probability $P(\theta \mid y)$ as follows:
+The platform replaces brute-force evaluation with Optuna, a framework driven by the Tree-structured Parzen Estimator (TPE). TPE abandons blind search grids in favour of Bayesian probability. Instead of modelling the objective function directly, it models the parameter probability distributions conditioned on historical trial performance. Formally, for a given hyperparameter configuration $\theta$ and a target loss metric $y$ (specifically configured to optimise the PR-AUC and AUPIMO benchmarks formally defined in Chapter 7), TPE models the conditional probability $P(\theta \mid y)$ as follows:
 \[
 P(\theta \mid y) = 
 \begin{cases} 

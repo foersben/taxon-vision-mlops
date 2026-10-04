@@ -31,24 +31,25 @@
 ]
 
 %% ======================================================================
-%%  TITLE BLOCK  (Y = 14.3 .. 12.8)
+%%  TITLE BLOCK  (Y = 15.8 .. 14.7)
 %% ======================================================================
-\node[align=center] (title) at (0, 14.2) {
+\node[align=center] (title) at (0, 15.0) {
     {\LARGE\bfseries Production Pipeline Architecture}\\[2.5pt]
     {\footnotesize\color{black!70} Decoupled Dual-Pipeline Engine $\cdot$ Epistemic Safety Gates $\cdot$ Hybrid Serving Boundary $\cdot$ Active Learning Closed Loop}
 };
 
-\node[fill=black!4, draw=black!25, rounded corners=2pt, inner sep=2.5pt, font=\tiny\bfseries, align=center] at (0, 13.1) {
+\node[fill=black!4, draw=black!25, rounded corners=2pt, inner sep=2.5pt, font=\footnotesize\bfseries, align=center] at (0, 13.8) {
     \textbf{Target:} Local Bare-Metal (RTX 5070 Ti, i7-14700K) + CI-CPU \quad$\vert$\quad
     \textbf{Epistemic Guarantee:} Conformal Coverage $1-\alpha \ge 0.95$\\
     \textbf{Inference SLA:} Fast Path $<25$\,ms p95
 };
 
 %% ======================================================================
-%%  ROW 1: CENTRAL ORCHESTRATION & GOVERNANCE PLANE (Y = 11.0)
+%%  ROW 1: CENTRAL ORCHESTRATION & GOVERNANCE PLANE (Y = 12.4)
 %%  Left: DagsHub (-4.7) | Right: CI/CD (+4.7), width = 6.9cm
 %% ======================================================================
-\node[hubbox={6.9cm}] (dagshub) at (-4.7, 11.0) {%
+\node[hubbox={6.9cm}] (dagshub) at (-4.7, 12.2) {%
+% \node[hubbox={6.9cm}] (dagshub) at (-4.7, 12.4) {%
     \textbf{\footnotesize\color{mblueborder} DagsHub Unified MLOps Hub}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
     \textbullet\ \textbf{Data Version Control (DVC):} Remote storage, Parquet manifests\\
@@ -56,7 +57,7 @@
     \textbullet\ \textbf{Annotation Backend:} Integrated Label Studio human triage workspace
 };
 
-\node[hubbox={6.9cm}] (cicd) at (4.7, 11.0) {%
+\node[hubbox={6.9cm}] (cicd) at (4.7, 12.4) {%
     \textbf{\footnotesize\color{mblueborder} GitHub Actions CI/CD \& Runner}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
     \textbullet\ \textbf{Bare-Metal Runner:} RTX 5070 Ti (16GB), Intel i7-14700K, 64GB RAM\\
@@ -69,10 +70,10 @@
 \end{scope}
 
 %% ======================================================================
-%%  ROW 2: DATA ENGINEERING & MULTIMODAL REPRESENTATION (Y = 7.3)
+%%  ROW 2: DATA ENGINEERING & MULTIMODAL REPRESENTATION (Y = 7.8)
 %%  Left: Data Ingestion (-4.7) | Right: Data Prep (+4.7), width = 6.9cm
 %% ======================================================================
-\node[ingestbox={6.9cm}] (ingest) at (-4.7, 7.3) {%
+\node[ingestbox={6.9cm}] (ingest) at (-4.7, 7.8) {%
     \textbf{\footnotesize\color{morangeborder} 1. Data Ingestion \& Licensing}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
     \textbullet\ \textbf{Zero-Copy Streaming:} Apache Arrow batches from AWS Open Data\\
@@ -81,7 +82,7 @@
     \textbullet\ \textbf{Data Versioning:} DVC Parquet manifests with SHA-256 integrity hashing
 };
 
-\node[prepbox={6.9cm}] (dataprep) at (4.7, 7.3) {%
+\node[prepbox={6.9cm}] (dataprep) at (4.7, 7.8) {%
     \textbf{\footnotesize\color{mblueborder!80!black} 2. Multimodal Visual Chunking}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
     \textbullet\ \textbf{Parent-Child Chunking:} Zero-shot isolation $\to 224{\times}224$ child crops\\
@@ -160,9 +161,9 @@
 \end{scope}
 
 %% ======================================================================
-%%  ROW 5: ACTIVE LEARNING CLOSED LOOP (Y = -5.7, full width w=16.3cm)
+%%  ROW 5: ACTIVE LEARNING CLOSED LOOP (Y = -6.0, full width w=16.3cm)
 %% ======================================================================
-\node[albox={16.3cm}] (activelearn) at (0, -5.7) {%
+\node[albox={16.3cm}] (activelearn) at (0, -6.0) {%
     \textbf{\footnotesize\color{mpurpleborder} Human-in-the-Loop Active Learning \& Continuous Evolution (Label Studio via DagsHub)}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
     \begin{minipage}[t]{0.485\linewidth}
@@ -196,7 +197,7 @@
 
 %%  (3) Ingestion -> Multimodal Chunking (Horizontal between row 2 boxes)
 \draw[arrow] (ingest.east) -- (dataprep.west);
-\node[lbl, anchor=south, yshift=2pt] at (0, 7.3) {Arrow Stream};
+\node[lbl, anchor=south, yshift=2pt] at (0, 7.8) {Arrow Stream};
 
 %%  (4) Ingest -> Pipeline 1 Training (Vertical, left axis X = -4.7)
 \draw[arrow] (ingest.south) -- (pipe1.north)
@@ -224,14 +225,14 @@
 
 %%  (10) Left Closed-Loop Spine: Active Learning -> Ingestion
 \draw[arrow, draw=mpurpleborder, line width=1.4pt, rounded corners=3mm]
-    (activelearn.west) -- (-8.8, -5.7) -- (-8.8, 7.3) -- (ingest.west);
-\node[lbl, rotate=90, text=mpurpleborder, draw=mpurpleborder!50] at (-8.8, 0.8)
+    (activelearn.west) -- (-8.8, -6.0) -- (-8.8, 7.8) -- (ingest.west);
+\node[lbl, rotate=90, text=mpurpleborder, draw=mpurpleborder!50] at (-8.8, 0.9)
     {Iterative Knowledge Feedback (DVC Manifest Recalibration)};
 
 %%  (11) Right Closed-Loop Spine: Serving Observability -> CI/CD
 \draw[arrow, draw=morangeborder, line width=1.4pt, rounded corners=3mm]
-    (k8s.east) -- (8.8, -1.4) -- (8.8, 11.0) -- (cicd.east);
-\node[lbl, rotate=-90, text=morangeborder, draw=morangeborder!50] at (8.8, 4.8)
+    (k8s.east) -- (8.8, -1.4) -- (8.8, 12.4) -- (cicd.east);
+\node[lbl, rotate=-90, text=morangeborder, draw=morangeborder!50] at (8.8, 5.5)
     {MMD Feature Drift Alert (Retrain Webhook)};
 
 \end{tikzpicture}%
