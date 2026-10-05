@@ -17,8 +17,8 @@ env:
 jobs:
   quality-gate:
     name: Code, Security & Type Quality
-    runs-on: [self-hosted, bare-metal, gpu, taxon-vision]
-    environment: bare-metal-server
+    runs-on: [k3s-pod, gpu, taxon-vision]
+    environment: taxon-vision
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
