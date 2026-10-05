@@ -1,0 +1,30 @@
+schema: '2.0'
+stages:
+  ingestion:
+    cmd: pixi run --frozen -e dev python scripts/ingest_data.py
+    deps:
+    - path: scripts/ingest_data.py
+      hash: md5
+      md5: 252699c9b9439376ffff4c510e27a1fe
+      size: 2833
+    - path: src/taxon_vision/data/inat_client.py
+      hash: md5
+      md5: 01a95251d93b68e69b4c222f6b501a12
+      size: 2427
+    - path: src/taxon_vision/data/license_filter.py
+      hash: md5
+      md5: 7a12bbdb07fec741c6502edc52451d7c
+      size: 2647
+    params:
+      config/params.yaml:
+        ingestion.per_page: 200
+        ingestion.taxa_to_fetch:
+        - 47120
+        - 47119
+        - 47114
+    outs:
+    - path: data/manifests
+      hash: md5
+      md5: d09f5518539b0c2c99bf0cf3ef4457d4.dir
+      size: 10748
+      nfiles: 1

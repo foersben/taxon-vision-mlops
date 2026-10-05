@@ -26,19 +26,3 @@ class PredictionResponse(BaseModel):
     is_ood_flagged: bool
     requires_human_review: bool
     latency_ms: float
-
-
-class FeedbackRequest(BaseModel):
-    """Payload submitted by domain experts reviewing model predictions."""
-
-    observation_id: str
-    validated_taxon_id: int
-    reviewer_name: str
-    comments: str = ""
-
-
-class FeedbackResponse(BaseModel):
-    """Confirmation response returned upon recording human review feedback."""
-
-    status: str
-    message: str

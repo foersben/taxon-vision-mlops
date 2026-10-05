@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from taxon_vision.service.routes import explain, feedback, health, predict, views
+from taxon_vision.service.routes import explain, health, predict, views
 
 app = FastAPI(
     title="TaxonVision Species Identification Service",
@@ -22,5 +22,4 @@ if static_dir.exists():
 app.include_router(health.router)
 app.include_router(predict.router)
 app.include_router(explain.router)
-app.include_router(feedback.router)
 app.include_router(views.router)

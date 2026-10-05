@@ -59,7 +59,6 @@ Home = "index.md"
 "Foundations" = [
     { "Taxonomy & DarwinCore" = "foundations/taxonomy_and_darwincore.md" },
     { "iNaturalist Data Ecosystem" = "foundations/inaturalist_data_ecosystem.md" },
-    { "Concept Design & Architecture" = "latex/concept_design/concept_design.md" },
 ]
 
 [[project.nav]]
@@ -78,6 +77,8 @@ Home = "index.md"
 
 [[project.nav]]
 "Operations" = [
+    { "Current Infrastructure" = "operations/current_infrastructure.md" },
+    { "GPU Resource Scheduling" = "operations/gpu_resource_scheduling.md" },
     { "API Reference" = "operations/api_reference.md" },
     { "Prometheus Observability" = "operations/prometheus_and_observability.md" },
     { "Deployment Runbook" = "operations/deployment_runbook.md" },

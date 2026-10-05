@@ -51,5 +51,10 @@
     "**/node_modules/*/**": true,
     "**/.pixi/**": false,
     "**/.venv/**": true
+  },
+  "annotation.colors": {
+      "dark": {
+          "highlightBackground": "#00000000"
+      }
   }
 }

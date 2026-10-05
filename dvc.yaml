@@ -1,0 +1,13 @@
+stages:
+  ingestion:
+    cmd: pixi run --frozen -e dev python scripts/ingest_data.py
+    deps:
+      - scripts/ingest_data.py
+      - src/taxon_vision/data/inat_client.py
+      - src/taxon_vision/data/license_filter.py
+    params:
+      - config/params.yaml:
+        - ingestion.taxa_to_fetch
+        - ingestion.per_page
+    outs:
+      - data/manifests

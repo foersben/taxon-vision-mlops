@@ -54,6 +54,9 @@ venv/
 # Pixi
 .pixi/
 
+# Plugin data
+.out-of-code-insights/
+
 # Site documentation
 /site/
 site/

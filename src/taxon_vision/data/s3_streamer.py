@@ -4,32 +4,59 @@
 
 from __future__ import annotations
 
+import io
 from collections.abc import Generator
+from pathlib import Path
 
+import httpx
+import polars as pl
 from PIL import Image
 
 
 class S3ImageStreamer:
     """Stream images directly from S3 open data bucket without local storage explosion."""
 
-    def __init__(self, bucket_name: str = "inaturalist-open-data") -> None:
+    def __init__(self, manifest_path: str | Path = "data/manifests/dataset_manifest.parquet") -> None:
         """Initialize the S3 image streaming interface.
 
         Args:
-            bucket_name: AWS S3 bucket name containing open data images.
+            manifest_path: Path to the Parquet manifest file containing image URLs.
         """
-        self.bucket_name = bucket_name
+        self.manifest_path = Path(manifest_path)
+        if not self.manifest_path.exists():
+            raise FileNotFoundError(f"Manifest not found at {self.manifest_path}. Run ingest_data.py first.")
 
-    def stream_sample_images(self, limit: int = 10) -> Generator[tuple[str, Image.Image], None, None]:
-        """Generator yielding synthetic/mocked or streamed PIL images.
+        self.df = pl.read_parquet(self.manifest_path)
+
+    def stream_images(self, limit: int | None = None) -> Generator[tuple[str, int, Image.Image], None, None]:
+        """Generator yielding streamed PIL images directly from the S3 URLs.
+
+        This method is intended to be used in training pipelines to avoid downloading the entire dataset to disk.
+        Furthermore the streaming approach is also used to avoid RAM overloads on smaller devices.
 
         Args:
-            limit: The number of images to stream.
+            limit: Optional limit on the number of images to stream.
 
-        Returns:
-            A generator yielding tuples of image IDs and PIL images.
+        Yields:
+            A generator yielding tuples of (observation_uuid, taxon_id, PIL Image).
         """
-        for i in range(limit):
-            # Generate placeholder RGB image for deterministic pipeline testing
-            img = Image.new("RGB", (224, 224), color=(30 + i * 20, 100, 150))
-            yield f"obs_{i:04d}", img
+        records = self.df.to_dicts()
+        if limit is not None:
+            records = records[:limit]
+
+        with httpx.Client(timeout=15.0) as client:
+            for record in records:
+                obs_uuid = str(record["observation_uuid"])
+                taxon_id = int(record["taxon_id"])
+                image_url = str(record["image_url"])
+
+                try:
+                    response = client.get(image_url)
+                    response.raise_for_status()
+                    img: Image.Image = Image.open(io.BytesIO(response.content))
+                    # Convert to RGB to handle grayscale/RGBA inconsistencies
+                    if img.mode != "RGB":
+                        img = img.convert("RGB")
+                    yield obs_uuid, taxon_id, img
+                except Exception as e:
+                    print(f"Failed to stream {obs_uuid} from {image_url}: {e}")

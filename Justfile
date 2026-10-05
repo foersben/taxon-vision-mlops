@@ -105,6 +105,10 @@ fetch-sample:
 	pixi run --frozen -e dev python -m taxon_vision.data.s3_streamer --limit 100 --out data/sample/
 
 [group("mlops")]
+ingest-data:
+	pixi run --frozen -e dev python scripts/ingest_data.py
+
+[group("mlops")]
 train-baseline extractor="bioclip-2":
 	pixi run --frozen -e dev python -m taxon_vision.models.trainer --extractor {{extractor}} --epochs 5
 
