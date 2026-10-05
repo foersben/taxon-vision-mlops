@@ -3,7 +3,7 @@ import numpy as np
 from taxon_vision.uncertainty.ood_detector import EnergyOODDetector
 
 
-def test_ood_energy_detector():
+def test_ood_energy_detector() -> None:
     detector = EnergyOODDetector(energy_threshold=-10.0)
     # Strong in-distribution logits
     id_logits = np.array([12.0, 1.0, -2.0])

@@ -1,10 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Benjamin Förster
 # SPDX-License-Identifier: MIT
-"""Energy-based Out-Of-Distribution and empty image detector.
-
-how does it work? what kind of energy?
-
-"""
+"""Energy-based Out-Of-Distribution and empty image detector."""
 
 from __future__ import annotations
 

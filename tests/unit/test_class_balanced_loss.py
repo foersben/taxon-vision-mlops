@@ -3,7 +3,7 @@ import torch
 from taxon_vision.models.loss import ClassBalancedLoss
 
 
-def test_class_balanced_loss_computation():
+def test_class_balanced_loss_computation() -> None:
     samples_per_class = [1000, 100, 10]
     loss_fn = ClassBalancedLoss(samples_per_class=samples_per_class, beta=0.999)
     assert len(loss_fn.weights) == 3
