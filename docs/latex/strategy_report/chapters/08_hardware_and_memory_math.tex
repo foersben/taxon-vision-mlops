@@ -62,12 +62,12 @@ Where:
 \begin{itemize}
     \item $\mathcal{M}_{\text{index}}$ is the total theoretical memory footprint required to store the raw embedding vectors in RAM.
     \item $N_{\text{nodes}}$ is the absolute upper bound of discrete biological exemplars within the retrieval catalogue ($500,000$).
-    \item $D_{\text{dim}}$ is the feature dimensionality of the chosen Vision Foundation Model (for example, $768$ dimensions for a standard ViT-Base backbone).
+    \item $D_{\text{dim}}$ is the feature dimensionality of the chosen Vision Foundation Model. While the active BioCLIP-2 backbone produces $512$-dimensional vectors ($z_{\text{child}} \in \mathbb{R}^{512}$), we evaluate the worst-case upper bound of $768$ dimensions representing a standard ViT-Base backbone.
     \item $B_{\text{bytes}}$ is the byte-size of the numerical precision format ($4$ bytes for standard FP32).
 \end{itemize}
 
-Evaluating this expression logically yields:
+Evaluating this expression logically yields the worst-case upper bound:
 \[
-\mathcal{M}_{\text{index}} = 500,000 \times 768 \times 4 \text{ bytes} = 1,536,000,000 \text{ bytes} \approx 1.53 \text{ GB}
+\mathcal{M}_{\text{index}} = 500,000 \times 768 \times 4 \text{ bytes} = 1,536,000,000 \text{ bytes} \approx 1.536 \text{ GB}
 \]
-By formally proving that the uncompressed vector payload requires approximately $1.53 \text{ GB}$, the system firmly guarantees that the entire HNSW graph (including navigational edge overhead) will safely consume less than $3 \text{ GB}$ of host memory. This critically allows the index to remain resident in fast RAM concurrently alongside the FastAPI worker processes, thereby completely bypassing slow hard-drive reads and successfully preserving the $25 \text{ ms}$ inference SLA.
+By formally proving that the uncompressed vector payload requires at most $1.536 \text{ GB}$ (and only $1.024 \text{ GB}$ under the active $512$-dimensional BioCLIP-2 architecture), the system firmly guarantees that the entire HNSW graph (including navigational edge overhead) will safely consume less than $3 \text{ GB}$ of host memory. This critically allows the index to remain resident in fast RAM concurrently alongside the FastAPI worker processes, thereby completely bypassing slow hard-drive reads and successfully preserving the $25 \text{ ms}$ inference SLA.

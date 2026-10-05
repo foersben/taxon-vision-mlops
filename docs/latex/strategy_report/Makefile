@@ -14,7 +14,7 @@ export TEXMF_OUTPUT_DIRECTORY ?= .
 
 # Rule to build the PDF with automated dependency tracking and BibTeX resolution via latexmk
 $(PROJECT).pdf: $(PROJECT).tex references.bib $(wildcard chapters/*.tex)
-	TEXMF_OUTPUT_DIRECTORY="." latexmk -pdf -shell-escape -interaction=nonstopmode -halt-on-error $(PROJECT).tex
+	latexmk -pdf -outdir=. -shell-escape -interaction=nonstopmode -halt-on-error $(PROJECT).tex
 
 # Clean rule to remove temporary, auxiliary, and target PDF files
 clean:

@@ -82,3 +82,6 @@ uv.lock
 *.out
 *.toc
 _minted*/
+
+# Personal Scripts
+scripts/unlock_taxon.sh

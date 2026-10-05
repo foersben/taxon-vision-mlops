@@ -7,15 +7,6 @@
 
 This repository provides a highly formalised, end-to-end MLOps pipeline and high-throughput production service for the purpose of species identification from citizen-science photographs (such as iNaturalist and GBIF DarwinCore). It has been engineered with rigorous attention to deterministic execution and state-of-the-art inference efficiency.
 
-```text
-    ┌────────────────────────────────────────────────────────────────────────────────────────┐
-    │                                  TAXONVISION-MLOPS                                     │
-    │         Automated End-to-End MLOps Pipeline for Species Identification from Photos     │
-    │              Citizen Science (iNaturalist / GBIF) - Conformal Uncertainty              │
-    │             Production-Grade Engineering - Dual-Target Pixi (GPU / CPU)                │
-    └────────────────────────────────────────────────────────────────────────────────────────┘
-```
-
 ---
 
 ## Key Capabilities

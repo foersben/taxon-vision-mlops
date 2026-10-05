@@ -15,7 +15,7 @@ The necessity for architectural decoupling stems directly from the fundamentally
 
 Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely because Pipeline 2 updated an exemplar image for a specific beetle species wastes immense computational resources. Furthermore, physically separating these domains enforces strict failure isolation. If a malformed DarwinCore archive from an upstream provider induces a schema violation, Pipeline 2 will halt securely. However, Pipeline 1 remains entirely unimpeded, preserving our ability to compile, test, and deploy critical hot-fixes to the classification logic.
 
-\section{Automated CI/CD Orchestration and Registry Promotion}
+\section{Automated CI/CD Orchestration \& Registry Promotion}
 \label{sec:ci_cd_binding}
 
 \begin{figure}[htbp]

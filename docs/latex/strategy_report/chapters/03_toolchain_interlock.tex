@@ -1,4 +1,4 @@
-\chapter{The Open-Source MLOps Toolchain}
+\chapter{Open-Source MLOps Toolchain}
 \label{ch:toolchain}
 
 In order to construct a production-grade machine learning platform without incurring prohibitive enterprise cloud licensing costs, our architecture integrates a curated selection of open-source components. However, merely assembling disparate tools is insufficient. True operational resilience requires a deep, mechanical interlocking between data versioning, experiment telemetry, and hyperparameter optimisation.
@@ -12,7 +12,7 @@ The system safely circumvents this limitation by utilising Data Version Control 
 
 This pointer file is subsequently committed to Git. When a deployment runner or data scientist executes a checkout command for a specific historical commit, the DVC client reads the hash from the pointer file, resolves the asset location in the remote cache, and constructs near-instantaneous filesystem reflinks (or hardlinks) into the local workspace. This dual-layered approach reliably decouples the heavy binary storage from the codebase, whilst guaranteeing mathematically verifiable, bit-for-bit data reproducibility.
 
-\section{The Unified Management Plane}
+\section{Unified Management Plane}
 \label{sec:dagshub}
 
 Operating a distributed MLOps toolchain traditionally requires provisioning disparate infrastructure: an AWS S3 bucket for data object storage, a PostgreSQL database for experiment telemetry, and a complex matrix of Identity and Access Management (IAM) policies in order to broker communication between them.
@@ -49,7 +49,7 @@ The algorithm iteratively selects new configurations that maximise the ratio $\e
 
 In order to further conserve hardware cycles, Optuna executes the Asynchronous Successive Halving Algorithm (ASHA). If a trial's validation metrics fall into the bottom quartile during its initial training epochs, ASHA aggressively prunes (terminates) the run. This immediately frees the Tensor Cores to evaluate a more promising branch of the probability distribution.
 
-\subsection{The MLflow Interlock Architecture}
+\subsection{MLflow Interlock Architecture}
 
 While Optuna efficiently orchestrates the search mathematics locally, it inherently lacks the infrastructure to permanently archive model provenance across a distributed engineering team. MLflow bridges this gap, operating as the continuous flight data recorder for our training pipeline.
 

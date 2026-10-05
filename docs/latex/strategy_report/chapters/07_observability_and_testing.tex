@@ -1,10 +1,10 @@
 % !TeX root = ../strategy_report.tex
-\chapter{Observability, Testing \& Deployment}
+\chapter{Observability, Testing, Deployment}
 \label{ch:observability}
 
 Transitioning a deep learning system from a localised development environment into a production ecosystem fundamentally shifts the engineering challenge from model optimisation to system verification, runtime isolation, and continuous operational health monitoring. A machine learning service rarely fails through overt code exceptions; instead, it fails silently through data distribution shift, memory leaks under continuous streaming, Translation Lookaside Buffer thrashing, and uncalibrated epistemic decay.
 
-In order to maintain production integrity, our deployment architecture rigorously couples containerised runtime encapsulation with Kubernetes cluster orchestration, real-time statistical telemetry, and a multi-tiered verification framework. This chapter outlines the software engineering mechanisms governing containerisation, traffic routing, automated drift alerting, and offline testing suites.
+In order to maintain production integrity, our deployment architecture rigorously couples containerised runtime encapsulation with Kubernetes (K8s) cluster orchestration, real-time statistical telemetry, and a multi-tiered verification framework. This chapter outlines the software engineering mechanisms governing containerisation, traffic routing, automated drift alerting, and offline testing suites.
 
 \section{Containerisation and Multi-Stage Runtimes}
 \label{sec:containerization}
@@ -28,10 +28,10 @@ At runtime, execution security and resource determinism are enforced directly th
     \item \textbf{Rootless Execution:} The container runs strictly under an unprivileged user namespace (\texttt{USER appuser}), mounting the root filesystem as read-only and intelligently routing temporary scratch buffers to an ephemeral, in-memory \texttt{tmpfs} volume.
 \end{itemize}
 
-\section{Kubernetes Cluster Orchestration and Workload Routing}
+\section{K8s Cluster Orchestration and Workload Routing}
 \label{sec:k8s_orchestration}
 
-Deploying a hybrid vision architecture -- where routine queries resolve in sub-25ms hot paths whilst ambiguous queries trigger heavy generative multimodal retrieval -- requires cluster orchestration capable of handling highly asymmetric latency profiles. The system is deployed across a managed Kubernetes cluster strictly configured to separate lightweight inference paths from resource-intensive Vision RAG pipelines.
+Deploying a hybrid vision architecture -- where routine queries resolve in sub-25ms hot paths whilst ambiguous queries trigger heavy generative multimodal retrieval -- requires cluster orchestration capable of handling highly asymmetric latency profiles. While the physical bare-metal workstation detailed in Chapter 2 serves as the primary edge deployment executing a single-node Kubernetes cluster (via k3s), the system is deployed via Helm charts structurally designed to scale seamlessly across managed multi-node cloud clusters when production traffic surges. These charts are strictly configured to separate lightweight inference paths from resource-intensive Vision RAG pipelines.
 
 \subsection{Asymmetric Pod Architecture and Ingress Routing}
 Rather than packaging the fast-path ONNX classifier and the multi-gigabyte Vision-Language Model into a single monolithic pod, the cluster architecture deliberately splits the workload into two specialised microservices:
@@ -40,25 +40,25 @@ Rather than packaging the fast-path ONNX classifier and the multi-gigabyte Visio
     \item \textbf{The Multimodal RAG Service (\texttt{taxon-vision-vlm}):} A specialised, resource-allocated deployment mounting dedicated GPU Tensor Cores to host the quantised 2-billion parameter Vision-Language Model and the in-memory HNSW vector index.
 \end{enumerate}
 
-An ingress controller inspects incoming network payloads and intelligently load-balances observation traffic across the \texttt{taxon-vision-serving} pods. If an observation's conformal prediction set cardinality evaluates to $|C| = 1$, the primary pod returns the classification directly through the ingress to the client. If the conformal layer flags ambiguity ($|C| > 1$) or novelty ($|C| = 0$), the primary service seamlessly dispatches an asynchronous internal gRPC call to the \texttt{taxon-vision-vlm} service. This service then executes filtered graph traversal, synthesises the comparative diagnostic context, and efficiently returns the structured differential payload.
+An ingress controller inspects incoming network payloads and intelligently load-balances observation traffic across the \texttt{taxon-vision-serving} pods. If an observation's conformal prediction set cardinality evaluates to $|C| = 1$, the primary pod returns the classification directly through the ingress to the client. If the conformal layer flags ambiguity ($1 < |C| \le 3$), it triggers a lightweight RAG comparative lookup via HNSW and Reciprocal Rank Fusion. If the ambiguity is severe ($|C| > 3$) or novel ($|C| = 0$), the primary service seamlessly dispatches an asynchronous internal gRPC call to the \texttt{taxon-vision-vlm} service. This service then executes full generative VLM differential diagnosis and routes the query to DagsHub Label Studio for expert human triage.
 
 \subsection{Self-Healing and Health Probing}
-In order to prevent cluster degradation caused by deadlocks or memory corruption, Kubernetes enforces dual-tier health probes:
+In order to prevent cluster degradation caused by deadlocks or memory corruption, K8s enforces dual-tier health probes:
 \begin{itemize}
     \item \textbf{Liveness Probes:} The kubelet periodically polls a lightweight \texttt{/healthz/liveness} HTTP endpoint. If the FastAPI event loop becomes unresponsive or encounters an unrecoverable worker thread failure, the control plane immediately terminates the failing container and instantiates a clean replica.
     \item \textbf{Readiness Probes:} A separate \texttt{/healthz/readiness} probe strictly verifies that internal model buffers, CUDA execution providers, and HNSW graph indexes are fully loaded into memory before the ingress controller ever routes live citizen-science observation traffic to the pod.
 \end{itemize}
 
 \subsection{Horizontal Pod Autoscaling on Custom Telemetry}
-Standard Kubernetes autoscaling typically relies on CPU or system memory thresholds, which unfortunately provide misleading operational signals for neural network workloads. A GPU-bound container can experience severe execution queuing whilst reporting surprisingly low CPU utilisation.
+Standard K8s autoscaling typically relies on CPU or system memory thresholds, which unfortunately provide misleading operational signals for neural network workloads. A GPU-bound container can experience severe execution queuing whilst reporting surprisingly low CPU utilisation.
 
-The cluster implements Horizontal Pod Autoscaling (HPA) driven by custom Prometheus metrics via the Kubernetes Custom Metrics API. The autoscaler continuously monitors two primary indicators:
+The cluster implements Horizontal Pod Autoscaling (HPA) driven by custom Prometheus metrics via the K8s Custom Metrics API. The autoscaler continuously monitors two primary indicators:
 \begin{enumerate}
     \item \textbf{GPU VRAM Saturation and Compute Utilisation:} Sourced directly from NVIDIA Data Center GPU Manager (DCGM) metrics.
     \item \textbf{Conformal Ambiguity Influx:} Sourced directly from the application's telemetry. If an environmental event (for example, sudden regional weather shifts causing blurred imagery) causes the proportion of multi-candidate conformal sets ($|C| > 1$) to spike, the HPA preemptively scales the \texttt{taxon-vision-vlm} pod pool to comfortably absorb the anticipated surge in heavy multimodal retrieval passes before service latency inevitably degrades.
 \end{enumerate}
 
-\section{Telemetry, Metric Exporters, and Concept Drift Monitoring}
+\section{Telemetry, Metric Exporters, Concept Drift Monitoring}
 \label{sec:observability_telemetry}
 
 Unlike traditional software services that experience deterministic failure modes, machine learning systems are uniquely vulnerable to silent statistical degradation. A model endpoint can report 100\% uptime and sub-millisecond HTTP response times whilst concurrently outputting meaningless ecological predictions due to seasonal distribution shifts, camera sensor variations, or geographic migrations. Thus, the platform embeds comprehensive statistical telemetry deeply into the serving runtime.

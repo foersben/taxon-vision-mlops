@@ -4,7 +4,7 @@
 
 The computational demands of high-throughput vision architectures strictly dictate physical and operational determinism. In order to move beyond volatile cloud abstractions, this chapter establishes the bare-metal hardware topography, memory budgeting, and cryptographic data storage strategies which are necessary to sustain continuous model training and real-time inference without performance degradation or unnecessary cloud expenditures.
 
-\section{Heterogeneous Silicon and Thermal Determinism}
+\section{Heterogeneous Silicon and Physical Determinism}
 Training and deploying dense Vision Foundation Models (VFMs) at high throughput necessitate deterministic physical execution. Relying on shared public cloud infrastructure inevitably introduces hypervisor virtualisation overhead and variable PCIe bandwidth. This obscures true performance metrics during latency profiling. Consequently, the platform utilises a dedicated bare-metal host architecture.
 
 The computational core relies on an Intel Core i7-14700K processor, thereby leveraging its heterogeneous core topology to explicitly isolate workloads. High-frequency neural execution paths and PyTorch gradient calculations are pinned strictly to the Performance-cores (P-cores), preserving the L2 and L3 cache lines for the mathematical hot loops. Conversely, background asynchronous I/O operations -- such as streaming HTTP requests, dataset extraction, and database indexing -- are relegated to the Efficiency-cores (E-cores) in order to prevent CPU context switching.
@@ -24,17 +24,17 @@ Rather than storing the raw images, DVC tracks the cryptographically validated P
 \subsection{Bounded Exemplar Storage Mathematics}
 For the actual visual data, the Vision RAG architecture curates a bounded Reference Exemplar Catalogue, strictly capped at 50 validated environmental crops per species.
 
-For a production deployment spanning 2,000 baseline taxa, this yields exactly 100,000 curated images. Assuming a compressed WebP format averaging 60 KB per crop, the mathematical storage footprint evaluates as follows:
+For a production deployment spanning 2,000 baseline taxa, this yields exactly 100,000 curated images. Assuming a compressed WebP format with an empirical average of 45 KB per crop (and a conservative padded upper bound of 60 KB), the mathematical storage footprint evaluates as follows:
 \[
-\text{Storage}_{\text{Exemplars}} = 100{,}000 \text{ images} \times 60 \text{ KB} = 6{,}000{,}000 \text{ KB} \approx 6.0 \text{ GB}
+\text{Storage}_{\text{Exemplars}} = 100{,}000 \text{ images} \times 45 \text{ KB} = 4{,}500{,}000 \text{ KB} \approx 4.5 \text{ GB}
 \]
 Furthermore, dynamic INT8 quantised ONNX model checkpoints range from 20 MB to 350 MB each. Retaining a rolling buffer of the most recent production release candidates consumes well under 2.0 GB.
 
 \begin{align*}
-\text{Storage}_{\text{Total}} &= 300 \text{ MB (Manifests)} + 6.0 \text{ GB (Exemplars)} \\
-&\quad + 2.0 \text{ GB (ONNX Models)} + 1.5 \text{ GB (DVC Churn)} \approx 9.8 \text{ GB}
+\text{Storage}_{\text{Total}} &= 300 \text{ MB (Manifests)} + 4.5 \text{ GB (Exemplars)} \\
+&\quad + 2.0 \text{ GB (ONNX Models)} + 1.5 \text{ GB (DVC Churn)} \approx 8.3 \text{ GB}
 \end{align*}
-This peak allocation naturally consumes less than $50\%$ of the DagsHub free-tier allowance, thereby leaving significant overhead for active learning annotations.
+This 8.3 GB peak allocation (or 9.8 GB under peak 60 KB compression variance) naturally consumes less than $50\%$ of the DagsHub free-tier allowance, thereby leaving significant overhead for active learning annotations.
 
 \subsection{External Remote Fallback Topology}
 As the catalogue scales towards 10,000 global taxa, the exemplar storage requirement will linearly increase to approximately 30 GB, thereby breaching the native quota. In this scenario, the DVC remote backend is simply retargeted to an external, zero-egress S3-compatible bucket (such as Cloudflare R2 or a localised MinIO cluster). DagsHub then continues to render the Directed Acyclic Graphs (DAGs) and track Git-to-DVC commit diffs, successfully decoupling the management interface from the physical storage layer.
