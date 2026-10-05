@@ -18,7 +18,8 @@ jobs:
   quality-gate:
     name: Code, Security & Type Quality
     runs-on: [k3s-pod, gpu, taxon-vision]
-    environment: taxon-vision
+    environment:
+      name: ${{ github.ref == 'refs/heads/main' && 'taxon-vision-prod' || 'taxon-vision-staging' }}
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
