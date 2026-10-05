@@ -5,14 +5,14 @@
 [![Pixi](https://img.shields.io/badge/managed%20by-pixi-blue)](https://pixi.sh)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
 
-An automated end-to-end MLOps pipeline and high-throughput production service for species identification from citizen-science photographs (iNaturalist / GBIF DarwinCore).
+This repository provides a highly formalised, end-to-end MLOps pipeline and high-throughput production service for the purpose of species identification from citizen-science photographs (such as iNaturalist and GBIF DarwinCore). It has been engineered with rigorous attention to deterministic execution and state-of-the-art inference efficiency.
 
 ```text
     ┌────────────────────────────────────────────────────────────────────────────────────────┐
     │                                  TAXONVISION-MLOPS                                     │
     │         Automated End-to-End MLOps Pipeline for Species Identification from Photos     │
-    │              Citizen Science (iNaturalist / GBIF) • Conformal Uncertainty             │
-    │             Production-Grade Engineering • Dual-Target Pixi (GPU / CPU)               │
+    │              Citizen Science (iNaturalist / GBIF) - Conformal Uncertainty              │
+    │             Production-Grade Engineering - Dual-Target Pixi (GPU / CPU)                │
     └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -20,10 +20,10 @@ An automated end-to-end MLOps pipeline and high-throughput production service fo
 
 ## Key Capabilities
 
-* **Level 1 Closed Chain:** Ingestion of ~10 well-represented taxa, open license filtering (CC0, CC-BY, CC-BY-NC), attribution preservation, frozen feature extraction, and deployment.
-* **Level 2 Scalability & Cost:** Automated multi-backbone Pareto benchmarking (`BioCLIP-2`, `DINOv3`, `DINOv2`, `MobileNetV4`, `EfficientNet`), ONNX Runtime export with dynamic INT8/FP16 quantization, and DVC dataset versioning.
-* **Level 3 Observability:** Automated feedback ingestion, taxonomic mutation reconciliation, and Prometheus telemetry.
-* **Level 4 Robustness & Safety:** **Split Conformal Prediction** guaranteeing distribution-free $1 - \alpha$ coverage, energy-based OOD detection, active learning triage, Class-Balanced Loss for long-tail species, and low-latency Grad-CAM heatmaps (< 25 ms).
+* **Level 1 Closed Chain:** Ingestion of approximately 10 well-represented taxa, strict open license filtering (CC0, CC-BY, CC-BY-NC), attribution preservation, frozen feature extraction, and automated deployment.
+* **Level 2 Scalability & Cost:** Automated multi-backbone Pareto benchmarking (`BioCLIP-2`, `DINOv3`, `DINOv2`, `MobileNetV4`, `EfficientNet`), ONNX Runtime export with dynamic INT8/FP16 quantisation, and rigorous DVC dataset versioning.
+* **Level 3 Observability:** Automated feedback ingestion, taxonomic mutation reconciliation, and structured Prometheus telemetry.
+* **Level 4 Robustness & Safety:** **Split Conformal Prediction** mathematically guaranteeing distribution-free $1 - \alpha$ coverage, energy-based OOD detection, active learning triage, Class-Balanced Loss for long-tail species, and low-latency Grad-CAM heatmaps (< 25 ms).
 
 ---
 
@@ -69,4 +69,4 @@ just run
 
 ## Repository Governance
 
-Governed by a 12-role agent matrix defined in `.agents/AGENTS.md` and documented under Google Open Knowledge Format (OKF v0.2) in `docs/`.
+The architecture is governed by a 12-role agent matrix defined within `.agents/AGENTS.md` and standardises upon the Google Open Knowledge Format (OKF v0.2) across the `docs/` directory.

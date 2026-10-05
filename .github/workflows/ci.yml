@@ -3,7 +3,7 @@ name: CI & Deployment Pipeline
 on:
   push:
     branches: [ "main", "develop" ]
-  pull_request:
+  pull_request_target:
     branches: [ "main", "develop" ]
 
 permissions:
@@ -17,7 +17,8 @@ env:
 jobs:
   quality-gate:
     name: Code, Security & Type Quality
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, bare-metal, gpu, taxon-vision]
+    environment: bare-metal-server
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
