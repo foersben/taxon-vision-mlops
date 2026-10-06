@@ -8,7 +8,11 @@ import numpy as np
 
 
 class EnergyOODDetector:
-    """Detects uninformative, blurry, or non-organism images via energy scoring."""
+    """Detects uninformative, blurry, or non-organism images via energy scoring.
+
+    Attributes:
+        energy_threshold: Decision boundary threshold above which inputs are classified as OOD.
+    """
 
     def __init__(self, energy_threshold: float = -12.5) -> None:
         """Initialize the energy-based out-of-distribution detector.

@@ -701,11 +701,11 @@ def main() -> None:
     base_paths = [d for d in base_dirs if d.exists()]
 
     if args.files:
-        target_files = [Path(f).resolve() for f in args.files]
+        target_files = [Path(f).resolve() for f in args.files if ".archive" not in str(f)]
     else:
         target_files = []
         for base in base_paths:
-            target_files.extend(base.rglob("*.md"))
+            target_files.extend(f for f in base.rglob("*.md") if ".archive" not in str(f))
 
     if args.fix:
         fixed_count = auto_fix_timestamps(target_files)

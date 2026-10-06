@@ -116,7 +116,12 @@ def main() -> int:
             target_files.append(p)
         elif p.is_dir():
             target_files.extend(
-                f for f in p.rglob("*.md") if ".pixi" not in str(f) and "site" not in str(f) and ".cache" not in str(f)
+                f
+                for f in p.rglob("*.md")
+                if ".pixi" not in str(f)
+                and "site" not in str(f)
+                and ".cache" not in str(f)
+                and ".archive" not in str(f)
             )
 
     all_errors: dict[Path, list[str]] = {}

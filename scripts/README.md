@@ -8,4 +8,3 @@ This directory houses the deterministic verification scripts, quality gates, and
 * `benchmark_pareto.py`: Benchmarks candidate backbones (BioCLIP-2, DINOv3, DINOv2, MobileNetV4, EfficientNet) evaluating Accuracy vs. Latency vs. \$/M queries.
 * `calibrate_conformal.py`: Calibrates Split Conformal Prediction non-conformity score quantiles on holdout data.
 * `local_ci.sh`: Reproduces the complete GitHub Actions CI pipeline locally on the native host without Docker overhead.
-* `run_ci_with_act.sh`: Rehearses GitHub Actions workflows locally using Docker and `act`.
