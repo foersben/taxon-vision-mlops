@@ -9,7 +9,7 @@ router = APIRouter(prefix="/api/v1")
 
 
 class ExplainResponse(BaseModel):
-    """Response containing Grad-CAM explanation generation status and latency."""
+    """Response containing CAM explanation generation status and latency."""
 
     heatmap_status: str
     latency_ms: float
@@ -17,7 +17,7 @@ class ExplainResponse(BaseModel):
 
 @router.post("/explain", response_model=ExplainResponse)
 async def explain_prediction() -> ExplainResponse:
-    """Generate Grad-CAM activation map highlighting regions influencing classification.
+    """Generate CAM activation map highlighting regions influencing classification.
 
     Returns:
         Explanation response indicating heatmap generation status and overhead latency.
