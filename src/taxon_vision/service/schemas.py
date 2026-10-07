@@ -8,7 +8,17 @@ from pydantic import BaseModel
 
 
 class TaxonPrediction(BaseModel):
-    """Predicted taxonomic identity with confidence score."""
+    """Predicted taxonomic identity with calibrated confidence score.
+
+    Why:
+        Establishes an unambiguous representation of individual candidate species,
+        linking machine-learning probability outputs to canonical Darwin Core identifiers
+        and binomial scientific nomenclature.
+
+    How:
+        Encapsulates integer taxon identifier, binomial scientific name, vernacular
+        common name, and top-1 probability score rounded to four decimal places.
+    """
 
     taxon_id: int
     scientific_name: str
@@ -17,7 +27,19 @@ class TaxonPrediction(BaseModel):
 
 
 class PredictionResponse(BaseModel):
-    """Structured inference response containing top predictions, conformal sets, and flags."""
+    """Structured inference response containing top predictions, conformal sets, and triage flags.
+
+    Why:
+        Production ecological inference must not return uncalibrated point estimates in isolation.
+        Clients require both the primary identification, ranked alternatives, distribution-free
+        conformal guarantee sets, and actionable triage recommendations (human review required,
+        OOD flags) to safely automate field workflows.
+
+    How:
+        Bundles the top-1 `TaxonPrediction`, secondary candidates admitted into the conformal set,
+        conformal set scientific names list, ambiguity boolean flags, epistemic referral triggers,
+        and end-to-end execution latency in milliseconds.
+    """
 
     top_prediction: TaxonPrediction
     top_candidates: list[TaxonPrediction]
@@ -29,7 +51,17 @@ class PredictionResponse(BaseModel):
 
 
 class TrainingRequest(BaseModel):
-    """Parameters for model training."""
+    """Parameters governing model head training execution.
+
+    Why:
+        Allows callers to trigger and configure linear classification head optimization
+        over cached foundation model representations via REST API without altering
+        underlying server configuration files.
+
+    How:
+        Defines default backbone extractor name, epoch budget, batch size, optimizer
+        learning rate, and a background dispatch flag (`background=True`) to offload long jobs.
+    """
 
     extractor: str = "mobilenetv4_conv_small"
     epochs: int = 5
@@ -39,7 +71,17 @@ class TrainingRequest(BaseModel):
 
 
 class TrainingResponse(BaseModel):
-    """Result and metrics from model training run."""
+    """Execution status and evaluation metrics from a model head training run.
+
+    Why:
+        Communicates the convergence outcomes, weight artifact destinations, and operational
+        status of local or remote training pipelines to human operators and MLOps controllers.
+
+    How:
+        Serializes operational status ('started' or 'completed'), target backbone extractor,
+        completed epochs count, final train and validation losses, top-1 accuracy, persisted
+        checkpoint path, total elapsed duration, and summary status message.
+    """
 
     status: str
     extractor: str

@@ -1,6 +1,23 @@
 # SPDX-FileCopyrightText: 2026 Benjamin Förster
 # SPDX-License-Identifier: MIT
-"""FastAPI Application Composition Root."""
+"""FastAPI Application Composition Root.
+
+Why:
+    TaxonVision requires a unified deployment artifact serving both automated high-throughput
+    machine prediction requests (OpenAPI REST endpoints) and interactive human verification
+    dashboards (HTMX/Jinja2 server-rendered views). Unifying these surfaces inside a single
+    FastAPI ASGI application simplifies Kubernetes pod topology, shares cached PyTorch and
+    conformal inference memory spaces, and ensures telemetry scrapes cover all operational surfaces.
+
+How:
+    Instantiates the top-level FastAPI application with formal OpenAPI metadata, mounts static
+    CSS/JS styling assets if present, and mounts modular route handlers:
+    - `health`: Liveness probes and Prometheus metric scrapes.
+    - `predict`: High-throughput species classification with conformal sets.
+    - `train`: Model head training triggering and status reporting.
+    - `explain`: Visual attribution Class Activation Maps (CAM).
+    - `views`: Interactive Jinja2/HTMX dashboard views for field biologists.
+"""
 
 from pathlib import Path
 
