@@ -26,3 +26,27 @@ class PredictionResponse(BaseModel):
     is_ood_flagged: bool
     requires_human_review: bool
     latency_ms: float
+
+
+class TrainingRequest(BaseModel):
+    """Parameters for model training."""
+
+    extractor: str = "mobilenetv4_conv_small"
+    epochs: int = 5
+    batch_size: int = 16
+    learning_rate: float = 0.001
+    background: bool = False
+
+
+class TrainingResponse(BaseModel):
+    """Result and metrics from model training run."""
+
+    status: str
+    extractor: str
+    epochs_trained: int
+    final_train_loss: float | None = None
+    final_val_loss: float | None = None
+    final_val_accuracy: float | None = None
+    checkpoint_path: str
+    duration_seconds: float
+    message: str

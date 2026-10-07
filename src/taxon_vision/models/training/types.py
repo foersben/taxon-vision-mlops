@@ -85,7 +85,7 @@ class HeadTrainingConfig:
     Attributes:
         epochs: Number of complete training epochs to execute.
         batch_size: Mini-batch size for gradient optimization steps.
-        pruner_callback: Optional callable taking `(epoch, val_accuracy)` that returns
+        pruner_callback: Optional callable taking `(epoch, val_pr_auc)` that returns
             True if training should terminate early.
     """
 
