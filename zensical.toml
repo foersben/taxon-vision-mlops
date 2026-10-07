@@ -32,7 +32,7 @@ features = [
 [project.theme.palette]
 scheme = "slate"
 primary = "black"
-accent = "emerald"
+accent = "deep-orange"
 
 [project.theme.icon]
 repo = "fontawesome/brands/github"
