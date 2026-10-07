@@ -51,6 +51,14 @@ tracks all experiments with MLflow, and automatically promotes the best model us
 | `runner.py` | `_promote_model_if_better()` | Compares PR-AUC and assigns Production / Challenger alias - **planned: delegate to Jenkins** |
 | `runner.py` | `_dispatch_remote_training()` | HTTP dispatch to FastAPI to trigger training remotely - **planned: delete, replaced by Jenkins trigger** |
 
+## Pipeline Lifecycle & MLflow RAII Strategy
+
+**What we chose:**
+The MLflow run lifecycle is strictly managed via a custom `@contextmanager` named `mlflow_run_scope()`. This native Python RAII (Resource Acquisition Is Initialization) pattern guarantees that if the training pipeline crashes (e.g., CUDA OOM), the exception is caught, the run is explicitly marked as `FAILED` in the MLflow tracking registry, and the run is cleanly closed before bubbling the exception up to the FastAPI route.
+
+**Why we chose it (Semantic Validation):**
+A common anti-pattern is tracking state via detached boolean flags (e.g., `is_active: bool`) across multiple methods. If an unhandled exception occurs in a deep submodule, the top-level script crashes without closing the MLflow run. This leaves orphaned, zombie runs stuck in a perpetual `RUNNING` state in the MLflow UI, requiring manual DB cleanup and breaking downstream automation that polls for run completion. The RAII context manager semantically links the scope of the Python execution block directly to the MLflow lifecycle, ensuring perfect state consistency.
+
 ## Full Pipeline Sequence
 
 ```mermaid
