@@ -135,6 +135,18 @@ ingest-data:
 train-baseline extractor="bioclip-2":
 	pixi run --frozen -e dev python -m taxon_vision.models.trainer --extractor {{extractor}} --epochs 5
 
+# Run CLI training script (Phase 1 Baseline)
+[group("mlops")]
+train epochs="5" extractor="mobilenetv4_conv_small":
+	pixi run --frozen -e dev python -m taxon_vision.models.trainer --epochs {{epochs}} --extractor {{extractor}}
+
+# Run CLI prediction script on an observation image
+[group("mlops")]
+predict image="data/sample/406185885_taxon_47120.jpg":
+	pixi run --frozen -e dev python -m taxon_vision.inference.cli {{image}}
+
+
+
 # Export trained PyTorch model to ONNX computational graph
 [group("mlops")]
 export-onnx:

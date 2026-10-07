@@ -5,12 +5,15 @@
 from __future__ import annotations
 
 import io
+import logging
 from collections.abc import Generator
 from pathlib import Path
 
 import httpx
 import polars as pl
 from PIL import Image
+
+logger = logging.getLogger(__name__)
 
 
 class S3ImageStreamer:
@@ -59,4 +62,71 @@ class S3ImageStreamer:
                         img = img.convert("RGB")
                     yield obs_uuid, taxon_id, img
                 except Exception as e:
-                    print(f"Failed to stream {obs_uuid} from {image_url}: {e}")
+                    logger.warning("Failed to stream %s from %s: %s", obs_uuid, image_url, e)
+
+
+def main() -> None:
+    """CLI entrypoint to test and stream images from the Parquet manifest."""
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(
+        description="Stream images from Parquet manifest directly from S3 open data without disk bloat."
+    )
+    parser.add_argument(
+        "--manifest",
+        type=str,
+        default="data/manifests/dataset_manifest.parquet",
+        help="Path to dataset Parquet manifest",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=5,
+        help="Number of images to stream (default: 5)",
+    )
+    parser.add_argument(
+        "--out",
+        type=str,
+        default=None,
+        help="Optional directory to save streamed images for local inspection",
+    )
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+        stream=sys.stdout,
+    )
+
+    streamer = S3ImageStreamer(manifest_path=args.manifest)
+    out_dir = Path(args.out) if args.out else None
+    if out_dir:
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+    logger.info("Loaded manifest '%s' with %d records.", args.manifest, len(streamer.df))
+    logger.info("Streaming up to %d images in-memory...", args.limit)
+
+    count = 0
+    for obs_uuid, taxon_id, img in streamer.stream_images(limit=args.limit):
+        count += 1
+        logger.info(
+            "[%d/%d] Streamed observation %s (taxon=%d): %s %s",
+            count,
+            args.limit,
+            obs_uuid,
+            taxon_id,
+            img.size,
+            img.mode,
+        )
+        if out_dir:
+            save_path = out_dir / f"{obs_uuid}_taxon_{taxon_id}.jpg"
+            img.save(save_path)
+            logger.info("  -> Saved to %s", save_path)
+
+    logger.info("Successfully streamed %d images.", count)
+
+
+if __name__ == "__main__":
+    main()
