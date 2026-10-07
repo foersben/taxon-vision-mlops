@@ -90,7 +90,19 @@ class ClassBalancedLoss(nn.Module):
         self.register_buffer("weights", torch.tensor(weights, dtype=torch.float32))
 
     def forward(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        """Compute the class-balanced cross-entropy loss.
+        """Compute the class-balanced cross-entropy loss over a batch of predictions.
+
+        Why:
+            Biological vision datasets feature extreme class imbalance (power-law tails). Standard
+            unweighted cross-entropy gradients are dominated by common taxa, degrading recall
+            on endangered or rare species. Naive inverse frequency weighting induces explosive gradient
+            variance on singletons. Weighting by inverse effective sample volume smooths gradient
+            magnitudes, improving minority class recall while maintaining stable optimization dynamics.
+
+        How:
+            Transfers precomputed normalized class buffer weights to the active device (CPU/CUDA),
+            and evaluates weighted cross-entropy loss against ground-truth target indices via
+            `torch.nn.functional.cross_entropy`.
 
         Args:
             logits: Unnormalized class predictions of shape `(batch_size, num_classes)`.

@@ -26,9 +26,20 @@ import torch.nn as nn
 class TaxonClassifier(nn.Module):
     r"""Frozen vision foundation backbone coupled with a trainable linear classification head.
 
-    This architecture keeps all backbone weights static while optimizing a single linear
-    transformation matrix $\\theta_{\\text{last}} \\in \\mathbb{R}^{D \\times K}$ with dropout
-    regularization.
+    Why:
+        Fine-tuning deep Vision Transformers (ViTs) or large CNNs across thousands of biological
+        classes requires substantial GPU memory (>= 24GB VRAM) and risks catastrophic forgetting
+        of rich visual priors learned on billions of pre-training images. Linear probing—freezing
+        backbone feature extractors and training only a linear projection head with dropout—yields
+        competitive top-1 accuracy while reducing training iteration times from hours to seconds
+        on cached embeddings, dramatically lowering compute costs and eliminating gradient instability.
+
+    How:
+        Wraps a pre-trained feature extractor backbone module and locks all its parameter tensors
+        (`param.requires_grad = False`). Constructs a trainable `head` sequence comprising
+        `nn.Dropout(p=dropout)` followed by `nn.Linear(feature_dim, num_classes)`.
+        Exposes separate feature extraction (`forward_features`), head projection (`forward_head`),
+        and end-to-end evaluation (`forward`) pathways.
 
     Attributes:
         backbone: Frozen vision backbone producing $D$-dimensional representations.

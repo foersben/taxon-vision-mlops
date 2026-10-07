@@ -22,10 +22,22 @@ logger = logging.getLogger(__name__)
 
 
 class HyperparameterObjective:
-    """Optuna objective function for tuning the classification head.
+    """Optuna objective function evaluating candidate hyperparameters on cached embeddings.
 
-    Evaluates candidate learning rates, weight decays, dropout rates, and
-    Class-Balanced Loss beta values on pre-computed feature embeddings.
+    Why:
+        Grid and random searches scale exponentially with the number of hyperparameters and
+        waste compute exploring unpromising regions of hyperparameter space. Bayesian optimization
+        with Tree-structured Parzen Estimators (TPE) constructs probabilistic models of the objective
+        function p(x|y), focusing search effort on high-performing configurations. Coupling TPE
+        with Asynchronous Successive Halving (ASHA) pruning allows aborting underperforming trials
+        within 2 epochs, reducing total tuning duration by 3-5x.
+
+    How:
+        1. Samples learning rate, weight decay, dropout rate, and Class-Balanced beta from prior distributions.
+        2. Instantiates classification head, Class-Balanced Loss, and AdamW optimizer.
+        3. Mounts an optional nested MLflow run under the active tuning experiment.
+        4. Trains the head on cached embeddings, invoking Optuna's pruning callback at each epoch.
+        5. Logs per-epoch trajectories and returns final validation Macro PR-AUC as the optimization target.
 
     Attributes:
         data: Pre-computed feature representations and ground-truth labels.
@@ -249,10 +261,20 @@ def tune_hyperparameters(
 ) -> tuple[dict[str, Any], optuna.Study]:
     r"""Automate Bayesian hyperparameter tuning using Optuna with ASHA pruning and MLflow tracking.
 
-    Tunes learning rate, weight decay, dropout rate, and Class-Balanced Loss $\beta$
-    hyperparameters. Uses the Tree-structured Parzen Estimator (TPE) algorithm to
-    sample configurations and an Asynchronous Successive Halving Pruner to terminate
-    sub-optimal configurations within their first epochs.
+    Why:
+        Fine-tuning hyperparameters (learning rate, weight decay, dropout, and Class-Balanced Loss $\beta$)
+        interactively or via ad-hoc heuristics leads to suboptimal convergence and poor generalization
+        on long-tailed biological distributions. Automating search via Bayesian Optimization (TPE)
+        guarantees reproducible exploration of the hyperparameter landscape while pruning poor trials
+        early to respect compute budgets.
+
+    How:
+        1. Sets up MLflow tracking URI and experiment if configured.
+        2. Configures `TPESampler` with deterministic PRNG seed and `SuccessiveHalvingPruner`
+           with `min_resource=2` and `reduction_factor=2`.
+        3. Instantiates `HyperparameterObjective` and executes `study.optimize` across `n_trials`.
+        4. Logs the optimal parameter configuration and peak Macro PR-AUC to MLflow as a consolidated run.
+        5. Returns the best parameters dictionary and the full Optuna study object.
 
     Args:
         data: Pre-computed feature representations and labels.

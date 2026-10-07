@@ -20,6 +20,8 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +43,18 @@ logger = logging.getLogger(__name__)
 def _resolve_feature_dim(extractor: str) -> int:
     """Resolve embedding dimension for the specified backbone extractor.
 
+    Why:
+        Different foundation backbones project representations into distinct vector spaces
+        (e.g., MobileNetV4 at 1280, ViT-Base / BioCLIP at 768, ViT-Large at 1024). Dynamically
+        querying the model architecture prevents hardcoding projection layer dimensions in
+        the training configuration, decoupling the classifier head geometry from the upstream
+        feature extraction architecture.
+
+    How:
+        Instantiates a zero-weight feature extractor instance via the factory, inspects the
+        terminal pooling or classifier layer feature dimension, and falls back to a safe default
+        (1280) if dynamic inspection fails.
+
     Args:
         extractor: Name of the vision foundation backbone.
 
@@ -57,6 +71,17 @@ def _resolve_feature_dim(extractor: str) -> int:
 
 def _prepare_embedding_split(dim: int, num_classes: int) -> EmbeddingSplit:
     """Construct deterministic embedding splits for rapid head training.
+
+    Why:
+        During rapid iteration, CI verification, and local benchmarking, generating or loading
+        pre-computed representations enables instantaneous evaluation without incurring hours of
+        backbone feature extraction. Setting a deterministic PRNG seed ensures reproducible
+        validation trajectories across runs and environments.
+
+    How:
+        Seeds PyTorch PRNG (seed=42), samples Gaussian embeddings for train and validation splits,
+        allocates discrete integer taxon labels across classes, and counts class frequencies
+        to populate the effective sample size container required by Class-Balanced Loss.
 
     Args:
         dim: Dimensionality of feature vectors.
@@ -86,6 +111,15 @@ def _prepare_embedding_split(dim: int, num_classes: int) -> EmbeddingSplit:
 def _get_dvc_dataset_hash() -> str | None:
     """Parse dvc.lock to extract the dataset hash from the ingestion stage.
 
+    Why:
+        In auditable MLOps pipelines, every trained checkpoint must be cryptographically linked
+        to the exact immutable dataset snapshot used during training. Logging the DVC manifest
+        hash to MLflow provides end-to-end lineage tracking from raw observations to deployed models.
+
+    How:
+        Reads `dvc.lock`, parses the YAML stage graph, extracts the output MD5 checksum associated
+        with `data/manifests`, and returns the hex digest string.
+
     Returns:
         The MD5 hash of the data/manifests directory, or None if unavailable.
     """
@@ -113,20 +147,44 @@ def _get_dvc_dataset_hash() -> str | None:
     return None
 
 
-def _init_mlflow_run(extractor: str, epochs: int, batch_size: int, lr: float, num_classes: int, dim: int) -> bool:
-    """Initialize MLflow experiment run and log training parameters if available.
+@contextmanager
+def mlflow_run_scope(
+    run_name: str,
+    params: dict[str, Any] | None = None,
+    log_file: Path | str | None = None,
+) -> Generator[mlflow.ActiveRun | None, None, None]:
+    """Provide RAII lifecycle management for MLflow experiment tracking.
+
+    Why:
+        Orphaned experiment runs left in 'RUNNING' status pollute MLOps registries
+        when training processes abort, crash, or hit out-of-memory errors. Passing
+        boolean flags (`is_active: bool`) across subroutines causes tramp data code
+        smells and fragile error handling. A context manager guarantees deterministic
+        lifecycle boundaries: setting up tracking, logging hyperparameter metadata,
+        persisting run artifacts, and safely closing the run—marking failures as FAILED
+        and successful completions as FINISHED—even during unhandled exceptions.
+
+    How:
+        1. Configures MLflow tracking URI and experiment name from project settings.
+        2. Starts an active MLflow run with the given `run_name`.
+        3. Logs initial training parameters and DVC dataset manifest hashes.
+        4. Yields the active run object to the caller.
+        5. If an unhandled exception occurs inside the block, marks the run status as
+           FAILED via `mlflow.end_run(status="FAILED")` and re-raises.
+        6. On normal exit, logs execution log file artifacts (if present) and marks
+           the run as FINISHED via `mlflow.end_run(status="FINISHED")`.
+        7. If MLflow tracking server is unreachable, catches connection errors gracefully,
+           logs a debug notice, and yields None to allow offline training to proceed unimpeded.
 
     Args:
-        extractor: Backbone name.
-        epochs: Epochs budget.
-        batch_size: Mini-batch size.
-        lr: Optimizer learning rate.
-        num_classes: Target classes count.
-        dim: Feature dimension.
+        run_name: Human-readable run name for identification in the MLflow UI.
+        params: Optional dictionary of hyperparameter key-value pairs to log.
+        log_file: Optional path to an execution log file to attach as an MLflow artifact.
 
-    Returns:
-        True if MLflow tracking run is active, False otherwise.
+    Yields:
+        Active MLflow run instance if tracking succeeded, or None if unavailable.
     """
+    active_run = None
     try:
         settings = get_settings()
         if settings.mlflow.tracking_uri:
@@ -134,45 +192,55 @@ def _init_mlflow_run(extractor: str, epochs: int, batch_size: int, lr: float, nu
         if settings.mlflow.experiment_name:
             mlflow.set_experiment(settings.mlflow.experiment_name)
 
-        mlflow.start_run(run_name=f"train_{extractor}_{int(time.time())}")
-        mlflow.log_params(
-            {
-                "extractor": extractor,
-                "epochs": epochs,
-                "batch_size": batch_size,
-                "learning_rate": lr,
-                "num_classes": num_classes,
-                "feature_dim": dim,
-                "loss": "ClassBalancedLoss",
-            }
-        )
+        active_run = mlflow.start_run(run_name=run_name)
+        if params:
+            mlflow.log_params(params)
 
         dataset_hash = _get_dvc_dataset_hash()
         if dataset_hash:
             mlflow.log_param("dvc_dataset_hash", dataset_hash)
-
-        return True
     except Exception as err:
         logger.debug("MLflow tracking setup skipped or unavailable: %s", err)
-        return False
+        active_run = None
+
+    try:
+        yield active_run
+    except Exception:
+        if active_run:
+            try:
+                mlflow.end_run(status="FAILED")
+            except Exception as end_err:
+                logger.debug("Failed to set MLflow run status to FAILED: %s", end_err)
+        raise
+    else:
+        if active_run:
+            try:
+                if log_file and Path(log_file).exists():
+                    try:
+                        mlflow.log_artifact(str(log_file))
+                    except Exception as art_err:
+                        logger.debug("Failed to attach log artifact to MLflow: %s", art_err)
+                mlflow.end_run(status="FINISHED")
+            except Exception as end_err:
+                logger.debug("Failed to finalize MLflow run: %s", end_err)
 
 
-def _finalize_mlflow_run(
-    history: dict[str, list[float]],
-    duration: float,
-    is_active: bool,
-    log_file: Path | str | None = None,
-) -> None:
-    """Log training metric trajectories and terminate active MLflow run.
+def _log_mlflow_metrics(history: dict[str, list[float]], duration: float) -> None:
+    """Log training metric trajectories and duration to the active MLflow run.
+
+    Why:
+        Tracking per-epoch convergence curves (training loss, validation loss, validation accuracy,
+        F1, and PR-AUC) in MLflow enables visualization of overfitting, learning rate decay
+        effectiveness, and historical comparisons across training runs.
+
+    How:
+        Iterates over recorded epochs in the history dictionary, emitting `mlflow.log_metrics`
+        at each step index, followed by the total wall-clock training duration.
 
     Args:
-        history: Metric history dictionary.
-        duration: Training elapsed duration in seconds.
-        is_active: Flag indicating whether an MLflow run was started.
-        log_file: Optional path to an execution log file to attach as an MLflow artifact.
+        history: Metric history dictionary containing epoch evaluation metrics.
+        duration: Total elapsed training duration in seconds.
     """
-    if not is_active:
-        return
     try:
         n_epochs = len(history.get("train_loss", []))
         for i in range(n_epochs):
@@ -185,22 +253,23 @@ def _finalize_mlflow_run(
             }
             mlflow.log_metrics(metrics, step=i + 1)
         mlflow.log_metric("duration_seconds", duration)
-        if log_file and Path(log_file).exists():
-            try:
-                mlflow.log_artifact(str(log_file))
-            except Exception as artifact_err:
-                logger.debug("Failed to attach log artifact to MLflow: %s", artifact_err)
-        mlflow.end_run()
     except Exception as err:
-        logger.debug("Failed to finalize MLflow run metrics: %s", err)
+        logger.debug("Failed to log MLflow metrics: %s", err)
 
 
 def _promote_model_if_better(model: nn.Module, pr_auc: float) -> None:
-    """Evaluate performance and conditionally promote the model via MLflow.
+    """Evaluate performance and conditionally promote the model via MLflow Model Registry.
 
-    Compares the newly trained model's Macro PR-AUC against the current
-    Production model. If it outperforms the baseline, it is tagged as
-    'Challenger'. Otherwise, it is tagged as 'Archived'.
+    Why:
+        Automated continuous deployment requires programmatic model promotion gates.
+        Comparing Macro PR-AUC ensures newly trained models generalize effectively across
+        both dominant and rare taxa before receiving traffic in production.
+
+    How:
+        Logs the validation PR-AUC promotion score and registers the PyTorch module in
+        MLflow Model Registry. Compares the PR-AUC against the active 'Production' model alias.
+        If superior, tags the model as 'Challenger' for Canary testing; otherwise tags it
+        as 'Archived'. If no baseline exists, initializes the candidate as 'Production'.
 
     Args:
         model: The trained PyTorch classification head.
@@ -239,6 +308,16 @@ def _promote_model_if_better(model: nn.Module, pr_auc: float) -> None:
 def _save_checkpoint(head: nn.Module, checkpoint_path: Path | str | None) -> Path:
     """Persist trained head weights and invalidate runtime classifier cache.
 
+    Why:
+        Persisting model weights to disk ensures deployment permanence and enables
+        fast restoration during service cold starts. Clearing the runtime inference
+        classifier cache (`get_classifier.cache_clear()`) ensures subsequent inference
+        requests immediately consume the updated weights without requiring a service restart.
+
+    How:
+        Resolves target filesystem destination, creates parent directories if missing,
+        serializes state dictionary via `torch.save`, and calls `cache_clear()` on `get_classifier`.
+
     Args:
         head: PyTorch classification head module.
         checkpoint_path: Optional explicit filesystem destination.
@@ -273,6 +352,21 @@ def run_training_pipeline(
 ) -> dict[str, Any]:
     """Execute end-to-end classification head training on cached or synthetic embeddings.
 
+    Why:
+        Orchestrates the foundational model head training workflow: loads taxonomic target
+        classes, resolves feature extractor projection dimensionality, prepares embedding
+        splits, initializes the linear classifier with Class-Balanced Loss, trains across
+        specified epochs, saves weight checkpoints, and records metrics and model lineage in MLflow.
+
+    How:
+        1. Resolves taxa count and feature dimension.
+        2. Prepares deterministic embedding splits and sample-per-class distributions.
+        3. Configures AdamW optimizer and ClassBalancedLoss with hyperparameter beta=0.99.
+        4. Enters `mlflow_run_scope` RAII context manager for clean tracking.
+        5. Executes optimization loop over cached representations.
+        6. Persists weights to checkpoint path and invalidates runtime inference cache.
+        7. Logs metrics, attaches execution logs, and performs model registry promotion inside the active run.
+
     Args:
         extractor: Name of the feature extractor backbone.
         epochs: Number of training epochs to execute.
@@ -282,7 +376,7 @@ def run_training_pipeline(
         log_file: Optional path to an execution log file to record and attach to MLflow.
 
     Returns:
-        Dictionary containing training metrics, checkpoint path, and status.
+        Dictionary containing training metrics, checkpoint path, duration, and status.
     """
     t0 = time.perf_counter()
     logger.info("Initiating head training for extractor '%s' across %d epochs", extractor, epochs)
@@ -298,26 +392,37 @@ def run_training_pipeline(
     optimizer = optim.AdamW(head.parameters(), lr=learning_rate)
     config = HeadTrainingConfig(epochs=epochs, batch_size=batch_size)
 
-    mlflow_active = _init_mlflow_run(extractor, epochs, batch_size, learning_rate, num_classes, dim)
-    history = train_head_on_cached_embeddings(
-        head=head,
-        data=data,
-        optimizer=optimizer,
-        criterion=criterion,
-        config=config,
-    )
+    params = {
+        "extractor": extractor,
+        "epochs": epochs,
+        "batch_size": batch_size,
+        "learning_rate": learning_rate,
+        "num_classes": num_classes,
+        "feature_dim": dim,
+        "loss": "ClassBalancedLoss",
+    }
+    run_name = f"train_{extractor}_{int(time.time())}"
 
-    target_path = _save_checkpoint(head, checkpoint_path)
-    duration = time.perf_counter() - t0
-    _finalize_mlflow_run(history, duration, mlflow_active, log_file=log_file)
+    with mlflow_run_scope(run_name=run_name, params=params, log_file=log_file) as active_run:
+        history = train_head_on_cached_embeddings(
+            head=head,
+            data=data,
+            optimizer=optimizer,
+            criterion=criterion,
+            config=config,
+        )
+
+        target_path = _save_checkpoint(head, checkpoint_path)
+        duration = time.perf_counter() - t0
+
+        if active_run:
+            _log_mlflow_metrics(history, duration)
+            val_pr_auc = float(history.get("val_pr_auc", [0.0])[-1]) if history.get("val_pr_auc") else 0.0
+            _promote_model_if_better(head, val_pr_auc)
 
     train_loss = float(history["train_loss"][-1]) if history.get("train_loss") else 0.0
     val_loss = float(history["val_loss"][-1]) if history.get("val_loss") else 0.0
     val_acc = float(history["val_accuracy"][-1]) if history.get("val_accuracy") else 0.0
-    val_pr_auc = float(history.get("val_pr_auc", [0.0])[-1]) if history.get("val_pr_auc") else 0.0
-
-    if mlflow_active:
-        _promote_model_if_better(head, val_pr_auc)
 
     logger.info(
         "Training completed in %.3fs: train_loss=%.4f, val_loss=%.4f, val_acc=%.2f%%",
@@ -342,6 +447,17 @@ def run_training_pipeline(
 
 def setup_logging(level: int = logging.INFO, log_file: Path | str | None = None) -> None:
     """Configure structured logging directed to stdout and an optional log file.
+
+    Why:
+        Training pipelines produce heterogeneous telemetry: real-time console feedback
+        for interactive CLI users, persistent file audit logs for debugging distributed failures,
+        and MLflow artifacts for experiment tracking. Standardizing log formats across stdout
+        and file handlers ensures uniform timestamps and severity parsing across all runners.
+
+    How:
+        Retrieves the root logger, clears preexisting handlers to avoid duplicate message
+        emission, attaches a formatted StreamHandler targeting stdout, and conditionally mounts
+        a FileHandler with microsecond timestamps and source line numbers if `log_file` is provided.
 
     Args:
         level: Base logging severity level (default: logging.INFO).
@@ -369,6 +485,17 @@ def setup_logging(level: int = logging.INFO, log_file: Path | str | None = None)
 
 def _dispatch_remote_training(api_url: str, extractor: str, epochs: int, batch_size: int, lr: float) -> int:
     """Trigger training remotely on a running FastAPI service.
+
+    Why:
+        Enables headless training orchestration from external schedulers (e.g. cron jobs,
+        CI/CD runners, or edge devices) without requiring local PyTorch GPU environments.
+        Dispatching via standard HTTP requests allows decoupling compute infrastructure from
+        the orchestration trigger.
+
+    How:
+        Constructs a POST request targeting the `/training` endpoint with serialized
+        TrainingRequest JSON payload. Waits synchronously for completion up to 30 seconds,
+        parses the JSON response, logs validation metrics, and returns the appropriate exit code.
 
     Args:
         api_url: Host base URL of the FastAPI service.
@@ -405,6 +532,16 @@ def _dispatch_remote_training(api_url: str, extractor: str, epochs: int, batch_s
 
 def train_cli(argv: list[str] | None = None) -> int:
     """Entrypoint for the CLI training script.
+
+    Why:
+        Provides a unified command-line interface for human developers, automated Pixi tasks
+        (`pixi run train`), and shell scripts to launch local or remote training pipelines
+        with custom hyperparameters, backbones, and logging paths without modifying source code.
+
+    How:
+        Parses CLI flags using standard argparse, configures structured logging with optional
+        file output, and routes execution either to `_dispatch_remote_training` (if `--api-url` is passed)
+        or `run_training_pipeline` (for local execution), logging summary metrics upon completion.
 
     Args:
         argv: Optional command line arguments list.

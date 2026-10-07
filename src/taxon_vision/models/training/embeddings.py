@@ -16,6 +16,19 @@ from taxon_vision.models.training.types import EmbeddingSplit, HeadTrainingConfi
 def _compute_additional_metrics(val_logits: torch.Tensor, val_lbl: torch.Tensor) -> tuple[float, float]:
     """Compute Macro F1-Score and Macro PR-AUC from validation logits and labels.
 
+    Why:
+        In severe power-law biological classification, raw top-1 accuracy is misleading: a model
+        can predict only the dominant 10% of species and still achieve 90% accuracy while failing
+        on the remaining 90% of species. Macro F1 and Macro Precision-Recall AUC weight each
+        taxon category equally, providing a sensitive evaluation of performance across rare
+        and minority taxa.
+
+    How:
+        Converts PyTorch validation logits to NumPy softmax probability distributions, binarizes
+        ground-truth labels across classes via one-hot encoding, and calculates unweighted macro-averaged
+        F1 and average precision (PR-AUC) scores via scikit-learn metrics. Gracefully returns (0.0, 0.0)
+        if evaluation encounters numerical anomalies on empty classes.
+
     Args:
         val_logits: Raw model predictions of shape (batch_size, num_classes).
         val_lbl: Ground truth class indices of shape (batch_size,).
@@ -54,15 +67,33 @@ def train_head_on_cached_embeddings(
 ) -> dict[str, list[float]]:
     """Train a linear classification head directly on pre-computed feature embeddings.
 
-    Executes near-instant training iterations on CPU or GPU because expensive forward
-    passes through deep vision foundation backbones are eliminated.
+    Why:
+        Linear probing on cached embeddings decouples representation extraction from classifier
+        head optimization. Running forward and backward passes across deep 100M+ parameter backbones
+        on every epoch wastes orders of magnitude of GPU compute and electricity. Pre-computing
+        feature representations once and optimizing the lightweight head on static vectors reduces
+        training time from hours to seconds while preventing gradient instability and memory bloat.
+
+    How:
+        1. Moves cached embedding and label tensors onto the active compute device.
+        2. In each epoch, generates a pseudo-random permutation over training indices.
+        3. Iterates mini-batches: computes head logits, evaluates Class-Balanced Loss, executes
+           gradient backpropagation (`loss.backward()`), and steps the optimizer.
+        4. Switches head to evaluation mode (`eval()`), computes validation loss, top-1 accuracy,
+           macro F1, and PR-AUC.
+        5. Calls the pruning callback (if provided by Optuna hyperparameter tuning) to terminate
+           unpromising trials early.
+
+    Complexity:
+        O(E * N * D * K) where E is epochs, N is sample count, D is feature dimension, and K is class count.
+        Near-zero dynamic heap allocations because training arrays are pre-allocated in device memory.
 
     Args:
         head: Differentiable classification head module (e.g. Dropout followed by Linear).
         data: Pre-computed feature representations and ground-truth labels for training and validation splits.
         optimizer: PyTorch optimizer configured for the head parameters.
         criterion: Differentiable loss function (e.g. ClassBalancedLoss).
-        config: Hyperparameters governing training epochs, batch size, and pruning callbacks. If None, default configuration settings are applied.
+        config: Hyperparameters governing training epochs, batch size, and pruning callbacks.
 
     Returns:
         Dictionary containing recorded metric histories per epoch:
