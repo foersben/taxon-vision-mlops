@@ -13,6 +13,6 @@ verified: {by: process:scaffold-init, at: "2026-10-02T10:00:00Z"}
 # FastAPI Service & OpenAPI Contract Reference
 
 * `POST /api/v1/predict`: Accepts multipart image upload, returns top-k predictions and conformal sets.
-* `POST /api/v1/explain`: Returns Grad-CAM visual attribution heatmaps.
+* `POST /api/v1/explain`: Returns CAM visual attribution heatmaps.
 * `GET /health`: Liveness probe.
 * `GET /metrics`: Prometheus telemetry scrape target.

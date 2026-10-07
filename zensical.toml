@@ -57,31 +57,44 @@ Home = "index.md"
 
 [[project.nav]]
 "Foundations" = [
+    { "Chapter Overview" = "foundations/index.md" },
     { "Taxonomy & DarwinCore" = "foundations/taxonomy_and_darwincore.md" },
     { "iNaturalist Data Ecosystem" = "foundations/inaturalist_data_ecosystem.md" },
+    { "Curriculum vs. Production Strategy" = "foundations/architectural_comparison.md" },
 ]
 
 [[project.nav]]
-"MLOps Pipelines" = [
+"Data & MLOps Pipelines" = [
+    { "Chapter Overview" = "mlops_pipeline/index.md" },
+    { "Dual Pipeline Topology" = "mlops_pipeline/dual_pipeline_architecture.md" },
     { "Ingestion & Versioning" = "mlops_pipeline/ingestion_and_versioning.md" },
-    { "Backbone Pareto Benchmarks" = "mlops_pipeline/backbone_benchmarking_pareto.md" },
-    { "ONNX Runtime Optimization" = "mlops_pipeline/onnx_optimization_and_latency.md" },
+]
+
+[[project.nav]]
+"Model Engineering & Inference" = [
+    { "Chapter Overview" = "model_engineering/index.md" },
+    { "Vision Model Architecture" = "model_engineering/model_architecture.md" },
+    { "Training Pipeline" = "model_engineering/training_pipeline.md" },
+    { "Backbone Pareto Benchmarks" = "model_engineering/backbone_benchmarking_pareto.md" },
+    { "ONNX Runtime Optimization" = "model_engineering/onnx_optimization_and_latency.md" },
 ]
 
 [[project.nav]]
 "Uncertainty & Safety" = [
+    { "Chapter Overview" = "uncertainty_and_safety/index.md" },
     { "Conformal Prediction Theory" = "uncertainty_and_safety/conformal_prediction_theory.md" },
     { "OOD & Empty Frame Detection" = "uncertainty_and_safety/ood_and_empty_frame_detection.md" },
     { "Active Learning & Human Review" = "uncertainty_and_safety/active_learning_and_hitl.md" },
 ]
 
 [[project.nav]]
-"Operations" = [
+"Operations & Deployment" = [
+    { "Chapter Overview" = "operations/index.md" },
     { "Current Infrastructure" = "operations/current_infrastructure.md" },
     { "GPU Resource Scheduling" = "operations/gpu_resource_scheduling.md" },
-    { "API Reference" = "operations/api_reference.md" },
-    { "Prometheus Observability" = "operations/prometheus_and_observability.md" },
     { "Deployment Runbook" = "operations/deployment_runbook.md" },
+    { "Prometheus Observability" = "operations/prometheus_and_observability.md" },
+    { "API Reference" = "operations/api_reference.md" },
 ]
 
 [project.plugins.htmlproofer]

@@ -59,7 +59,7 @@
 \node[hubbox={6.9cm}] (cicd) at (4.7, 12.4) {%
     \textbf{\footnotesize\color{mblueborder} GitHub Actions CI/CD \& Runner}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
-    \textbullet\ \textbf{Bare-Metal Runner:} RTX 5070 Ti (16GB), Intel i7-14700K, 128GB RAM\\
+    \textbullet\ \textbf{Deployment Target:} k3s Pods / Containerized Services with GPU Passthrough\\
     \textbullet\ \textbf{Quality Gates:} Ruff linting, MyPy static typing, CC open-license audit\\
     \textbullet\ \textbf{Epistemic Safety Gate:} Empirical coverage $\ge 95\%$ on calibration holdout
 };
@@ -105,7 +105,7 @@
     \textbullet\ \textbf{Head Training:} Class-Balanced Loss ($E_n = \frac{1-\beta^n}{1-\beta}$) for long-tail classes\\
     \textbullet\ \textbf{Hyperparameter Tuning:} Optuna TPE search with ASHA pruning\\
     \textbullet\ \textbf{Graph Compilation:} INT8 ONNX export (${<}25$\,ms latency SLA)\\
-    \textbullet\ \textbf{Interpretability:} Forward-hooked Class Activation Mapping (Grad-CAM)
+    \textbullet\ \textbf{Interpretability:} Forward-hooked Class Activation Mapping (CAM)
 };
 
 \node[pipebox={6.9cm}] (pipe2) at (4.7, 3.3) {%
@@ -130,8 +130,8 @@
     \textbf{\footnotesize\color{mgreenborder} FastAPI Serving Gateway \& Conformal Routing}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
     \textbf{Split Conformal Prediction (SCP) Gating ($\alpha=0.05$, $95\%$ Coverage):}\\
-    \textbullet\ \textbf{Fast Path (85\%):} $|\hat{C}|=1 \implies$ Decisive INT8 ONNX (${<}25$\,ms SLA)\\
-    \textbullet\ \textbf{Vision RAG (15\%):} Ambiguity $|\hat{C}| > k_{\max}$ or $|\hat{C}|=0 \implies$ VLM triage\\
+    \textbullet\ \textbf{Fast Path (Decisive):} $|\hat{C}|=1 \implies$ Decisive INT8 ONNX (${<}25$\,ms SLA)\\
+    \textbullet\ \textbf{Vision RAG (Ambiguous):} Ambiguity $|\hat{C}| > k_{\max}$ or $|\hat{C}|=0 \implies$ VLM triage\\
     \textbullet\ \textbf{Rank Fusion (RRF):} $w_{\mathrm{vis}} \cdot \mathrm{Sim}_{\cos}(z) + w_{\mathrm{geo}} \cdot \mathrm{Prior}_{\mathrm{geo}}(\mathrm{coord},\,\mathrm{month})$\\[0.8mm]
     \textbf{Observability \& Epistemic Monitoring:}\\
     \textbullet\ Prometheus metrics: Latency histograms, conformal set size tracking, OOD rate\\
@@ -172,7 +172,7 @@
     \end{minipage}\hfill
     \begin{minipage}[t]{0.485\linewidth}
     \textbf{Expert Validation \& Dataset Evolution:}\\
-    \textbullet\ \textbf{Diagnostic Review:} Taxonomists inspect VLM differential cards with overlaid Grad-CAM activation heatmaps\\
+    \textbullet\ \textbf{Diagnostic Review:} Taxonomists inspect VLM differential cards with overlaid CAM activation heatmaps\\
     \textbullet\ \textbf{Manifest Recalibration:} Verified annotations expand DVC manifest \& update conformal calibration quantiles\\
     \textbullet\ \textbf{Conflict Purging:} Automated purging via \texttt{requires\_reannotation}
     \end{minipage}

@@ -9,7 +9,7 @@ Operating a high-throughput machine learning service under strict latency servic
 
 Deep neural networks are fundamentally composed of dense, high-dimensional weight matrices. By default, standard training frameworks construct these matrices using 32-bit floating-point (FP32) numerical representations. Whilst FP32 provides extreme gradient precision during the backpropagation phase of training, it is highly inefficient during production inference. FP32 tensors consume vast amounts of GPU VRAM, and executing matrix multiplications at this precision severely bottlenecks the memory bandwidth, thereby increasing prediction latency.
 
-In order to optimise the deployment architecture, the PyTorch classification head and feature extractor are exported to the Open Neural Network Exchange (ONNX) format, cleanly decoupling the computational graph from Python's execution overhead. Subsequently, the ONNX Runtime strategically applies Integer-8 (INT8) dynamic quantisation. This mathematical operation robustly maps the high-resolution continuous floating-point weights onto a discrete 8-bit integer grid.
+In order to optimise the deployment architecture, the PyTorch classification head and feature extractor are exported to the Open Neural Network Exchange (ONNX) format, cleanly decoupling the computational graph from Python's execution overhead. Subsequently, the ONNX Runtime strategically applies Integer-8 (INT8) static quantisation. This mathematical operation robustly maps the high-resolution continuous floating-point weights onto a discrete 8-bit integer grid. Static Post-Training Quantisation (PTQ) with a calibration dataset is strictly required for the convolutional and vision-transformer backbones, while dynamic quantization is reserved exclusively for the Vision-Language Model's linear projection layers.
 
 The quantisation mapping function is formally defined as:
 \[
@@ -23,7 +23,7 @@ In this formulation:
     \item $Z$ is the 8-bit integer zero-point offset, which aligns the real-world mathematical zero with the quantised integer zero in order to ensure zero-padding operations remain absolutely precise.
 \end{itemize}
 
-By mapping 32-bit floats to 8-bit integers, the model's memory footprint is deterministically compressed by $75\%$ (for example, reducing a 400 MB architecture to approximately 100 MB). Because INT8 operands are significantly smaller, modern hardware can efficiently pack multiple operations into single SIMD (Single Instruction, Multiple Data) registers, strongly leveraging AVX-512 Vector Neural Network Instructions (VNNI) on CPUs or Tensor Cores on GPUs. This delivers a $2\times$ to $4\times$ acceleration in inference latency whilst historically yielding less than a $1\%$ degradation in top-1 accuracy.
+By mapping 32-bit floats to 8-bit integers, the model's theoretical tensor parameter footprint is deterministically reduced by $75\%$ (an exact $4:1$ bit-width ratio; for example, reducing an illustrative 400~MB model to approximately 100~MB). Because INT8 operands are significantly smaller, modern hardware can efficiently pack multiple operations into single SIMD (Single Instruction, Multiple Data) registers, strongly leveraging AVX-512 Vector Neural Network Instructions (VNNI) on CPUs or Tensor Cores on GPUs. In published deployment benchmarks across standard vision backbones, this quantisation pattern yields an empirical $2\times$ to $4\times$ latency acceleration with typically less than a $1\%$ degradation in top-1 accuracy (subject to validation on target biological splits).
 
 \section{Marginal Coverage Guarantees in Conformal Prediction}
 \label{sec:conformal_math}
@@ -52,7 +52,7 @@ This theorem provides a remarkably robust distribution-free guarantee. This mean
 
 Retrieval-augmented generation systems frequently bottleneck on disk I/O when attempting to query massive vector databases stored on solid-state drives. In order to guarantee sub-millisecond retrieval latency during the Single-Stage Metadata-Filtered HNSW traversal, the entire Reference Exemplar Catalogue must clearly fit completely within the host system's Random Access Memory (RAM).
 
-In order to achieve this, the architecture aggressively bounds the catalogue size. Assuming the system scales to support a global baseline of $10,000$ distinct taxa, and curates exactly $50$ environmental crops per taxon, the vector index reaches a safe, deterministic upper bound of $500,000$ nodes.
+In order to achieve this, the architecture establishes an illustrative engineering sizing model. Assuming an operational scope scaling to a design baseline of $10,000$ distinct taxa, with $50$ curated environmental crops per taxon, the vector index reaches a safe upper bound of $500,000$ nodes.
 
 The theoretical memory lower bound $\mathcal{M}_{\text{index}}$ required to securely store the raw embedding vectors in memory is mathematically calculated as:
 \[
