@@ -2,8 +2,19 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+from PIL import Image
+
 from taxon_vision.inference.cli import main as predict_cli_main
 from taxon_vision.models.training.runner import run_training_pipeline, train_cli
+
+
+@pytest.fixture
+def sample_img(tmp_path: Path) -> str:
+    img_path = tmp_path / "dummy_image.jpg"
+    img = Image.new("RGB", (224, 224), color="red")
+    img.save(img_path, "JPEG")
+    return str(img_path)
 
 
 def test_run_training_pipeline_direct() -> None:
@@ -30,14 +41,12 @@ def test_training_module_execution() -> None:
     assert "Training Completed Successfully" in proc.stdout
 
 
-def test_predict_cli_function() -> None:
-    sample_img = "data/sample/406185885_taxon_47120.jpg"
+def test_predict_cli_function(sample_img: str) -> None:
     ret = predict_cli_main([sample_img])
     assert ret == 0
 
 
-def test_predict_module_subprocess() -> None:
-    sample_img = "data/sample/406185885_taxon_47120.jpg"
+def test_predict_module_subprocess(sample_img: str) -> None:
     proc = subprocess.run(
         [sys.executable, "-m", "taxon_vision.inference.cli", sample_img],
         capture_output=True,
@@ -48,8 +57,7 @@ def test_predict_module_subprocess() -> None:
     assert "TaxonVision Species Prediction Report" in proc.stdout
 
 
-def test_predict_module_json_mode() -> None:
-    sample_img = "data/sample/406185885_taxon_47120.jpg"
+def test_predict_module_json_mode(sample_img: str) -> None:
     proc = subprocess.run(
         [sys.executable, "-m", "taxon_vision.inference.cli", "--json", sample_img],
         capture_output=True,
