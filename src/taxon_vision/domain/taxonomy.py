@@ -8,7 +8,33 @@ from pydantic import BaseModel, Field
 
 
 class TaxonNode(BaseModel):
-    """Taxonomic rank node in the biological tree."""
+    """Taxonomic rank node in the biological tree.
+
+    Attributes:
+        taxon_id: Unique taxonomic ID
+        scientific_name: Binomial or uninomial scientific name
+        common_name: Vernacular name
+        rank: Taxonomic rank (kingdom, class, species)
+        parent_id: Parent taxon node ID
+
+    Usage Examples:
+        - Import and use `TaxonNode` model for taxonomic data.
+        - Create and validate `TaxonNode` instances for incoming observation records.
+
+    Example:
+        >>> from taxon_vision.domain.taxonomy import TaxonNode
+        >>>
+        >>> taxon = TaxonNode(
+        >>>     taxon_id=12345,
+        >>>     scientific_name="Homo sapiens",
+        >>>     common_name="Human",
+        >>>     rank="species",
+        >>>     parent_id=9606
+        >>> )
+        >>>
+        >>> print(taxon.scientific_name)
+        Homo sapiens
+    """
 
     taxon_id: int = Field(..., description="Unique taxonomic ID")
     scientific_name: str = Field(..., description="Binomial or uninomial scientific name")
@@ -18,7 +44,32 @@ class TaxonNode(BaseModel):
 
 
 class TaxonomyCatalog(BaseModel):
-    """Collection of supported taxa in the perimeter."""
+    """Collection of supported taxa in the perimeter.
+
+    Attributes:
+        taxa: List of taxon nodes
+
+    Usage Examples:
+        - Import and use `TaxonNode` and `TaxonomyCatalog` models for taxonomic data.
+        - Use `get_by_id` to retrieve a specific taxon node from the catalog.
+
+    Example:
+        >>> from taxon_vision.domain.taxonomy import TaxonomyCatalog
+        >>>
+        >>> taxonomy = TaxonomyCatalog(taxa=[
+        >>>     TaxonNode(
+        >>>         taxon_id=12345,
+        >>>         scientific_name="Homo sapiens",
+        >>>         common_name="Human",
+        >>>         rank="species",
+        >>>         parent_id=9606
+        >>>     )
+        >>> ])
+        >>>
+        >>> taxon = taxonomy.get_by_id(12345)
+        >>> print(taxon.scientific_name)
+        Homo sapiens
+    """
 
     taxa: list[TaxonNode] = Field(default_factory=list)
 

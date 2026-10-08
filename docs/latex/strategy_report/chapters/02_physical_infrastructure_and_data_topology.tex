@@ -16,25 +16,26 @@ Storage I/O is managed across a 2 TB NVMe SSD. In order to maximise read bandwid
 \section{Cryptographic Storage Economics}
 A primary architectural constraint for open-source and low-budget MLOps is data storage costs. The platform standardises on DagsHub as the central management plane, which enforces a 20 GB free-tier storage limit on its DVC remote. We find that this limit is entirely viable, provided that the pipeline enforces a strict physical separation between bulk raw observation streams and versioned metadata artefacts.
 
-\subsection{Circumventing the 50 TB Trap}
-The raw citizen-science dataset hosted on the AWS Open Data registry already exceeds 50 Terabytes. Mirroring this volume locally or to a Git-tracked remote would be financially and computationally catastrophic. The system explicitly avoids this through zero-duplication streaming. Our ingestion scripts stream the massive TAR archives directly from AWS Open Data into memory, leveraging zero-copy Apache Arrow buffers.
+\subsection{Circumventing the Multi-Terabyte Storage Trap}
+The raw citizen-science image corpora hosted on AWS Open Data registries collectively span tens of terabytes (an operational scale colloquially termed the ``50 TB trap''). Mirroring this bulk volume locally or to a Git-tracked remote would be financially and computationally unviable. The system explicitly avoids this through zero-duplication streaming: ingestion pipelines stream raw TAR archives directly from AWS Open Data into memory via zero-copy Apache Arrow buffers.
 
-Rather than storing the raw images, DVC tracks the cryptographically validated Parquet index manifests. These lightweight tabular files contain the observation IDs, DarwinCore taxonomic metadata, source URLs, and SHA-256 validation hashes. A Parquet manifest indexing 10 million distinct biological observations typically consumes less than 300 MB of disk space.
+Rather than storing the raw images, DVC tracks cryptographically validated Parquet index manifests. These lightweight tabular files contain observation IDs, DarwinCore taxonomic metadata, source URLs, and SHA-256 validation hashes. As an illustrative sizing calculation, an Apache Parquet manifest indexing 10 million distinct biological observations requires under 300 MB of storage due to columnar dictionary encoding.
 
 \subsection{Bounded Exemplar Storage Mathematics}
-For the actual visual data, the Vision RAG architecture curates a bounded Reference Exemplar Catalogue, strictly capped at 50 validated environmental crops per species.
+For localized visual retrieval, the Vision RAG architecture curates a bounded Reference Exemplar Catalogue, constrained by policy to at most 50 validated environmental crops per species.
 
-For a production deployment spanning 2,000 baseline taxa, this yields exactly 100,000 curated images. Assuming a compressed WebP format with an empirical average of 45 KB per crop (and a conservative padded upper bound of 60 KB), the mathematical storage footprint evaluates as follows:
+To demonstrate the storage envelope, we model an illustrative production scenario spanning 2,000 baseline taxa (yielding 100,000 curated images). Assuming an empirical compression target of approximately 45 KB per WebP crop (with a conservative 60 KB variance ceiling), the exemplar storage footprint evaluates as:
 \[
 \text{Storage}_{\text{Exemplars}} = 100{,}000 \text{ images} \times 45 \text{ KB} = 4{,}500{,}000 \text{ KB} \approx 4.5 \text{ GB}
 \]
-Furthermore, dynamic INT8 quantised ONNX model checkpoints range from 20 MB to 350 MB each. Retaining a rolling buffer of the most recent production release candidates consumes well under 2.0 GB.
+Furthermore, dynamic INT8 quantised ONNX model checkpoints typically range from 20 MB to 350 MB each depending on backbone parameter counts. Retaining a rolling buffer of production release candidates requires under 2.0 GB.
 
+Under these illustrative assumptions:
 \begin{align*}
 \text{Storage}_{\text{Total}} &= 300 \text{ MB (Manifests)} + 4.5 \text{ GB (Exemplars)} \\
 &\quad + 2.0 \text{ GB (ONNX Models)} + 1.5 \text{ GB (DVC Churn)} \approx 8.3 \text{ GB}
 \end{align*}
-This 8.3 GB peak allocation (or 9.8 GB under peak 60 KB compression variance) naturally consumes less than $50\%$ of the DagsHub free-tier allowance, thereby leaving significant overhead for active learning annotations.
+This 8.3 GB peak allocation (or 9.8 GB under peak 60 KB compression ceiling) operates well within the DagsHub 20 GB free-tier allowance, leaving ample headroom for active learning annotations.
 
 \subsection{External Remote Fallback Topology}
-As the catalogue scales towards 10,000 global taxa, the exemplar storage requirement will linearly increase to approximately 30 GB, thereby breaching the native quota. In this scenario, the DVC remote backend is simply retargeted to an external, zero-egress S3-compatible bucket (such as Cloudflare R2 or a localised MinIO cluster). DagsHub then continues to render the Directed Acyclic Graphs (DAGs) and track Git-to-DVC commit diffs, successfully decoupling the management interface from the physical storage layer.
+If the catalogue scales towards an illustrative upper horizon of 10,000 global taxa, exemplar storage requirements would scale linearly to approximately 30 GB, thereby exceeding native free quotas. In this scenario, the DVC remote backend is retargeted to an external, zero-egress S3-compatible bucket (such as Cloudflare R2 or a localized MinIO cluster). DagsHub then continues to render Directed Acyclic Graphs (DAGs) and track Git-to-DVC commit diffs, decoupling the management interface from the physical storage layer.

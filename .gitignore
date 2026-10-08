@@ -88,3 +88,6 @@ _minted*/
 
 # Personal Scripts
 scripts/unlock_taxon.sh
+
+# Docs Archive
+docs/.archive/

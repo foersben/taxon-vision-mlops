@@ -36,7 +36,7 @@ Deploying a hybrid vision architecture -- where routine queries resolve in sub-2
 \subsection{Asymmetric Pod Architecture and Ingress Routing}
 Rather than packaging the fast-path ONNX classifier and the multi-gigabyte Vision-Language Model into a single monolithic pod, the cluster architecture deliberately splits the workload into two specialised microservices:
 \begin{enumerate}
-    \item \textbf{The Primary Classifier Service (\texttt{taxon-vision-serving}):} A high-density, horizontally scaled deployment of lightweight FastAPI pods hosting the INT8 quantised ONNX backbone and the Split Conformal Prediction engine. These pods require minimal VRAM ($\approx 1.5\text{ GB}$) and handle 100\% of initial incoming traffic, rapidly resolving 85\% of queries in under $22\text{ ms}$.
+    \item \textbf{The Primary Classifier Service (\texttt{taxon-vision-serving}):} A high-density, horizontally scaled deployment of lightweight FastAPI pods hosting the INT8 quantised ONNX backbone and the Split Conformal Prediction engine. These pods require minimal memory (allocated under $1.5\text{ GB}$ VRAM) and handle initial incoming traffic, resolving decisive single-candidate queries within the sub-$25\text{ ms}$ SLA without invoking heavy secondary microservices.
     \item \textbf{The Multimodal RAG Service (\texttt{taxon-vision-vlm}):} A specialised, resource-allocated deployment mounting dedicated GPU Tensor Cores to host the quantised 2-billion parameter Vision-Language Model and the in-memory HNSW vector index.
 \end{enumerate}
 
@@ -69,7 +69,7 @@ The FastAPI application exposes a secure \texttt{/metrics} endpoint scraped at r
     \item \textbf{Inference Latency Histograms (\texttt{inference\_latency\_seconds\_bucket}):} High-resolution histograms tracking the duration of zero-shot cropping, ONNX backbone execution, and conformal set evaluation, effectively generating empirical p50, p95, and p99 latency distributions.
     \item \textbf{Conformal Prediction Set Distribution (\texttt{conformal\_set\_size}):} A sliding-window metric tracking the cardinality distribution of $\hat{C}(X)$. Under stationary distribution conditions, the average set size $\mathbb{E}[|\hat{C}|]$ remains fundamentally constant. A measured expansion in set size mathematically indicates rising classification ambiguity.
     \item \textbf{Energy OOD Rejection Counter (\texttt{ood\_rejections\_total}):} Tracks the cumulative volume and rate of incoming images rejected by the free-energy scoring layer ($E(x; f) > \tau_{\text{OOD}}$).
-    \item \textbf{Tail-Species Classification Gauge (\texttt{tail\_species\_accuracy}):} Monitors real-time identification accuracy on verified long-tail species subsets possessing fewer than 20 historical training observations.
+    \item \textbf{Tail-Species Classification Gauge (\texttt{tail\_species\_accuracy}):} Monitors real-time identification accuracy on verified long-tail species subsets (configured by policy for taxa possessing few historical training observations, e.g., $N_{\text{tail}} < 20$).
 \end{itemize}
 
 \subsection{Mathematical Formulation of Feature Drift via Maximum Mean Discrepancy}
@@ -98,7 +98,7 @@ Where:
 \subsection{Automated Alerting and Continuous Retraining Triggers}
 Prometheus Alertmanager evaluates streaming metrics directly against hard operational invariants. Two primary conditions trigger automated intervention:
 \begin{enumerate}
-    \item \textbf{Conformal Inflation Alert:} Triggered if the mean prediction set cardinality $\mathbb{E}[|\hat{C}|]$ expands by more than $20\%$ over a rolling 1-hour window relative to baseline calibration distributions.
+    \item \textbf{Conformal Inflation Alert:} Triggered if the mean prediction set cardinality $\mathbb{E}[|\hat{C}|]$ expands substantially beyond calibration baselines (e.g., using an illustrative alert threshold of $>20\%$ expansion over a rolling 1-hour window).
     \item \textbf{Embedding Drift Alert:} Triggered if the feature space distribution distance securely exceeds an empirical threshold, $\text{MMD}^2(\mathcal{Z}_{\text{base}}, \mathcal{Z}_{\text{prod}}) > \tau_{\text{drift}}$.
 \end{enumerate}
 
