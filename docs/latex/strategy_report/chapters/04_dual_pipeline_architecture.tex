@@ -9,7 +9,7 @@ A common anti-pattern in machine learning deployments is the monolithic pipeline
 
 The necessity for architectural decoupling stems directly from the fundamentally asymmetric nature of biological modelling operations.
 
-\textbf{Pipeline 1: The Classification Engine.} The primary neural backbone (for example, an optimised BioCLIP-2 \cite{stevens2024bioclip} or DINOv3 transformer) is computationally expensive to train but relatively static in production. Refining its weights using Class-Balanced Loss \cite{cui2019classbalanced} requires intensive GPU Tensor Core utilisation, distributed gradient synchronisation, and dynamic ONNX quantisation calibration. However, once an optimal checkpoint is compiled, the model architecture may remain unchanged for weeks or months.
+\textbf{Pipeline 1: The Classification Engine.} The primary neural backbone (for example, an optimised BioCLIP-2 \cite{stevens2024bioclip} or DINOv3 transformer) is computationally expensive to train but relatively static in production. Refining its weights using Class-Balanced Loss \cite{cui2019classbalanced} requires intensive GPU Tensor Core utilisation, distributed gradient synchronisation, and static ONNX Post-Training Quantisation (PTQ) calibration. However, once an optimal checkpoint is compiled, the model architecture may remain unchanged for weeks or months.
 
 \textbf{Pipeline 2: The Taxonomic MMKG.} Conversely, the underlying citizen-science data stream is highly volatile. The pipeline must ingest continuous drops of new iNaturalist research-grade observations. More critically, biological taxonomies are frequently subjected to scientific realignments -- species are split into novel taxonomic branches or lumped together under unified nomenclature. Pipeline 2 is an I/O-bound vector-indexing workflow responsible for parsing DarwinCore Parquet manifests, extracting zero-shot organism crops, filtering open-source licences, and appending dense embeddings to the Hierarchical Navigable Small World (HNSW) graph.
 
@@ -77,16 +77,14 @@ client.transition_model_version_stage(
 \section{Convergence at the Serving Boundary}
 \label{sec:serving_convergence}
 
-The two distinct pipelines exist in absolute isolation until the precise moment of user inference. The FastAPI serving application acts as the convergence node, simultaneously loading the INT8 quantised ONNX graph from Pipeline 1 into memory, whilst mounting the live IVF-HNSW vector index compiled by Pipeline 2.
+The two distinct pipelines exist in absolute isolation until the precise moment of user inference. The FastAPI serving application acts as the convergence node, simultaneously loading the INT8 quantised ONNX graph from Pipeline 1 into memory, whilst mounting the live HNSW vector index compiled by Pipeline 2.
 
 When a field photograph is submitted to the API, it is passed through the fast-path ONNX backbone. If the epistemic safety layer determines the classification is decisive -- meaning the conformal prediction set yields exactly one candidate ($|C| = 1$) -- the pipeline returns the prediction immediately, bypassing the vector database entirely. If, however, the model exhibits severe ambiguity ($|C| > 1$), the serving application lazy-loads Pipeline 2's HNSW index, executes a single-stage filtered traversal, and retrieves the top-$k$ reference exemplar crops in order to synthesise a robust, comparative visual context.
 
 \section{Low-Latency Interpretability via Forward-Hooked CAM}
-\label{sec:gradcam_shortcut}
+\label{sec:cam_shortcut}
 
-Providing diagnostic transparency to human reviewers requires visual interpretability tools, such as Gradient-weighted Class Activation Mapping (Grad-CAM). Grad-CAM highlights the specific anatomical regions of an image (e.g., the venation on a wing or the shape of a leaf) that most heavily influenced the model's decision. 
-
-However, standard Grad-CAM implementations require a computationally expensive backward pass (calculating gradients with respect to the feature maps) during inference. Executing gradient backpropagation on a production server destroys the sub-$25\text{ ms}$ latency Service Level Agreement (SLA) and prevents the model from being deployed in highly optimized, forward-only runtimes like INT8 ONNX.
+Providing diagnostic transparency to human reviewers requires visual interpretability tools such as Class Activation Mapping (CAM). While modern extensions like Grad-CAM are popular, they require a computationally expensive backward pass during inference. Executing gradient backpropagation on a production server destroys the sub-$25\text{ ms}$ latency Service Level Agreement (SLA) and prevents the model from being deployed in highly optimized, forward-only runtimes like INT8 ONNX.
 
 To achieve visual interpretability without violating strict operational latency constraints, the architecture bypasses the backward pass entirely by leveraging the properties of the linear classification head.
 

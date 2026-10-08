@@ -2,16 +2,9 @@
 # SPDX-License-Identifier: MIT
 """Vision Foundation Model (VFM) backbone factory.
 
-This module provides factory functions to instantiate pre-trained domain foundation
-models (specifically BioCLIP-2, DINOv3, DINOv2, MobileNetV4, and EfficientNet) via
-the `timm` library. The feature extractor backbones are instantiated with their
-classification heads removed (`num_classes=0`) and all parameter gradients frozen
-(`requires_grad=False`), decoupling downstream taxonomic head training from full
-backbone backpropagation.
+This module provides factory functions to instantiate pre-trained domain foundation models (specifically BioCLIP-2, DINOv3, DINOv2, MobileNetV4, and EfficientNet) via the `timm` library. The feature extractor backbones are instantiated with their classification heads removed (`num_classes=0`) and all parameter gradients frozen (`requires_grad=False`), decoupling downstream taxonomic head training from full backbone backpropagation.
 
-Model architecture mappings, fallback identifiers, and image dimensions are resolved
-dynamically from the centralized type-safe application configuration (`taxon_vision.config`),
-eliminating magic numbers and hardcoded globals.
+Model architecture mappings, fallback identifiers, and image dimensions are resolved dynamically from the centralized type-safe application configuration (`taxon_vision.config`), eliminating magic numbers and hardcoded globals.
 
 Typical usage example:
     backbone = create_feature_extractor("bioclip-2", pretrained=True)
@@ -41,28 +34,17 @@ def create_feature_extractor(
 ) -> nn.Module:
     """Instantiate a frozen pre-trained feature extractor backbone.
 
-    Constructs a convolutional neural network or vision transformer backbone using
-    `timm`. The network's classification head is removed (returning dense pooled
-    feature embeddings), parameters are frozen by setting `requires_grad = False`,
-    and the model is switched to evaluation mode (`eval()`).
+    Constructs a convolutional neural network or vision transformer backbone using `timm`. The network's classification head is removed (returning dense pooled feature embeddings), parameters are frozen by setting `requires_grad = False`, and the model is switched to evaluation mode (`eval()`).
 
-    If remote Hugging Face or timm weight downloads fail (e.g., in offline or CI
-    environments), the factory gracefully falls back to an un-pretrained local
-    lightweight architecture defined in `config.fallback_extractor` to ensure
-    deterministic offline execution.
+    If remote Hugging Face or timm weight downloads fail (e.g., in offline or CI environments), the factory gracefully falls back to an un-pretrained local lightweight architecture defined in `config.fallback_extractor` to ensure deterministic offline execution.
 
     Args:
-        model_name: Identifier for the desired model backbone. Can be a key from
-            `config.backbone_registry` or any valid timm model name. If None,
-            uses `config.default_extractor`.
-        pretrained: Whether to download and load pre-trained weights from the
-            remote registry or Hugging Face Hub.
-        config: Model subsystem configuration. If None, loaded from global
-            `get_settings().model`.
+        model_name: Identifier for the desired model backbone. Can be a key from `config.backbone_registry` or any valid timm model name. If None, uses `config.default_extractor`.
+        pretrained: Whether to download and load pre-trained weights from the remote registry or Hugging Face Hub.
+        config: Model subsystem configuration. If None, loaded from global `get_settings().model`.
 
     Returns:
-        The instantiated PyTorch backbone with frozen parameters and evaluation
-        mode active.
+        The instantiated PyTorch backbone with frozen parameters and evaluation mode active.
 
     Raises:
         RuntimeError: If both the requested model and the fallback architecture fail.
@@ -93,16 +75,12 @@ def get_feature_dimension(
 ) -> int:
     """Retrieve the output feature embedding dimension for a given backbone.
 
-    Executes a single-sample forward pass with a zero dummy tensor in zero-grad
-    inference mode to deterministically resolve the exact output representation
-    dimensionality across CNN and ViT architectures without hardcoding output sizes.
+    Executes a single-sample forward pass with a zero dummy tensor in zero-grad inference mode to deterministically resolve the exact output representation dimensionality across CNN and ViT architectures without hardcoding output sizes.
 
     Args:
         model: The feature extractor backbone to inspect.
-        image_size: Input spatial image height/width. If None, resolved from
-            `config.image_size`.
-        channels: Input image color channels. If None, resolved from
-            `config.channels`.
+        image_size: Input spatial image height/width. If None, resolved from `config.image_size`.
+        channels: Input image color channels. If None, resolved from `config.channels`.
         config: Model configuration. If None, loaded from `get_settings().model`.
 
     Returns:
@@ -126,15 +104,12 @@ def extract_features(
 ) -> torch.Tensor:
     """Extract dense feature embeddings from a batch of images using a frozen backbone.
 
-    Executes inference in zero-grad mode (`torch.inference_mode`) without maintaining
-    computational graphs, optimizing memory allocation and execution latency.
+    Executes inference in zero-grad mode (`torch.inference_mode`) without maintaining computational graphs, optimizing memory allocation and execution latency.
 
     Args:
         model: The frozen feature extractor backbone.
-        images: A 4D tensor representing the batch of normalized images of
-            shape `(batch_size, channels, height, width)`.
-        device: Target device for execution. If None, the device of the model
-            parameters is used.
+        images: A 4D tensor representing the batch of normalized images of shape `(batch_size, channels, height, width)`.
+        device: Target device for execution. If None, the device of the model parameters is used.
 
     Returns:
         Dense feature embeddings of shape `(batch_size, feature_dim)`.
@@ -160,15 +135,11 @@ def extract_and_cache_features(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Iterate over an entire dataset to pre-compute and cache feature embeddings.
 
-    Decouples feature extraction from linear head training. By passing the dataset
-    through the frozen vision foundation model once and caching embeddings in memory
-    or storage, subsequent classification head training iterations run in seconds
-    rather than hours.
+    Decouples feature extraction from linear head training. By passing the dataset through the frozen vision foundation model once and caching embeddings in memory or storage, subsequent classification head training iterations run in seconds rather than hours.
 
     Args:
         model: The frozen feature extractor backbone.
-        dataloader: An iterable or PyTorch DataLoader yielding batches of
-            `(images, labels)`.
+        dataloader: An iterable or PyTorch DataLoader yielding batches of `(images, labels)`.
         device: Target execution device. If None, uses the model parameter device.
 
     Returns:

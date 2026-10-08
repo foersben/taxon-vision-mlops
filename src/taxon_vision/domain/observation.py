@@ -13,7 +13,53 @@ from taxon_vision.domain.taxonomy import TaxonNode
 
 
 class ObservationRecord(BaseModel):
-    """Validated observation conforming to DarwinCore standard."""
+    """Validated observation conforming to DarwinCore standard.
+
+    Attributes:
+        observation_id: Unique identifier of observation
+        taxon: Taxonomic classification of observation
+        attribution: Attribution record for media licensing
+        image_url: URL to primary photo
+        latitude: Latitude coordinate
+        longitude: Longitude coordinate
+        observed_on: Date and time of observation
+        quality_grade: Quality grade of observation
+
+    Usage Examples:
+        - Import and use `ObservationRecord` model for observation data.
+        - Validate incoming observation records from data ingestion pipelines.
+        - Create and serialize `ObservationRecord` instances for downstream storage or sharing.
+
+    Example:
+        >>> from taxon_vision.domain.observation import ObservationRecord
+        >>> from taxon_vision.domain.taxonomy import TaxonNode
+        >>> from taxon_vision.domain.license import AttributionRecord
+        >>>
+        >>> observation = ObservationRecord(
+        >>>     observation_id="obs-12345-abc",
+        >>>     taxon=TaxonNode(
+        >>>         taxon_id=12345,
+        >>>         scientific_name="Homo sapiens",
+        >>>         common_name="Human",
+        >>>         rank="species",
+        >>>         parent_id=9606
+        >>>     ),
+        >>>     attribution=AttributionRecord(
+        >>>         photographer_name="Jane_Doe",
+        >>>         license_code="CC-BY",
+        >>>         license_url="https://creativecommons.org/licenses/by/4.0/",
+        >>>         observation_uuid="obs-12345-abc",
+        >>>     ),
+        >>>     image_url="https://example.com/image.jpg",
+        >>>     latitude=40.7128,
+        >>>     longitude=-74.0060,
+        >>>     observed_on="2023-10-27T10:00:00Z",
+        >>>     quality_grade="research"
+        >>> )
+        >>>
+        >>> print(observation.observation_id)
+        obs-12345-abc
+    """
 
     observation_id: str = Field(..., description="iNaturalist or GBIF observation ID")
     taxon: TaxonNode = Field(..., description="Assigned taxonomic classification")

@@ -169,6 +169,7 @@ api = { cmd = "uvicorn taxon_vision.service.api:app --host 0.0.0.0 --port 8000 -
 train = { cmd = "python -m taxon_vision.pipelines.train" }
 pareto = { cmd = "python scripts/benchmark_pareto.py" }
 calibrate = { cmd = "python scripts/calibrate_conformal.py" }
+mlflow = { cmd = "mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5000" }
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["D"]

@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 from PIL import Image
 
-from taxon_vision.inference.gradcam import generate_heatmap
+from taxon_vision.inference.cam import generate_heatmap
 from taxon_vision.models.factory import (
     create_feature_extractor,
     extract_and_cache_features,
@@ -161,7 +161,7 @@ def test_embedding_split_validation() -> None:
         )
 
 
-def test_gradcam_heatmap() -> None:
+def test_cam_heatmap() -> None:
     img = Image.new("RGB", (100, 100))
     heatmap = generate_heatmap(img)
     assert heatmap.shape == (100, 100)

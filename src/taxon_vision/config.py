@@ -2,11 +2,7 @@
 # SPDX-License-Identifier: MIT
 """Centralized application configuration schemas and strict validation.
 
-This module defines the type-safe validation schemas for the TaxonVision platform.
-To maintain the Single Source of Truth (SSOT) and DRY principles, default configuration
-values are declared strictly in `config/default_config.yaml`. This module serves as
-the schema validator and runtime accessor, preventing configuration drift between
-code defaults and YAML declarations.
+This module defines the type-safe validation schemas for the TaxonVision platform. To maintain the Single Source of Truth (SSOT) and DRY principles, default configuration values are declared strictly in `config/default_config.yaml`. This module serves as the schema validator and runtime accessor, preventing configuration drift between code defaults and YAML declarations.
 
 Settings are loaded with precedence:
 1. Environment variables (prefixed with `TAXON_`, e.g. `TAXON_MODEL__IMAGE_SIZE=336`).
@@ -62,10 +58,12 @@ class ModelConfig(BaseModel):
         available_extractors (list[str]): List of supported feature extractor architectures.
         image_size (int): Standard square image spatial dimension (height and width in pixels).
         channels (int): Number of image input color channels.
+        mean (list[float]): Mean values for channel-wise normalization.
+        std (list[float]): Standard deviation values for channel-wise normalization.
         onnx_model_path (str): Relative or absolute path to exported quantized ONNX checkpoint.
         temperature (float): Softmax logit scaling temperature for probability calibration.
-        backbone_registry (dict[str, str]): Mapping of canonical model identifiers to
-            Hugging Face Hub or timm model definitions.
+        backbone_registry (dict[str, str]): Mapping of canonical model identifiers to Hugging Face Hub or timm model definitions.
+        head_checkpoint_path (str): Relative or absolute path to the trained classification head checkpoint.
     """
 
     default_extractor: str
@@ -122,8 +120,7 @@ class OODConfig(BaseModel):
 class Settings(BaseSettings):
     """Global application settings container with strict schema validation.
 
-    Aggregates subsystem configurations. Default values are populated from
-    `config/default_config.yaml` and can be overridden by environment variables.
+    Aggregates subsystem configurations. Default values are populated from `config/default_config.yaml` and can be overridden by environment variables.
     """
 
     model_config = SettingsConfigDict(
@@ -178,14 +175,10 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
 def get_settings(config_path: str | Path | None = None) -> Settings:
     """Retrieve the validated global application configuration settings.
 
-    Loads base configuration from `config/default_config.yaml`. If an explicit
-    `config_path` is provided, its values are layered on top of the base configuration,
-    followed by any active `TAXON_` environment variables.
+    Loads base configuration from `config/default_config.yaml`. If an explicit `config_path` is provided, its values are layered on top of the base configuration, followed by any active `TAXON_` environment variables.
 
     Args:
-        config_path (str | Path | None, optional): Explicit filesystem path to YAML configuration
-            overrides. If None, resolves from the `TAXON_CONFIG_PATH` environment variable.
-            Defaults to None.
+        config_path (str | Path | None, optional): Explicit filesystem path to YAML configuration overrides. If None, resolves from the `TAXON_CONFIG_PATH` environment variable. Defaults to None.
 
     Returns:
         Settings: The validated application configuration instance.

@@ -73,7 +73,7 @@ Executing zero-shot entity linking, vector graph traversal, and generative multi
 
 The incoming observation is first evaluated by the primary, lightweight INT8 ONNX classification head. The Split Conformal Prediction engine formally calculates the dynamic prediction set $\hat{C}(X)$ bounded by significance parameter $\alpha = 0.05$:
 \begin{itemize}
-    \item \textbf{Decisive Prediction ($|\hat{C}(X)| = 1$):} The model exhibits high confidence in a single taxon. The identification is returned immediately to the client with sub-25ms latency. The Vision RAG pipeline remains completely idle, thus satisfying approximately $85\%$ of production traffic at negligible compute cost.
+    \item \textbf{Decisive Prediction ($|\hat{C}(X)| = 1$):} The model exhibits high confidence in a single taxon. The identification is returned immediately to the client within the sub-$25\text{ ms}$ latency budget. The Vision RAG pipeline remains completely idle, allowing decisive, high-confidence observations to resolve without heavy retrieval overhead (with exact fast-path ratios monitored dynamically via production telemetry).
     \item \textbf{Severe Ambiguity ($|\hat{C}(X)| > k_{\max}$):} The model cannot distinguish between multiple closely related sibling species within the $95\%$ confidence bound ($k_{\max} = 3$). The system triggers the Vision RAG engine to retrieve parent-child exemplars for all taxa contained within $\hat{C}(X)$, explicitly providing context for comparative multimodal diagnosis.
     \item \textbf{Novelty and Out-of-Distribution ($|\hat{C}(X)| = 0$):} No known class meets the non-conformity threshold, signalling an anomalous, severely degraded, or uncatalogued taxon. The Vision RAG engine executes in unconstrained mode (with spatial filters relaxed), retrieving structural visual analogues across the global tree of life to assist taxonomic triage.
 \end{itemize}
@@ -102,7 +102,7 @@ This rank fusion guarantees that candidates appearing at the top of the context 
 
 The top-3 candidates resulting from Reciprocal Rank Fusion are assembled into a structured prompt schema along with the query observation. This payload is dispatched to a localised Vision-Language Model (such as a quantised Qwen2-VL-2B instance running on host P-cores or the RTX 5070 Ti).
 
-In order to ensure machine readability and eliminate conversational hallucination, the VLM is constrained by grammar-based sampling to emit a strictly typed JSON payload:
+In order to ensure machine readability and eliminate ungrounded generation or conversational drift, the VLM is constrained by grammar-based sampling to emit a strictly typed JSON payload:
 \begin{minted}{json}
 {
   "conformal_context_size": 2,
@@ -145,26 +145,28 @@ The Multimodal Knowledge Graph resolves this by decoupling the immutable visual 
 \section{End-to-End Latency \& Resource Allocation}
 \label{sec:latency_budget}
 
-The operational performance of the dual-path inference engine is bound by strict execution latency and memory constraints, as detailed in Table~\ref{tab:rag_latency}.
+Operating a decoupled serving architecture requires clear engineering resource bounds. To guarantee the overarching sub-$25\text{ ms}$ Service Level Agreement (SLA) on production GPU silicon (NVIDIA RTX 5070 Ti), the platform partitions the execution timeline into bounded budget allocations. Table~\ref{tab:rag_latency} details these engineering budget ceilings across the fast hot-path and the lazy retrieval path.
+
+Crucially, these figures represent allocated architectural SLA ceilings rather than static, universal hardware constants. Physical backbone inference latency varies substantially across execution providers: a domain transformer such as BioCLIP-2 or DINOv3 executes in under $9\text{ ms}$ when compiled with FP16 TensorRT or ONNX Runtime on modern desktop GPU Tensor Cores, but requires $20\text{--}50\text{ ms}$ or more when deployed on general-purpose CPUs without dedicated SIMD acceleration. Consequently, downstream operational deployments strictly profile candidate extractors dynamically using the Pareto benchmark suite rather than assuming static values from external literature.
 
 \begin{table}[htbp]
 \centering
 \small
-\caption{End-to-End Latency and Resource Budget SLA}
+\caption{End-to-End Latency SLA Budget and Resource Allocation (GPU Serving Baseline)}
 \label{tab:rag_latency}
-\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}llrr@{}}
+\begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X r r @{}}
 \toprule
-\textbf{Pipeline Segment} & \textbf{Execution Engine} & \textbf{Latency SLA} & \textbf{Memory Footprint} \\
+\textbf{Pipeline Segment} & \textbf{Execution Engine} & \textbf{SLA (ms)} & \textbf{Memory (MB)} \\
 \midrule
-Zero-Shot Cropping & YOLO-World (ORT INT8) & $12.4 \text{ ms}$ & $380 \text{ MB VRAM}$ \\
-VFM Feature Extractor & BioCLIP-2 (ORT FP16) & $8.2 \text{ ms}$ & $1{,}120 \text{ MB VRAM}$ \\
-Conformal Gate & PyTorch / C-Array & $0.8 \text{ ms}$ & $< 50 \text{ MB RAM}$ \\
-Filtered HNSW & Embedded HNSWlib & $3.5 \text{ ms}$ & $205 \text{ MB RAM}$ \\
-Multi-Modal RRF & In-Memory Polars / DuckDB & $1.2 \text{ ms}$ & $< 20 \text{ MB RAM}$ \\
-VLM Synthesis (Lazy) & Quantised 2B VLM & $280.0 \text{ ms}$ & $2{,}200 \text{ MB VRAM}$ \\
+Zero-Shot Cropping & YOLO-World (ORT INT8) & $\le 12.0$ & $\le 400$ VRAM \\
+VFM Feature Extraction & Vision Backbone (ORT FP16) & $\le 9.0$ & $\le 1{,}200$ VRAM \\
+Conformal Gate & PyTorch / C-Array & $\le 1.0$ & $< 50$ RAM \\
+Filtered HNSW & Embedded HNSWlib & $\le 4.0$ & $\le 250$ RAM \\
+Multi-Modal RRF & In-Memory Polars / DuckDB & $\le 1.5$ & $< 20$ RAM \\
+VLM Synthesis (Lazy) & Quantised 2B VLM & $\le 2{,}500.0$ & $\le 2{,}500$ VRAM \\
 \midrule
-\textbf{Fast Hot-Path (85\%)} & \textbf{Direct ONNX Inference} & \textbf{21.4 ms} & \textbf{1,500 MB VRAM} \\
-\textbf{Lazy RAG Path (15\%)} & \textbf{Full Retrieval + VLM} & \textbf{306.1 ms} & \textbf{3,700 MB VRAM} \\
+\textbf{Fast Hot-Path} & \textbf{Crop + ORT Backbone} & $\mathbf{\le 22.0}$ & $\mathbf{\le 1{,}600}$ \textbf{VRAM} \\
+\textbf{Lazy RAG Path} & \textbf{Retrieval + VLM} & $\mathbf{\le 2{,}600.0}$ & $\mathbf{\le 4{,}100}$ \textbf{VRAM} \\
 \bottomrule
-\end{tabular*}
+\end{tabularx}
 \end{table}
