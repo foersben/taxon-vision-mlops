@@ -13,18 +13,10 @@ class LicenseFilter:
     """Enforces open licensing constraints and attribution retention on observation imagery.
 
     Why:
-        Citizen science imagery (such as iNaturalist or GBIF media) is uploaded under diverse
-        copyright licenses. Ingesting proprietary "All Rights Reserved" assets or unverified
-        static domain scrapes into training datasets exposes production vision pipelines to
-        copyright infringement and breaks open science reproducibility. TaxonVision strictly
-        permits only open Creative Commons licenses (CC0, CC-BY, CC-BY-NC) and requires complete
-        retention of contributor attribution records.
+        Citizen science imagery (such as iNaturalist or GBIF media) is uploaded under diverse copyright licenses. Ingesting proprietary "All Rights Reserved" assets or unverified static domain scrapes into training datasets exposes production vision pipelines to copyright infringement and breaks open science reproducibility. TaxonVision strictly permits only open Creative Commons licenses (CC0, CC-BY, CC-BY-NC) and requires complete retention of contributor attribution records.
 
     How:
-        Normalizes license string identifiers, validates against the `OpenLicense` enum, checks
-        domain provenance to prevent direct unverified hotlinking of raw `static.inaturalist.org`
-        assets, and extracts structured `AttributionRecord` containers containing photographer
-        credits, license URLs, and observation UUIDs.
+        Normalizes license string identifiers, validates against the `OpenLicense` enum, checks domain provenance to prevent direct unverified hotlinking of raw `static.inaturalist.org` assets, and extracts structured `AttributionRecord` containers containing photographer credits, license URLs, and observation UUIDs.
     """
 
     @staticmethod
@@ -32,14 +24,10 @@ class LicenseFilter:
         """Validate whether a license identifier corresponds to an admitted open license.
 
         Why:
-            Ensures that only CC0, CC-BY, and CC-BY-NC licensed media enter downstream feature
-            extraction and training pipelines. Inadmissible licenses (e.g. CC-BY-ND, All Rights Reserved)
-            are filtered out at ingestion before hitting storage tiers.
+            Ensures that only CC0, CC-BY, and CC-BY-NC licensed media enter downstream feature extraction and training pipelines. Inadmissible licenses (e.g. CC-BY-ND, All Rights Reserved) are filtered out at ingestion before hitting storage tiers.
 
         How:
-            Strips surrounding whitespace, converts to uppercase, replaces underscores with standard
-            hyphens, and attempts validation against the `OpenLicense` enumeration. Returns True if
-            valid, False if a ValueError is raised.
+            Strips surrounding whitespace, converts to uppercase, replaces underscores with standard hyphens, and attempts validation against the `OpenLicense` enumeration. Returns True if valid, False if a ValueError is raised.
 
         Args:
             license_str: String representation of license code (e.g. 'CC0', 'CC-BY', 'CC-BY-NC').
@@ -59,14 +47,10 @@ class LicenseFilter:
         """Reject unverified image assets hosted directly on static domains without manifest verification.
 
         Why:
-            Directly scraping `static.inaturalist.org` endpoints without AWS Open Data registry
-            verification violates API terms of service and risks scraping un-licensed or private
-            observations. Ingestion is only permitted for assets verified against the official
-            open data registry manifests.
+            Directly scraping `static.inaturalist.org` endpoints without AWS Open Data registry verification violates API terms of service and risks scraping un-licensed or private observations. Ingestion is only permitted for assets verified against the official open data registry manifests.
 
         How:
-            Checks if `static.inaturalist.org` is present in the URI string and asserts whether
-            `is_open_dataset_verified` is False.
+            Checks if `static.inaturalist.org` is present in the URI string and asserts whether `is_open_dataset_verified` is False.
 
         Args:
             image_url: Remote image locator URI string.
@@ -84,10 +68,7 @@ class LicenseFilter:
         """Extract validated attribution metadata from raw observation records.
 
         Why:
-            Under Creative Commons attribution terms (CC-BY, CC-BY-NC), creators must receive
-            proper attribution including creator name, license type, and source link. Stripping
-            photographer credits invalidates license compliance. This method enforces atomic
-            retention of attribution records for compliant observations and rejects non-compliant entries.
+            Under Creative Commons attribution terms (CC-BY, CC-BY-NC), creators must receive proper attribution including creator name, license type, and source link. Stripping photographer credits invalidates license compliance. This method enforces atomic retention of attribution records for compliant observations and rejects non-compliant entries.
 
         How:
             1. Extracts and normalizes `license_code` and `image_url`.

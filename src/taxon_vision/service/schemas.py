@@ -30,15 +30,10 @@ class PredictionResponse(BaseModel):
     """Structured inference response containing top predictions, conformal sets, and triage flags.
 
     Why:
-        Production ecological inference must not return uncalibrated point estimates in isolation.
-        Clients require both the primary identification, ranked alternatives, distribution-free
-        conformal guarantee sets, and actionable triage recommendations (human review required,
-        OOD flags) to safely automate field workflows.
+        Production ecological inference must not return uncalibrated point estimates in isolation. Clients require both the primary identification, ranked alternatives, distribution-free conformal guarantee sets, and actionable triage recommendations (human review required, OOD flags) to safely automate field workflows.
 
     How:
-        Bundles the top-1 `TaxonPrediction`, secondary candidates admitted into the conformal set,
-        conformal set scientific names list, ambiguity boolean flags, epistemic referral triggers,
-        and end-to-end execution latency in milliseconds.
+        Bundles the top-1 `TaxonPrediction`, secondary candidates admitted into the conformal set, conformal set scientific names list, ambiguity boolean flags, epistemic referral triggers, and end-to-end execution latency in milliseconds.
     """
 
     top_prediction: TaxonPrediction

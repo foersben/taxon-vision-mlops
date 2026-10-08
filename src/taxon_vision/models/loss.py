@@ -2,16 +2,9 @@
 # SPDX-License-Identifier: MIT
 r"""Class-Balanced Loss (Cui et al., 2019) for long-tailed species distributions.
 
-This module implements the Class-Balanced Loss proposed in Cui et al. (CVPR 2019):
-"Class-Balanced Loss Based on Effective Number of Samples". Biological observations
-naturally follow an extreme power-law (Zipfian) distribution, where a small subset
-of common species accounts for the majority of sightings while thousands of rare
-species possess minimal observations.
+This module implements the Class-Balanced Loss proposed in Cui et al. (CVPR 2019): "Class-Balanced Loss Based on Effective Number of Samples". Biological observations naturally follow an extreme power-law (Zipfian) distribution, where a small subset of common species accounts for the majority of sightings while thousands of rare species possess minimal observations.
 
-Rather than naive inverse frequency weighting (which causes severe gradient variance
-on rare classes), Class-Balanced Loss introduces the concept of 'effective number of
-samples' $E_n = (1 - \beta^n) / (1 - \beta)$, where $\beta \in [0, 1)$ captures
-data overlap in feature space.
+Rather than naive inverse frequency weighting (which causes severe gradient variance on rare classes), Class-Balanced Loss introduces the concept of 'effective number of samples' $E_n = (1 - \beta^n) / (1 - \beta)$, where $\beta \in [0, 1)$ captures data overlap in feature space.
 
 Typical usage example:
     samples_per_class = [1200, 450, 30, 5]
@@ -33,17 +26,17 @@ class ClassBalancedLoss(nn.Module):
     r"""Loss function dynamically weighted by the effective number of samples per class.
 
     Given $N_i$ training examples for class $i$, the effective number of samples is:
+
     $$E_{N_i} = \frac{1 - \beta^{N_i}}{1 - \beta}$$
 
     The corresponding class weight is inversely proportional to the effective volume:
+
     $$W_i = \frac{1 - \beta}{1 - \beta^{N_i}}$$
+
     normalized such that $\sum_{i=1}^K W_i = K$ where $K$ is the number of classes.
 
     Attributes:
-        beta: Hyperparameter controlling the scale of effective samples,
-            typically chosen in $[0.9, 0.9999]$. When $\beta \to 1$, weights approach
-            inverse class frequency. When $\beta = 0$, weights collapse to standard
-            unweighted cross-entropy.
+        beta: Hyperparameter controlling the scale of effective samples, typically chosen in $[0.9, 0.9999]$. When $\beta \to 1$, weights approach inverse class frequency. When $\beta = 0$, weights collapse to standard unweighted cross-entropy.
         weights: 1D tensor of pre-calculated normalized class weights of shape `(num_classes,)`.
     """
 
@@ -56,8 +49,7 @@ class ClassBalancedLoss(nn.Module):
         """Initialize the ClassBalancedLoss module.
 
         Args:
-            samples_per_class: Number of training examples per class. Length corresponds
-                to the total number of classes $K$.
+            samples_per_class: Number of training examples per class. Length corresponds to the total number of classes $K$.
             beta: Overlap hyperparameter in $[0.0, 1.0)$.
             epsilon: Small constant to prevent division by zero for classes with zero observations.
 
@@ -93,16 +85,10 @@ class ClassBalancedLoss(nn.Module):
         """Compute the class-balanced cross-entropy loss over a batch of predictions.
 
         Why:
-            Biological vision datasets feature extreme class imbalance (power-law tails). Standard
-            unweighted cross-entropy gradients are dominated by common taxa, degrading recall
-            on endangered or rare species. Naive inverse frequency weighting induces explosive gradient
-            variance on singletons. Weighting by inverse effective sample volume smooths gradient
-            magnitudes, improving minority class recall while maintaining stable optimization dynamics.
+            Biological vision datasets feature extreme class imbalance (power-law tails). Standard unweighted cross-entropy gradients are dominated by common taxa, degrading recall on endangered or rare species. Naive inverse frequency weighting induces explosive gradient variance on singletons. Weighting by inverse effective sample volume smooths gradient magnitudes, improving minority class recall while maintaining stable optimization dynamics.
 
         How:
-            Transfers precomputed normalized class buffer weights to the active device (CPU/CUDA),
-            and evaluates weighted cross-entropy loss against ground-truth target indices via
-            `torch.nn.functional.cross_entropy`.
+            Transfers precomputed normalized class buffer weights to the active device (CPU/CUDA), and evaluates weighted cross-entropy loss against ground-truth target indices via `torch.nn.functional.cross_entropy`.
 
         Args:
             logits: Unnormalized class predictions of shape `(batch_size, num_classes)`.

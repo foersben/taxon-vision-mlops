@@ -9,7 +9,23 @@ import onnxruntime as ort
 
 
 class ONNXInferenceEngine:
-    """Executes batched inference with pre-allocated I/O bindings."""
+    """Executes batched inference with pre-allocated I/O bindings.
+
+    Why:
+        In continuous active learning workflows, inference latency directly impedes throughput. Loading the model weights and tracing the computational graph on every individual prediction incurs substantial I/O and kernel launch overhead. Maintaining a persistent ONNX Runtime session with graph optimization enabled ensures the computational graph is constructed and optimized exactly once during initialization, minimizing per-prediction latency for subsequent inference calls.
+
+    How:
+        Initializes an ONNX Runtime inference session using the specified model path and enables graph optimizations. Pre-allocates memory for inputs and outputs to avoid repeated memory allocations during inference. The prediction method preprocesses input arrays to match the model's expected input shape and data type (e.g., C,H,W normalized to [0, 1]), runs inference using the session, and converts the raw outputs to softmax probability distributions element-wise via the exponential function to produce calibrated likelihood scores.
+
+    Complexity:
+        - initialization: O(M) time complexity, where M is the number of layers in the model.
+        - prediction: O(N) time complexity, where N is the number of input samples.
+
+    Attributes:
+        session: The ONNX Runtime inference session.
+        input_name: The name of the input layer.
+        output_name: The name of the output layer.
+    """
 
     def __init__(self, model_path: str) -> None:
         """Initialize the ONNX Runtime session with graph optimizations.

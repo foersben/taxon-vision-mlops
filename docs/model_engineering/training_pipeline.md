@@ -10,6 +10,8 @@ generated: {by: process:docs-librarian, at: "2026-10-06T20:00:00Z"}
 verified: {by: process:docs-librarian, at: "2026-10-06T20:00:00Z"}
 sources:
   - resource: "src/taxon_vision/models/training/runner.py"
+  - resource: "src/taxon_vision/models/training/tracking.py"
+  - resource: "src/taxon_vision/models/training/checkpoint.py"
   - resource: "src/taxon_vision/models/training/embeddings.py"
   - resource: "src/taxon_vision/models/training/tuning.py"
   - resource: "src/taxon_vision/models/training/types.py"
@@ -46,9 +48,9 @@ tracks all experiments with MLflow, and automatically promotes the best model us
 | `tuning.py` | `HyperparameterObjective` | Optuna callable wrapping the inner training loop |
 | `tuning.py` | `tune_hyperparameters()` | Orchestrates Optuna study with ASHA pruning |
 | `runner.py` | `run_training_pipeline()` | Top-level orchestrator called by the FastAPI endpoint |
-| `runner.py` | `_get_dvc_dataset_hash()` | Parses `dvc.lock` for reproducible dataset provenance - **planned: delegate to Jenkins** |
-| `runner.py` | `_init_mlflow_run()` | Opens parent MLflow run and logs training parameters |
-| `runner.py` | `_promote_model_if_better()` | Compares PR-AUC and assigns Production / Challenger alias - **planned: delegate to Jenkins** |
+| `tracking.py` | `_get_dvc_dataset_hash()` | Parses `dvc.lock` for reproducible dataset provenance - **planned: delegate to Jenkins** |
+| `tracking.py` | `mlflow_run_scope()` | Context manager that opens parent MLflow run and logs training parameters |
+| `tracking.py` | `_promote_model_if_better()` | Compares PR-AUC and assigns Production / Challenger alias - **planned: delegate to Jenkins** |
 | `runner.py` | `_dispatch_remote_training()` | HTTP dispatch to FastAPI to trigger training remotely - **planned: delete, replaced by Jenkins trigger** |
 
 ## Pipeline Lifecycle & MLflow RAII Strategy
@@ -209,9 +211,8 @@ summary for the long-tailed taxonomic classification task.
 
 ## Planned Orchestration Transition
 
-The current `runner.py` acts as a God script - it trains the model, parses DVC lock files,
-communicates with the MLflow model registry, and can trigger itself remotely over HTTP.
-This is appropriate for the current single-script setup but does not scale when compute
+Prior to modularization, `runner.py` acted as a God script. We have already initiated the separation of concerns by moving MLflow and DVC tracking logic into `tracking.py`.
+However, the pipeline logic still relies heavily on Python orchestration and does not scale perfectly when compute
 jobs need to run in dedicated Kubernetes pods.
 
 The planned transition introduces a **two-layer CI architecture**:
@@ -251,18 +252,18 @@ stage('Promote')   -> CPU pod  - set_registered_model_alias() Challenger / Produ
 stage('Deploy')    -> CPU pod  - rolling restart of FastAPI Kubernetes deployment
 ```
 
-### Impact on `runner.py`
+### Impact on Python Orchestration
 
 Once Jenkins is in place, the following functions become dead code and will be deleted
-from `runner.py`, reducing it from ~400 lines to ~150 lines of pure PyTorch:
+from `tracking.py` and `runner.py`, reducing the orchestration footprint further:
 
-* `_get_dvc_dataset_hash()` - moved to the Jenkins `Ingest` stage as a bash step.
-* `_promote_model_if_better()` - moved to the Jenkins `Evaluate` and `Promote` stages.
-* `_dispatch_remote_training()` - deleted entirely; Jenkins triggers jobs directly.
+* `_get_dvc_dataset_hash()` (in `tracking.py`) - moved to the Jenkins `Ingest` stage as a bash step.
+* `_promote_model_if_better()` (in `tracking.py`) - moved to the Jenkins `Evaluate` and `Promote` stages.
+* `_dispatch_remote_training()` (in `runner.py`) - deleted entirely; Jenkins triggers jobs directly.
 * `train_cli()` argument complexity - simplified to just `extractor`, `epochs`, `batch_size`, `lr`.
 
-The result is a `runner.py` that only a Data Scientist needs to read: PyTorch modules,
-loss functions, and MLflow metric logging. All pipeline wiring lives in the `Jenkinsfile`.
+The result is a Python training package that only a Data Scientist needs to read: PyTorch modules,
+loss functions, and metric evaluation. All pipeline wiring lives in the `Jenkinsfile`.
 
 ## API Reference
 

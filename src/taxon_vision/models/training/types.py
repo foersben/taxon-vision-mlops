@@ -14,8 +14,7 @@ import torch
 class EmbeddingSplit:
     """Pre-computed feature representations and labels for training and validation.
 
-    Groups training and validation tensors together to eliminate parameter clumps
-    and guarantee consistent feature dimensions across splits.
+    Groups training and validation tensors together to eliminate parameter clumps and guarantee consistent feature dimensions across splits.
 
     Attributes:
         train_embeddings: Pre-computed representations of shape `(N_train, feature_dim)`.
@@ -35,8 +34,7 @@ class EmbeddingSplit:
         """Validate tensor shapes and consistency across training and validation splits.
 
         Raises:
-            ValueError: If feature dimensions differ between train and validation tensors,
-                or if label counts do not match sample counts.
+            ValueError: If feature dimensions differ between train and validation tensors, or if label counts do not match sample counts.
         """
         if self.train_embeddings.ndim != 2 or self.val_embeddings.ndim != 2:
             raise ValueError(
@@ -61,7 +59,21 @@ class EmbeddingSplit:
 
     @property
     def feature_dim(self) -> int:
-        """Dimensionality of feature vectors extracted by the backbone."""
+        """Dimensionality of feature vectors extracted by the backbone.
+
+        Why:
+            The feature dimension defines the dimensionality of the embedding space produced by the neural network's backbone. This value is critical for designing downstream components such as the classification head, nearest-neighbor search indexes, and dimensionality reduction projections. Ensuring a consistent feature dimension across all embeddings guarantees compatibility between these components and simplifies the architecture design.
+
+        How:
+            The feature dimension is determined by the output dimensionality of the final layer in the backbone network (e.g., the output of a ResNet's global average pooling layer). It is accessed directly from the shape of the pre-computed embedding tensors.
+
+        Complexity:
+            - time complexity: O(1), as the dimensionality is retrieved directly from the tensor metadata.
+            - space complexity: O(1), as no additional memory is allocated.
+
+        Returns:
+            The dimensionality of feature vectors extracted by the backbone.
+        """
         return int(self.train_embeddings.shape[1])
 
     def get_samples_per_class(self, num_classes: int) -> list[int]:

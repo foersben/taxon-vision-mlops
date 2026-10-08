@@ -11,17 +11,10 @@ def compute_wasserstein_drift(reference_embeddings: np.ndarray, current_embeddin
     """Compute 1D Wasserstein distance approximation on representation embedding norms.
 
     Why:
-        In continuous ecological vision streams, visual domain shifts (seasonal foliage variations,
-        differing camera sensors, regional lighting) and concept drift (shifts in species relative
-        abundances) degrade model reliability over time. High-dimensional multi-variate statistical tests
-        (e.g. MMD, KS tests over 1024 dimensions) suffer from the curse of dimensionality and high
-        computational overhead. Projecting representations onto their vector norms and measuring
-        Wasserstein-1 (earth mover's) distance yields an efficient, sensitive scalar metric for
-        detecting representation drift across production inference windows.
+        In continuous ecological vision streams, visual domain shifts (seasonal foliage variations, differing camera sensors, regional lighting) and concept drift (shifts in species relative abundances) degrade model reliability over time. High-dimensional multi-variate statistical tests (e.g. MMD, KS tests over 1024 dimensions) suffer from the curse of dimensionality and high computational overhead. Projecting representations onto their vector norms and measuring Wasserstein-1 (earth mover's) distance yields an efficient, sensitive scalar metric for detecting representation drift across production inference windows.
 
     How:
-        1. Evaluates L2 Euclidean vector norms along the feature dimension for both reference
-           and current observation batches.
+        1. Evaluates L2 Euclidean vector norms along the feature dimension for both reference and current observation batches.
         2. Computes the absolute difference in mean norm distributions between reference and current sets:
            W_1(P_ref, P_curr) approx | E[||z_ref||] - E[||z_curr||] |
         3. Returns the scalar distance as a drift alert indicator.

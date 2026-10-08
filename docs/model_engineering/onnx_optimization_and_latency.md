@@ -4,7 +4,7 @@ title: ONNX Runtime Optimization & Latency Invariants
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
 version: 1.0
-description: INT8 dynamic quantization, zero-allocation memory execution, and forward-hooked visual CAM under a strict 25ms p95 latency budget.
+description: INT8 static PTQ quantization, zero-allocation memory execution, and forward-hooked visual CAM under a strict 25ms p95 latency budget.
 tags: [onnx, quantization, latency, vnni, cam, optimization]
 generated: {by: process:docs-librarian, at: "2026-10-06T12:00:00Z"}
 verified: {by: process:docs-librarian, at: "2026-10-06T12:00:00Z"}
@@ -19,7 +19,7 @@ sources:
 
 Operating an interactive biodiversity identification platform requires strict adherence to latency Service Level Agreements (SLAs). While unoptimized PyTorch forward passes on general-purpose CPUs often exceed 100 to 200 ms depending on batch size and architecture, TaxonVision enforces a **fast-path p95 latency budget strictly under 25 milliseconds**.
 
-This latency bound is achieved through Open Neural Network Exchange (ONNX) graph compilation, dynamic Integer-8 (INT8) quantization, zero-allocation hot paths, and forward-hooked interpretability.
+This latency bound is achieved through Open Neural Network Exchange (ONNX) graph compilation, static Post-Training Quantization (PTQ), zero-allocation hot paths, and forward-hooked interpretability.
 
 ```mermaid
 flowchart LR
@@ -28,7 +28,7 @@ flowchart LR
     end
 
     subgraph Compilation["ONNX Export & Quantization Pipeline"]
-        C1["ONNX Graph Export<br/>Dynamic Batch Axes"] --> C2["Dynamic INT8 Quantizer<br/>q = round(x/S) + Z"]
+        C1["ONNX Graph Export<br/>Dynamic Batch Axes"] --> C2["Static INT8 PTQ<br/>Calibration Data Reader"]
         C2 --> C3["Quantized Graph<br/>(Illustrative 100 MB Artifact - 75% Reduction)"]
     end
 
@@ -43,11 +43,11 @@ flowchart LR
 
 ---
 
-## 1. Dynamic INT8 Quantization Mathematics
+## 1. Static vs. Dynamic INT8 Quantization Mathematics
 
 By default, PyTorch constructs weight matrices using 32-bit floating-point (FP32) precision. During production serving, FP32 operations saturate memory bandwidth and inflate cache requirements.
 
-To optimize throughput, [`ONNXQuantizer`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/inference/quantizer.py) maps continuous 32-bit floating-point weights onto a discrete 8-bit integer grid:
+To optimize throughput, the [`quantizer.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/inference/quantizer.py) module maps continuous 32-bit floating-point weights onto a discrete 8-bit integer grid:
 
 $$q = \text{round}\left(\frac{x}{S}\right) + Z$$
 
@@ -60,6 +60,14 @@ Where:
 $$S = \frac{x_{\max} - x_{\min}}{255}$$
 
 * $Z \in \mathbb{Z}$ is the integer zero-point offset, aligning real zero with the discrete zero grid to preserve sparse zero-padding accuracy.
+
+### Static PTQ (Vision Backbones)
+
+Static Post-Training Quantization (PTQ) is mathematically required for the convolutional and vision transformer backbones. Because convolution activations vary spatially, calculating activation scales dynamically at runtime introduces severe computational overhead. Instead, static PTQ passes a subset of representative data (a calibration dataset) through the model offline to precompute static $S$ and $Z$ values for every layer, guaranteeing zero runtime allocation overhead.
+
+### Dynamic Quantization (Linear Projections)
+
+Dynamic quantization evaluates $S$ and $Z$ on-the-fly for every forward pass based on observed activation distributions. This is reserved exclusively for Vision-Language Models (VLMs) or standalone linear heads where variations between tokens are massive and matrix multiplications dominate.
 
 ### Silicon Acceleration via SIMD & VNNI
 

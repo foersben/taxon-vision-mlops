@@ -21,13 +21,21 @@ def train_head_epoch(
 ) -> float:
     """Execute a single training epoch across batches of raw image inputs.
 
-    Optimizes the parameters of `model.head` while the underlying backbone remains
-    frozen and evaluated without gradient tracking.
+    Optimizes the parameters of `model.head` while the underlying backbone remains frozen and evaluated without gradient tracking.
+
+    Why:
+        During the transfer learning phase, the backbone (pre-trained on a large general dataset) captures robust low-level visual features (edges, textures, shapes). Freezing these parameters prevents the high-frequency noise and class imbalance of the specific target domain from corrupting the learned representations. Training only the head allows the model to specialize in mapping these existing features to the new taxonomic labels efficiently, avoiding catastrophic forgetting and accelerating convergence.
+
+    How:
+        Sets the `requires_grad` attribute to `False` for all parameters in `model.backbone` prior to the optimization step. During the forward pass, only the head's parameters are updated via standard backpropagation. The `torch.no_grad()` context manager or explicit parameter freezing ensures that gradient computations do not propagate into the backbone layers, saving memory and computation time.
+
+    Complexity:
+        - time complexity: O(T * B * C_feat), where T is the number of training steps, B is the batch size, and C_feat is the fixed computational cost of the backbone forward pass. The complexity is independent of the number of trainable parameters in the head, as the backbone computation is constant.
+        - space complexity: O(M_head + B * C_feat), where M_head is the number of parameters in the head (typically small) and B * C_feat is the memory required for backbone activations. The space complexity is dominated by the backbone's feature map storage.
 
     Args:
         model: The taxonomic classifier containing frozen backbone and head.
-        dataloader: Iterable yielding `(inputs, labels)` where `inputs` is a 4D batch
-            tensor of images and `labels` is a 1D tensor of targets.
+        dataloader: Iterable yielding `(inputs, labels)` where `inputs` is a 4D batch tensor of images and `labels` is a 1D tensor of targets.
         optimizer: PyTorch optimizer targeting the head parameters.
         criterion: Differentiable loss function (e.g. ClassBalancedLoss).
 

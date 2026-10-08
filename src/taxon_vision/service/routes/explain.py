@@ -25,17 +25,10 @@ async def explain_prediction() -> ExplainResponse:
     """Generate Class Activation Map (CAM) saliency visualization.
 
     Why:
-        High-stakes biodiversity monitoring requires interpretable predictions so ecologists
-        can verify that classifications are based on genuine morphometric organism characteristics
-        (e.g. wing venation, dorsal markings) rather than background context artifacts (e.g. foliage,
-        ruler bars, museum pins). As specified in Strategy Report Chapter 4 (§4.4), classical
-        backward-pass Grad-CAM is prohibited due to sub-25ms latency limits and INT8 ONNX forward-only
-        runtime constraints. Forward-hooked attribution provides low-latency interpretability.
+        High-stakes biodiversity monitoring requires interpretable predictions so ecologists can verify that classifications are based on genuine morphometric organism characteristics (e.g. wing venation, dorsal markings) rather than background context artifacts (e.g. foliage, ruler bars, museum pins). As specified in Strategy Report Chapter 4 (§4.4), classical backward-pass Grad-CAM is prohibited due to sub-25ms latency limits and INT8 ONNX forward-only runtime constraints. Forward-hooked attribution provides low-latency interpretability.
 
     How:
-        Processes feature activation tensors from the final convolutional or attention projection
-        layer, aggregates channel weights, projects the resulting heatmap back to the input spatial
-        dimensions, and returns status and generation latency metrics.
+        Processes feature activation tensors from the final convolutional or attention projection layer, aggregates channel weights, projects the resulting heatmap back to the input spatial dimensions, and returns status and generation latency metrics.
 
     Returns:
         Explanation response indicating heatmap generation status and overhead latency.

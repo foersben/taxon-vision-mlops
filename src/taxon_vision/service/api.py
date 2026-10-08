@@ -3,15 +3,10 @@
 """FastAPI Application Composition Root.
 
 Why:
-    TaxonVision requires a unified deployment artifact serving both automated high-throughput
-    machine prediction requests (OpenAPI REST endpoints) and interactive human verification
-    dashboards (HTMX/Jinja2 server-rendered views). Unifying these surfaces inside a single
-    FastAPI ASGI application simplifies Kubernetes pod topology, shares cached PyTorch and
-    conformal inference memory spaces, and ensures telemetry scrapes cover all operational surfaces.
+    TaxonVision requires a unified deployment artifact serving both automated high-throughput machine prediction requests (OpenAPI REST endpoints) and interactive human verification dashboards (HTMX/Jinja2 server-rendered views). Unifying these surfaces inside a single FastAPI ASGI application simplifies Kubernetes pod topology, shares cached PyTorch and conformal inference memory spaces, and ensures telemetry scrapes cover all operational surfaces.
 
 How:
-    Instantiates the top-level FastAPI application with formal OpenAPI metadata, mounts static
-    CSS/JS styling assets if present, and mounts modular route handlers:
+    Instantiates the top-level FastAPI application with formal OpenAPI metadata, mounts static CSS/JS styling assets if present, and mounts modular route handlers:
     - `health`: Liveness probes and Prometheus metric scrapes.
     - `predict`: High-throughput species classification with conformal sets.
     - `train`: Model head training triggering and status reporting.

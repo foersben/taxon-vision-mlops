@@ -29,18 +29,10 @@ class TriageQueue:
     """Priority review queue sorting observations by uncertainty score.
 
     Why:
-        In continuous active learning workflows, human taxonomic verification is a finite,
-        expensive resource. Routing all ambiguous observations naively or using an un-indexed
-        list sort on every insertion incurs O(N log N) overhead per push and O(N) per pop.
-        Employing a binary max-heap (implemented via min-heap with negated priorities) guarantees
-        strict O(log N) worst-case time complexity for enqueuing and dequeuing, enabling
-        unbounded scaling as field observations stream into the staging tier.
+        In continuous active learning workflows, human taxonomic verification is a finite, expensive resource. Routing all ambiguous observations naively or using an un-indexed list sort on every insertion incurs O(N log N) overhead per push and O(N) per pop. Employing a binary max-heap (implemented via min-heap with negated priorities) guarantees strict O(log N) worst-case time complexity for enqueuing and dequeuing, enabling unbounded scaling as field observations stream into the staging tier.
 
     How:
-        Stores tuples of `(-uncertainty_score, sequence_counter, item)` inside a binary heap.
-        The negated score converts Python's default min-heap into a max-heap prioritizing highest
-        uncertainty. The monotonic integer counter breaks ties deterministically between observations
-        with identical uncertainty scores without requiring comparative operators on `TriageItem`.
+        Stores tuples of `(-uncertainty_score, sequence_counter, item)` inside a binary heap. The negated score converts Python's default min-heap into a max-heap prioritizing highest uncertainty. The monotonic integer counter breaks ties deterministically between observations with identical uncertainty scores without requiring comparative operators on `TriageItem`.
 
     Complexity:
         - push: O(log N) time complexity.

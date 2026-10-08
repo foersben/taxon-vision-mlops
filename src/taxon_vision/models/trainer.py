@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: MIT
 """Rapid linear head training and automated hyperparameter optimization with Optuna and MLflow.
 
-This module acts as a backwards-compatible facade for the `taxon_vision.models.training` package.
-Please see the individual modules in `taxon_vision.models.training` for underlying implementations.
+This module acts as a backwards-compatible facade for the `taxon_vision.models.training` package. Please see the individual modules in `taxon_vision.models.training` for underlying implementations.
 """
 
 import sys

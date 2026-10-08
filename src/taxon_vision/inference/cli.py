@@ -1,6 +1,13 @@
 # SPDX-FileCopyrightText: 2026 Benjamin Förster
 # SPDX-License-Identifier: MIT
-"""CLI entrypoint for running species inference."""
+"""CLI entrypoint for running species inference.
+
+Usage Examples:
+    - Run inference on a single image: `python -m taxon_vision.inference.cli data/sample/406185885_taxon_47120.jpg`
+    - Run inference on multiple images: `python -m taxon_vision.inference.cli data/sample/`
+    - Run inference on all images in a directory: `python -m taxon_vision.inference.cli data/sample/`
+    - Run inference on all images in a directory: `python -m taxon_vision.inference.cli data/sample/`
+"""
 
 from __future__ import annotations
 

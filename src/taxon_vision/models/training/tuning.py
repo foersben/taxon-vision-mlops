@@ -25,12 +25,7 @@ class HyperparameterObjective:
     """Optuna objective function evaluating candidate hyperparameters on cached embeddings.
 
     Why:
-        Grid and random searches scale exponentially with the number of hyperparameters and
-        waste compute exploring unpromising regions of hyperparameter space. Bayesian optimization
-        with Tree-structured Parzen Estimators (TPE) constructs probabilistic models of the objective
-        function p(x|y), focusing search effort on high-performing configurations. Coupling TPE
-        with Asynchronous Successive Halving (ASHA) pruning allows aborting underperforming trials
-        within 2 epochs, reducing total tuning duration by 3-5x.
+        Grid and random searches scale exponentially with the number of hyperparameters and waste compute exploring unpromising regions of hyperparameter space. Bayesian optimization with Tree-structured Parzen Estimators (TPE) constructs probabilistic models of the objective function p(x|y), focusing search effort on high-performing configurations. Coupling TPE with Asynchronous Successive Halving (ASHA) pruning allows aborting underperforming trials within 2 epochs, reducing total tuning duration by 3-5x.
 
     How:
         1. Samples learning rate, weight decay, dropout rate, and Class-Balanced beta from prior distributions.

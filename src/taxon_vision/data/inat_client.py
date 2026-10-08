@@ -14,17 +14,10 @@ class INatAPIClient:
     """Asynchronous HTTP client adhering to strict iNaturalist API rate limits.
 
     Why:
-        The iNaturalist API v1 imposes a strict terms-of-use rate limit of 60 requests
-        per minute (1 request/second) with aggressive IP throttling and bans for abusive
-        burst traffic. Ingesting training metadata dynamically requires an asynchronous client
-        that enforces request spacing, filters exclusively for 'research' quality-grade
-        observations, and converts thumbnail URLs into standardized medium-resolution images.
+        The iNaturalist API v1 imposes a strict terms-of-use rate limit of 60 requests per minute (1 request/second) with aggressive IP throttling and bans for abusive burst traffic. Ingesting training metadata dynamically requires an asynchronous client that enforces request spacing, filters exclusively for 'research' quality-grade observations, and converts thumbnail URLs into standardized medium-resolution images.
 
     How:
-        Calculates minimum request delay (60.0 / max_requests_per_minute) and awaits an
-        `asyncio.sleep` throttle before dispatching GET requests via `httpx.AsyncClient`.
-        Filters query parameters to mandate research-grade community identifications and
-        presence of photographic evidence, extracting licensing and attribution metadata.
+        Calculates minimum request delay (60.0 / max_requests_per_minute) and awaits an `asyncio.sleep` throttle before dispatching GET requests via `httpx.AsyncClient`. Filters query parameters to mandate research-grade community identifications and presence of photographic evidence, extracting licensing and attribution metadata.
 
     Attributes:
         delay_seconds: Precomputed delay between sequential requests in seconds.
@@ -44,16 +37,11 @@ class INatAPIClient:
         """Fetch verified research-grade observations for a target taxon.
 
         Why:
-            Biological training data must maintain high label fidelity. By querying exclusively
-            for `quality_grade=research`, we ensure that community taxonomists have reached
-            consensus on the organism's species identification. Upgrading image URLs from
-            `square` (75x75 thumbnails) to `medium` (500px longest dimension) provides sufficient
-            spatial resolution for neural feature extraction.
+            Biological training data must maintain high label fidelity. By querying exclusively for `quality_grade=research`, we ensure that community taxonomists have reached consensus on the organism's species identification. Upgrading image URLs from `square` (75x75 thumbnails) to `medium` (500px longest dimension) provides sufficient spatial resolution for neural feature extraction.
 
         How:
             1. Enforces asynchronous rate limiting via `await asyncio.sleep(self.delay_seconds)`.
-            2. Issues an HTTP GET request to `/observations` with `taxon_id`, `quality_grade=research`,
-               and `has[]=photos`.
+            2. Issues an HTTP GET request to `/observations` with `taxon_id`, `quality_grade=research`, and `has[]=photos`.
             3. Validates HTTP response status code via `raise_for_status()`.
             4. Parses JSON response and filters observations with valid photo records.
             5. Replaces square thumbnail URL segments with medium resolution locators.

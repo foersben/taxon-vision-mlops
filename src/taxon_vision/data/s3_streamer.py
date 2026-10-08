@@ -20,18 +20,10 @@ class S3ImageStreamer:
     """Stream imagery directly from open cloud buckets without local disk explosion.
 
     Why:
-        Global biodiversity datasets (e.g. iNaturalist on AWS Open Data) exceed hundreds
-        of gigabytes or terabytes in raw image storage. Downloading entire datasets locally
-        before training causes storage exhaustion, slow provisioning cycles, and high disk I/O.
-        Streaming images in memory directly from remote S3 presigned URLs via HTTP connection
-        pooling bounds local disk footprint to zero while avoiding RAM exhaustion through
-        lazy generator evaluation.
+        Global biodiversity datasets (e.g. iNaturalist on AWS Open Data) exceed hundreds of gigabytes or terabytes in raw image storage. Downloading entire datasets locally before training causes storage exhaustion, slow provisioning cycles, and high disk I/O. Streaming images in memory directly from remote S3 presigned URLs via HTTP connection pooling bounds local disk footprint to zero while avoiding RAM exhaustion through lazy generator evaluation.
 
     How:
-        Loads the tabular Parquet manifest into memory using Apache Arrow / Polars, extracts
-        observation UUIDs, taxon IDs, and image URLs, and lazily streams byte streams using
-        persistent HTTP connections via `httpx.Client`. Converts inbound buffers into standardized
-        RGB PIL Image instances on-the-fly.
+        Loads the tabular Parquet manifest into memory using Apache Arrow / Polars, extracts observation UUIDs, taxon IDs, and image URLs, and lazily streams byte streams using persistent HTTP connections via `httpx.Client`. Converts inbound buffers into standardized RGB PIL Image instances on-the-fly.
 
     Attributes:
         manifest_path: Filesystem path to the Parquet manifest containing image URLs.
@@ -42,12 +34,10 @@ class S3ImageStreamer:
         """Initialize the S3 image streaming interface from a Parquet manifest.
 
         Why:
-            Reads metadata using columnar Parquet format to enable fast projected queries
-            without parsing uncompressed text or CSV files.
+            Reads metadata using columnar Parquet format to enable fast projected queries without parsing uncompressed text or CSV files.
 
         How:
-            Resolves manifest path, asserts file existence, and loads columnar tables via
-            `polars.read_parquet`.
+            Resolves manifest path, asserts file existence, and loads columnar tables via `polars.read_parquet`.
 
         Args:
             manifest_path: Path to the Parquet manifest file containing image URLs.
@@ -65,16 +55,10 @@ class S3ImageStreamer:
         """Lazily yield streamed PIL images directly from remote S3 URLs.
 
         Why:
-            Executing deep learning training or representation extraction without downloading
-            the entire dataset prevents disk saturation and enables training on edge or memory-constrained
-            workstations. Yielding a lazy generator ensures only one image buffer exists in RAM
-            at any given instant per worker.
+            Executing deep learning training or representation extraction without downloading the entire dataset prevents disk saturation and enables training on edge or memory-constrained workstations. Yielding a lazy generator ensures only one image buffer exists in RAM at any given instant per worker.
 
         How:
-            Iterates across dictionary records from the manifest up to the specified limit.
-            Maintains an open `httpx.Client` session with connection pooling, issues HTTP GET requests,
-            validates status codes via `raise_for_status()`, decodes binary buffers into PIL Images,
-            and normalizes color modes to 3-channel RGB.
+            Iterates across dictionary records from the manifest up to the specified limit. Maintains an open `httpx.Client` session with connection pooling, issues HTTP GET requests, validates status codes via `raise_for_status()`, decodes binary buffers into PIL Images, and normalizes color modes to 3-channel RGB.
 
         Args:
             limit: Optional upper bound on the number of images to yield from the manifest.
@@ -108,12 +92,10 @@ def main() -> None:
     """CLI entrypoint to test and stream images from the Parquet manifest.
 
     Why:
-        Provides developers with an interactive diagnostic utility to verify S3 network
-        connectivity, inspect remote image dimensions, and save small test batches locally.
+        Provides developers with an interactive diagnostic utility to verify S3 network connectivity, inspect remote image dimensions, and save small test batches locally.
 
     How:
-        Parses `--manifest`, `--limit`, and optional `--out` directory arguments, initializes
-        `S3ImageStreamer`, and iterates through the generator logging observation metadata.
+        Parses `--manifest`, `--limit`, and optional `--out` directory arguments, initializes `S3ImageStreamer`, and iterates through the generator logging observation metadata.
     """
     import argparse
     import sys
