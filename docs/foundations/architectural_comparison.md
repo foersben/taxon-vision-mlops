@@ -10,7 +10,7 @@ generated: {by: process:docs-librarian, at: "2026-10-06T12:00:00Z"}
 verified: {by: process:docs-librarian, at: "2026-10-06T12:00:00Z"}
 sources:
   - resource: "docs/Species identification.pdf"
-  - resource: "docs/.archive/project_plan_mlops_roadmap.md"
+  - resource: "docs/.archive/taxon_vision_mlops_master_plan.md"
   - resource: "docs/latex/strategy_report/strategy_report.pdf"
 ---
 
