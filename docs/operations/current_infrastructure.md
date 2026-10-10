@@ -256,7 +256,7 @@ two-layer CI architecture:
   continue to run on ARC runner pods. This layer is free, fast, and already in place.
 * **Layer 2 - Jenkins (heavy compute, planned):** On merge to `main`, GitHub Actions fires
   a webhook to a self-hosted Jenkins instance running on the bare-metal cluster. Jenkins
-  then dispatches isolated Kubernetes pods for each pipeline stage:
+  then dispatches ephemeral agent pods on Kubernetes/k3s using RBAC ServiceAccount (`jenkins-agent-sa`) for each pipeline stage:
     * `Ingest` - CPU pod for DVC data pull and dataset hash extraction.
     * `Train` - GPU pod executing the stripped `run_training_pipeline()` (pure ML, no
       promotion logic).

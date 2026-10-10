@@ -41,10 +41,15 @@ For workloads that do not require real-time responsiveness, we can implement a n
 * **Job Serialization:** Instead of deploying long-running pods, workloads are submitted as discrete Jobs to a central queue. The queue manager evaluates the available cluster resources. If an ARC runner is executing a deployment, a newly submitted Training job will simply wait patiently in the queue.
 * **Limitations:** While this elegantly solves contention between backend tasks (like preventing CI/CD pipelines and Model Training from colliding), it is fundamentally incompatible with a live Web API. Users expect a web interface to load in milliseconds, not to wait hours for a training run to finish.
 
+## Fallback Strategy for Development
+
+For environments lacking GPU hardware (such as local development machines), workloads are configured with a fallback to CPU emulation. This allows the API and pipelines to function gracefully, albeit at higher latencies, without failing instantly on missing CUDA drivers.
+
 ## The Hybrid Recommendation
 
 To satisfy the competing demands of high-throughput training, agile CI/CD, and real-time user inference on a single GPU, we will adopt a hybrid architecture:
 
-1. **Enable Time-Slicing:** Configure the `k3s` NVIDIA plugin for Time-Slicing, allowing the Web API to coexist permanently with background tasks.
+1. **Enable Time-Slicing:** Configure the `k3s` NVIDIA plugin for Time-Slicing, allowing the Web API to coexist permanently with background tasks via standard Kubernetes GPU resource allocation (`nvidia.com/gpu: 1`).
 2. **Enforce VRAM Fractions:** Hardcode `torch.cuda.set_per_process_memory_fraction` in the model engineering pipelines, paired with ultra-light ONNX quantization for the FastAPI endpoints.
 3. **Queue Heavy Backends:** Implement Kueue exclusively for batch jobs. This ensures that while the Web API is always alive via Time-Slicing, multiple heavy backend tasks (e.g., Training vs CI/CD Runners) do not crash each other, but instead queue up politely.
+4. **Node Isolation:** Configure node taints and tolerations for dedicated ML worker nodes to ensure regular non-ML pods do not accidentally schedule onto scarce GPU resources.

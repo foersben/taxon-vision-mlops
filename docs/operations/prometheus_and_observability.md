@@ -14,6 +14,20 @@ verified: {by: process:scaffold-init, at: "2026-10-02T10:00:00Z"}
 
 Tracks inference latency, prediction counts by taxon, conformal set size distributions, and human referral rates in real time.
 
+## Prometheus Metrics Specification
+
+The following metrics are exposed to track system health, uncertainty, and performance:
+
+* **`inference_latency_seconds_bucket`:** Histogram metric capturing the time taken to process an inference request. It allows calculation of p50, p95, and p99 latency percentiles to monitor adherence to latency budgets.
+* **`conformal_prediction_set_size_distribution`:** Histogram metric tracking the cardinality of prediction sets returned by the conformal predictor.
+* **`conformal_empty_set_total`:** Counter metric tracking occurrences where the conformal predictor returns an empty set (i.e. model is completely unsure).
+* **`ood_energy_score_distribution`:** Histogram metric tracking the energy scores for out-of-distribution detection.
+* **`taxonomic_triage_referred_total`:** Counter metric tracking predictions deferred for manual human triage.
+
+## Covariate and Concept Drift Detection
+
+To ensure models maintain performance in production over time, we employ real-time drift detection on latent vision embeddings. The system continuously evaluates statistical distance metrics such as **Wasserstein distance** and **Maximum Mean Discrepancy (MMD)** between incoming production data and the calibration set. Significant drift violations automatically trigger retraining DAGs to recalibrate the model.
+
 ## Accurate Prometheus Telemetry & Error Masking Resolution
 
 **What we chose:**
