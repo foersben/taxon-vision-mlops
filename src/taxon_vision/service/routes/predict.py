@@ -10,15 +10,14 @@ import anyio
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from PIL import UnidentifiedImageError
 
+from taxon_vision.config import get_settings
 from taxon_vision.monitoring.telemetry import PREDICTION_COUNTER
 from taxon_vision.service.inference import load_taxa_catalog, run_prediction
 from taxon_vision.service.schemas import PredictionResponse, TaxonPrediction
-from taxon_vision.uncertainty.conformal import ConformalPredictionEngine
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Inference"])
-conformal_engine = ConformalPredictionEngine(q_hat=0.85, alpha=0.05, k_max=3)
 
 
 def _build_live_prediction(pred: dict[str, Any], latency_ms: float) -> PredictionResponse:
@@ -66,6 +65,7 @@ def _build_live_prediction(pred: dict[str, Any], latency_ms: float) -> Predictio
                 )
             )
 
+    settings = get_settings()
     pred_set = [str(s) for s in pred["conformal_set"]]
     is_ood = bool(pred.get("is_ood", False))
 
@@ -73,7 +73,7 @@ def _build_live_prediction(pred: dict[str, Any], latency_ms: float) -> Predictio
         top_prediction=top,
         top_candidates=candidates,
         conformal_prediction_set=pred_set,
-        is_conformal_ambiguous=len(pred_set) > 3 or len(pred_set) == 0,
+        is_conformal_ambiguous=len(pred_set) > settings.conformal.k_max or len(pred_set) == 0,
         is_ood_flagged=is_ood,
         requires_human_review=bool(pred["requires_human_review"]),
         latency_ms=round(latency_ms, 2),

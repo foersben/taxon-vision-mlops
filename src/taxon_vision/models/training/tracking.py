@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import mlflow
-import torch.nn as nn
+from torch import nn
 
 from taxon_vision.config import get_settings
 

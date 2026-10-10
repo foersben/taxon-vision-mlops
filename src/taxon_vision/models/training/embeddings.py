@@ -5,10 +5,9 @@
 from __future__ import annotations
 
 import torch
-import torch.nn as nn
-import torch.optim as optim
 from sklearn.metrics import average_precision_score, f1_score
 from sklearn.preprocessing import label_binarize
+from torch import nn, optim
 
 from taxon_vision.models.training.types import EmbeddingSplit, HeadTrainingConfig
 

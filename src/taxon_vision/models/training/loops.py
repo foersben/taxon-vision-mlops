@@ -7,8 +7,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 import torch
-import torch.nn as nn
-import torch.optim as optim
+from torch import nn, optim
 
 from taxon_vision.models.head import TaxonClassifier
 

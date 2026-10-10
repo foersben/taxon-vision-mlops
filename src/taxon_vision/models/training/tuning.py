@@ -4,14 +4,14 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 from typing import Any
 
 import mlflow
 import optuna
-import torch.nn as nn
-import torch.optim as optim
+from torch import nn, optim
 
 from taxon_vision.config import get_settings
 from taxon_vision.models.loss import ClassBalancedLoss
@@ -196,10 +196,8 @@ class HyperparameterObjective:
 
         finally:
             if active_run is not None:
-                try:
+                with contextlib.suppress(Exception):
                     mlflow.end_run()
-                except Exception:
-                    pass
 
 
 def _setup_mlflow(cfg: TuningConfig) -> bool:
