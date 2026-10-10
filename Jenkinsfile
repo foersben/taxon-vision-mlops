@@ -138,6 +138,38 @@ spec:
       }
     }
 
+    stage('Model Training & Checkpoint (GPU)') {
+      when {
+        branch 'main'
+      }
+      steps {
+        container('ml-runner') {
+          sh '''
+            export PATH="/root/.pixi/bin:$PATH"
+            echo ">>> Executing automated model training on main branch..."
+            # Install GPU-enabled dev environment
+            pixi install --frozen -e dev
+
+            # Pull latest DVC manifests and datasets from DagsHub
+            pixi run --frozen -e dev dvc pull || true
+
+            # Execute classification head training with DINOv3 backbone and VRAM limit
+            pixi run --frozen -e dev python -m taxon_vision.models.trainer \
+              --extractor dinov3 \
+              --epochs 15 \
+              --batch-size 64 \
+              --cuda-memory-fraction 0.7
+
+            # Re-export fresh ONNX computational graph
+            pixi run --frozen -e dev python -m taxon_vision.inference.onnx_exporter || true
+
+            # Push freshly trained weights and ONNX artifacts to DagsHub DVC remote
+            pixi run --frozen -e dev dvc push models/checkpoints/head.pt models/checkpoints/model.onnx || true
+          '''
+        }
+      }
+    }
+
     stage('Deploy to Kubernetes') {
       when {
         anyOf {

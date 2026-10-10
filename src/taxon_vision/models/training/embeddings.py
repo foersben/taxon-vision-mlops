@@ -4,12 +4,17 @@
 
 from __future__ import annotations
 
+import copy
+import logging
+
 import torch
 from sklearn.metrics import average_precision_score, f1_score
 from sklearn.preprocessing import label_binarize
 from torch import nn, optim
 
 from taxon_vision.models.training.types import EmbeddingSplit, HeadTrainingConfig
+
+logger = logging.getLogger(__name__)
 
 
 def _compute_additional_metrics(val_logits: torch.Tensor, val_lbl: torch.Tensor) -> tuple[float, float]:
@@ -104,6 +109,16 @@ def train_head_on_cached_embeddings(
     val_emb = data.val_embeddings.to(device)
     val_lbl = data.val_labels.to(device)
 
+    scheduler = (
+        optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="max", factor=0.5, patience=cfg.reduce_lr_patience)
+        if cfg.reduce_lr_patience is not None
+        else None
+    )
+
+    best_pr_auc = -1.0
+    best_weights: dict[str, torch.Tensor] | None = None
+    patience_counter = 0
+
     for epoch in range(cfg.epochs):
         head.train()
         permutation = torch.randperm(num_samples, device=device)
@@ -141,9 +156,32 @@ def train_head_on_cached_embeddings(
         history["val_f1"].append(val_f1_val)
         history["val_pr_auc"].append(val_pr_auc_val)
 
+        if scheduler is not None:
+            scheduler.step(val_pr_auc_val)
+
+        # Track best model checkpoint
+        if val_pr_auc_val > best_pr_auc:
+            best_pr_auc = val_pr_auc_val
+            best_weights = copy.deepcopy(head.state_dict())
+            patience_counter = 0
+        else:
+            patience_counter += 1
+
         if cfg.pruner_callback is not None:
             should_stop = cfg.pruner_callback(epoch, val_pr_auc_val)
             if should_stop:
                 break
+
+        if cfg.early_stopping_patience is not None and patience_counter >= cfg.early_stopping_patience:
+            logger.info(
+                "Early stopping triggered at epoch %d: val_pr_auc did not improve for %d epochs.",
+                epoch,
+                cfg.early_stopping_patience,
+            )
+            break
+
+    if cfg.restore_best_weights and best_weights is not None:
+        head.load_state_dict(best_weights)
+        logger.debug("Restored best model weights with val_pr_auc: %.4f", best_pr_auc)
 
     return history
