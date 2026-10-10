@@ -4,3 +4,8 @@ ingestion:
     - 47119  # Bombus (Bumble bees)
     - 47114  # Vespidae (Yellowjackets & Hornets)
   per_page: 200 # Request 200 images per taxon at once.
+
+training:
+  epochs: 5
+  extractor: "mobilenetv4_conv_small"
+  batch_size: 32

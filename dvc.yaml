@@ -11,3 +11,14 @@ stages:
         - ingestion.per_page
     outs:
       - data/manifests
+  train:
+    cmd: pixi run --frozen -e dev python -m taxon_vision.models.trainer --epochs 5 --extractor mobilenetv4_conv_small
+    deps:
+      - data/manifests
+      - src/taxon_vision/models/
+    params:
+      - config/params.yaml:
+        - training.epochs
+        - training.extractor
+    outs:
+      - models/checkpoints/head.pt

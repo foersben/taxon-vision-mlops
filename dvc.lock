@@ -9,12 +9,12 @@ stages:
       size: 2833
     - path: src/taxon_vision/data/inat_client.py
       hash: md5
-      md5: 01a95251d93b68e69b4c222f6b501a12
-      size: 2427
+      md5: 6f925d7c31fd3d16da8bc5640ca4c470
+      size: 4834
     - path: src/taxon_vision/data/license_filter.py
       hash: md5
-      md5: 7a12bbdb07fec741c6502edc52451d7c
-      size: 2647
+      md5: 9d53e65484b212283079875587a0dca3
+      size: 5367
     params:
       config/params.yaml:
         ingestion.per_page: 200
@@ -25,6 +25,29 @@ stages:
     outs:
     - path: data/manifests
       hash: md5
-      md5: d09f5518539b0c2c99bf0cf3ef4457d4.dir
-      size: 10748
+      md5: e1ead79bbe4bac3b0b80cf0d11a68d6b.dir
+      size: 10745
       nfiles: 1
+  train:
+    cmd: pixi run --frozen -e dev python -m taxon_vision.models.trainer --epochs
+      5 --extractor mobilenetv4_conv_small
+    deps:
+    - path: data/manifests
+      hash: md5
+      md5: e1ead79bbe4bac3b0b80cf0d11a68d6b.dir
+      size: 10745
+      nfiles: 1
+    - path: src/taxon_vision/models/
+      hash: md5
+      md5: 7a411cd200a5be88c9970f95dc6f6e86.dir
+      size: 174131
+      nfiles: 31
+    params:
+      config/params.yaml:
+        training.epochs: 5
+        training.extractor: mobilenetv4_conv_small
+    outs:
+    - path: models/checkpoints/head.pt
+      hash: md5
+      md5: 2c1c95064274f3dfc3aaf77cdbc6daad
+      size: 52678

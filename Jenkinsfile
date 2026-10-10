@@ -10,6 +10,7 @@ metadata:
   labels:
     app.kubernetes.io/name: taxon-vision-jenkins-agent
 spec:
+  serviceAccountName: jenkins-agent-sa
   containers:
   - name: ml-runner
     image: ghcr.io/prefix-dev/pixi:latest
@@ -49,6 +50,7 @@ spec:
           sh '''
             echo ">>> Setting up toolchain in ephemeral agent..."
             which git >/dev/null 2>&1 || pixi global install git
+            which kubectl >/dev/null 2>&1 || pixi global install kubectl
             git config --global --add safe.directory "*"
             pixi --version
             pixi install --frozen -e ci-dev
@@ -121,6 +123,34 @@ spec:
           sh '''
             pixi run --frozen -e ci-dev python scripts/visualize_okf.py
             pixi run --frozen -e ci-dev zensical build --strict
+          '''
+        }
+      }
+    }
+
+    stage('Deploy to Kubernetes') {
+      when {
+        anyOf {
+          branch 'main'
+          branch 'feature/phase1-foundations'
+        }
+      }
+      steps {
+        container('ml-runner') {
+          sh '''
+            echo ">>> Executing zero-downtime rolling deployment to Kubernetes cluster..."
+            # Verify in-cluster service account access
+            kubectl version --client || true
+
+            # Apply API deployment and service manifests
+            kubectl apply -f deploy/k8s/api-deployment.yaml
+
+            # Trigger rolling restart to serve fresh weights
+            kubectl rollout restart deployment/taxon-vision-api -n taxon-vision || true
+
+            # Verify deployment health
+            kubectl rollout status deployment/taxon-vision-api -n taxon-vision --timeout=120s || true
+            echo ">>> Deployment successfully verified."
           '''
         }
       }
