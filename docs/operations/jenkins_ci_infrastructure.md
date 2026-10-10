@@ -453,7 +453,7 @@ The provisioned Kubernetes pod instantiates two containers sharing network and f
 
 #### Pipeline Stage Breakdown
 
-* **Prepare Toolchain:** Checks for Git availability, installs a standalone Git binary via `pixi global install git` into `/root/.pixi/bin`, registers `safe.directory "*"` across container mount boundaries, and executes `pixi install --frozen -e ci-dev`.
+* **Prepare Toolchain:** Checks for Git and kubectl availability, installs standalone binaries via Pixi (`git`, `kubernetes-client`), registers `safe.directory "*"` across container mount boundaries, and executes `pixi install --frozen -e ci-dev`.
 * **Static Quality & Invariants:** Runs Ruff formatting/linting, MyPy strict type analysis, open license compliance auditing, and OKF knowledge graph validation concurrently in parallel blocks across CPU cores.
 * **Unit Tests & Coverage:** Executes the full unit test suite, enforcing a strict 80% line coverage threshold (`--cov-fail-under=80`).
 * **Integration & Conformal Invariants:** Validates FastAPI service endpoints and evaluates mathematical error bounds for split conformal prediction.

@@ -49,7 +49,8 @@ spec:
           sh '''
             echo ">>> Setting up toolchain in ephemeral agent..."
             which git >/dev/null 2>&1 || pixi global install git
-            which kubectl >/dev/null 2>&1 || pixi global install kubectl
+            which kubectl >/dev/null 2>&1 || pixi global install kubernetes-client
+            export PATH="/root/.pixi/bin:$PATH"
             git config --global --add safe.directory "*"
             pixi --version
             pixi install --frozen -e ci-dev
@@ -137,6 +138,7 @@ spec:
       steps {
         container('ml-runner') {
           sh '''
+            export PATH="/root/.pixi/bin:$PATH"
             echo ">>> Executing zero-downtime rolling deployment to Kubernetes cluster..."
             # Verify in-cluster service account access
             kubectl version --client || true
