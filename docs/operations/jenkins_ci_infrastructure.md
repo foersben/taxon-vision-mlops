@@ -498,9 +498,11 @@ The provisioned Kubernetes pod instantiates two containers sharing network and f
 
 * **Prepare Toolchain:** Checks for Git and kubectl availability, installs standalone binaries via Pixi (`git`, `kubernetes-client`), registers `safe.directory "*"` across container mount boundaries, and executes `pixi install --frozen -e ci-dev`.
 * **Static Quality & Invariants:** Runs Lint (`ruff`) formatting/linting, Type Check (`mypy`) strict type analysis, open license compliance auditing (License Audit), and OKF knowledge graph validation concurrently in parallel blocks across CPU cores.
-* **Unit Tests & Coverage:** Executes the full unit test suite, enforcing a strict 80% line coverage threshold (`--cov-fail-under=80`).
+* **Unit Tests & Coverage:** Executes the full unit test suite, enforcing a strict 78% line coverage threshold (`--cov-fail-under=78`).
 * **Integration & Conformal Invariants:** Validates FastAPI service endpoints and evaluates mathematical error bounds for split conformal prediction (Conformal Coverage Verification).
 * **Documentation Strict Build:** Generates the OKF knowledge graph visualizer (`docs/viz.html`) and executes `zensical build --strict` to verify syntax and reference integrity (strict Zensical build).
+* **Model Training & Checkpoint (GPU - main branch only):** When triggered on `main` (or release tags), executes PyTorch model training directly on `hive-mind` using a dedicated GPU time-slicing slot. Synchronizes DVC datasets from DagsHub S3 (`s3://dvc`), enforces `TAXON_CUDA_MEMORY_FRACTION=0.7`, trains the head with early stopping and best weight restoration, exports `models/classifier_head.onnx`, and pushes updated DVC hashes.
+* **Deployment Rollout (main branch only):** Applies Kubernetes manifests and triggers `kubectl rollout restart deployment/taxon-vision-api -n taxon-vision`, awaiting readiness probe verification with zero downtime.
 * **Workspace Cleanup (`cleanWs()`):** Wipes the temporary checkout directory before pod termination.
 
 ---
@@ -530,12 +532,12 @@ The bare-metal host utilizes Full Disk Encryption (LUKS). Following a system reb
 
 ---
 
-## 8. Planned CI/CD Evolution: Multi-Stage Hybrid Scheduling
+## 8. Multi-Stage Hybrid Scheduling Architecture
 
-As outlined in [gpu_resource_scheduling.md](gpu_resource_scheduling.md) and [current_infrastructure.md](current_infrastructure.md), the CI/CD architecture is designed to evolve into a multi-tier pipeline upon merge to `main`:
+As outlined in [gpu_resource_scheduling.md](gpu_resource_scheduling.md) and [current_infrastructure.md](current_infrastructure.md), the CI/CD architecture operates a multi-tier pipeline upon merge to `main`:
 
-* **Stage 1 - Ingest (CPU):** Dispatches a lightweight CPU pod to pull dataset updates and compute cryptographic hashes via DVC.
-* **Stage 2 - Train (GPU via Time-Slicing):** Provisions a dedicated GPU pod configured via NVIDIA Device Plugin Time-Slicing (`replicas: 4`), allocating compute cycles without starving web inference services. Training scripts enforce `torch.cuda.set_per_process_memory_fraction(0.7)` to prevent VRAM exhaustion.
-* **Stage 3 - Evaluate (CPU):** Queries the MLflow tracking registry on DagsHub to evaluate PR-AUC and Top-1 accuracy against the current Production model candidate.
-* **Stage 4 - Promote (CPU):** Assigns the `Challenger` or `Production` model alias in the MLflow model registry.
-* **Stage 5 - Deploy (CPU):** Issues a rolling restart of the FastAPI Kubernetes deployment, refreshing ONNX runtime inference engines.
+* **Stage 1 - Ingest & Cache (CPU):** Ephemeral CPU runner mounts NVMe Rattler cache, checks out code, pulls dataset updates, and verifies cryptographic hashes via DVC.
+* **Stage 2 - Static Gates & Unit Testing (CPU):** Concurrent Ruff linting, MyPy static analysis, open-license audit, OKF validation, and pytest coverage execution across 8 CPU cores.
+* **Stage 3 - Conformal Invariant Assertions (CPU):** Formally asserts that empirical coverage of Split Conformal Prediction satisfies $1 - \alpha \ge 0.95$ on holdout splits.
+* **Stage 4 - Train & Export (GPU via Time-Slicing):** Bare-metal runner on `hive-mind` claims 1 of 4 NVIDIA time-slicing slots, enforcing `TAXON_CUDA_MEMORY_FRACTION=0.7` to prevent VRAM starvation. Executes training (`pixi run -e dev python -m taxon_vision.models.training.runner`), exports INT8/FP32 ONNX graph, logs to DagsHub MLflow, and pushes updated DVC pointer.
+* **Stage 5 - Zero-Downtime Deploy (CPU):** Dispatches rolling update to k3s via `kubectl rollout restart deployment/taxon-vision-api -n taxon-vision`. In-flight queries continue uninterrupted until newly warmed ONNX pods clear readiness probes.

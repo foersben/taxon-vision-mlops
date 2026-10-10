@@ -281,6 +281,8 @@ The system implements a production two-layer CI/CD architecture:
     * `Prepare Toolchain` - Provisions standalone `git` and `kubernetes-client` via Pixi, mounting the host NVMe Rattler cache for sub-second dependency resolution.
     * `Static Quality & Invariants` - Executes Ruff linting, MyPy type checks, license compliance auditing, and OKF graph validation concurrently.
     * `Unit & Integration Tests` - Runs pytest suites with 78% line coverage threshold and verifies split conformal coverage error bounds.
+    * `Documentation Strict Build` - Validates OKF knowledge graph and verifies doc integrity via `zensical build --strict`.
+    * `Model Training & Checkpoint (GPU)` - Runs on `main` using bare-metal GPU time-slicing on `hive-mind`, pulling DVC datasets, training with early stopping and best weight restoration, exporting ONNX, and logging to DagsHub MLflow.
     * `Deployment Rollout` - Automatically applies [deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) and monitors zero-downtime rolling update status in the `taxon-vision` namespace.
 
 ## Outstanding Implementation Tasks
@@ -288,10 +290,9 @@ The system implements a production two-layer CI/CD architecture:
 * **Data Pipeline Execution:** Actual execution of DVC pipelines to ingest and transform iNaturalist/GBIF DarwinCore observation data.
 * **Model Training & Benchmarking:** Implementation of the multi-backbone Pareto benchmarking (`BioCLIP-2`, `DINOv3`, `MobileNetV4`) as defined in the strategy report.
 * **Inference Optimisation:** ONNX Runtime export with static INT8 ONNX PTQ for low-latency inference.
-* **Uncertainty Calibration:** Implementation of Split Conformal Prediction for coverage bounds and OOD detection logic.
-* **Web Service & Dashboard:** Development of the unified FastAPI machine REST API and the server-rendered Jinja2/HTMX operator dashboard.
+* **Uncertainty Calibration:** Verification of Split Conformal Prediction coverage bounds and OOD detection logic on full observation splits.
+* **Web Service & Dashboard:** Validation and enhancement of the unified FastAPI machine REST API and the server-rendered Jinja2/HTMX operator dashboard.
 * **Observability Stack:** Deployment of the Prometheus telemetry stack and Grafana dashboards for monitoring concept drift and latency budgets.
-* **Jenkins Integration:** Deploy Jenkins on the bare-metal cluster, configure the Kubernetes plugin for pod-per-stage scheduling, and wire the GitHub Actions webhook trigger on `main` merge. See the planned transition section above.
 
 ## Local Development Stack
 

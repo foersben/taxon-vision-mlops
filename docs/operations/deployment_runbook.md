@@ -158,13 +158,23 @@ This reserves 30% (4.8 GB) of VRAM for live ONNX Runtime FastAPI inference and h
 
 ## Section 8: Automated Kubernetes Continuous Deployment Pipeline
 
-When commits are pushed to `main` or `feature/phase1-foundations`, the declarative pipeline in [Jenkinsfile](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/Jenkinsfile) executes an automated zero-downtime rolling update:
+When commits are pushed to `main` or release tags, the declarative pipeline in [Jenkinsfile](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/Jenkinsfile) executes automated verification, remote model training, and zero-downtime rolling updates.
+
+> [!IMPORTANT]
+> **Zero Local Training Paradigm:** The local developer workstation has zero GPU allocation for model training. All PyTorch training loops, Optuna sweeps, and ONNX graph exports are performed remotely by the bare-metal CI runner on `hive-mind`, ensuring full reproducibility and eliminating local hardware strain.
 
 ### Pipeline Execution Flow
 
 * **Step 1 (Toolchain Provisioning):** The container runner installs `kubernetes-client` (from conda-forge, exposing `kubectl`) and standalone `git` into `/root/.pixi/bin`.
 * **Step 2 (Verification Gates):** Executes Ruff linting, MyPy type checks, License compliance audits, OKF validation, unit tests (with 78% line coverage threshold), integration tests, and strict Zensical build.
-* **Step 3 (Deployment Rollout):**
+* **Step 3 (GPU Model Training & Checkpoint - main branch only):**
+    * Binds to a bare-metal GPU runner slot on `hive-mind` using 1 of 4 NVIDIA time-slicing partitions.
+    * Pulls the latest versioned dataset from DagsHub DVC remote (`s3://dvc`).
+    * Sets `TAXON_CUDA_MEMORY_FRACTION=0.7` to prevent VRAM starvation of live services.
+    * Executes classification head training: `pixi run -e dev python -m taxon_vision.models.training.runner --epochs 15 --batch-size 64`.
+    * Serializes and exports the refreshed classification head to `models/classifier_head.onnx`.
+    * Pushes updated DVC pointers and logs metrics to DagsHub MLflow.
+* **Step 4 (Deployment Rollout):**
     * Applies [deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) using `jenkins-deployer-role` permissions.
     * Triggers zero-downtime rolling update: `kubectl rollout restart deployment/taxon-vision-api -n taxon-vision`.
     * Awaits readiness probe verification: `kubectl rollout status deployment/taxon-vision-api -n taxon-vision --timeout=120s`.
