@@ -66,6 +66,7 @@ async def predict_htmx(request: Request, file: Annotated[UploadFile, File(...)])
         "common_name": result["common_name"],
         "confidence": result["confidence"],
         "conformal_set": result["conformal_set"],
+        "is_ood": result["is_ood"],
         "requires_human_review": result["requires_human_review"],
         "latency_ms": result["latency_ms"],
     }

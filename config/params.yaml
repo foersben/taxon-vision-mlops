@@ -7,5 +7,5 @@ ingestion:
 
 training:
   epochs: 5
-  extractor: "mobilenetv4_conv_small"
+  extractor: "dinov3"
   batch_size: 32

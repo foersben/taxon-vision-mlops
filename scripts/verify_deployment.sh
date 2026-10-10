@@ -10,7 +10,7 @@ DEPLOYMENT="taxon-vision-api"
 SERVICE="taxon-vision-api"
 
 echo "=================================================================="
-echo "🌿 TaxonVision-MLOps Kubernetes Deployment Verification"
+echo "   TaxonVision-MLOps Kubernetes Deployment Verification"
 echo "=================================================================="
 
 # 1. Verify Deployment Rollout Status
@@ -37,7 +37,7 @@ echo "    Liveness Probe (/health): HTTP ${LIVENESS_STATUS}"
 echo "    Readiness Probe (/health/ready): HTTP ${READINESS_STATUS}"
 
 if [ "${LIVENESS_STATUS}" != "200" ] || [ "${READINESS_STATUS}" != "200" ]; then
-    echo "❌ ERROR: Health probes did not return HTTP 200 OK."
+    echo "   ERROR: Health probes did not return HTTP 200 OK."
     exit 1
 fi
 
@@ -50,5 +50,5 @@ METRICS_MATCH=$(curl -s "${TARGET_URL}/metrics" | grep -c "taxon_predictions_tot
 echo "    Prometheus metrics verified (${METRICS_MATCH} matches for taxon_predictions_total)"
 
 echo "=================================================================="
-echo "✅ DEPLOYMENT VERIFICATION PASSED: TaxonVision is operational!"
+echo "   DEPLOYMENT VERIFICATION PASSED: TaxonVision is operational!"
 echo "=================================================================="

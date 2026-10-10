@@ -13,12 +13,19 @@
     <div class="badges">
       {% for species in conformal_set %}
         <span class="badge">{{ species }}</span>
+      {% else %}
+        <span class="badge empty">∅ (Empty set - null coverage)</span>
       {% endfor %}
     </div>
   </div>
+  {% if is_ood %}
+    <div class="alert danger">
+      🛑 Out-Of-Distribution (OOD) Observation Detected (Helmholtz free energy exceeded threshold). Epistemic confidence compromised.
+    </div>
+  {% endif %}
   {% if requires_human_review %}
     <div class="alert warning">
-      ⚠️ High ambiguity or out-of-distribution signal. Flagged for expert review.
+      ⚠️ High ambiguity or out-of-distribution signal. Flagged for expert taxonomist triage.
     </div>
   {% endif %}
 </div>

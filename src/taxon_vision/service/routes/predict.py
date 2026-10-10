@@ -67,13 +67,14 @@ def _build_live_prediction(pred: dict[str, Any], latency_ms: float) -> Predictio
             )
 
     pred_set = [str(s) for s in pred["conformal_set"]]
+    is_ood = bool(pred.get("is_ood", False))
 
     return PredictionResponse(
         top_prediction=top,
         top_candidates=candidates,
         conformal_prediction_set=pred_set,
-        is_conformal_ambiguous=len(pred_set) > 3,
-        is_ood_flagged=False,
+        is_conformal_ambiguous=len(pred_set) > 3 or len(pred_set) == 0,
+        is_ood_flagged=is_ood,
         requires_human_review=bool(pred["requires_human_review"]),
         latency_ms=round(latency_ms, 2),
     )
