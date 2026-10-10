@@ -73,11 +73,12 @@ metadata:
     app.kubernetes.io/name: taxon-vision-api
     app.kubernetes.io/part-of: taxon-vision-mlops
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app.kubernetes.io/name: taxon-vision-api
   ports:
   - name: http
     port: 8000
     targetPort: 8000
+    nodePort: 30080
     protocol: TCP
