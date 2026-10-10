@@ -174,6 +174,11 @@ run-api:
 run:
 	@just run-api
 
+# Validate live Kubernetes deployment health, endpoints, and inference
+[group("app")]
+verify-deployment namespace="taxon-vision":
+	@bash scripts/verify_deployment.sh {{namespace}}
+
 # ── Documentation ───────────────────────────────────────────────────────────
 
 # Build Zensical documentation site
