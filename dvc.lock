@@ -39,15 +39,15 @@ stages:
       nfiles: 1
     - path: src/taxon_vision/models/
       hash: md5
-      md5: 7a411cd200a5be88c9970f95dc6f6e86.dir
-      size: 174131
+      md5: 6a2ef4f6175d585137a01862f7641a96.dir
+      size: 178708
       nfiles: 31
     params:
       config/params.yaml:
         training.epochs: 5
-        training.extractor: mobilenetv4_conv_small
+        training.extractor: dinov3
     outs:
     - path: models/checkpoints/head.pt
       hash: md5
-      md5: 2c1c95064274f3dfc3aaf77cdbc6daad
-      size: 52678
+      md5: 4ad8dd53fd46a1db2e4dbab78b038e90
+      size: 16838

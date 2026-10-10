@@ -42,6 +42,14 @@ spec:
     disableConcurrentBuilds(abortPrevious: true)
   }
 
+  environment {
+    DAGSHUB_TOKEN = credentials('dagshub-token')
+    AWS_ACCESS_KEY_ID = "${DAGSHUB_TOKEN}"
+    AWS_SECRET_ACCESS_KEY = "${DAGSHUB_TOKEN}"
+    MLFLOW_TRACKING_USERNAME = 'foersben'
+    MLFLOW_TRACKING_PASSWORD = "${DAGSHUB_TOKEN}"
+  }
+
   stages {
     stage('Prepare Toolchain') {
       steps {
@@ -54,6 +62,8 @@ spec:
             git config --global --add safe.directory "*"
             pixi --version
             pixi install --frozen -e ci-dev
+            echo ">>> Pulling DVC tracked datasets and model checkpoints from DagsHub..."
+            pixi run --frozen -e ci-dev dvc pull || echo "WARNING: DVC pull skipped or failed; continuing with workspace cache."
           '''
         }
       }
