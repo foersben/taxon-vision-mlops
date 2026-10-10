@@ -10,7 +10,7 @@ from taxon_vision.domain.license import AttributionRecord, OpenLicense
 
 
 class LicenseFilter:
-    """Enforces open licensing constraints and attribution retention on observation imagery.
+    """Filters images to ensure they have open licenses and photographer attribution.
 
     Why:
         Citizen science imagery (such as iNaturalist or GBIF media) is uploaded under diverse copyright licenses. Ingesting proprietary "All Rights Reserved" assets or unverified static domain scrapes into training datasets exposes production vision pipelines to copyright infringement and breaks open science reproducibility. TaxonVision strictly permits only open Creative Commons licenses (CC0, CC-BY, CC-BY-NC) and requires complete retention of contributor attribution records.

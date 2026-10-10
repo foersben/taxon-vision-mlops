@@ -60,6 +60,7 @@ venv/
 # Site documentation
 /site/
 site/
+docs/viz.html
 
 # Data & Model weights (DVC tracked)
 data/raw/

@@ -174,3 +174,4 @@ mlflow = { cmd = "mlflow server --backend-store-uri sqlite:///mlflow.db --defaul
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["D"]
 "scripts/**/*.py" = ["D"]
+"*.ipynb" = ["ALL"]

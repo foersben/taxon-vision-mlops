@@ -91,6 +91,7 @@ Home = "index.md"
 "Operations & Deployment" = [
     { "Chapter Overview" = "operations/index.md" },
     { "Current Infrastructure" = "operations/current_infrastructure.md" },
+    { "Jenkins CI/CD Infrastructure" = "operations/jenkins_ci_infrastructure.md" },
     { "GPU Resource Scheduling" = "operations/gpu_resource_scheduling.md" },
     { "Deployment Runbook" = "operations/deployment_runbook.md" },
     { "Prometheus Observability" = "operations/prometheus_and_observability.md" },

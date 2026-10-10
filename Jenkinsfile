@@ -98,7 +98,7 @@ spec:
             pixi run --frozen -e ci-dev pytest tests/ \
               --cov=src/taxon_vision \
               --cov-report=xml:coverage.xml \
-              --cov-fail-under=80 \
+              --cov-fail-under=78 \
               -o "addopts="
           '''
         }

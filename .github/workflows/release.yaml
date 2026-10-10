@@ -1,0 +1,67 @@
+name: Release & Distribution
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag (e.g. v0.1.0)"
+        required: true
+        type: string
+      draft:
+        description: "Create draft release"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  release:
+    if: false # job disabled
+    name: Build & Publish Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Pixi Environment (CPU ci-dev)
+        uses: prefix-dev/setup-pixi@v0.10.2
+        with:
+          environments: ci-dev
+
+      - name: Build Distribution Wheel
+        run: |
+          mkdir -p dist
+          pixi run --frozen -e ci-dev pip wheel --no-deps -w dist .
+
+      - name: Generate Checksums
+        working-directory: dist
+        run: |
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
+          name: Release ${{ github.event.inputs.tag_name || github.ref_name }}
+          draft: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || false }}
+          generate_release_notes: true
+          files: |
+            dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

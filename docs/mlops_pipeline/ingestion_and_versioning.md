@@ -12,6 +12,7 @@ sources:
   - resource: "docs/latex/strategy_report/strategy_report.pdf"
   - resource: "src/taxon_vision/data/s3_streamer.py"
   - resource: "src/taxon_vision/data/license_filter.py"
+  - resource: "dvc.yaml"
 ---
 
 # Ingestion Engine & Cryptographic Versioning
@@ -90,19 +91,75 @@ This 8.3 GB allocation consumes less than **$50\%$ of DagsHub's 20 GB free-tier 
 
 ---
 
-## 4. Content-Addressable Storage with DVC
+## 4. DVC Pipeline Topology & DagsHub Remote Storage
 
-Data Version Control (DVC) implements content-addressable storage over heavy assets:
+Data Version Control (DVC) and DagsHub establish the data management control plane for TaxonVision, combining cloud-backed content-addressable storage with deterministic pipeline DAG execution.
 
-1. DVC computes a unique SHA-256 cryptographic hash over the target Parquet manifest or exemplar directory.
-2. The binary data is pushed to the DagsHub S3-compatible remote storage bucket.
-3. A lightweight tracking pointer (`dataset_manifest.parquet.dvc`) containing the hash is committed to Git.
-4. When checking out historical commits, the DVC client resolves the SHA-256 hash from the pointer file and creates local filesystem reflinks or hardlinks in milliseconds.
+### 4.1 Remote Architecture & DagsHub S3 Integration
 
-```bash
-# Verify data integrity and pull remote cache
-pixi run -e dev dvc pull data/manifests/dataset_manifest.parquet.dvc
+DagsHub provisions a unified cloud control plane that mirrors the primary GitHub repository and hosts an S3-compatible content-addressable storage bucket:
+
+* **Remote Endpoint Configuration:** The repository connects to DagsHub via `.dvc/config` targeting `s3://dvc` at `https://dagshub.com/foersben/taxon-vision-mlops.s3`.
+* **Zero-Egress Data Archival:** Binary Parquet manifests, exemplar crops, and quantized model artifacts are pushed directly to this remote endpoint (`dvc push`), preventing Git LFS size bottlenecks and repository bloat.
+* **Unified Management Plane:** Alongside DVC remote caching, DagsHub hosts the centralized MLflow Tracking Server and experiment dashboard, linking Git commit SHAs, DVC dataset versions, and training run metrics within a single interface.
+
+### 4.2 Pipeline DAG Specification (`dvc.yaml` & `dvc.lock`)
+
+Rather than relying on isolated shell scripts, data processing workflows are structured as a formal Directed Acyclic Graph (DAG) declared in [dvc.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/dvc.yaml):
+
+```yaml
+stages:
+  ingestion:
+    cmd: pixi run --frozen -e dev python scripts/ingest_data.py
+    deps:
+      - scripts/ingest_data.py
+      - src/taxon_vision/data/inat_client.py
+      - src/taxon_vision/data/license_filter.py
+    params:
+      - config/params.yaml:
+        - ingestion.taxa_to_fetch
+        - ingestion.per_page
+    outs:
+      - data/manifests
 ```
+
+The pipeline topology enforces cryptographic lineage across three elements:
+
+* **Inputs and Dependencies (`deps`):** Source scripts and library modules responsible for observation retrieval and validation.
+* **Configuration Parameters (`params`):** Parameter subsets in `config/params.yaml` defining target taxon IDs and ingestion volume.
+* **Outputs (`outs`):** Destination directories containing generated dataset manifests (`data/manifests`), tracked by content hashes in [dvc.lock](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/dvc.lock).
+
+### 4.3 Why DVC Tracks Code Dependencies
+
+A primary design principle of DVC is that it does not duplicate Git's responsibilities, but extends them to maintain mathematical data-to-code lineage:
+
+* **Separation of Responsibilities:**
+    * Git manages source code revision history, file diffs, branches, and author identity.
+    * DVC does not version or store source code copies. Instead, it computes and records cryptographic MD5 checksums over designated source files inside `dvc.lock`.
+* **Code-to-Data Lineage Guarantee:**
+    * A dataset manifest (`data/manifests/dataset_manifest.parquet`) is the deterministic mathematical output of the ingestion code executed against external API inputs.
+    * If the HTTP query logic in `inat_client.py` changes, or if the license acceptance rules in `license_filter.py` are altered, the downstream dataset is no longer valid for that pipeline state.
+    * Tracking code modules as stage dependencies guarantees that modifications to transformation logic immediately invalidate the cached stage output.
+
+### 4.4 Status Evaluation & Lifecycle Semantics
+
+When developers modify source files declared in the `deps` block, DVC detects hash discrepancies between the active filesystem and the recorded state in `dvc.lock`:
+
+```text
+ingestion:
+    changed deps:
+        modified: src/taxon_vision/data/inat_client.py
+        modified: src/taxon_vision/data/license_filter.py
+```
+
+This diagnostic indicates that the pipeline DAG has entered an unverified state:
+
+* **Stage Reproduction (`dvc repro`):**
+    * Re-executes the ingestion command, runs the updated client and filter logic, produces a fresh `data/manifests` directory, and writes updated dependency and output hashes into `dvc.lock`.
+    * Utilized when code changes intentionally modify data ingestion semantics or filtering rules.
+* **Checksum Synchronization (`dvc commit`):**
+    * Updates the MD5 checksums of the modified source files in `dvc.lock` without re-running the ingestion command or overwriting existing manifests.
+    * Utilized when source modifications are cosmetic or structural (such as type annotations, docstrings, or logging tweaks) that do not alter the underlying data output.
 
 ---
 

@@ -36,6 +36,11 @@ class INatAPIClient:
     async def fetch_observations(self, taxon_id: int, per_page: int = 10) -> list[dict[str, Any]]:
         """Fetch verified research-grade observations for a target taxon.
 
+        A request page consists of:
+          - At least 10 records (default) - per default there are 4 images per observation, so this is 40 images
+          - Zero-shot results (taxons not seen during training) - we request more than the maximum number of taxons in our training set to ensure coverage
+          - Open license images - only observations with Creative Commons licenses are considered
+
         Why:
             Biological training data must maintain high label fidelity. By querying exclusively for `quality_grade=research`, we ensure that community taxonomists have reached consensus on the organism's species identification. Upgrading image URLs from `square` (75x75 thumbnails) to `medium` (500px longest dimension) provides sufficient spatial resolution for neural feature extraction.
 

@@ -8,6 +8,7 @@ This section covers the physical hardware realities, including bare-metal GPU pr
 ## Thematic Sections
 
 * **Current Infrastructure**: State of the bare-metal servers, K3s, and network architecture.
+* **Jenkins CI/CD Infrastructure**: Zero-open-ports controller, Cloudflare Tunnel, and k3s ephemeral runners.
 * **GPU Resource Scheduling**: Multiplexing workloads across the RTX 5070 Ti.
 * **Deployment Runbook**: Containerization, orchestration, and disaster recovery.
 * **Prometheus Observability**: Tracking feature drift, latency histograms, and system metrics.

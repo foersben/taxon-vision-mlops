@@ -9,7 +9,7 @@
   "python.terminal.activateEnvironment": true,
   "python.terminal.activateEnvInCurrentTerminal": true,
   "python.createEnvironment.trigger": "off",
-  "python.createEnvironment.contentButton": false,
+  "python.createEnvironment.contentButton": "hide",
   "python.testing.pytestEnabled": true,
   "python.testing.pytestPath": "${workspaceFolder}/.pixi/envs/dev/bin/pytest",
   "python.testing.pytestArgs": [
@@ -19,6 +19,15 @@
   "python.analysis.extraPaths": [
     "${workspaceFolder}/src"
   ],
+  "python.analysis.ignore": [
+    "scratch/**",
+    "**/*.ipynb"
+  ],
+  "notebook.formatOnSave.enabled": false,
+  "notebook.codeActionsOnSave": {
+    "source.organizeImports": "never",
+    "source.fixAll": "never"
+  },
   "ruff.interpreter": [
     "${workspaceFolder}/.pixi/envs/dev/bin/python"
   ],
