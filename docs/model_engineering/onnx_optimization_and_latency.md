@@ -71,6 +71,12 @@ Dynamic quantization evaluates $S$ and $Z$ on-the-fly for every forward pass bas
 
 ### Silicon Acceleration via SIMD & VNNI
 
+### ONNX Runtime Execution Providers & Operator Fusion
+
+The ONNX Runtime engine executes the graph utilizing hardware-specific Execution Providers (EP). When deploying on x86-64 CPUs, the OpenVINO or default CPU EP accelerates operations via AVX-512 VNNI instructions. On GPU targets, the TensorRT EP compiles the ONNX graph into FP16 or INT8 engines. Crucially, ONNX Runtime aggressively performs **operator fusion** (e.g., fusing Convolution, BatchNorm, and ReLU into a single kernel execution). This minimizes memory bandwidth bottlenecks by keeping intermediate activations in fast L1/L2 cache rather than writing them back to main memory.
+
+Combined with the zero-allocation hot inference path, these optimizations ensure deterministic sub-25ms latency on production infrastructure.
+
 Quantizing to INT8 yields immediate computational benefits:
 
 * **Memory Footprint Compression:** Compresses model parameter footprint by **$75\%$** (an exact $4:1$ bit-width ratio; e.g., reducing an illustrative 400 MB checkpoint to approximately 100 MB).

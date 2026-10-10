@@ -12,7 +12,7 @@ verified: {by: process:scaffold-init, at: "2026-10-02T10:00:00Z"}
 
 # Active Learning & Human-in-the-Loop Triage
 
-Unlabelled observations are prioritized using BADGE and margin uncertainty sampling, ensuring expert citizen scientists annotate observations that maximize model performance gains.
+Unlabelled observations are prioritized using BADGE (Batch Active Learning by Diverse Gradient Embeddings) and CoreSet geometry sampling strategies. This ensures expert labelers annotate a diverse set of observations that maximize model performance gains. Furthermore, prioritization heavily favors conformal borderline observations and empty sets, ensuring that the most challenging edge cases are escalated to expert labeler review.
 
 ## Human Triage Queue Optimization
 

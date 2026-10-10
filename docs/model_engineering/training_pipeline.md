@@ -28,7 +28,13 @@ tracks all experiments with MLflow, and automatically promotes the best model us
 
 * **Zero backbone backpropagation.** All training iterates only over the
   linear head (`Dropout` + `Linear`), operating on embeddings pre-extracted by the
-  frozen backbone. This reduces a full training epoch to milliseconds.
+  frozen backbone (`vit_base_patch14_reg4_dinov2`, `bioclip-2`, `mobilenetv4_conv_small`). This reduces a full training epoch to milliseconds.
+* **Class-Balanced Loss for Long-Tail Distributions.** The loss formulation is defined as:
+
+  $$\mathcal{L}_{\text{CB}}(p, y) = -\frac{1 - \beta}{1 - \beta^{n_y}} \log(p_y)$$
+
+  Where $\beta \to 1$ approximates standard class-frequency inverse weighting and intermediate $\beta \in [0.99, 0.9999]$ is optimal for long-tail species classification.
+* **Multi-Head Hierarchical Taxonomic Loss.** Rather than relying solely on a single-head flat classification over terminal leaf nodes, the system can optionally project embeddings into a multi-head taxonomy (Class, Order, Family, Genus, Species) ensuring coarse-grained taxonomic errors are penalized far more heavily than fine-grained errors.
 * **Single promotion metric.** Macro PR-AUC is the authoritative comparison signal.
   It is robust to severe class imbalance (characteristic of species observation data)
   and does not require threshold selection.
