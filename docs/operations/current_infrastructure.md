@@ -92,12 +92,32 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
 sudo systemctl restart k3s
 ```
 
-1. **Deploy NVIDIA Kubernetes Device Plugin:** Deploy the device plugin daemonset so K3s
-   exposes `nvidia.com/gpu` allocatable resources:
+1. **Deploy NVIDIA Kubernetes Device Plugin & Time-Slicing Configuration:** Deploy the device plugin daemonset and apply the time-slicing ConfigMap so K3s exposes 4 virtual GPU slices for the physical RTX 5070 Ti:
 
 ```bash
-kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.16.1/deployments/static/gpu-feature-discovery-daemonset.yaml
-kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.16.1/deployments/static/nvidia-device-plugin.yml
+kubectl apply -f deploy/k8s/nvidia-time-slicing-config.yaml
+```
+
+Patch the device plugin daemonset to read the configuration:
+
+```bash
+kubectl patch daemonset nvidia-device-plugin-daemonset -n kube-system --patch '
+spec:
+  template:
+    spec:
+      containers:
+      - name: nvidia-device-plugin-ctr
+        env:
+        - name: CONFIG_FILE
+          value: /etc/config/config.yaml
+        volumeMounts:
+        - name: config
+          mountPath: /etc/config
+      volumes:
+      - name: config
+        configMap:
+          name: nvidia-device-plugin-config
+'
 ```
 
 1. **Verify GPU Capacity:**
@@ -106,7 +126,7 @@ kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.
 kubectl get nodes "-o=custom-columns=NAME:.metadata.name,GPU:.status.allocatable.nvidia\.com/gpu"
 ```
 
-The output confirms 1 allocatable `nvidia.com/gpu` on the node.
+The output confirms 4 allocatable `nvidia.com/gpu` virtual units on the `hive-mind` node, permitting concurrent multi-tenant execution across Web API inference, PyTorch batch training, and CI test runners without exclusive locking.
 
 ## Actions Runner Controller (ARC) Setup
 

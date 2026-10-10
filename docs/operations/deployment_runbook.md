@@ -90,3 +90,81 @@ The architectural breakdown details how TaxonVision-MLOps scales across data hor
 | Horizon 1 (Pilot Perimeter) | ~5,000 observations, 10 curated target taxa | Single GPU training, DVC versioning on DagsHub | Strict CC-BY/CC0 verification |
 | Horizon 2 (Regional Production) | ~50,000 observations, 100 taxa | Multi-GPU Distributed Data Parallel (DDP), S3/MinIO bucket versioning | Automated concept drift detection |
 | Horizon 3 (Global Scale) | 100,000+ exemplars, ~50 TB raw imagery | Distributed zero-copy streaming with Ray Data and PyTorch WebDataset, fine-tuning foundation vision backbones (DINOv2, BioCLIP-2) | Conformal calibration on stratified holdouts |
+
+## Section 6: Cluster Bootstrapping vs. Continuous Delivery Lifecycle
+
+The deployment infrastructure separates Day-0 cluster prerequisites from Day-2 continuous deployment pipelines:
+
+* **Day-0 Cluster Bootstrap (One-Time Setup):**
+    * Configures host-level infrastructure, hardware device plugins, and authentication boundaries on `hive-mind` (`192.168.178.30`).
+    * Applied once by cluster administrators using `kubectl apply`:
+        * [deploy/k8s/jenkins-agent-rbac.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/jenkins-agent-rbac.yaml): Provisions `jenkins-ci` and `taxon-vision` namespaces, machine ServiceAccount `jenkins-agent`, and RBAC bindings.
+        * [deploy/k8s/nvidia-time-slicing-config.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/nvidia-time-slicing-config.yaml): Partitions the physical RTX 5070 Ti into 4 virtual GPU slices in `kube-system`.
+    * Storing these manifests in Git provides Infrastructure as Code (IaC) without requiring repetitive manual execution.
+* **Day-2 Continuous Delivery (Automated via Jenkins):**
+    * Operates entirely within the CI/CD pipeline triggered by Git commits and PR events.
+    * Eliminates brittle host-level cronjobs, systemd file watchers, or local `git pull` shell loops on the server.
+    * Jenkins checks out code via authenticated GitHub PAT, executes test gates, builds documentation, and applies [deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) directly via the in-cluster `jenkins-agent` ServiceAccount.
+
+## Section 7: NVIDIA Device Plugin GPU Time-Slicing Specification
+
+Consumer and workstation GPUs (such as our NVIDIA GeForce RTX 5070 Ti) lack hardware Multi-Instance GPU (MIG) slicing. Without time-slicing, requesting `nvidia.com/gpu: 1` places an exclusive lock on the entire card, starving co-located workloads.
+
+### Time-Slicing Configuration Architecture
+
+The cluster exposes 4 virtual GPU slots using the official NVIDIA Kubernetes Device Plugin:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nvidia-device-plugin-config
+  namespace: kube-system
+data:
+  config.yaml: |
+    version: v1
+    sharing:
+      timeSlicing:
+        resources:
+          - name: nvidia.com/gpu
+            replicas: 4
+```
+
+The `nvidia-device-plugin-daemonset` in `kube-system` mounts this ConfigMap at `/etc/config/config.yaml` and reads environment variable `CONFIG_FILE=/etc/config/config.yaml`.
+
+### Cluster Verification Command
+
+Validate allocatable GPU slices on `hive-mind`:
+
+```bash
+kubectl get node hive-mind -o jsonpath='{.status.allocatable.nvidia\.com/gpu}{"\n"}'
+# Output: 4
+```
+
+### Application VRAM Guardrails
+
+Because hardware time-slicing multiplexes compute cores while sharing device memory globally, PyTorch batch training pipelines enforce a strict allocation cap:
+
+```python
+import os
+import torch
+
+if torch.cuda.is_available():
+    fraction = float(os.getenv("TAXON_CUDA_MEMORY_FRACTION", "0.7"))
+    torch.cuda.set_per_process_memory_fraction(fraction)
+```
+
+This reserves 30% (4.8 GB) of VRAM for live ONNX Runtime FastAPI inference and host display outputs.
+
+## Section 8: Automated Kubernetes Continuous Deployment Pipeline
+
+When commits are pushed to `main` or `feature/phase1-foundations`, the declarative pipeline in [Jenkinsfile](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/Jenkinsfile) executes an automated zero-downtime rolling update:
+
+### Pipeline Execution Flow
+
+* **Step 1 (Toolchain Provisioning):** The container runner installs `kubernetes-client` (from conda-forge, exposing `kubectl`) and standalone `git` into `/root/.pixi/bin`.
+* **Step 2 (Verification Gates):** Executes Ruff linting, MyPy type checks, License compliance audits, OKF validation, unit tests (with 78% line coverage threshold), integration tests, and strict Zensical build.
+* **Step 3 (Deployment Rollout):**
+    * Applies [deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) using `jenkins-deployer-role` permissions.
+    * Triggers zero-downtime rolling update: `kubectl rollout restart deployment/taxon-vision-api -n taxon-vision`.
+    * Awaits readiness probe verification: `kubectl rollout status deployment/taxon-vision-api -n taxon-vision --timeout=120s`.

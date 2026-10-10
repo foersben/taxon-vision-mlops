@@ -229,11 +229,43 @@ metadata:
   annotations:
     kubernetes.io/service-account.name: jenkins-agent
 type: kubernetes.io/service-account-token
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: taxon-vision
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: jenkins-deployer-role
+  namespace: taxon-vision
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+  - apiGroups: [""]
+    resources: ["services", "pods", "pods/log", "events"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jenkins-deployer-binding
+  namespace: taxon-vision
+subjects:
+  - kind: ServiceAccount
+    name: jenkins-agent
+    namespace: jenkins-ci
+roleRef:
+  kind: Role
+  name: jenkins-deployer-role
+  apiGroup: rbac.authorization.k8s.io
 ```
 
 #### Detailed Breakdown of Manifest Resources
 
-The manifest declares five Kubernetes objects designed to isolate runtime compute, decouple authentication, and restrict administrative verbs:
+The manifest declares eight Kubernetes objects designed to isolate runtime compute, decouple authentication, and restrict administrative verbs:
 
 * **1. Namespace (`jenkins-ci`): Execution Boundary Isolation**
     * Creates an explicit organizational and security perimeter for all transient CI/CD operations.
@@ -267,6 +299,17 @@ The manifest declares five Kubernetes objects designed to isolate runtime comput
     * Declared with `type: kubernetes.io/service-account-token` and annotation `kubernetes.io/service-account.name: jenkins-agent`.
     * **Kubernetes v1.24+ Context:** Starting in Kubernetes v1.24, the control plane no longer auto-generates perpetual secret tokens upon `ServiceAccount` creation, favoring ephemeral projected volume tokens. However, external controllers (such as Jenkins running in Docker outside the Kubernetes control plane) require a persistent bearer token to authenticate over `https://192.168.178.30:6443`.
     * Declaring this Secret explicitly instructs the Kubernetes `service-account-token` controller to mint a signed bearer JWT, embed the cluster CA certificate, and populate the secret data fields dynamically. This avoids hardcoding sensitive credentials in source control while providing a stable authentication token for the Jenkins Kubernetes Cloud plugin.
+
+* **6. Namespace (`taxon-vision`): Application Runtime Perimeter**
+    * Isolates the production web serving layer and model inference containers (`taxon-vision-api`) from CI/CD runners and cluster system daemons.
+
+* **7. Role (`jenkins-deployer-role`): Continuous Delivery Privileges**
+    * Grants permissions to create, update, patch, and watch `deployments` (apps API group) and `services`, `pods`, `events` (core API group) strictly inside `taxon-vision`.
+    * Powers the automated pipeline deployment step without requiring cluster-wide admin rights or brittle host-level cron/systemd automation.
+
+* **8. RoleBinding (`jenkins-deployer-binding`): Cross-Namespace Deployment Authorization**
+    * Maps the `jenkins-agent` identity in `jenkins-ci` to `jenkins-deployer-role` in `taxon-vision`.
+    * Enables the in-cluster runner to execute `kubectl apply -f deploy/k8s/api-deployment.yaml` and `kubectl rollout restart deployment/taxon-vision-api` seamlessly upon successful test completion.
 
 ### 5.2 Kubernetes Cloud Configuration in Jenkins
 
