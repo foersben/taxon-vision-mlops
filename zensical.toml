@@ -96,6 +96,7 @@ Home = "index.md"
     { "Deployment Runbook" = "operations/deployment_runbook.md" },
     { "Prometheus Observability" = "operations/prometheus_and_observability.md" },
     { "API Reference" = "operations/api_reference.md" },
+    { "Implementation Roadmap" = "operations/implementation_status.md" },
 ]
 
 [project.plugins.htmlproofer]

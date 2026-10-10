@@ -13,3 +13,4 @@ This section covers the physical hardware realities, including bare-metal GPU pr
 * **Deployment Runbook**: Containerization, orchestration, and disaster recovery.
 * **Prometheus Observability**: Tracking feature drift, latency histograms, and system metrics.
 * **API Reference**: FastAPI endpoints, schemas, and interaction contracts.
+* **Implementation Roadmap**: Milestone progress, Phase 1-3 roadmap, and automated model promotion criteria.

@@ -250,12 +250,19 @@ transparently without needing GitHub Actions Repository Secrets.
 
 ### DVC Remote Configuration
 
-The repository DVC configuration routes to the DagsHub S3-compatible bucket:
+The repository DVC configuration routes to the DagsHub S3-compatible bucket (`s3://dvc` at `https://dagshub.com/foersben/taxon-vision-mlops.s3`):
 
 ```bash
-# Add DagsHub S3 remote to dvc configuration
-pixi run -e dev dvc remote add -d dagshub s3://taxon-vision-mlops
-pixi run -e dev dvc remote modify dagshub endpointurl https://dagshub.com/api/v1/repo-buckets/s3/foersben
+# S3-compatible remote on DagsHub
+pixi run -e dev dvc remote add -d dagshub s3://dvc
+pixi run -e dev dvc remote modify dagshub endpointurl https://dagshub.com/foersben/taxon-vision-mlops.s3
+```
+
+Local developers never commit credentials to `.dvc/config.local`. Instead, `just dvc-push` queries the token in-memory from KeePassXC via Secret Service:
+
+```bash
+# Push manifests and artifacts using ephemeral Secret Service tokens
+just dvc-push
 ```
 
 ## Core MLOps Ecosystem
@@ -265,29 +272,16 @@ pixi run -e dev dvc remote modify dagshub endpointurl https://dagshub.com/api/v1
 * **CI/CD Pipelines:** A robust `.github/workflows/ci.yml` triggers exclusively on pushes or pull requests to the `main` and `develop` branches. Deployments are secured via GitHub Environments (`taxon-vision-prod` and `taxon-vision-staging`), requiring manual administrator approval to prevent unauthorised execution on our bare-metal infrastructure.
 * **Data Versioning & Tracking:** We rely on DVC for dataset immutability and MLflow (hosted on DagsHub) for experiment tracking.
 
-## Planned CI Transition: GitHub Actions + Jenkins Hybrid
+## Production CI/CD Architecture: GitHub Actions + Jenkins Hybrid
 
-The current setup routes all work through GitHub Actions (ARC). As the training workloads
-grow and the need for granular GPU pod scheduling increases, the plan is to introduce a
-two-layer CI architecture:
+The system implements a production two-layer CI/CD architecture:
 
-* **Layer 1 - GitHub Actions (lightweight gates, current):** Lint, type checks, unit tests
-  (CPU), license audit, OKF validation, conformal audit, Docker builds, and DVC push/pull
-  continue to run on ARC runner pods. This layer is free, fast, and already in place.
-* **Layer 2 - Jenkins (heavy compute, planned):** On merge to `main`, GitHub Actions fires
-  a webhook to a self-hosted Jenkins instance running on the bare-metal cluster. Jenkins
-  then dispatches ephemeral agent pods on Kubernetes/k3s using RBAC ServiceAccount (`jenkins-agent-sa`) for each pipeline stage:
-    * `Ingest` - CPU pod for DVC data pull and dataset hash extraction.
-    * `Train` - GPU pod executing the stripped `run_training_pipeline()` (pure ML, no
-      promotion logic).
-    * `Evaluate` - CPU pod querying MLflow to compare PR-AUC against the Production alias.
-    * `Promote` - CPU pod calling `set_registered_model_alias()` for Challenger / Production.
-    * `Deploy` - CPU pod issuing a rolling restart of the FastAPI Kubernetes deployment.
-
-This split keeps engineers in GitHub as the single control plane while delegating
-GPU-intensive work to a dedicated scheduler with proper resource limits per pod.
-See [training_pipeline.md](../model_engineering/training_pipeline.md) for the impact
-on `runner.py` and which functions will be deleted once Jenkins is in place.
+* **Layer 1 - GitHub Actions (lightweight gates):** Lint, type checks, unit tests (CPU), license audit, OKF validation, conformal audit, Docker builds, and DVC push/pull run on ARC runner pods.
+* **Layer 2 - Jenkins (heavy compute & continuous delivery):** A self-hosted Jenkins controller on the bare-metal host (`hive-mind`) receives webhooks through a zero-open-ports Cloudflare Tunnel. Jenkins dispatches ephemeral agent pods inside `k3s` via the `jenkins-agent` ServiceAccount across isolated pipeline stages:
+    * `Prepare Toolchain` - Provisions standalone `git` and `kubernetes-client` via Pixi, mounting the host NVMe Rattler cache for sub-second dependency resolution.
+    * `Static Quality & Invariants` - Executes Ruff linting, MyPy type checks, license compliance auditing, and OKF graph validation concurrently.
+    * `Unit & Integration Tests` - Runs pytest suites with 78% line coverage threshold and verifies split conformal coverage error bounds.
+    * `Deployment Rollout` - Automatically applies [deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) and monitors zero-downtime rolling update status in the `taxon-vision` namespace.
 
 ## Outstanding Implementation Tasks
 

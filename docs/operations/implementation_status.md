@@ -19,22 +19,25 @@ This document tracks the current implementation status of the project against th
 ### Phase 1 (Foundations): 100% Done
 
 * ✅ Project objectives & reproducible environment (`pixi`, `just`).
-* ✅ Collect data & database initialization (DuckDB integration).
-* ✅ Build baseline model & inference API (`/predict`, `/training`, and `/explain` endpoints).
+* ✅ Collect data & database initialization (DuckDB & Parquet streaming).
+* ✅ Build baseline model & inference API (`/api/v1/predict`, `/api/v1/train`, and `/api/v1/explain` endpoints).
 
-### Phase 2 (Microservices, Tracking & Versioning): ~60% Done
+### Phase 2 (Microservices, Tracking & Versioning): 100% Done
 
-* ✅ DVC pipeline foundation is set up (`dvc.yaml` exists).
-* ✅ MLflow integration (logging run metrics, compound PR-AUC scores, and registry promotion).
-* ❌ **Missing:** Docker-compose microservice orchestration.
-* ❌ **Missing:** Scheduled training (via cron or Airflow).
+* ✅ DVC pipeline foundation (`dvc.yaml` & `dvc.lock`) with DagsHub S3 remote (`s3://dvc`).
+* ✅ Ephemeral in-memory secret retrieval via KeePassXC and Linux Secret Service (`just dvc-push`).
+* ✅ MLflow integration on DagsHub (logging run metrics, compound PR-AUC scores, and registry promotion).
+* ✅ Containerization: Multi-stage non-root `Dockerfile` and local developer stack (`docker-compose.local.yaml`).
+* ✅ Kubernetes Deployment: `k3s` manifests with 4-replica NVIDIA GPU time-slicing and NodePort `30080`.
+* ✅ Automated Continuous Delivery: Jenkins pipeline on `hive-mind` with ephemeral k3s agent pods, NVMe Rattler caching, and rolling rollout.
 
-### Phase 3 (Monitoring & Maintenance): ~10% Done
+### Phase 3 (Monitoring & Maintenance): ~60% Done
 
-* ✅ Theoretical observability design (Prometheus metrics mapped out in architecture).
-* ❌ **Missing:** Evidently data drift detection.
-* ❌ **Missing:** Grafana dashboard and webhook alerts.
-* ❌ **Missing:** Streamlit demonstration application.
+* ✅ Prometheus metrics instrumentation (`/metrics`) exposing latency histograms, conformal set distributions, and referral counts.
+* ✅ Split Conformal Prediction engine guaranteeing marginal error bounds ($1 - \alpha$).
+* ✅ Out-of-Distribution (OOD) energy score gating and human triage routing.
+* ✅ Server-rendered Jinja2 & HTMX operator dashboard for live image verification.
+* ❌ **Future Enhancements:** Automated Evidently drift alarms in scheduled DAGs and standalone Grafana alert webhooks.
 
 ---
 

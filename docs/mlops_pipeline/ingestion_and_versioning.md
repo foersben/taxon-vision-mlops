@@ -101,6 +101,7 @@ DagsHub provisions a unified cloud control plane that mirrors the primary GitHub
 
 * **Remote Endpoint Configuration:** The repository connects to DagsHub via `.dvc/config` targeting `s3://dvc` at `https://dagshub.com/foersben/taxon-vision-mlops.s3`. Remote storage is hosted on DagsHub and AWS S3/MinIO.
 * **Zero-Egress Data Archival:** Binary Parquet manifests, exemplar crops, and quantized model artifacts are pushed directly to this remote endpoint (`dvc push`), preventing Git LFS size bottlenecks and repository bloat. Data artifacts are immutable and tracked via SHA256 hashes.
+* **Zero-Leak Secret Management via Secret Service:** Rather than persisting sensitive cloud tokens to disk in `.dvc/config.local` or unencrypted `.env` files, local developers query authentication tokens directly from KeePassXC using `secret-tool`. The `just dvc-push` and `just dvc-pull` recipes retrieve the token in-memory and inject it ephemerally as `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` for the duration of the child process only.
 * **Unified Management Plane:** Alongside DVC remote caching, DagsHub hosts the centralized MLflow Tracking Server and experiment dashboard, linking Git commit SHAs, DVC dataset versions, and training run metrics within a single interface.
 
 ### 4.2 Pipeline DAG Specification (`dvc.yaml` & `dvc.lock`)

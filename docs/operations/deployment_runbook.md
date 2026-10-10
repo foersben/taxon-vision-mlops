@@ -54,8 +54,8 @@ tunnel: <TUNNEL_ID>
 credentials-file: /etc/cloudflared/credentials.json
 
 ingress:
-  - hostname: taxon.example.org
-    service: http://fastapi-service:8000
+  - hostname: taxon.benjamin-foerster.eu
+    service: http://localhost:30080
   - service: http_status:404
 ```
 
