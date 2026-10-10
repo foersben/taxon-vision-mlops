@@ -70,7 +70,7 @@ The bare-metal CI/CD design resolves the operational tension between developer a
 * **Zero Public Ingress Ports:** Rather than exposing home router NAT ports or DDNS records, all external ingress terminates on Cloudflare edge servers and routes to the host via an outbound-initiated tunnel (`cloudflared`).
 * **Edge-Level Attack Surface Elimination:** The public controller hostname is shielded by a Cloudflare WAF custom expression that blocks 100% of standard web browser traffic, search crawler requests, and automated scanners, permitting solely authenticated GitHub webhook deliveries.
 * **Separation of Control and Execution Planes:** The Jenkins controller is configured with 0 local executors. It acts exclusively as a workflow orchestrator, dispatching workloads to isolated, disposable Kubernetes pods.
-* **Ephemeral Pod Lifecycle:** Build agents are scheduled on-demand inside `k3s` and deleted immediately upon pipeline completion (`podRetention: Never`), eliminating environment drift and dirty state accumulation across builds.
+* **Ephemeral Pod Lifecycle:** Build agents are scheduled on-demand inside `k3s` using RBAC ServiceAccount (`jenkins-agent-sa`) and deleted immediately upon pipeline completion (`podRetention: Never`), eliminating environment drift and dirty state accumulation across builds.
 * **Hardware Slicing & Cache Acceleration:** Continuous integration test suites run against CPU profiles (`ci-dev`), preserving the single RTX 5070 Ti GPU for training and real-time inference. Package resolution latency is reduced from minutes to seconds via a shared NVMe Rattler cache mount.
 
 ---
@@ -497,10 +497,10 @@ The provisioned Kubernetes pod instantiates two containers sharing network and f
 #### Pipeline Stage Breakdown
 
 * **Prepare Toolchain:** Checks for Git and kubectl availability, installs standalone binaries via Pixi (`git`, `kubernetes-client`), registers `safe.directory "*"` across container mount boundaries, and executes `pixi install --frozen -e ci-dev`.
-* **Static Quality & Invariants:** Runs Ruff formatting/linting, MyPy strict type analysis, open license compliance auditing, and OKF knowledge graph validation concurrently in parallel blocks across CPU cores.
+* **Static Quality & Invariants:** Runs Lint (`ruff`) formatting/linting, Type Check (`mypy`) strict type analysis, open license compliance auditing (License Audit), and OKF knowledge graph validation concurrently in parallel blocks across CPU cores.
 * **Unit Tests & Coverage:** Executes the full unit test suite, enforcing a strict 80% line coverage threshold (`--cov-fail-under=80`).
-* **Integration & Conformal Invariants:** Validates FastAPI service endpoints and evaluates mathematical error bounds for split conformal prediction.
-* **Documentation Strict Build:** Generates the OKF knowledge graph visualizer (`docs/viz.html`) and executes `zensical build --strict` to verify syntax and reference integrity.
+* **Integration & Conformal Invariants:** Validates FastAPI service endpoints and evaluates mathematical error bounds for split conformal prediction (Conformal Coverage Verification).
+* **Documentation Strict Build:** Generates the OKF knowledge graph visualizer (`docs/viz.html`) and executes `zensical build --strict` to verify syntax and reference integrity (strict Zensical build).
 * **Workspace Cleanup (`cleanWs()`):** Wipes the temporary checkout directory before pod termination.
 
 ---

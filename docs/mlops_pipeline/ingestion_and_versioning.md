@@ -67,7 +67,7 @@ The raw citizen-science image dataset hosted on AWS Open Data exceeds 50 Terabyt
 
 TaxonVision circumvents this trap via **zero-duplication streaming**:
 
-* **Zero-Copy Arrow Buffers:** [`S3ImageStreamer`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/data/s3_streamer.py#L16) streams image objects directly from the public AWS S3 bucket into memory during training.
+* **Zero-Copy Arrow Buffers:** [`S3ImageStreamer`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/data/s3_streamer.py#L16) streams image objects directly from the public AWS S3 bucket into memory during training via Ray Data or WebDataset without local disk buffering.
 * **Lightweight Parquet Manifests:** The local repository stores only cryptographically validated Parquet index files containing observation IDs, taxon IDs, source URLs, and attribution headers.
 * **Storage Footprint:** An index representing 10 million biological observations occupies less than 300 MB of disk space.
 
@@ -99,8 +99,8 @@ Data Version Control (DVC) and DagsHub establish the data management control pla
 
 DagsHub provisions a unified cloud control plane that mirrors the primary GitHub repository and hosts an S3-compatible content-addressable storage bucket:
 
-* **Remote Endpoint Configuration:** The repository connects to DagsHub via `.dvc/config` targeting `s3://dvc` at `https://dagshub.com/foersben/taxon-vision-mlops.s3`.
-* **Zero-Egress Data Archival:** Binary Parquet manifests, exemplar crops, and quantized model artifacts are pushed directly to this remote endpoint (`dvc push`), preventing Git LFS size bottlenecks and repository bloat.
+* **Remote Endpoint Configuration:** The repository connects to DagsHub via `.dvc/config` targeting `s3://dvc` at `https://dagshub.com/foersben/taxon-vision-mlops.s3`. Remote storage is hosted on DagsHub and AWS S3/MinIO.
+* **Zero-Egress Data Archival:** Binary Parquet manifests, exemplar crops, and quantized model artifacts are pushed directly to this remote endpoint (`dvc push`), preventing Git LFS size bottlenecks and repository bloat. Data artifacts are immutable and tracked via SHA256 hashes.
 * **Unified Management Plane:** Alongside DVC remote caching, DagsHub hosts the centralized MLflow Tracking Server and experiment dashboard, linking Git commit SHAs, DVC dataset versions, and training run metrics within a single interface.
 
 ### 4.2 Pipeline DAG Specification (`dvc.yaml` & `dvc.lock`)
@@ -125,7 +125,7 @@ stages:
 
 The pipeline topology enforces cryptographic lineage across three elements:
 
-* **Inputs and Dependencies (`deps`):** Source scripts and library modules responsible for observation retrieval and validation.
+* **Inputs and Dependencies (`deps`):** DVC DAG execution requires detailed dependency tracking for source scripts, configuration, and data artifacts. Source scripts and library modules responsible for observation retrieval and validation must be declared.
 * **Configuration Parameters (`params`):** Parameter subsets in `config/params.yaml` defining target taxon IDs and ingestion volume.
 * **Outputs (`outs`):** Destination directories containing generated dataset manifests (`data/manifests`), tracked by content hashes in [dvc.lock](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/dvc.lock).
 

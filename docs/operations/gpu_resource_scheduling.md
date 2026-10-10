@@ -41,13 +41,18 @@ For workloads that do not require real-time responsiveness, we can implement a n
 * **Job Serialization:** Instead of deploying long-running pods, workloads are submitted as discrete Jobs to a central queue. The queue manager evaluates the available cluster resources. If an ARC runner is executing a deployment, a newly submitted Training job will simply wait patiently in the queue.
 * **Limitations:** While this elegantly solves contention between backend tasks (like preventing CI/CD pipelines and Model Training from colliding), it is fundamentally incompatible with a live Web API. Users expect a web interface to load in milliseconds, not to wait hours for a training run to finish.
 
+## Fallback Strategy for Development
+
+For environments lacking GPU hardware (such as local development machines), workloads are configured with a fallback to CPU emulation. This allows the API and pipelines to function gracefully, albeit at higher latencies, without failing instantly on missing CUDA drivers.
+
 ## The Hybrid Recommendation
 
 To satisfy the competing demands of high-throughput training, agile CI/CD, and real-time user inference on a single GPU, we adopt a hybrid architecture:
 
-* **Enable Time-Slicing:** Configure the `k3s` NVIDIA plugin for Time-Slicing via [deploy/k8s/nvidia-time-slicing-config.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/nvidia-time-slicing-config.yaml), allowing the Web API to coexist permanently with background tasks.
+* **Enable Time-Slicing:** Configure the `k3s` NVIDIA plugin for Time-Slicing via [deploy/k8s/nvidia-time-slicing-config.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/nvidia-time-slicing-config.yaml), allowing the Web API to coexist permanently with background tasks via standard Kubernetes GPU resource allocation (`nvidia.com/gpu: 1`).
 * **Enforce VRAM Fractions:** Hardcode per-process memory limits in training via `configure_cuda_memory_budget()` in [src/taxon_vision/models/training/runner.py](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/runner.py), paired with ultra-light ONNX quantization for FastAPI endpoints.
 * **Queue Heavy Backends:** Implement Kueue exclusively for batch jobs. This ensures that while the Web API is always alive via Time-Slicing, multiple heavy backend tasks do not crash each other, but instead queue up politely.
+* **Node Isolation:** Configure node taints and tolerations for dedicated ML worker nodes to ensure regular non-ML pods do not accidentally schedule onto scarce GPU resources.
 
 ## Kubernetes Time-Slicing Manifest Specification
 
