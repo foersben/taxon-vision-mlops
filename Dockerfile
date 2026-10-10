@@ -1,30 +1,27 @@
-# syntax=docker/dockerfile:1
 # TaxonVision-MLOps Production Serving Container
-# Optimized multi-stage build using Pixi and non-root execution
+# Optimized build using Pixi and non-root execution
 
 FROM ghcr.io/prefix-dev/pixi:latest AS runner
 
 WORKDIR /app
 
-# Ensure non-root app user exists
+# Ensure non-root app user exists and owns working directory
 RUN groupadd -g 10001 appgroup && \
-    useradd -u 10001 -g appgroup -s /bin/bash -m appuser
-
-# Copy dependency specifications first to leverage layer caching
-COPY pyproject.toml pixi.lock ./
-
-# Install the minimal CPU-only production/inference environment
-RUN pixi install --frozen -e ci
-
-# Copy application source code, configuration, and default parameters
-COPY src/ src/
-COPY config/ config/
-COPY models/checkpoints/head.pt models/checkpoints/head.pt
-
-# Ensure files are owned by the non-root application user
-RUN chown -R appuser:appgroup /app
+    useradd -u 10001 -g appgroup -s /bin/bash -m appuser && \
+    chown -R appuser:appgroup /app
 
 USER appuser
+
+# Copy dependency specifications, README, and source code required for editable hatchling build
+COPY --chown=appuser:appgroup pyproject.toml pixi.lock README.md ./
+COPY --chown=appuser:appgroup src/ src/
+
+# Install the minimal CPU-only production/inference environment directly as non-root user
+RUN pixi install --frozen -e ci
+
+# Copy configuration, model checkpoints, and default parameters
+COPY --chown=appuser:appgroup config/ config/
+COPY --chown=appuser:appgroup models/checkpoints/head.pt models/checkpoints/head.pt
 
 # Expose FastAPI HTTP serving port
 EXPOSE 8000
