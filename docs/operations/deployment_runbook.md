@@ -168,12 +168,12 @@ When commits are pushed to `main` or release tags, the declarative pipeline in [
 * **Step 1 (Toolchain Provisioning):** The container runner installs `kubernetes-client` (from conda-forge, exposing `kubectl`) and standalone `git` into `/root/.pixi/bin`.
 * **Step 2 (Verification Gates):** Executes Ruff linting, MyPy type checks, License compliance audits, OKF validation, unit tests (with 78% line coverage threshold), integration tests, and strict Zensical build.
 * **Step 3 (GPU Model Training & Checkpoint - main branch only):**
-    * Binds to a bare-metal GPU runner slot on `hive-mind` using 1 of 4 NVIDIA time-slicing partitions.
-    * Pulls the latest versioned dataset from DagsHub DVC remote (`s3://dvc`).
-    * Sets `TAXON_CUDA_MEMORY_FRACTION=0.7` to prevent VRAM starvation of live services.
-    * Executes classification head training: `pixi run -e dev python -m taxon_vision.models.training.runner --epochs 15 --batch-size 64`.
-    * Serializes and exports the refreshed classification head to `models/classifier_head.onnx`.
-    * Pushes updated DVC pointers and logs metrics to DagsHub MLflow.
+    * Targets 1 of the 4 NVIDIA time-slicing partitions on `hive-mind`; this requires the agent pod to declare `nvidia.com/gpu: 1`, which is still pending in the `Jenkinsfile`.
+    * Pulls the latest versioned dataset from the DagsHub DVC remote (`s3://dvc`).
+    * Caps VRAM at 70% (`--cuda-memory-fraction 0.7`) to prevent starvation of live services.
+    * Executes classification head training: `pixi run -e dev python -m taxon_vision.models.trainer --extractor dinov3 --epochs 15 --batch-size 64 --cuda-memory-fraction 0.7`.
+    * Re-exports the ONNX graph (`taxon_vision.inference.onnx_exporter`) and pushes `models/checkpoints/head.pt` and `models/checkpoints/model.onnx` to the DVC remote.
+    * Logs metrics and registry aliases to DagsHub MLflow.
 * **Step 4 (Deployment Rollout):**
     * Applies [deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) using `jenkins-deployer-role` permissions.
     * Triggers zero-downtime rolling update: `kubectl rollout restart deployment/taxon-vision-api -n taxon-vision`.

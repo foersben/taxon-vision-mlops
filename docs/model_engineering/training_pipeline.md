@@ -123,7 +123,7 @@ It receives pre-built tensors from `EmbeddingSplit` and runs a mini-batch SGD lo
 
 ### Training Callbacks
 
-The inner loop incorporates three convergence callbacks:
+The inner loop incorporates three convergence callbacks and one tuning hook:
 
 * **Best Model Weights Restoration (`restore_best_weights=True`):** Tracks validation Macro PR-AUC at each epoch. If an epoch yields a new historical high, a deep copy of the model state dict is cached. When training completes (either by reaching the epoch limit or via early stopping), the model weights are automatically restored to the optimal checkpoint.
 * **Early Stopping Callback (`early_stopping_patience=4`):** Monitors validation Macro PR-AUC across epochs. If the metric fails to improve for 4 consecutive epochs, training terminates early, preventing overfitting on rare long-tail classes and saving compute cycles.
@@ -132,9 +132,9 @@ The inner loop incorporates three convergence callbacks:
 
 ## Optimal Training Dynamics & Hyperparameters
 
-Empirical benchmarking on biological observation distributions yields the following configuration guidelines:
+The following defaults are design guidelines for linear probing on frozen foundation embeddings. They have not yet been validated on real extracted embeddings, because the training runner still uses a deterministic synthetic placeholder split (see [Implementation Status](../operations/implementation_status.md)):
 
-* **Epoch Budget (10-15 Epochs):** Linear probing on pre-extracted foundation embeddings converges rapidly. Optimal validation PR-AUC is routinely reached between epochs 8 and 12. Training past 15 epochs increases the risk of memorizing long-tail noise.
+* **Epoch Budget (10-15 Epochs):** Linear probes on frozen embeddings typically converge within 10-15 epochs. Early stopping (patience 4) bounds the effective budget and limits memorisation of long-tail noise.
 * **Batch Size Budgeting:**
     * **Batch Size 64 for Cached Embeddings:** Minimizes gradient variance while maximizing SIMD throughput when operating purely on cached feature vectors.
     * **Batch Size 32 for ViT Feature Extraction:** When extracting embeddings from raw images using the RTX 5070 Ti (16 GB GDDR7 VRAM), batch size 32 operates well within the 70% VRAM cap (`TAXON_CUDA_MEMORY_FRACTION=0.7`), reserving headroom for the host system and live inference.
@@ -147,15 +147,16 @@ Empirical benchmarking on biological observation distributions yields the follow
 Optuna explores hyperparameter search spaces using the Tree-structured Parzen Estimator (`TPESampler`) coupled with Asynchronous Successive Halving (`SuccessiveHalvingPruner`/ASHA):
 
 * **Search Space Formulation:**
-    * **Learning Rate ($\eta$):** Log-uniform distribution over $[10^{-4}, 10^{-2}]$.
+    * **Learning Rate ($\eta$):** Log-uniform distribution over $[10^{-4}, 10^{-1}]$.
     * **Weight Decay ($\lambda$):** Log-uniform distribution over $[10^{-6}, 10^{-2}]$.
     * **Dropout Rate ($p$):** Uniform distribution over $[0.0, 0.5]$.
     * **Class-Balanced Loss $\beta$:** Uniform distribution over $[0.99, 0.9999]$, controlling effective sample re-weighting for long-tail classes.
-* **ASHA Pruning Invariants:** Initialized with `min_resource=2` and `reduction_factor=2`. Trials reporting bottom-quartile PR-AUC after 2 epochs are pruned immediately.
+* **Optimiser:** `AdamW` with the sampled learning rate and weight decay.
+* **ASHA Pruning Invariants:** Initialized with `min_resource=2` and `reduction_factor=2`. Trials are first evaluated after 2 epochs; at each subsequent rung only the better half of the trials (a fraction of `1 / reduction_factor`) is promoted.
 * **CLI Trigger:**
 
 ```bash
-pixi run -e dev python -m taxon_vision.models.training.runner --tune --n-trials 15
+pixi run -e dev python -m taxon_vision.models.trainer --tune --n-trials 15
 ```
 
 ```mermaid
@@ -272,10 +273,10 @@ The continuous integration and delivery pipeline defined in `Jenkinsfile` automa
 
 During Stage 6, the runner interacts directly with the cluster's GPU topology:
 
-* **Time-Slicing Slot:** The physical NVIDIA RTX 5070 Ti is partitioned into 4 virtual GPU slots via the NVIDIA Kubernetes Device Plugin. The training job consumes 1 virtual slot, allowing concurrent execution without locking out other workloads.
+* **Time-Slicing Slot (target):** The physical NVIDIA RTX 5070 Ti is partitioned into 4 virtual GPU slots via the NVIDIA Kubernetes Device Plugin. The training job is intended to consume 1 virtual slot (`nvidia.com/gpu: 1`). The agent pod specification in the `Jenkinsfile` does not yet request this resource, so the stage currently has no guaranteed GPU allocation.
 * **VRAM Memory Fraction Cap:** The training process enforces `TAXON_CUDA_MEMORY_FRACTION=0.7`. This reserves 30% of VRAM (4.8 GB) for live ONNX Runtime inference serving and display buffers.
-* **DVC State Synchronization:** DVC pulls the latest dataset state from DagsHub S3 (`s3://dvc`), verifies MD5 checksums, and feeds the training pipeline.
-* **ONNX Export & Model Refresh:** Upon completing the training loop (with early stopping and best weight restoration), the updated model head is exported to `models/classifier_head.onnx`.
+* **DVC State Synchronization:** DVC pulls the latest dataset state from DagsHub S3 (`s3://dvc`) and verifies MD5 checksums before training.
+* **Artefact Export:** After the training loop (with early stopping and best weight restoration), the head checkpoint is written to `models/checkpoints/head.pt`, the ONNX graph is re-exported via `taxon_vision.inference.onnx_exporter`, and both artefacts are pushed to the DagsHub DVC remote.
 * **Zero-Downtime Rolling Update:** Jenkins applies the updated deployment and issues `kubectl rollout restart deployment/taxon-vision-api -n taxon-vision`, smoothly transitioning inference traffic to the new model checkpoint with zero downtime.
 
 ## API Reference

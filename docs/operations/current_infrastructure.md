@@ -17,10 +17,10 @@ TaxonVision, including the step-by-step instructions for reproducing and maintai
 
 ### Host Hardware Profile
 
-* **Node Identity:** Single-node bare-metal server (`hive-mind`) running Ubuntu 24.04 LTS.
+* **Node Identity:** Single-node bare-metal server (`hive-mind`) running Ubuntu 26.04.1 LTS (codename `resolute`).
 * **Processor (CPU):** Intel Core i7-14700K (20 physical cores, 28 threads).
 * **System Memory (RAM):** 128 GB DDR5.
-* **Graphics Hardware (GPU):** NVIDIA GeForce RTX 5070 Ti (16 GB VRAM).
+* **Graphics Hardware (GPU):** NVIDIA GeForce RTX 5070 Ti (16 GB VRAM, Blackwell, compute capability 12.0) with NVIDIA driver 615.71.09 (CUDA 13.4 user-mode driver).
 * **Storage:** NVMe SSD storage with Full Disk Encryption (LUKS).
 
 ### Remote Boot & Remote LUKS Decryption Setup
@@ -39,13 +39,17 @@ decryption before the root filesystem mounts.
 
 ### NVIDIA Drivers & Container Toolkit Setup
 
-To make the RTX 5070 Ti accessible to container engines, the proprietary NVIDIA driver (latest - version placeholder)
-and the NVIDIA Container Toolkit are installed directly on the Ubuntu host:
+To make the RTX 5070 Ti accessible to container engines, the proprietary NVIDIA driver
+and the NVIDIA Container Toolkit are installed directly on the Ubuntu host. The verified
+baseline is driver `615.71.09` reporting CUDA `13.4` (`nvidia-smi`). Because the CUDA user-mode
+driver is backward compatible, containers may ship an older CUDA runtime; for the Blackwell
+GPU this runtime must be CUDA 12.8 or newer, since earlier PyTorch builds contain no kernels
+for compute capability 12.0:
 
 ```bash
-# 1. Install proprietary NVIDIA graphics driver
+# 1. Install the recommended proprietary NVIDIA graphics driver
 sudo apt-get update
-sudo apt-get install -y nvidia-driver-595
+sudo ubuntu-drivers install
 
 # 2. Add NVIDIA Container Toolkit repository
 curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
@@ -267,7 +271,7 @@ just dvc-push
 
 ## Core MLOps Ecosystem
 
-* **Package & Environment Management:** Strictly managed via `pixi`. We utilise a dual-environment strategy: `ci-dev` (CPU only) for continuous integration, and `dev` (GPU enabled) for local execution.
+* **Package & Environment Management:** Strictly managed via `pixi`. We utilise a dual-environment strategy: `ci-dev` (CPU only) for continuous integration, and `dev` (GPU enabled) for the remote GPU runners; model training is never executed on the developer workstation.
 * **Task Automation:** All pipeline steps, testing, and linting are executed via `just` (as defined in our `Justfile`).
 * **CI/CD Pipelines:** A robust `.github/workflows/ci.yml` triggers exclusively on pushes or pull requests to the `main` and `develop` branches. Deployments are secured via GitHub Environments (`taxon-vision-prod` and `taxon-vision-staging`), requiring manual administrator approval to prevent unauthorised execution on our bare-metal infrastructure.
 * **Data Versioning & Tracking:** We rely on DVC for dataset immutability and MLflow (hosted on DagsHub) for experiment tracking.

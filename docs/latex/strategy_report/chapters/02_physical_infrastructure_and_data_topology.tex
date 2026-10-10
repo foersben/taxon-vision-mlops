@@ -9,9 +9,28 @@ Training and deploying dense Vision Foundation Models (VFMs) at high throughput 
 
 The computational core relies on an Intel Core i7-14700K processor, thereby leveraging its heterogeneous core topology to explicitly isolate workloads. High-frequency neural execution paths and PyTorch gradient calculations are pinned strictly to the Performance-cores (P-cores), preserving the L2 and L3 cache lines for the mathematical hot loops. Conversely, background asynchronous I/O operations -- such as streaming HTTP requests, dataset extraction, and database indexing -- are relegated to the Efficiency-cores (E-cores) in order to prevent CPU context switching.
 
-Neural network acceleration is driven by an NVIDIA RTX 5070 Ti possessing 16 GB of GDDR7 VRAM. This provides the necessary computational throughput and absolute physical stability required to reliably prevent clock-speed variance during critical CI/CD latency validation tests and continuous multi-day benchmarking suites.
+Neural network acceleration is driven by an NVIDIA RTX 5070 Ti possessing 16 GB of GDDR7 VRAM, supported by 128 GB of DDR5 system memory. This provides the necessary computational throughput and absolute physical stability required to reliably prevent clock-speed variance during critical CI/CD latency validation tests and continuous multi-day benchmarking suites.
 
 Storage I/O is managed across a 2 TB NVMe SSD. In order to maximise read bandwidth across the PCIe bus when streaming millions of small image chunks, the underlying BTRFS filesystem utilises transparent \texttt{zstd:3} compression. However, we must consider that BTRFS is a Copy-on-Write (CoW) filesystem. This fundamentally conflicts with continuous database writes and Data Version Control (DVC) chunk caching, leading to severe disk fragmentation. In order to resolve this, a dedicated storage subvolume is initialised with the NOCOW attribute (\texttt{chattr +C}), ensuring contiguous physical block allocations for all local data caches.
+
+\section{Verified Software Baseline of the Host}
+\label{sec:host_baseline}
+
+The host (\texttt{hive-mind}) runs Ubuntu 26.04.1 LTS (codename \textit{resolute}) on a LUKS-encrypted root volume. The proprietary NVIDIA driver in version 615.71.09 is installed, which reports a CUDA user-mode driver of version 13.4. Because the CUDA user-mode driver is backward compatible with older runtime libraries, container images are free to ship an older CUDA runtime. For the RTX 5070 Ti, which belongs to the Blackwell generation (compute capability 12.0), this runtime must however be CUDA 12.8 or newer: earlier PyTorch binary builds contain no kernels for this architecture and abort with a missing-kernel-image error. The CUDA runtime pinned in the dependency lock file is therefore a hard prerequisite of GPU execution rather than a cosmetic detail (see Section~\ref{sec:impl_status}).
+
+\section{GPU Partitioning and Memory Budget}
+\label{sec:gpu_partitioning}
+
+Consumer GPUs do not support hardware Multi-Instance GPU (MIG) partitioning. Without further measures, a Kubernetes pod requesting one GPU would therefore lock the entire device and starve every co-located workload. The cluster consequently uses the time-slicing mode of the NVIDIA Kubernetes device plugin, which advertises the single physical GPU as four virtual devices. Time-slicing multiplexes compute cycles but does not isolate memory: all slices share the same VRAM. Isolation is therefore enforced in software, by capping the fraction $f$ of device memory available to the training process through the PyTorch per-process memory fraction. With $f = 0.7$ and a device memory of $M_{\text{VRAM}} = 16\text{ GB}$, the training budget evaluates to
+\[
+M_{\text{train}} = f \cdot M_{\text{VRAM}} = 0.7 \times 16\text{ GB} = 11.2\text{ GB},
+\]
+which leaves $M_{\text{VRAM}} - M_{\text{train}} = 4.8\text{ GB}$ for the INT8 ONNX serving process and the display server. The latter reserve is comfortably larger than the serving footprint of $\le 1.6\text{ GB}$ derived in Table~\ref{tab:rag_latency}.
+
+\section{Access Topology and Edge Security}
+\label{sec:access_topology}
+
+The host exposes no inbound port to the public internet. Both the CI/CD controller and the operator-facing service are reached through outbound-initiated Cloudflare Tunnels, so that no router port forwarding and no dynamic DNS record is required. A Web Application Firewall rule at the Cloudflare edge restricts the controller hostname to authenticated GitHub webhook deliveries, and the operator dashboard is placed behind an identity-aware Zero Trust access policy. Remote maintenance after a reboot is possible despite the encrypted root volume, because a minimal SSH daemon (Dropbear) in the initial ramdisk accepts the unlock passphrase before the root file system is mounted.
 
 \section{Cryptographic Storage Economics}
 A primary architectural constraint for open-source and low-budget MLOps is data storage costs. The platform standardises on DagsHub as the central management plane, which enforces a 20 GB free-tier storage limit on its DVC remote. We find that this limit is entirely viable, provided that the pipeline enforces a strict physical separation between bulk raw observation streams and versioned metadata artefacts.

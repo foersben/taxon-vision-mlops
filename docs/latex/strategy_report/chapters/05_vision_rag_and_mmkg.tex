@@ -7,7 +7,7 @@ Standard text-centric Retrieval-Augmented Generation (RAG) paradigms typically r
 \section{Ingestion Engine \& Reference Exemplar Catalogue Curation}
 \label{sec:exemplar_curation}
 
-A naive approach to visual retrieval attempts to pass every available field photograph through a deep Vision Foundation Model (VFM) in order to construct an exhaustive vector database. In the context of global biodiversity monitoring, this brute-force strategy requires generating dense embeddings for more than 170 million observations. Storing 512-dimensional 32-bit floating-point (FP32) representations for this volume would require over 340 GB of addressable memory purely to hold the vector matrices in RAM, alongside years of continuous GPU compute on workstation-grade silicon.
+A naive approach to visual retrieval attempts to pass every available field photograph through a deep Vision Foundation Model (VFM) in order to construct an exhaustive vector database. In the context of global biodiversity monitoring, this brute-force strategy requires generating dense embeddings for more than 170 million observations. Storing 768-dimensional 32-bit floating-point (FP32) representations for this volume would require over 520 GB of addressable memory purely to hold the vector matrices in RAM, alongside years of continuous GPU compute on workstation-grade silicon.
 
 The platform actively circumvents this computational barrier by curating a deterministic Reference Exemplar Catalogue. Instead of tracking all historical user submissions, our ingestion pipeline filters raw DarwinCore observation records according to four strict quality predicates:
 \begin{enumerate}
@@ -17,9 +17,9 @@ The platform actively circumvents this computational barrier by curating a deter
     \item \textbf{Diversity Sampling:} The catalogue selects up to 50 exemplar observations per taxon. In order to capture seasonal and geographical morphological variations, observations are partitioned into discrete spatial clusters using Uber H3 hexagonal spatial cells at Resolution 4.
 \end{enumerate}
 
-By bounding the catalogue to 2,000 baseline taxa with 50 exemplars each, the vector database maintains an upper bound of 100,000 reference vectors. The total memory required to hold these 512-dimensional FP32 vectors in RAM evaluates to:
+By bounding the catalogue to 2,000 baseline taxa with 50 exemplars each, the vector database maintains an upper bound of 100,000 reference vectors. The total memory required to hold these 768-dimensional FP32 vectors in RAM evaluates to:
 \[
-\text{Memory}_{\text{Vectors}} = 100{,}000 \times 512 \times 4 \text{ bytes} \approx 204.8 \text{ MB}
+\text{Memory}_{\text{Vectors}} = 100{,}000 \times 768 \times 4 \text{ bytes} \approx 307.2 \text{ MB}
 \]
 Stored as compressed WebP image crops averaging 45 KB each, the total exemplar disk image footprint is approximately 4.5 GB. This architectural decision allows the entire retrieval index to reside in high-speed host RAM, completely eliminating disk I/O bottlenecks during retrieval.
 
@@ -30,7 +30,7 @@ In text-based RAG architectures, feeding an entire multi-page document into an e
 
 In order to isolate diagnostic visual signals, the system implements Parent-Child Visual Chunking:
 \begin{itemize}
-    \item \textbf{Child Visual Chunk ($I_{\text{child}}$):} An upstream zero-shot detector (YOLO-World or OWL-ViT v2) scans the raw photograph to isolate the target specimen, outputting a normalised bounding box coordinates vector $B = [x_{\min}, y_{\min}, x_{\max}, y_{\max}]$. The organism is cropped, scaled to $224 \times 224$ pixels, and forwarded to the frozen feature extractor (BioCLIP-2 \cite{stevens2024bioclip}) to produce the dense visual query embedding $z_{\text{child}} \in \mathbb{R}^{512}$:
+    \item \textbf{Child Visual Chunk ($I_{\text{child}}$):} An upstream zero-shot detector (YOLO-World or OWL-ViT v2) scans the raw photograph to isolate the target specimen, outputting a normalised bounding box coordinates vector $B = [x_{\min}, y_{\min}, x_{\max}, y_{\max}]$. The organism is cropped, scaled to $224 \times 224$ pixels, and forwarded to the frozen feature extractor (BioCLIP-2 \cite{stevens2024bioclip}) to produce the dense visual query embedding $z_{\text{child}} \in \mathbb{R}^{768}$:
     \[
     z_{\text{child}} = f_{\text{VFM}}(I_{\text{child}}), \quad \|z_{\text{child}}\|_2 = 1
     \]

@@ -9,3 +9,48 @@ By completely abandoning monolithic web servers and fragile Python environments 
 Crucially, the platform refuses to trade scientific reliability for inference speed. The implementation of Energy-Based Out-of-Distribution rejection and Split Conformal Prediction guarantees that no identification reaches production without a formal, distribution-free mathematical error bound. By wrapping these invariants in a strict CI/CD verification gate, and routing statistically ambiguous queries through a Reciprocal Rank Fused Vision RAG pipeline, the architecture elegantly closes the active learning loop.
 
 TaxonVision-MLOps is not just a deployment strategy; it is a continuously evolving, epistemically secure intelligence engine capable of sustaining the next generation of global biodiversity monitoring.
+
+\section{Phased Delivery Roadmap and Implementation Status}
+\label{sec:impl_status}
+
+The architecture described in this report is delivered in three phases that end in a final defence. The milestones are fixed as follows: Phase~1 (foundations: reproducible environment, data ingestion, baseline model and inference interface) on 12~October 2026, Phase~2 (containerised services, experiment tracking and dataset versioning, scheduled retraining) on 22~October 2026, and Phase~3 (monitoring, drift detection, interactive demonstration and documentation hardening) on 16~November 2026. The defence takes place on 17 and 18~November 2026 and comprises a 15-minute architecture presentation, a 5-minute live demonstration and a 10-minute question-and-answer session.
+
+In order to avoid any ambiguity between the target design and the present state of the code base, Table~\ref{tab:impl_status} records the status of each capability as verified against the repository. The label \textit{implemented} denotes functionality that exists in the code base and is exercised by the test suite or the deployment manifests; \textit{partial} denotes functionality whose building blocks exist but which is not yet integrated end-to-end; and \textit{planned} denotes functionality that is specified in this report but has not yet been implemented.
+
+\begin{table}[htbp]
+\centering
+\caption{Implementation status of the principal capabilities, verified against the repository.}
+\label{tab:impl_status}
+\small
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{3.9cm} l X@{}}
+\toprule
+\textbf{Capability} & \textbf{Status} & \textbf{Evidence or outstanding action} \\
+\midrule
+Reproducible environment (Pixi, Just) & implemented & Lock-file driven environments; no virtual environments are created. \\
+Dataset versioning (DVC on DagsHub) & implemented & S3-compatible DagsHub remote; the dataset hash from \texttt{dvc.lock} is logged to MLflow. \\
+Experiment tracking and registry & implemented & MLflow on DagsHub; model \texttt{taxon\_vision\_classifier} with the aliases \texttt{Production}, \texttt{Challenger} and \texttt{Archived}. \\
+Head training with callbacks & implemented & Best-weight restoration, early stopping (patience~4) and learning-rate decay on plateau (patience~2). \\
+Hyperparameter search & implemented & Optuna TPE with ASHA pruning and nested MLflow runs (Section~\ref{sec:search_space}). \\
+Inference service and dashboard & implemented & FastAPI with a server-rendered HTMX operator view. \\
+Split conformal prediction and energy-based OOD & implemented & Conformal sets in the serving path; energy score in the uncertainty module. \\
+Prometheus instrumentation & implemented & Metrics endpoint of the serving application. \\
+Jenkins controller and k3s agents & implemented & Outbound-only Cloudflare Tunnel, ephemeral agent pods, rolling deployment, four-slot time-slicing configuration. \\
+\midrule
+Main-branch training stage & partial & Stage declared for the main branch, but it currently operates on a seeded synthetic embedding split; wiring the cached features of the real dataset is outstanding. \\
+GPU access of the agent pod & partial & The agent pod does not yet request an \texttt{nvidia.com/gpu} resource; the request must be added in order to bind the training stage to a time-slicing slot. \\
+GPU-capable PyTorch build & partial & The pinned build targets CUDA~12.1, whereas the Blackwell architecture of the RTX~5070~Ti requires CUDA~$\geq 12.8$ (Section~\ref{sec:host_baseline}); an upgrade of the toolchain is required before any GPU run. \\
+Conformal invariant on the candidate model & partial & The coverage invariant gates the source code, but is not yet applied to the freshly trained candidate before promotion. \\
+Drift detection and active learning & partial & MMD and BADGE query modules exist; neither is connected to a schedule, an alert or a webhook. \\
+Container composition for grading & partial & The compose file covers object storage, Prometheus and Grafana only. \\
+\midrule
+Filtered HNSW retrieval and rank fusion & planned & Chapter~\ref{ch:vision_rag}. \\
+Zero-shot cropping and VLM triage & planned & Chapter~\ref{ch:vision_rag}. \\
+Label Studio synchronisation & planned & Annotation round trip through DagsHub. \\
+Evidently reports and Alertmanager trigger & planned & Section~\ref{sec:k8s_orchestration} and the retraining trigger of Chapter~\ref{ch:observability}. \\
+Git commit tagging of runs & planned & Binding of the commit identifier to the MLflow run. \\
+Optional Streamlit demonstration & planned & HTMX dashboard serves as the baseline demonstration. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Three items determine the critical path towards a first genuine GPU training run: the replacement of the synthetic split by cached backbone features, the GPU resource request of the agent pod, and the upgrade of the PyTorch build to a CUDA release that supports compute capability~12.0. Until these are completed, all reported hyperparameter and promotion decisions must be interpreted as an exercise of the pipeline mechanics rather than as empirical evidence regarding model quality.

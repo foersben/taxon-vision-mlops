@@ -28,7 +28,7 @@ Model convergence, latency minimisation, and epistemic reliability depend fundam
 
 Neural network architectures require the optimisation of external hyperparameters, such as learning rates, weight decay penalties, and conformal confidence thresholds. Traditional Grid Search algorithms evaluate these spaces exhaustively, incurring a computational cost of $\mathcal{O}(S^D)$, where $S$ represents the number of discrete steps evaluated across $D$ hyperparameter dimensions. On a single-node bare-metal architecture, this geometric explosion renders hyperparameter tuning computationally unviable.
 
-The platform replaces brute-force evaluation with Optuna, a framework driven by the Tree-structured Parzen Estimator (TPE). TPE abandons blind search grids in favour of Bayesian probability. Instead of modelling the objective function directly, it models the parameter probability distributions conditioned on historical trial performance. Formally, for a given hyperparameter configuration $\theta$ and a target loss metric $y$ (specifically configured to optimise the PR-AUC and AUPIMO benchmarks formally defined in Chapter 7), TPE models the conditional probability $P(\theta \mid y)$ as follows:
+The platform replaces brute-force evaluation with Optuna, a framework driven by the Tree-structured Parzen Estimator (TPE). TPE abandons blind search grids in favour of Bayesian probability. Instead of modelling the objective function directly, it models the parameter probability distributions conditioned on historical trial performance. Formally, for a given hyperparameter configuration $\theta$ and a target loss metric $y$ (in this system, the validation Macro PR-AUC defined in Chapter~\ref{ch:observability}), TPE models the conditional probability $P(\theta \mid y)$ as follows:
 \[
 P(\theta \mid y) = 
 \begin{cases} 
@@ -45,12 +45,49 @@ In this formulation:
     \item $g(\theta)$ is the probability density function formed by the parameters of unsuccessful past trials ($y \ge y^*$).
 \end{itemize}
 
-The algorithm iteratively selects new configurations that maximise the ratio $\ell(\theta) / g(\theta)$. This guides the GPU to sample from regions mathematically correlated with low loss, whilst preserving enough variance to escape local minima.
+The algorithm iteratively selects new configurations that maximise the ratio $\ell(\theta) / g(\theta)$. This guides the GPU to sample from regions mathematically correlated with low loss, whilst preserving enough variance to escape local minima. Because the validation Macro PR-AUC is to be maximised rather than minimised, the study is configured with the direction \textit{maximise}; the formulation above then applies to the correspondingly sign-adjusted objective.
 
-In order to further conserve hardware cycles, Optuna executes the Asynchronous Successive Halving Algorithm (ASHA). If a trial's validation metrics fall into the bottom quartile during its initial training epochs, ASHA aggressively prunes (terminates) the run. This immediately frees the Tensor Cores to evaluate a more promising branch of the probability distribution.
+In order to further conserve hardware cycles, Optuna applies the Asynchronous Successive Halving Algorithm (ASHA) with a minimum resource of two epochs and a reduction factor of $\eta = 2$. A trial is first evaluated after two epochs. At each subsequent rung, only the better half of the trials, that is a fraction $1/\eta$, is permitted to continue, whilst the remainder is terminated. This immediately frees the GPU to evaluate a more promising region of the search space.
+
+\subsection{Search Space and Optimiser}
+\label{sec:search_space}
+
+The search space comprises four dimensions, which are sampled anew for every trial (Table~\ref{tab:search_space}). The sampler is seeded, so that the exploration of the search space is deterministic and reproducible. Each trial instantiates a classification head consisting of a dropout layer followed by a linear layer, trains it with the AdamW optimiser under Class-Balanced Loss \cite{cui2019classbalanced}, and reports the validation Macro PR-AUC as its score.
+
+\begin{table}[htbp]
+\centering
+\caption{Hyperparameter search space of the Optuna study.}
+\label{tab:search_space}
+\begin{tabularx}{\textwidth}{@{}l l X@{}}
+\toprule
+\textbf{Hyperparameter} & \textbf{Distribution} & \textbf{Range and role} \\
+\midrule
+Learning rate $\eta_{\text{lr}}$ & log-uniform & $[10^{-4}, 10^{-1}]$; step size of the AdamW optimiser. \\
+Weight decay $\lambda$ & log-uniform & $[10^{-6}, 10^{-2}]$; regularisation of the head weights. \\
+Dropout probability $p$ & uniform & $[0.0, 0.5]$; regularisation of the input embedding. \\
+Class-Balanced Loss $\beta$ & uniform & $[0.99, 0.9999]$; controls the effective number of samples per class and hence the re-weighting of long-tail taxa. \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
 \subsection{MLflow Interlock Architecture}
 
-While Optuna efficiently orchestrates the search mathematics locally, it inherently lacks the infrastructure to permanently archive model provenance across a distributed engineering team. MLflow bridges this gap, operating as the continuous flight data recorder for our training pipeline.
+While Optuna efficiently orchestrates the search mathematics, it inherently lacks the infrastructure to permanently archive model provenance across a distributed engineering team. MLflow bridges this gap, operating as the continuous flight data recorder for our training pipeline.
 
-The two systems are strictly coupled via an \texttt{MLflowCallback} hook. As the pipeline executes, the overarching Optuna \textit{Study} is registered as a root experiment in MLflow. Every individual parameter combination evaluated by Optuna is recorded as a nested child run. During these nested executions, MLflow streams the step-by-step metrics (for example, training loss, top-1 accuracy) and the sampled parameters (for example, $\theta$) directly to the DagsHub dashboard. Upon completion, physical artefacts -- such as the serialised ONNX graphs and validation histograms -- are uploaded to the artefact registry. Programmatic triggers then evaluate the Pareto frontier of all logged trials, automatically promoting the optimal model checkpoint to the MLflow Model Registry, staging it for formal CI/CD deployment testing.
+The coupling is implemented explicitly within the objective function rather than through a generic callback. The tuning session is registered as an MLflow experiment on the DagsHub tracking server, and every parameter combination evaluated by Optuna is opened as a nested child run, in which the sampled parameters and the per-epoch metrics (training loss, validation loss, Top-1 accuracy, Macro F1-score and Macro PR-AUC) are logged. A consolidated run records the best configuration found. The lifecycle of the top-level training run is managed by a context manager (resource acquisition is initialisation), which marks the run as failed if an exception occurs instead of leaving it in a perpetual running state.
+
+Model promotion is governed by a single criterion. The validation Macro PR-AUC of the candidate is compared with that of the model currently carrying the \texttt{Production} alias in the MLflow Model Registry. A better candidate receives the alias \texttt{Challenger} and awaits formal deployment testing; an inferior candidate receives the alias \texttt{Archived}; and the very first model is initialised as \texttt{Production}. The multi-objective trade-off between accuracy, latency and memory is evaluated separately, at the level of backbone selection, by the Pareto benchmark described in Section~\ref{sec:latency_budget}.
+
+\section{Training Dynamics and Convergence Control}
+\label{sec:training_dynamics}
+
+Because the backbone is frozen and its embeddings are cached, a training epoch of the classification head reduces to a small number of matrix products. The principal risk is therefore not under-fitting but over-fitting to the rare classes of the long tail. Three mechanisms control this risk. All of them monitor the validation Macro PR-AUC, which is also the promotion metric of the registry:
+\begin{enumerate}
+    \item \textbf{Best-weight restoration:} The head weights of the epoch with the highest validation Macro PR-AUC are cached and restored once training has ended, so that the returned head is the best head and not merely the last one.
+    \item \textbf{Early stopping:} Training terminates when the metric has not improved for four consecutive epochs.
+    \item \textbf{Learning-rate reduction on plateau:} The learning rate is halved when the metric has not improved for two epochs. Since this patience is shorter than that of early stopping, the optimiser receives at least one epoch at a reduced rate before training terminates.
+\end{enumerate}
+
+As design defaults, the epoch budget is limited to 15 epochs and the mini-batch size is 64 for training on cached embeddings. Where embeddings are extracted from images by a Vision Transformer on the GPU, a smaller batch of 32 images keeps the activation memory comfortably inside the budget of Section~\ref{sec:gpu_partitioning}. These values are engineering guidelines, and they remain to be validated on real extracted embeddings (see Section~\ref{sec:impl_status}).
+
+Data augmentation applied during embedding extraction must respect biological invariants. Horizontal reflection yields physically plausible specimens, because most organisms are bilaterally or radially symmetric about a vertical axis. Vertical reflection is prohibited: gravity and phototropism impose a canonical orientation, so that an inverted specimen would never occur in field imagery and would merely bias the learned spatial priors.

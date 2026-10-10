@@ -39,7 +39,7 @@
 };
 
 \node[fill=black!4, draw=black!25, rounded corners=2pt, inner sep=2.5pt, font=\footnotesize\bfseries, align=center] at (0, 14.7) {
-    \textbf{Target:} Local Bare-Metal (RTX 5070 Ti, i7-14700K) + CI-CPU\\ % \quad$\vert$\quad
+    \textbf{Target:} Bare-Metal Host (RTX 5070 Ti, i7-14700K) $\cdot$ Remote-Only Training\\ % \quad$\vert$\quad
     \textbf{Epistemic Guarantee:} Conformal Coverage $1-\alpha \ge 0.95$\\
     \textbf{Inference SLA:} Fast Path $<25$\,ms p95
 };
@@ -57,9 +57,9 @@
 };
 
 \node[hubbox={6.9cm}] (cicd) at (4.7, 12.4) {%
-    \textbf{\footnotesize\color{mblueborder} GitHub Actions CI/CD \& Runner}\\[0.8mm]
+    \textbf{\footnotesize\color{mblueborder} GitHub Actions \& Jenkins CI/CD}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
-    \textbullet\ \textbf{Deployment Target:} k3s Pods / Containerized Services with GPU Passthrough\\
+    \textbullet\ \textbf{Deployment Target:} k3s Pods with GPU Time-Slicing (4 slots)\\
     \textbullet\ \textbf{Quality Gates:} Ruff linting, MyPy static typing, CC open-license audit\\
     \textbullet\ \textbf{Epistemic Safety Gate:} Empirical coverage $\ge 95\%$ on calibration holdout
 };
@@ -85,7 +85,7 @@
     \textbf{\footnotesize\color{mblueborder!80!black} 2. Multimodal Visual Chunking}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
     \textbullet\ \textbf{Parent-Child Chunking:} Zero-shot isolation $\to 224{\times}224$ child crops\\
-    \textbullet\ \textbf{Frozen Features:} Embeddings $z_{\mathrm{child}} \in \mathbb{R}^{512}$ via backbone\\
+    \textbullet\ \textbf{Frozen Features:} Embeddings $z_{\mathrm{child}} \in \mathbb{R}^{768}$ via backbone\\
     \textbullet\ \textbf{Habitat Context:} Uncropped parent scene preserved for environmental priors\\
     \textbullet\ \textbf{Relational Linking:} Child embeddings mapped to parent DarwinCore IDs
 };
@@ -103,7 +103,7 @@
     \rule{\linewidth}{0.4pt}\\[0.6mm]
     \textbullet\ \textbf{Frozen Backbone:} BioCLIP-2 / DINOv3 (zero grad)\\
     \textbullet\ \textbf{Head Training:} Class-Balanced Loss ($E_n = \frac{1-\beta^n}{1-\beta}$) for long-tail classes\\
-    \textbullet\ \textbf{Hyperparameter Tuning:} Optuna TPE search with ASHA pruning\\
+    \textbullet\ \textbf{Hyperparameter Tuning:} Optuna TPE + ASHA, early stopping, LR decay\\
     \textbullet\ \textbf{Graph Compilation:} INT8 ONNX export (${<}25$\,ms latency SLA)\\
     \textbullet\ \textbf{Interpretability:} Forward-hooked Class Activation Mapping (CAM)
 };
@@ -135,7 +135,7 @@
     \textbullet\ \textbf{Rank Fusion (RRF):} $w_{\mathrm{vis}} \cdot \mathrm{Sim}_{\cos}(z) + w_{\mathrm{geo}} \cdot \mathrm{Prior}_{\mathrm{geo}}(\mathrm{coord},\,\mathrm{month})$\\[0.8mm]
     \textbf{Observability \& Epistemic Monitoring:}\\
     \textbullet\ Prometheus metrics: Latency histograms, conformal set size tracking, OOD rate\\
-    \textbullet\ \textbf{MMD Drift Detector:} Maximum Mean Discrepancy on $\mathbb{R}^{512}$ feature space
+    \textbullet\ \textbf{MMD Drift Detector:} Maximum Mean Discrepancy on $\mathbb{R}^{768}$ feature space
 };
 
 \node[box={5.1cm}] (k8s) at (5.65, -1.9) {%
