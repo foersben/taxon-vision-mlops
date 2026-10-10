@@ -1,0 +1,36 @@
+# NVIDIA Kubernetes Device Plugin Time-Slicing Configuration
+# Target Cluster: k3s bare-metal server (hive-mind / 192.168.178.30)
+# Target Hardware: Single NVIDIA RTX 5070 Ti (16 GB VRAM)
+#
+# Why:
+#   Consumer and prosumer GPUs lack hardware Multi-Instance GPU (MIG) partitioning.
+#   Without time-slicing, requesting 'nvidia.com/gpu: 1' places an exclusive hardware lock,
+#   causing subsequent pods (CI runners, Web API, batch training) to languish in Pending state.
+#
+# How:
+#   This ConfigMap configures the NVIDIA Device Plugin to expose 4 virtual GPU slices
+#   for the single physical device. The NVIDIA driver multiplexes compute cycles via hardware
+#   context switching. VRAM isolation must be enforced at the software layer via
+#   'torch.cuda.set_per_process_memory_fraction' (batch training) and lightweight ONNX INT8 runtimes (web API).
+#
+# Deployment:
+#   kubectl apply -f deploy/k8s/nvidia-time-slicing-config.yaml
+#   kubectl set env daemonset/nvidia-device-plugin-daemonset -n kube-system \
+#     CONFIG_FILE=/etc/nvidia-container-runtime/config.yaml || true
+#
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nvidia-device-plugin-config
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: nvidia-device-plugin
+    app.kubernetes.io/part-of: taxon-vision-mlops
+data:
+  config.yaml: |
+    version: v1
+    sharing:
+      timeSlicing:
+        resources:
+          - name: nvidia.com/gpu
+            replicas: 4

@@ -7,10 +7,11 @@ pipeline {
 apiVersion: v1
 kind: Pod
 metadata:
+  namespace: jenkins-ci
   labels:
     app.kubernetes.io/name: taxon-vision-jenkins-agent
 spec:
-  serviceAccountName: jenkins-agent-sa
+  serviceAccountName: jenkins-agent
   containers:
   - name: ml-runner
     image: ghcr.io/prefix-dev/pixi:latest
@@ -22,16 +23,14 @@ spec:
       mountPath: /root/.cache/rattler/cache
     resources:
       limits:
-        memory: "16Gi"
-        cpu: "8"
+        memory: "8Gi"
+        cpu: "4"
       requests:
-        memory: "4Gi"
-        cpu: "2"
+        memory: "512Mi"
+        cpu: "200m"
   volumes:
   - name: rattler-cache
-    hostPath:
-      path: /home/benni/.cache/rattler/cache
-      type: DirectoryOrCreate
+    emptyDir: {}
 '''
     }
   }

@@ -40,11 +40,13 @@ spec:
           value: "0.0.0.0"
         resources:
           requests:
-            cpu: "500m"
-            memory: "1Gi"
+            cpu: "200m"
+            memory: "512Mi"
           limits:
             cpu: "2"
-            memory: "4Gi"
+            memory: "2Gi"
+            # In clusters with NVIDIA time-slicing enabled, uncomment below to mount a virtual GPU slice:
+            # nvidia.com/gpu: "1"
         livenessProbe:
           httpGet:
             path: /health

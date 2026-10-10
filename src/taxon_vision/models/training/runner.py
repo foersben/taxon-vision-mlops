@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 import time
 import urllib.error
@@ -95,6 +96,43 @@ def _prepare_embedding_split(dim: int, num_classes: int) -> EmbeddingSplit:
     )
 
 
+def configure_cuda_memory_budget(fraction: float | None = None) -> float | None:
+    """Configure per-process CUDA memory fraction for safe multi-tenant GPU time-slicing.
+
+    Why:
+        Under NVIDIA Device Plugin time-slicing on shared single-GPU nodes (e.g. RTX 5070 Ti),
+        compute is time-multiplexed across virtual slices, but VRAM is shared globally. Unbounded
+        PyTorch allocations can trigger Out-Of-Memory (OOM) failures in co-located real-time
+        inference services. Capping training VRAM (e.g. to 70% / 11.2 GB) permanently reserves
+        sufficient memory for ONNX inference serving and system displays.
+
+    How:
+        Inspects CUDA availability. If available, reads `fraction` or the `TAXON_CUDA_MEMORY_FRACTION`
+        environment variable (defaulting to 0.7), and applies `torch.cuda.set_per_process_memory_fraction`.
+
+    Args:
+        fraction: Optional explicit memory fraction between 0.0 and 1.0.
+
+    Returns:
+        Applied memory fraction, or None if CUDA is unavailable.
+    """
+    if not torch.cuda.is_available():
+        return None
+
+    target_fraction = fraction
+    if target_fraction is None:
+        raw_env = os.getenv("TAXON_CUDA_MEMORY_FRACTION", "0.7")
+        try:
+            target_fraction = float(raw_env)
+        except ValueError:
+            target_fraction = 0.7
+
+    target_fraction = max(0.1, min(1.0, target_fraction))
+    torch.cuda.set_per_process_memory_fraction(target_fraction)
+    logger.info("Enforced CUDA per-process VRAM budget fraction: %.2f", target_fraction)
+    return target_fraction
+
+
 def run_training_pipeline(
     extractor: str = "mobilenetv4_conv_small",
     epochs: int = 5,
@@ -102,6 +140,7 @@ def run_training_pipeline(
     learning_rate: float = 0.001,
     checkpoint_path: Path | str | None = None,
     log_file: Path | str | None = None,
+    cuda_memory_fraction: float | None = None,
 ) -> dict[str, Any]:
     """Execute end-to-end classification head training on cached or synthetic embeddings.
 
@@ -124,10 +163,12 @@ def run_training_pipeline(
         learning_rate: Optimizer learning rate.
         checkpoint_path: Optional custom file path to save the trained head weights.
         log_file: Optional path to an execution log file to record and attach to MLflow.
+        cuda_memory_fraction: Optional CUDA VRAM fraction limit under time-slicing.
 
     Returns:
         Dictionary containing training metrics, checkpoint path, duration, and status.
     """
+    applied_vram_fraction = configure_cuda_memory_budget(cuda_memory_fraction)
     t0 = time.perf_counter()
     logger.info("Initiating head training for extractor '%s' across %d epochs", extractor, epochs)
 
@@ -150,6 +191,7 @@ def run_training_pipeline(
         "num_classes": num_classes,
         "feature_dim": dim,
         "loss": "ClassBalancedLoss",
+        "cuda_memory_fraction": applied_vram_fraction if applied_vram_fraction is not None else "cpu",
     }
     run_name = f"train_{extractor}_{int(time.time())}"
 
@@ -293,6 +335,12 @@ def train_cli(argv: list[str] | None = None) -> int:
     parser.add_argument("--checkpoint-path", type=str, default=None, help="Output checkpoint file path")
     parser.add_argument("--api-url", type=str, default=None, help="Optional running API server URL to trigger remotely")
     parser.add_argument("--log-file", type=str, default=None, help="Optional log file destination")
+    parser.add_argument(
+        "--cuda-memory-fraction",
+        type=float,
+        default=None,
+        help="Optional maximum fraction of GPU VRAM (0.0 to 1.0) for training under time-slicing (defaults to TAXON_CUDA_MEMORY_FRACTION or 0.7)",
+    )
     args = parser.parse_args(argv)
 
     setup_logging(level=logging.INFO, log_file=args.log_file)
@@ -310,6 +358,7 @@ def train_cli(argv: list[str] | None = None) -> int:
         learning_rate=args.lr,
         checkpoint_path=args.checkpoint_path,
         log_file=args.log_file,
+        cuda_memory_fraction=args.cuda_memory_fraction,
     )
 
     logger.info("Training Completed Successfully")
