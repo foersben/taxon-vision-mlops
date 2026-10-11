@@ -82,10 +82,11 @@
 \node[hostbox] (host) {
     \textbf{\texttt{hive-mind} Compute Node}\\
     \scriptsize $\bullet$ OS: Ubuntu 26.04.1 LTS (\texttt{resolute})\\
-    \scriptsize $\bullet$ CPU: AMD Ryzen 9 9950X (16C/32T)\\
-    \scriptsize $\bullet$ RAM: 64\,GB DDR5-6000 ECC\\
-    \scriptsize $\bullet$ GPU: RTX 5070 Ti 16\,GB GDDR7\\
-    \scriptsize $\bullet$ Microarch: Blackwell SM 120 (CC 12.0)\\
+    \scriptsize $\bullet$ CPU: Intel Core i7-14700K (20C/28T)\\
+    \scriptsize $\bullet$ Mobo: ASRock B760M Pro RS (mATX)\\
+    \scriptsize $\bullet$ RAM: 128\,GB Crucial DDR5-5600\\
+    \scriptsize $\bullet$ GPU: ZOTAC RTX 5070 Ti 16\,GB\\
+    \scriptsize $\bullet$ NVMe: 2TB Seagate FireCuda 530\\
     \scriptsize $\bullet$ Driver: 615.71.09 / CUDA UMD 13.4
 };
 
@@ -93,7 +94,7 @@
     \textbf{Rattler SAT Solver Engine}\\
     \scriptsize Resolves \texttt{pyproject.toml} via SAT\\
     \scriptsize Locks SHA-256 Hashes $\rightarrow$ \texttt{pixi.lock}\\
-    \scriptsize Channels: \texttt{conda-forge}, \texttt{pytorch}, \texttt{nvidia}
+    \scriptsize Channel: \texttt{conda-forge} $\cdot$ Index: \texttt{cu128}
 };
 
 % Column 2: Dual-Target Environments

@@ -8,9 +8,12 @@
 % Key Hardware & System Specs:
 %   - Host name: hive-mind
 %   - Operating System: Ubuntu 26.04.1 LTS (codename 'resolute')
+%   - CPU: Intel Core i7-14700K (20C/28T: 8P + 12E, 3.4 GHz base / 5.5 GHz boost)
+%   - Motherboard: ASRock B760M Pro RS (Micro-ATX, DDR5, 3x M.2 slots)
+%   - RAM: 128 GB Crucial DDR5 Kit (slots A2 & B2, DDR5-5600 Non-ECC)
+%   - GPU: ZOTAC GAMING GeForce RTX 5070 Ti SOLID CORE (16 GB GDDR7, Blackwell SM 120 / Compute Capability 12.0, 300W TDP, 2.5-slot, 303.5 mm)
+%   - Storage: 1x 2TB Seagate FireCuda 530 Gen4 NVMe SSD (Phison E18, 2,550 TBW, slot M2_1 under heatsink armor)
 %   - NVIDIA Driver: 615.71.09, KMD Version: 615.71.09, CUDA UMD Version: 13.4
-%   - GPU: NVIDIA GeForce RTX 5070 Ti (16 GB GDDR7, Blackwell SM 120 / Compute Capability 12.0, 300W TDP)
-%   - Developer workstation contrast: Quadro T2000 (Turing SM 75)
 % Toolchain Invariants:
 %   - Strict Pixi toolchain (.pixi/ directory, pixi.toml, pixi.lock, pyproject.toml)
 %   - Pinned environments: 'default', 'dev' (with CUDA 12.8 / cu128 PyTorch 2.7.0 supporting SM 120),
@@ -31,13 +34,56 @@
 
 The architectural foundation of the TaxonVision-MLOps ecosystem relies on a highly specified, bare-metal physical compute topology, designed to eliminate the hypervisor overhead typically associated with virtualised cloud environments. The principal workstation and training node, designated as \texttt{hive-mind}, operates on Ubuntu 26.04.1 LTS (codename `resolute'), leveraging Linux Kernel 6.8+ to ensure advanced scheduler capabilities and extensive peripheral hardware support. The utilisation of an x86\_64 architecture provides the necessary compatibility matrix for the compiled binary dependencies critical to the machine learning pipeline.
 
-Central to the computational capacity of the \texttt{hive-mind} node is the AMD Ryzen 9 9950X CPU (16 physical cores, 32 threads, 4.3 GHz base / 5.7 GHz boost) and 64 GB DDR5-6000 ECC RAM, operating alongside the NVIDIA GeForce RTX 5070 Ti hardware accelerator. This graphics processing unit represents the vanguard of the Blackwell architecture, characterised by Streaming Multiprocessor (SM) 120 and Compute Capability 12.0. Equipped with 16 Gigabytes of GDDR7 Video Random Access Memory (VRAM), the accelerator guarantees unprecedented memory bandwidth for high-resolution image batch processing. Operating within a 300-Watt Thermal Design Power (TDP) envelope, the RTX 5070 Ti communicates with the host processor via a Peripheral Component Interconnect Express (PCIe) 5.0 interface. This generation of the PCIe standard ensures a symmetrical bandwidth of 32 Giga-transfers per second (GT/s) per lane, effectively eliminating the data-starvation bottlenecks frequently observed during the asynchronous transfer of multi-gigabyte Parquet datasets from system memory to device VRAM.
+Central to the computational capacity of the \texttt{hive-mind} node is the Intel Core i7-14700K processor (Raptor Lake Refresh microarchitecture), featuring 20 physical cores and 28 execution threads. The physical silicon incorporates an asymmetric hybrid topography comprising 8 Performance-cores (P-cores) with Hyper-Threading operating at a 3.4~GHz base and 5.5~GHz turbo boost frequency, alongside 12 Efficient-cores (E-cores) operating up to 4.3~GHz. The compute platform is anchored by an ASRock B760M Pro RS motherboard (Micro-ATX form factor, Intel B760 chipset), providing four DDR5 DIMM slots, triple M.2 storage connectivity, and PCIe 5.0 signalling integrity.
 
-In order to fully harness this computational capacity, the system necessitates a rigorous driver interlock. The host environment is strictly constrained to NVIDIA Driver version 615.71.09, synchronised with a Kernel Mode Driver (KMD) version 615.71.09 and a Compute Unified Device Architecture (CUDA) User Mode Driver (UMD) version 13.4. This configuration establishes a stable foundation for the CUDA 12.8 toolchain, which is non-negotiable for compiling custom kernels and executing PyTorch 2.7.0 operations optimally on the Blackwell microarchitecture.
+System memory is provisioned through a 128~GB Crucial DDR5 kit operating at DDR5-5600 (installed specifically across primary memory channels in slots A2 and B2). This 128~GB memory pool establishes deterministic headroom for high-throughput in-memory dataset transformations, eliminating swap paging during multi-worker feature extraction.
+
+Neural acceleration is powered by the ZOTAC GAMING GeForce RTX 5070 Ti SOLID CORE graphics card. This accelerator represents the vanguard of the NVIDIA Blackwell microarchitecture, featuring Streaming Multiprocessor (SM) 120 and Compute Capability 12.0. Equipped with 16~Gigabytes of GDDR7 Video Random Access Memory (VRAM) across a 256-bit memory bus, the accelerator delivers massive memory bandwidth for high-resolution image batch processing. Communicating via a PCIe 5.0 interface at 32 Giga-transfers per second (GT/s) per lane within a 300-Watt Thermal Design Power (TDP) envelope, power delivery is routed through a single 16-pin 12V-2x6 connector. Within the Micro-ATX chassis, the card's 2.5-slot physical design (303.5~mm length) mandates highest-position power supply unit (PSU) bracket mounting to preserve unconstrained cable clearance and prevent 12V-2x6 harness stress.
+
+Primary persistent storage is anchored by a 2~TB Seagate FireCuda 530 Gen4 NVMe SSD, installed directly into motherboard slot M2\_1 (Hyper M.2 PCIe Gen4x4). Featuring 176-layer 3D TLC NAND, a dedicated 2~GB DDR4 DRAM cache, and the Phison PS5018-E18 controller, this drive delivers up to 7,300~MB/s sequential read bandwidth and an endurance rating of 2,550 Terabytes Written (TBW).
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}lXl@{}}
+\toprule
+\textbf{Subsystem} & \textbf{Component \& Architectural Specification} & \textbf{Operational Domain} \\
+\midrule
+CPU & Intel Core i7-14700K (20C/28T: 8P @ 5.5\,GHz, 12E @ 4.3\,GHz) & Compute Core \\
+Motherboard & ASRock B760M Pro RS (Micro-ATX, Intel B760, 3x M.2) & System Bus \\
+System Memory & 128\,GB Crucial DDR5-5600 (Dual-Channel, Slots A2 \& B2) & Host RAM \\
+GPU & ZOTAC GAMING RTX 5070 Ti SOLID CORE (16\,GB GDDR7, SM 120) & GPU Silicon \\
+Primary NVMe & 2\,TB Seagate FireCuda 530 Gen4 (Phison E18, 2,550 TBW, Slot M2\_1) & Data Plane \\
+Operating System & Ubuntu 26.04.1 LTS (\texttt{resolute}, Kernel 6.8+, x86\_64) & Host OS \\
+NVIDIA Toolchain & Driver 615.71.09 $\cdot$ KMD 615.71.09 $\cdot$ CUDA UMD 13.4 $\cdot$ Runtime 12.8 & Accelerator API \\
+\bottomrule
+\end{tabularx}
+\caption{Physical bare-metal host specification and component topology of the \texttt{hive-mind} node.}
+\label{tab:hardware_topology}
+\end{table}
+
+\subsection{Asymmetric Core Affinity and Memory Allocation Topology}
+\label{subsec:core_affinity_topology}
+
+To eliminate latency variance and resource contention across heterogeneous workloads, the platform enforces strict asymmetric CPU affinity pinning across the 28 execution threads:
+\begin{itemize}
+    \item \textbf{Tensor Execution \& Gradient Hot Loops (\texttt{taskset -c 0-15}):} The 16 threads associated with the 8 physical Performance-cores (cores 0--7 with SMT) are reserved exclusively for PyTorch model training forward/backward loops, Class-Balanced Loss computation, and low-latency ONNX Runtime inference sessions. This pinning guarantees uninterrupted access to dedicated 2\,MB L2 caches per P-core and the shared 33\,MB Intel Smart Cache (L3).
+    \item \textbf{Arrow I/O, Ingestion, \& Background Daemons (\texttt{taskset -c 16-27}):} The 12 single-threaded Efficient-cores (cores 8--19) execute asynchronous Apache Arrow columnar slicing, Tar archive decompression, DVC chunk transfers, HTTP gateway routing, and Prometheus metrics scraping. By isolating high-throughput I/O on E-cores, cache eviction on the mathematical hot loops is mathematically prevented.
+\end{itemize}
+
+Furthermore, the 128~GB system memory envelope is partitioned deterministically:
+\begin{itemize}
+    \item \textbf{Host OS, Daemons, \& K3s Control Plane (16\,GB):} Sustains the base operating system, systemd services, containerd runtime, and the single-node Kubernetes control plane.
+    \item \textbf{In-Memory Arrow Dataset \& Tensor Cache (64\,GB):} Provides a zero-copy memory-mapped buffer for pre-decoded biological image embeddings, taxonomic feature manifests, and active learning candidate pools.
+    \item \textbf{Ephemeral CI Runners \& DataLoader Worker Pools (32\,GB):} Accommodates concurrent test execution pods, parallel PyTorch dataloader worker memory pinning (\texttt{pin\_memory=True}), and Optuna Bayesian optimization trial buffers.
+    \item \textbf{Elastic Page Cache \& Safety Headroom (16\,GB):} Dynamic Linux page cache buffer ensuring zero disk thrashing during heavy burst ingestion.
+\end{itemize}
+
+In order to fully harness this computational capacity, the system necessitates a rigorous driver interlock. The host environment is strictly constrained to NVIDIA Driver version 615.71.09, synchronised with a Kernel Mode Driver (KMD) version 615.71.09, a Compute Unified Device Architecture (CUDA) User Mode Driver (UMD) version 13.4, and host compiler \texttt{nvcc} version 13.4.92. Because the NVIDIA user-mode driver preserves backward binary compatibility, containerised execution and the Pixi toolchain statically lock against the CUDA 12.8 (\texttt{cu128}) runtime. This CUDA 12.8 runtime is non-negotiable for dispatching compiled PTX and SASS machine code targeting the Blackwell microarchitecture (Compute Capability 12.0 / SM 120), as earlier deep learning binary releases omit the SM~120 kernel binaries and crash with a missing-kernel-image error.
 
 In stark contrast to the high-performance \texttt{hive-mind} node, the ecosystem must also accommodate disparate developer workstation baselines. For instance, edge deployment simulations and initial algorithm prototyping may occur on legacy hardware, such as the NVIDIA Quadro T2000, which relies on the older Turing architecture (SM 75). The discrepancy in compute capabilities between the primary training node and auxiliary workstations mandates a flexible yet highly reproducible software environment encapsulation strategy, ensuring that algorithmic logic remains invariant irrespective of the underlying physical acceleration substrate.
 
-The storage layer of the bare-metal host is engineered to saturate the PCIe 5.0 bus. The local Non-Volatile Memory Express (NVMe) solid-state drive layout is partitioned deliberately to isolate operating system execution from the machine learning data plane. A dedicated high-speed partition is reserved exclusively for Parquet batch streaming and the caching of decoded image tensors. This partition ensures deterministic I/O bandwidth guarantees, preventing the operating system's background telemetry and logging operations from preempting the read operations of the data loader workers. The mathematical formulation of the I/O throughput must satisfy the condition where the data supply rate exceeds the GPU consumption rate, expressed as:
+The storage layer of the bare-metal host is engineered to saturate the PCIe 5.0 and Gen4 NVMe buses. The local storage layout isolates operating system execution from the machine learning data plane. A dedicated high-speed partition on the Seagate FireCuda 530 is reserved exclusively for Parquet batch streaming and the caching of decoded image tensors. This partition ensures deterministic I/O bandwidth guarantees, preventing the operating system's background telemetry and logging operations from preempting the read operations of the data loader workers. The mathematical formulation of the I/O throughput must satisfy the condition where the data supply rate exceeds the GPU consumption rate, expressed as:
 \[
     \mathcal{B}_{\text{read}} \ge \frac{N \times S_{\text{tensor}}}{\mathcal{T}_{\text{forward}} + \mathcal{T}_{\text{backward}}}
 \]
@@ -54,9 +100,9 @@ Conversely, the \texttt{ci-dev} environment is defined as a minimal CPU continuo
 
 Beyond development contexts, the platform defines the \texttt{-e ci} environment (\texttt{features = ["cpu"]}) to serve as a minimal CPU container serving environment for lightweight Docker deployments, explicitly distinct from the CI test execution environment (\texttt{ci-dev}). Furthermore, the \texttt{default} environment provides a minimal GPU runtime (\texttt{features = ["gpu"]}).
 
-The resolution logic prioritises specific package indices to prevent supply chain poisoning and ensure maximum performance. The channel priority resolution mandates that base system libraries and scientific utilities are sourced from \texttt{conda-forge}, whilst machine learning frameworks are pulled securely from the \texttt{pytorch} and \texttt{nvidia} channels. The exact configuration is formulated as a hierarchical fallback mechanism:
+The resolution logic prioritises specific package indices to prevent supply chain poisoning and ensure maximum performance. The package resolution mandates that base system libraries and scientific utilities are sourced strictly from \texttt{conda-forge}, whilst CUDA-accelerated PyTorch binaries are pulled securely from the official PyPI distribution index statically targeted to CUDA 12.8 (\texttt{https://download.pytorch.org/whl/cu128}). The foundational Conda configuration specifies:
 \[
-    \mathcal{C} = \left\langle \texttt{conda-forge}, \texttt{pytorch}, \texttt{nvidia} \right\rangle
+    \mathcal{C}_{\text{conda}} = \left\langle \texttt{conda-forge} \right\rangle, \quad \mathcal{I}_{\text{pypi}} = \left\langle \texttt{https://download.pytorch.org/whl/cu128} \right\rangle
 \]
 
 The cornerstone of this environmental reproducibility is the \texttt{pixi.lock} file. Unlike standard requirement files, \texttt{pixi.lock} serves as a cryptographic ledger. It records the exact uniform resource locators, the topological graph of the resolved dependencies, and the SHA-256 cryptographic hashes of every downloaded binary artefact. This immutability prevents upstream supply chain drift. When a developer or a deployment pipeline invokes \texttt{pixi install}, the system mathematically verifies the integrity of the fetched repodata against the locked hashes, throwing a fatal exception if a deviation is detected. This guarantees that the execution environment on the \texttt{hive-mind} node is bit-for-bit identical to the environment constructed inside a Docker container or an autonomous agent's sandbox.
