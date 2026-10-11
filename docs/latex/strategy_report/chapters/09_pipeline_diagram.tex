@@ -135,7 +135,7 @@
     \textbullet\ \textbf{Rank Fusion (RRF):} $w_{\mathrm{vis}} \cdot \mathrm{Sim}_{\cos}(z) + w_{\mathrm{geo}} \cdot \mathrm{Prior}_{\mathrm{geo}}(\mathrm{coord},\,\mathrm{month})$\\[0.8mm]
     \textbf{Observability \& Epistemic Monitoring:}\\
     \textbullet\ Prometheus metrics: Latency histograms, conformal set size tracking, OOD rate\\
-    \textbullet\ \textbf{Wasserstein-1 Drift Detector:} Norm-projected $W_1$ distance on feature space
+    \textbullet\ \textbf{Two-Tier Drift:} Live $W_1$ scalar norm monitoring \& Offline full-manifold MMD
 };
 
 \node[box={5.1cm}] (k8s) at (5.65, -1.9) {%

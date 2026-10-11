@@ -41,7 +41,7 @@ Git commit tagging of runs & implemented & The Git commit hash and branch identi
 \midrule
 Main-branch training stage & partial & GPU stage in \texttt{Jenkinsfile} enabled with Optuna tuning, but it currently operates on a seeded synthetic embedding split; wiring the cached features of the real dataset is outstanding. \\
 Conformal invariant on the candidate model & partial & The coverage invariant gates the source code, but is not yet applied to the freshly trained candidate before promotion. \\
-Drift detection and active learning & partial & Wasserstein-1 drift and BADGE query modules exist; neither is connected to a schedule, an alert or a webhook. \\
+Drift detection and active learning & partial & Two-tier drift (live Wasserstein-1 and full-manifold MMD) and BADGE query modules exist; neither is connected to a schedule, an alert or a webhook. \\
 Container composition for grading & partial & The compose file covers object storage, Prometheus and Grafana only. \\
 \midrule
 Filtered HNSW retrieval and rank fusion & planned & Chapter~\ref{ch:vision_rag}. \\
