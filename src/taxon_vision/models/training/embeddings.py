@@ -55,6 +55,134 @@ def _compute_additional_metrics(val_logits: torch.Tensor, val_lbl: torch.Tensor)
         return 0.0, 0.0
 
 
+def _train_cached_epoch(
+    head: nn.Module,
+    train_emb: torch.Tensor,
+    train_lbl: torch.Tensor,
+    permutation: torch.Tensor,
+    batch_size: int,
+    noise_std: float,
+    optimizer: optim.Optimizer,
+    criterion: nn.Module,
+) -> float:
+    """Execute a single training epoch over cached embeddings in mini-batches.
+
+    Args:
+        head: Differentiable classification head module.
+        train_emb: Device tensor of training representations.
+        train_lbl: Device tensor of training integer targets.
+        permutation: Pseudo-random permutation of indices.
+        batch_size: Mini-batch size.
+        noise_std: Standard deviation of Gaussian noise injected into representations.
+        optimizer: Optimizer targeting head parameters.
+        criterion: Loss criterion.
+
+    Returns:
+        Mean training loss across batches.
+    """
+    head.train()
+    epoch_loss = 0.0
+    num_batches = 0
+    num_samples = train_emb.shape[0]
+
+    for i in range(0, num_samples, batch_size):
+        indices = permutation[i : i + batch_size]
+        batch_x, batch_y = train_emb[indices], train_lbl[indices]
+        if noise_std > 0.0:
+            batch_x = batch_x + torch.randn_like(batch_x) * noise_std
+
+        optimizer.zero_grad()
+        logits = head(batch_x)
+        loss = criterion(logits, batch_y)
+        loss.backward()
+        optimizer.step()
+
+        epoch_loss += float(loss.item())
+        num_batches += 1
+
+    return epoch_loss / max(1, num_batches)
+
+
+def _evaluate_cached_split(
+    head: nn.Module,
+    val_emb: torch.Tensor,
+    val_lbl: torch.Tensor,
+    criterion: nn.Module,
+) -> tuple[float, float, float, float]:
+    """Evaluate validation loss, accuracy, Macro F1, and PR-AUC on cached embeddings.
+
+    Args:
+        head: Classification head module in evaluation mode.
+        val_emb: Device tensor of validation feature vectors.
+        val_lbl: Device tensor of validation ground-truth labels.
+        criterion: Differentiable loss function.
+
+    Returns:
+        Tuple of (val_loss, val_accuracy, val_f1, val_pr_auc).
+    """
+    head.eval()
+    with torch.no_grad():
+        val_logits = head(val_emb)
+        val_loss = float(criterion(val_logits, val_lbl).item())
+        preds = torch.argmax(val_logits, dim=1)
+        val_acc = float((preds == val_lbl).sum().item()) / max(1, val_lbl.size(0))
+        val_f1, val_pr_auc = _compute_additional_metrics(val_logits, val_lbl)
+    return val_loss, val_acc, val_f1, val_pr_auc
+
+
+def _track_checkpoint(
+    head: nn.Module,
+    val_pr_auc: float,
+    best_pr_auc: float,
+    best_weights: dict[str, torch.Tensor] | None,
+    patience: int,
+) -> tuple[float, dict[str, torch.Tensor] | None, int]:
+    """Update best validation score and checkpoint state dict.
+
+    Args:
+        head: Model head module.
+        val_pr_auc: Validation PR-AUC score for current epoch.
+        best_pr_auc: Peak validation PR-AUC observed so far.
+        best_weights: State dict of best model observed so far.
+        patience: Current counter of stagnant epochs.
+
+    Returns:
+        Tuple of (updated_best_pr_auc, updated_best_weights, updated_patience).
+    """
+    if val_pr_auc > best_pr_auc:
+        return val_pr_auc, copy.deepcopy(head.state_dict()), 0
+    return best_pr_auc, best_weights, patience + 1
+
+
+def _should_stop_early(
+    epoch: int,
+    val_pr_auc: float,
+    patience_counter: int,
+    cfg: HeadTrainingConfig,
+) -> bool:
+    """Evaluate whether training should terminate early via pruning or patience limits.
+
+    Args:
+        epoch: Current epoch index.
+        val_pr_auc: Validation PR-AUC achieved.
+        patience_counter: Number of epochs since last improvement.
+        cfg: Head training configuration.
+
+    Returns:
+        True if training should stop immediately, False otherwise.
+    """
+    if cfg.pruner_callback is not None and cfg.pruner_callback(epoch, val_pr_auc):
+        return True
+    if cfg.early_stopping_patience is not None and patience_counter >= cfg.early_stopping_patience:
+        logger.info(
+            "Early stopping triggered at epoch %d: val_pr_auc did not improve for %d epochs.",
+            epoch,
+            cfg.early_stopping_patience,
+        )
+        return True
+    return False
+
+
 def train_head_on_cached_embeddings(
     head: nn.Module,
     data: EmbeddingSplit,
@@ -120,66 +248,38 @@ def train_head_on_cached_embeddings(
     patience_counter = 0
 
     for epoch in range(cfg.epochs):
-        head.train()
         permutation = torch.randperm(num_samples, device=device)
-        epoch_loss = 0.0
-        num_batches = 0
+        avg_train_loss = _train_cached_epoch(
+            head=head,
+            train_emb=train_emb,
+            train_lbl=train_lbl,
+            permutation=permutation,
+            batch_size=cfg.batch_size,
+            noise_std=cfg.noise_std,
+            optimizer=optimizer,
+            criterion=criterion,
+        )
+        val_loss, val_acc, val_f1, val_pr_auc = _evaluate_cached_split(
+            head=head,
+            val_emb=val_emb,
+            val_lbl=val_lbl,
+            criterion=criterion,
+        )
 
-        for i in range(0, num_samples, cfg.batch_size):
-            indices = permutation[i : i + cfg.batch_size]
-            batch_x, batch_y = train_emb[indices], train_lbl[indices]
-            if cfg.noise_std > 0.0:
-                batch_x = batch_x + torch.randn_like(batch_x) * cfg.noise_std
-
-            optimizer.zero_grad()
-            logits = head(batch_x)
-            loss = criterion(logits, batch_y)
-            loss.backward()
-            optimizer.step()
-
-            epoch_loss += float(loss.item())
-            num_batches += 1
-
-        avg_train_loss = epoch_loss / max(1, num_batches)
         history["train_loss"].append(avg_train_loss)
-
-        # Validation evaluation
-        head.eval()
-        with torch.no_grad():
-            val_logits = head(val_emb)
-            val_loss_val = float(criterion(val_logits, val_lbl).item())
-            preds = torch.argmax(val_logits, dim=1)
-            val_acc = float((preds == val_lbl).sum().item()) / max(1, val_lbl.size(0))
-
-            val_f1_val, val_pr_auc_val = _compute_additional_metrics(val_logits, val_lbl)
-
-        history["val_loss"].append(val_loss_val)
+        history["val_loss"].append(val_loss)
         history["val_accuracy"].append(val_acc)
-        history["val_f1"].append(val_f1_val)
-        history["val_pr_auc"].append(val_pr_auc_val)
+        history["val_f1"].append(val_f1)
+        history["val_pr_auc"].append(val_pr_auc)
 
         if scheduler is not None:
-            scheduler.step(val_pr_auc_val)
+            scheduler.step(val_pr_auc)
 
-        # Track best model checkpoint
-        if val_pr_auc_val > best_pr_auc:
-            best_pr_auc = val_pr_auc_val
-            best_weights = copy.deepcopy(head.state_dict())
-            patience_counter = 0
-        else:
-            patience_counter += 1
+        best_pr_auc, best_weights, patience_counter = _track_checkpoint(
+            head, val_pr_auc, best_pr_auc, best_weights, patience_counter
+        )
 
-        if cfg.pruner_callback is not None:
-            should_stop = cfg.pruner_callback(epoch, val_pr_auc_val)
-            if should_stop:
-                break
-
-        if cfg.early_stopping_patience is not None and patience_counter >= cfg.early_stopping_patience:
-            logger.info(
-                "Early stopping triggered at epoch %d: val_pr_auc did not improve for %d epochs.",
-                epoch,
-                cfg.early_stopping_patience,
-            )
+        if _should_stop_early(epoch, val_pr_auc, patience_counter, cfg):
             break
 
     if cfg.restore_best_weights and best_weights is not None:
