@@ -1,0 +1,135 @@
+\providecolor{TaxonPrimary}{HTML}{1976D2}
+\providecolor{TaxonSecondary}{HTML}{388E3C}
+\providecolor{TaxonAccent}{HTML}{F57C00}
+\providecolor{TaxonDark}{HTML}{212121}
+\providecolor{mgrayborder}{HTML}{616161}
+\providecolor{mgray}{HTML}{F5F5F5}
+
+\begin{figure}[htbp]
+    \centering
+    \resizebox{\textwidth}{!}{%
+    \begin{tikzpicture}[
+        node distance=1.5cm and 2cm,
+        font=\sffamily\small,
+        >=stealth,
+        % Styles
+        process/.style={
+            rectangle,
+            rounded corners=4pt,
+            draw=TaxonDark,
+            fill=white,
+            thick,
+            inner sep=8pt,
+            align=center,
+            drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+            minimum width=4.5cm,
+            minimum height=1.2cm
+        },
+        databox/.style={
+            rectangle,
+            rounded corners=4pt,
+            draw=TaxonPrimary,
+            fill=TaxonPrimary!10,
+            thick,
+            inner sep=8pt,
+            align=left,
+            drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+            minimum width=4.5cm,
+            minimum height=1.2cm
+        },
+        metricbox/.style={
+            rectangle,
+            rounded corners=4pt,
+            draw=TaxonSecondary,
+            fill=TaxonSecondary!10,
+            thick,
+            inner sep=8pt,
+            align=left,
+            drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+            minimum width=4.5cm,
+            minimum height=1.2cm
+        },
+        artifactbox/.style={
+            rectangle,
+            rounded corners=4pt,
+            draw=TaxonAccent,
+            fill=TaxonAccent!10,
+            thick,
+            inner sep=8pt,
+            align=left,
+            drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+            minimum width=4.5cm,
+            minimum height=1.2cm
+        },
+        groupbox/.style={
+            rectangle,
+            rounded corners=6pt,
+            draw=mgrayborder,
+            fill=mgray,
+            dashed,
+            inner sep=15pt
+        },
+        connector/.style={
+            ->,
+            thick,
+            draw=TaxonDark
+        },
+        bidirectional/.style={
+            <->,
+            thick,
+            draw=TaxonDark,
+            dashed
+        }
+    ]
+
+    % 1. Training Pod / Ephemeral CI
+    \node[process] (pod) {\textbf{Ephemeral CI / Local Training}\\Hydra Settings / \texttt{Settings}};
+    
+    \node[databox, below=0.5cm of pod] (creds) {\textbf{Credentials Mapping}\\ \texttt{DAGSHUB\_USER} $\to$ \texttt{MLFLOW\_...}\\ \texttt{DAGSHUB\_TOKEN} $\to$ \texttt{MLFLOW\_...}};
+    
+    \node[databox, below=0.5cm of creds] (gitdvc) {\textbf{Version Control}\\ Git commit SHA\\ DVC dataset hash};
+
+    \begin{scope}[on background layer]
+        \node[groupbox, fit=(pod)(creds)(gitdvc), label={[font=\bfseries\color{TaxonDark}]above:1. Training Process / CI}] (training_group) {};
+    \end{scope}
+
+    % 2. MLflow Tracking Architecture
+    \node[process, right=2.5cm of pod, yshift=-0.5cm] (dagshub) {\textbf{DagsHub Remote Server}\\\texttt{https://dagshub.com/.../mlflow}};
+    
+    \node[databox, below=0.5cm of dagshub] (metadata) {\textbf{Run Metadata (taxon-vision-head-training)}\\Git SHA, DVC commit hash\\Hydra config snapshot\\CLI invocation arguments};
+    
+    \node[metricbox, below=0.5cm of metadata] (metrics) {\textbf{Metrics Logging (per-epoch)}\\\texttt{train\_loss}, \texttt{val\_loss}\\\texttt{val\_acc\_top1}, \texttt{val\_acc\_top5}\\\texttt{val\_macro\_f1}};
+    
+    \node[artifactbox, below=0.5cm of metrics] (artifacts) {\textbf{Artifact Logging (S3)}\\\texttt{head.pt} weights\\Confusion matrix heatmaps\\Classification report MD};
+
+    \begin{scope}[on background layer]
+        \node[groupbox, fit=(dagshub)(metadata)(metrics)(artifacts), label={[font=\bfseries\color{TaxonPrimary}]above:2. MLflow Experiment Tracking}] (tracking_group) {};
+    \end{scope}
+
+    % 3. Model Registry Lineage
+    \node[process, right=2.5cm of metadata, text width=5cm] (staging) {\textbf{Candidate Staging}\\Automated tagging of top run\\as candidate champion};
+    
+    \node[process, below=1cm of staging, text width=5cm] (lineage) {\textbf{Model Lineage Graph}\\Cryptographic bidirectional binding};
+
+    \begin{scope}[on background layer]
+        \node[groupbox, fit=(staging)(lineage), label={[font=\bfseries\color{TaxonSecondary}]above:3. Model Registry}] (registry_group) {};
+    \end{scope}
+
+    % Connections
+    \draw[connector] (training_group.east) -- node[above, align=center, font=\scriptsize] {Telemetry\\Stream} (tracking_group.west);
+    
+    \draw[connector] (dagshub) -- (metadata);
+    \draw[connector] (metadata) -- (metrics);
+    \draw[connector] (metrics) -- (artifacts);
+    
+    \draw[connector] (tracking_group.east) -- node[above, align=center, font=\scriptsize] {Promotion\\Logic} (registry_group.west);
+    
+    \draw[bidirectional] (lineage.west) -| (gitdvc.east);
+    \draw[bidirectional] (lineage.west) -- (metadata.east);
+    \draw[bidirectional] (lineage.south) -- ++(0,-0.5) -| node[pos=0.25, below, font=\scriptsize] {ONNX Serving Artifact $\leftrightarrow$ MLflow Model Version} (artifacts.east);
+
+    \end{tikzpicture}%
+    }
+    \caption{MLflow tracking architecture, cryptographic model lineage binding, and DagsHub remote artifact registry.}
+    \label{fig:mlflow_registry_lineage}
+\end{figure}

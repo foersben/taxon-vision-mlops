@@ -1,0 +1,105 @@
+\providecolor{TaxonPrimary}{HTML}{1976D2}
+\providecolor{TaxonSecondary}{HTML}{388E3C}
+\providecolor{TaxonAccent}{HTML}{F57C00}
+\providecolor{TaxonDark}{HTML}{263238}
+
+\resizebox{\textwidth}{!}{
+\begin{tikzpicture}[
+    node distance=1.5cm and 2.5cm,
+    font=\sffamily,
+    >=Stealth,
+    box/.style={
+        rectangle, 
+        rounded corners=3pt, 
+        draw=#1, 
+        fill=#1!10, 
+        thick, 
+        align=center, 
+        inner sep=10pt, 
+        drop shadow={opacity=0.1, shadow xshift=2pt, shadow yshift=-2pt}
+    },
+    zone/.style 2 args={
+        rectangle, 
+        rounded corners=5pt, 
+        draw=#1!50, 
+        fill=#1!5, 
+        dashed, 
+        thick, 
+        inner sep=15pt,
+        label={[anchor=north west, font=\bfseries\color{#1}, inner sep=5pt]north west:#2}
+    },
+    arrow/.style={
+        ->, 
+        thick, 
+        color=TaxonDark
+    }
+]
+
+% Image Preprocessing Zone
+\node[box=TaxonPrimary] (input) {
+    \textbf{Standardized Input}\\
+    RGB Image Tensor\\
+    $(3, 224, 224)$ or $(3, 384, 384)$
+};
+
+% Frozen Backbone Extractor Zone
+\node[box=TaxonDark, right=2cm of input] (backbone) {
+    \textbf{Backbone Factory Dispatch}\\
+    \textit{Frozen Trunk Guarantee: $\nabla_{\theta_{\text{backbone}}} = 0$}\\[10pt]
+    \begin{tabular}{lr}
+        \textbf{Candidate Backbones (Timm/HF)} & \textbf{Dim ($\mathbb{R}^D$)} \\
+        \midrule
+        \texttt{vit\_base\_patch14\_reg4\_dinov2.lvd142m} & 768 \\
+        \texttt{image-bioclip-2} & 512 \\
+        \texttt{convnext\_base.fb\_in22k\_ft\_in1k} & 1024 \\
+        \texttt{mobilenetv4\_conv\_medium} & 512 \\
+    \end{tabular}
+};
+
+% Feature extraction loop yield
+\node[box=TaxonSecondary, right=2cm of backbone] (features) {
+    \textbf{Feature Extraction}\\
+    Embedding Vectors\\
+    $\mathbf{z}_i \in \mathbb{R}^D$
+};
+
+% Memory-Mapped Cache Zone
+\node[box=TaxonSecondary, below=2cm of features] (cache) {
+    \textbf{Memory-Mapped Array}\\
+    \texttt{np.memmap} backing\\
+    \texttt{embeddings.npy}\\
+    \textit{(Disk-resident, zero-RAM)}
+};
+
+\node[box=TaxonSecondary, left=1cm of cache] (manifest) {
+    \textbf{Manifest Pointer Metadata}\\
+    \texttt{observations.parquet}\\
+    \textit{Aligned 1:1 with \texttt{np.memmap} rows}
+};
+
+% Classification Head Zone
+\node[box=TaxonAccent, left=1.5cm of manifest] (head) {
+    \textbf{Trainable Linear Probing Head}\\
+    $\hat{\mathbf{y}} = \mathbf{W} \mathbf{z} + \mathbf{b}$\\
+    where $\mathbf{W} \in \mathbb{R}^{C \times D}$\\[5pt]
+    \textit{Fast iterative head training}\\
+    \textit{(Epoch compute: hours $\rightarrow$ seconds)}
+};
+
+% Arrows
+\draw[arrow] (input) -- node[above, align=center] {Batching} (backbone);
+\draw[arrow] (backbone) -- node[above, align=center] {Extraction Loop} (features);
+\draw[arrow] (features) -- node[right, align=center] {Serialisation} (cache);
+\draw[<->, thick, TaxonDark, dashed] (manifest) -- node[above, align=center] {Sync} (cache);
+\draw[arrow] (cache) edge[bend left=15] node[below, align=center] {High-Speed Read Directly Off Memory-Map} (head);
+
+% Zones (using fit library)
+\begin{scope}[on background layer]
+    \node[zone={TaxonPrimary}{Image Preprocessing}, fit=(input)] {};
+    \node[zone={TaxonDark}{Frozen Backbone Extractor}, fit=(backbone)] {};
+    \node[zone={TaxonSecondary}{Memory-Mapped Caching System}, fit=(features)(cache)(manifest)] {};
+    \node[zone={TaxonAccent}{Classification Head Optimization}, fit=(head)] {};
+\end{scope}
+
+\end{tikzpicture}
+}

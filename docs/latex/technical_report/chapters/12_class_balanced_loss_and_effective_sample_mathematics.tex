@@ -31,6 +31,8 @@ When optimising deep neural networks on such extreme Pareto distributions using 
 
 A classical countermeasure to this structural imbalance involves the application of naive inverse class frequency weighting. In this theoretical paradigm, the loss contribution of each discrete observation is linearly scaled by the reciprocal of the total observation count for its corresponding ground-truth class. However, this approach introduces an opposite, yet equally destructive, mathematical pathology. The reciprocal scaling mechanism generates extreme gradient magnitude variance for the rarest outliers. A single noisy, atypical, or mislabelled observation belonging to a rare taxon, when amplified by a massive inverse frequency multiplier, produces explosive and highly unstable gradient updates. These volatile updates systematically destabilise the momentum buffers of modern adaptive optimisers, such as Adam and AdamW. The resultant non-convergent, oscillatory training dynamics fail to discover generalised minima. Consequently, neither the unweighted baseline nor the naive inverse frequency paradigm offers a mathematically sound framework for optimising deep networks over ecological long-tail distributions.
 
+\input{figures/fig_06_taxonomic_hierarchy_and_loss.tikz}
+
 \section{Effective Number of Samples Mathematical Derivation}
 \label{sec:effective_number_mathematics}
 

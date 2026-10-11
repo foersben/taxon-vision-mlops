@@ -5,6 +5,8 @@
 
 The computational cost of fine-tuning large-scale vision foundation models across thousands of granular biological classes renders traditional end-to-end backpropagation intractable for rapid experimentation. TaxonVision-MLOps addresses this limitation by adopting a decoupled linear probing philosophy. This approach strictly separates the extraction of high-dimensional visual priors, which are computed via pre-trained, frozen vision transformer or convolutional neural network (CNN) backbones, from the taxonomic categorisation task. By restricting trainable parameters strictly to a terminal, lightweight linear projection head, the platform accelerates optimisation cycles from hours to mere seconds. This architecture fundamentally eliminates the risk of catastrophic forgetting of generalized visual representations whilst simultaneously mitigating gradient instability and curbing excessive GPU memory consumption.
 
+\input{figures/fig_13_head_training_and_early_stopping.tikz}
+
 \section{TaxonClassifier Architecture}
 \label{sec:taxonclassifier_architecture}
 

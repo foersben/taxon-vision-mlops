@@ -25,6 +25,8 @@ To guide the selection of the subsequent hyperparameter configuration, the algor
 \end{equation}
 By maximising this ratio, the TPE sampler systematically selects configurations $x$ that have a high probability under $g(x)$ and a correspondingly low probability under $\ell(x)$. This elegant formulation balances the exploration of the parameter space with the exploitation of known performant regions, without the severe computational overhead of inverting covariance matrices required by traditional GP surrogates. Consequently, TPE is exceptionally well-suited for the conditional and continuous parameter spaces defined in the TaxonVision tuning module, permitting rapid convergence upon optimal hyperparameter combinations for the linear classification head.
 
+\input{figures/fig_08_optuna_asha_mlflow_loop.tikz}
+
 \section{Search Space Parameterisation and Objective Formulation}
 \label{sec:search_space_parameterisation}
 

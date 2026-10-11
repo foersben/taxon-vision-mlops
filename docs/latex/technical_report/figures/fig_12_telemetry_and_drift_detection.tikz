@@ -1,0 +1,89 @@
+\providecolor{TaxonPrimary}{HTML}{1976D2}
+\providecolor{TaxonSecondary}{HTML}{388E3C}
+\providecolor{TaxonDark}{HTML}{263238}
+\providecolor{TaxonAccent}{HTML}{E65100}
+
+\begin{figure}[htbp]
+    \centering
+    \resizebox{\textwidth}{!}{
+    \begin{tikzpicture}[
+        node distance=1.5cm and 2cm,
+        font=\sffamily\small,
+        container/.style={draw=TaxonDark, fill=gray!5, thick, rounded corners, rectangle, inner xsep=15pt, inner ysep=15pt, dashed},
+        component/.style={draw=TaxonDark, fill=white, thick, rounded corners, rectangle, align=center, minimum height=1.2cm, drop shadow, text width=4cm},
+        highlight/.style={draw=TaxonAccent, fill=TaxonAccent!5, thick, rounded corners, rectangle, align=center, minimum height=1.2cm, drop shadow, text width=4cm},
+        arrow/.style={-Stealth, thick, draw=TaxonDark},
+        alert_arrow/.style={-Stealth, thick, draw=TaxonAccent, dashed}
+    ]
+
+        % --- Prometheus Telemetry Layer ---
+        \node[component] (fastapi) {FastAPI Application\\\texttt{/predict}};
+        \node[component, right=of fastapi] (metrics) {Prometheus Exposition\\\texttt{/metrics}};
+        \node[component, right=of metrics] (scraper) {Prometheus Scraper\\(Pull-based, 15-60s)};
+        
+        \node[component, below=0.5cm of fastapi] (counter) {\texttt{taxon\_predictions\_total}\\(success, fallback, error)};
+        \node[component, below=0.5cm of metrics] (histogram) {\texttt{taxon\_inference\_latency\_seconds}\\(p50, p95, p99)};
+        \node[component, below=0.5cm of scraper] (gauge) {\texttt{taxon\_human\_referrals\_active}\\(Triage Queue)};
+
+        \begin{scope}[on background layer]
+            \node[container, fit=(fastapi) (metrics) (scraper) (counter) (histogram) (gauge), label={[font=\bfseries, text=TaxonPrimary]above:Prometheus Telemetry Layer}] (telemetry_layer) {};
+        \end{scope}
+
+        % --- Statistical Drift Detection Engine ---
+        \node[component, below=2cm of telemetry_layer] (engine) {Drift Detection Engine\\\texttt{monitoring/drift.py}};
+        
+        \node[component, left=0.5cm of engine, text width=3.5cm] (ref_embeddings) {Baseline Embeddings\\$\mathbf{Z}_{\text{ref}}$};
+        \node[component, right=0.5cm of engine, text width=3.5cm] (curr_embeddings) {Streaming Embeddings\\$\mathbf{Z}_{\text{curr}}$};
+
+        \node[highlight, below=0.8cm of engine, text width=6cm] (wasserstein) {$L_2$ Norm Scalar Projection\\$W_1(P_{\text{ref}}, P_{\text{curr}}) \approx |\mathbb{E}[||\mathbf{z}_{\text{ref}}||_2] - \mathbb{E}[||\mathbf{z}_{\text{curr}}||_2]|$};
+        
+        \node[highlight, below=0.8cm of wasserstein, text width=4cm] (decision_gate) {Decision Gate\\$W_1 > \tau_{\text{drift}}$};
+
+        \begin{scope}[on background layer]
+            \node[container, fit=(engine) (ref_embeddings) (curr_embeddings) (wasserstein) (decision_gate), label={[font=\bfseries, text=TaxonPrimary]above:Statistical Drift Detection Engine}] (drift_layer) {};
+        \end{scope}
+
+        % --- Closed-Loop Feedback & Automated Retraining Trigger ---
+        \node[component, below=2cm of decision_gate] (jenkins) {Jenkins Controller\\\texttt{jenkins-ci} namespace};
+        
+        \node[component, right=1cm of jenkins] (step1) {1. Dataset Re-ingestion\\\& DVC Snapshot};
+        \node[component, right=0.5cm of step1] (step2) {2. Optuna Bayesian\\Hyperparameter Tuning};
+        \node[component, below=0.5cm of step1] (step3) {3. ONNX INT8\\Quantization};
+        \node[component, below=0.5cm of step2] (step4) {4. Rolling Zero-Downtime\\Deployment Update};
+
+        \begin{scope}[on background layer]
+            \node[container, fit=(jenkins) (step1) (step2) (step3) (step4), label={[font=\bfseries, text=TaxonPrimary]above:Closed-Loop Feedback \& Automated Retraining Trigger}] (retraining_layer) {};
+        \end{scope}
+
+        % --- Edges ---
+        % Telemetry internal edges
+        \draw[arrow] (fastapi) -- (metrics);
+        \draw[arrow] (metrics) -- (scraper);
+        \draw[arrow, dotted] (counter) -- (fastapi);
+        \draw[arrow, dotted] (histogram) -- (metrics);
+        \draw[arrow, dotted] (gauge) -- (scraper);
+
+        % Flow to drift
+        \draw[arrow] (telemetry_layer.south) -- (engine.north);
+        \draw[arrow] (ref_embeddings) -- (engine);
+        \draw[arrow] (curr_embeddings) -- (engine);
+        \draw[arrow] (engine) -- (wasserstein);
+        \draw[arrow] (wasserstein) -- (decision_gate);
+
+        % Alert trigger
+        \draw[alert_arrow] (decision_gate) -- (jenkins) node[midway, right, text=TaxonAccent] {Webhook Dispatch (Alert)};
+
+        % Jenkins pipeline edges
+        \draw[arrow] (jenkins) -- (step1);
+        \draw[arrow] (step1) -- (step2);
+        \draw[arrow] (step2) -- (step3);
+        \draw[arrow] (step3) -- (step4);
+        
+        % Loop back to deployment
+        \draw[arrow] (step4.south) |- ++(0,-1cm) -| (telemetry_layer.south east) node[pos=0.25, below] {Deployment of new model artifact};
+
+    \end{tikzpicture}
+    }
+    \caption{End-to-end observability and closed-loop continuous training pipeline. Telemetry signals from the FastAPI Prometheus integration stream into the statistical drift engine, which projects high-dimensional embeddings down to scalar norms. Breaching the Wasserstein $W_1$ threshold dispatches a webhook alert to Jenkins, triggering an automated sequence of DVC snapshotting, Optuna retuning, INT8 quantization, and a zero-downtime rolling update.}
+    \label{fig:telemetry_and_drift_detection}
+\end{figure}

@@ -4,6 +4,8 @@
 
 In order to achieve stringent performance invariants and latency service level agreements within the production environment, the TaxonVision-MLOps deployment architecture transitions from high-level PyTorch computational graphs to deeply optimised, static ONNX (Open Neural Network Exchange) representations. The deployment strategy mandates zero memory allocation upon the hot inference path, dynamic eight-bit integer quantisation for memory compression, and deterministic execution providers that fail softly across hardware backends. This chapter details the comprehensive technical implementation of the ONNX exporter, the runtime session orchestration, the quantisation mechanics, and the visual interpretability paradigms encapsulated within the inference service pipeline.
 
+\input{figures/fig_10_onnx_quantization_and_runtime.tikz}
+
 \section{Computational Graph Export Architecture}
 \label{sec:onnx_graph_export}
 

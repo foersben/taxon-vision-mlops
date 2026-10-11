@@ -166,4 +166,6 @@ Upon receiving the validated drift alert, the Jenkins orchestrator initiates a c
     \item \textbf{Model Registration and Deployment:} The retrained model head undergoes a strict evaluation suite. If its empirical validation metrics decisively exceed the pre-drift baseline, the newly refined checkpoint is serialised into INT8/FP16 precision via the ONNX Runtime engine. This artifact is formally registered within the MLflow Model Registry, instantly triggering a zero-downtime, rolling Kubernetes deployment update that seamlessly replaces the degraded pods in the production namespace.
 \end{enumerate}
 
+\input{figures/fig_12_telemetry_and_drift_detection.tikz}
+
 This sophisticated, closed-loop feedback mechanism guarantees that the TaxonVision model dynamically adapts to continuous, real-world ecological domain shifts. By systematically eradicating the need for manual, reactive intervention, the architecture successfully maintains stringent epistemic safety boundaries and exceptional inferential throughput over extended, multi-year operational timelines.

@@ -68,6 +68,8 @@ Through its integration into the pre-commit hook architecture, the verification 
 \section{Master Agent Router and Role-Based AI Governance}
 \label{sec:master_agent_router_and_governance}
 
+\input{figures/fig_15_okf_agentic_governance.tikz}
+
 The orchestration of large language models and autonomous execution agents within the TaxonVision-MLOps codebase is governed by a highly structured, role-based delegation matrix, primarily instantiated in the \texttt{AGENTS.md} root configuration file and the \texttt{.agents/index.md} directory index. This Master Agent Router protocol dictates the behavioural constraints, operational boundaries, and contextual scoping for all autonomous entities interacting with the repository.
 
 The necessity for a deterministic routing mechanism stems from the inherent risks of unbounded token consumption and hallucinatory degradation prevalent in unconstrained AI environments. To mitigate these risks, the ecosystem enforces strict path-scoped roles. Rather than permitting an agent to recursively crawl the entire repository---a process that incurs significant computational waste and dilutes the operational context---the routing matrix maps specific file paths and architectural domains to specialised agent personas.

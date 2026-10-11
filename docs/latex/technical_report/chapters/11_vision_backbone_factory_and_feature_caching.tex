@@ -26,6 +26,13 @@ Upon instantiation via the \texttt{create\_feature\_extractor} routine, the fact
 
 Crucially, the factory dynamically resolves the output feature embedding dimension via the \texttt{get\_feature\_dimension} function. Rather than relying on hardcoded configurations, the system executes a deterministic single-sample forward pass using a zero-initialised dummy tensor. The dimensions of this dummy tensor are injected from the centralised \texttt{taxon\_vision.config} schema, ensuring that the resolved dimensionality (e.g. 384, 512, or 960) remains absolutely synchronised with the instantiated weights. This exact feature dimension is subsequently utilised to parameterise the downstream linear classification head and configure the traversal depth of the Hierarchical Navigable Small World (HNSW) retrieval graphs.
 
+\begin{figure}[htbp]
+\centering
+\input{figures/fig_07_vision_backbone_and_feature_caching.tikz}
+\caption{Vision backbone factory dispatch, parameter freezing, memory-mapped feature caching, and linear head architecture.}
+\label{fig:vision_backbone_and_feature_caching}
+\end{figure}
+
 \section{Feature Extraction and Embedding Pre-Computation}
 \label{sec:feature_extraction_precomputation}
 

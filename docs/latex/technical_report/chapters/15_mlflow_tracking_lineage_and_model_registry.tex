@@ -20,6 +20,9 @@ Crucially, this architecture incorporates graceful offline degradation. If the D
 
 \section{Cryptographic Data-Model Lineage and Immutable Invariants}
 \label{sec:cryptographic_lineage_and_promotion}
+
+\input{figures/fig_14_mlflow_model_registry_lineage.tikz}
+
 A fundamental invariant of auditable MLOps pipelines is end-to-end traceability: every compiled model checkpoint must be cryptographically linked to the precise dataset snapshot utilised during its training. This invariant is mechanised by the \texttt{\_get\_dvc\_dataset\_hash} routine, which surgically parses the \texttt{dvc.lock} manifest prior to training. By traversing the Directed Acyclic Graph (DAG) defined within the lock file, the routine extracts the MD5 checksum corresponding to the \texttt{data/manifests} output artefact.
 
 This dataset checksum is subsequently persisted as the \texttt{dvc\_dataset\_hash} parameter within the MLflow run. Concurrently, the Git commit SHA (\texttt{git.commit\_sha}) and active branch identifier (\texttt{git.branch}) are extracted via shell invocation and bound as immutable run tags. Additional parameters, including the vision backbone architecture and the PyTorch per-process memory fraction (\texttt{cuda-memory-fraction}), are logged alongside these lineage markers. Consequently, any given checkpoint can be retroactively audited to determine its exact computational provenance.

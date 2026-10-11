@@ -1,0 +1,91 @@
+\providecolor{TaxonPrimary}{HTML}{1976D2}
+\providecolor{TaxonSecondary}{HTML}{388E3C}
+\providecolor{TaxonAccent}{HTML}{F57C00}
+\providecolor{TaxonDark}{HTML}{263238}
+
+\begin{figure}[htbp]
+    \centering
+    \resizebox{\textwidth}{!}{%
+    \begin{tikzpicture}[
+        node distance=1.2cm and 1.8cm,
+        font=\sffamily\small,
+        >=Stealth,
+        % Styles
+        stepbox/.style={
+            rectangle,
+            rounded corners=4pt,
+            draw=#1,
+            fill=#1!10,
+            thick,
+            inner sep=8pt,
+            align=left,
+            drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+            minimum width=5.2cm,
+            minimum height=1.1cm
+        },
+        groupbox/.style={
+            rectangle,
+            rounded corners=6pt,
+            draw=#1!50,
+            fill=#1!5,
+            dashed,
+            inner sep=14pt
+        },
+        arrow/.style={
+            ->,
+            thick,
+            draw=TaxonDark
+        },
+        alert_arrow/.style={
+            ->,
+            thick,
+            dashed,
+            draw=TaxonAccent
+        }
+    ]
+
+        % LEFT: Automated Smoke & Deployment Verification
+        \node[stepbox=TaxonPrimary] (probe_stage) {\textbf{Multi-Stage Health Probing}\\$\bullet$ \texttt{GET /health} (Liveness, $O(1)$ JSON)\\$\bullet$ \texttt{GET /health/ready} (Readiness Probe)\\$\bullet$ \texttt{GET /metrics} (Prometheus Exposition)};
+        
+        \node[stepbox=TaxonPrimary, below=0.8cm of probe_stage] (predict_smoke) {\textbf{Synthetic Inference Assertion}\\$\bullet$ POST synthetic JPEG to \texttt{/predict}\\$\bullet$ HTTP 200 \& JSON Schema adherence\\$\bullet$ Conformal prediction set validation};
+        
+        \node[stepbox=TaxonPrimary, below=0.8cm of predict_smoke] (zero_downtime) {\textbf{Zero-Downtime Rolling Test}\\$\bullet$ \texttt{kubectl rollout restart deployment/api}\\$\bullet$ 100 continuous HTTP pings (0 drops)\\$\bullet$ MaxSurge=1, MaxUnavailable=0};
+
+        \begin{scope}[on background layer]
+            \node[groupbox=TaxonPrimary, fit=(probe_stage)(predict_smoke)(zero_downtime), label={[font=\bfseries, text=TaxonPrimary]above:1. Automated Smoke Verification (\texttt{scripts/verify\_deployment.sh})}] (verify_group) {};
+        \end{scope}
+
+        \draw[arrow] (probe_stage) -- (predict_smoke);
+        \draw[arrow] (predict_smoke) -- (zero_downtime);
+
+        % RIGHT: Cold-Start Disaster Recovery Pipeline
+        \node[stepbox=TaxonSecondary, right=2.2cm of probe_stage] (rec_host) {\textbf{Step 1: Host \& Storage Volume}\\$\bullet$ Bare-metal node reboot (\texttt{hive-mind})\\$\bullet$ Mount BTRFS pool \texttt{/mnt/data}};
+        
+        \node[stepbox=TaxonSecondary, below=0.6cm of rec_host] (rec_k3s) {\textbf{Step 2: K3s Service Restoration}\\$\bullet$ \texttt{systemctl restart k3s}\\$\bullet$ Flannel CNI \& CoreDNS verification};
+        
+        \node[stepbox=TaxonSecondary, below=0.6cm of rec_k3s] (rec_gpu) {\textbf{Step 3: NVIDIA Time-Slicing}\\$\bullet$ Apply 4-slot ConfigMap\\$\bullet$ Restart NVIDIA device plugin};
+        
+        \node[stepbox=TaxonSecondary, below=0.6cm of rec_gpu] (rec_rbac) {\textbf{Step 4: Secret \& RBAC Injection}\\$\bullet$ Apply \texttt{jenkins-agent-rbac.yaml}\\$\bullet$ Inject DagsHub S3 HMAC secrets};
+        
+        \node[stepbox=TaxonSecondary, below=0.6cm of rec_rbac] (rec_dvc) {\textbf{Step 5: DVC \& MLflow Data Sync}\\$\bullet$ \texttt{dvc pull} cached feature embeddings\\$\bullet$ Synchronise champion model checkpoint};
+        
+        \node[stepbox=TaxonDark, below=0.6cm of rec_dvc] (rec_deploy) {\textbf{Step 6: Workload Deployment}\\$\bullet$ Deploy API pods into \texttt{taxon-vision}\\$\bullet$ Execute automated verification smoke};
+
+        \begin{scope}[on background layer]
+            \node[groupbox=TaxonSecondary, fit=(rec_host)(rec_k3s)(rec_gpu)(rec_rbac)(rec_dvc)(rec_deploy), label={[font=\bfseries, text=TaxonSecondary]above:2. Cold-Start Disaster Recovery Sequence}] (recover_group) {};
+        \end{scope}
+
+        \draw[arrow] (rec_host) -- (rec_k3s);
+        \draw[arrow] (rec_k3s) -- (rec_gpu);
+        \draw[arrow] (rec_gpu) -- (rec_rbac);
+        \draw[arrow] (rec_rbac) -- (rec_dvc);
+        \draw[arrow] (rec_dvc) -- (rec_deploy);
+
+        % Inter-group validation arrow
+        \draw[alert_arrow] (rec_deploy.west) -| node[pos=0.25, below, font=\scriptsize] {Triggers Gate} (zero_downtime.east);
+
+    \end{tikzpicture}%
+    }
+    \caption{Engineering operations, automated deployment verification, and cold-start disaster recovery sequence across bare-metal host storage, K3s orchestration, NVIDIA GPU time-slicing, and zero-downtime rolling workload restarts.}
+    \label{fig:disaster_recovery_and_runbooks}
+\end{figure}

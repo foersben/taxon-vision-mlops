@@ -1,0 +1,92 @@
+\providecolor{TaxonPrimary}{HTML}{1976D2}
+\providecolor{TaxonSecondary}{HTML}{388E3C}
+\providecolor{TaxonAccent}{HTML}{F57C00}
+\providecolor{TaxonDark}{HTML}{263238}
+
+\begin{figure}[htbp]
+    \centering
+    \resizebox{\textwidth}{!}{%
+    \begin{tikzpicture}[
+        node distance=1.2cm and 1.5cm,
+        font=\sffamily\small,
+        >=Stealth,
+        % Styles
+        stagebox/.style={
+            rectangle,
+            rounded corners=4pt,
+            draw=#1,
+            fill=#1!10,
+            thick,
+            inner sep=8pt,
+            align=center,
+            drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+            minimum width=4.8cm,
+            minimum height=1.2cm
+        },
+        groupbox/.style={
+            rectangle,
+            rounded corners=6pt,
+            draw=#1!50,
+            fill=#1!5,
+            dashed,
+            inner sep=14pt
+        },
+        arrow/.style={
+            ->,
+            thick,
+            draw=TaxonDark
+        },
+        feedback/.style={
+            ->,
+            thick,
+            dashed,
+            draw=TaxonAccent
+        }
+    ]
+
+        % 1. Forward Pass & Loss Computation
+        \node[stagebox=TaxonPrimary] (input_emb) {\textbf{Cached Feature Embeddings}\\$\mathbf{z} \in \mathbb{R}^D$ and DarwinCore Labels $y \in \{0, \dots, C-1\}$};
+        \node[stagebox=TaxonPrimary, below=0.8cm of input_emb] (head_proj) {\textbf{Trainable Linear / MLP Head}\\$\hat{\mathbf{y}} = \mathbf{W}\mathbf{z} + \mathbf{b}$ (Dropout $p=0.2$)};
+        \node[stagebox=TaxonPrimary, below=0.8cm of head_proj] (cb_loss) {\textbf{Class-Balanced Objective}\\$\mathcal{L}_{\text{CB}}(z, y) = \frac{1 - \beta}{1 - \beta^{n_y}} \mathcal{L}_{\text{CE}}(z, y)$};
+
+        \begin{scope}[on background layer]
+            \node[groupbox=TaxonPrimary, fit=(input_emb)(head_proj)(cb_loss), label={[font=\bfseries, text=TaxonPrimary]above:1. Forward Pass \& Regularised Loss}] (fwd_group) {};
+        \end{scope}
+
+        \draw[arrow] (input_emb) -- (head_proj);
+        \draw[arrow] (head_proj) -- (cb_loss);
+
+        % 2. Optimizer & Learning Rate Schedule
+        \node[stagebox=TaxonSecondary, right=2cm of input_emb] (adamw) {\textbf{AdamW Optimiser}\\Decoupled Weight Decay $\lambda \in [10^{-6}, 10^{-3}]$\\Momentum $(\beta_1 = 0.9, \beta_2 = 0.999)$};
+        \node[stagebox=TaxonSecondary, below=0.8cm of adamw] (scheduler) {\textbf{Cosine Annealing Scheduler}\\Linear Warm-up ($T_{\text{warmup}} = 5$ epochs)\\Decay Horizon ($T_{\max} = 50$ epochs)};
+        \node[stagebox=TaxonSecondary, below=0.8cm of scheduler] (grad_step) {\textbf{Gradient Step \& Clip}\\$\mathbf{W} \leftarrow \mathbf{W} - \eta_t \cdot \nabla_{\mathbf{W}} \mathcal{L}_{\text{CB}}$};
+
+        \begin{scope}[on background layer]
+            \node[groupbox=TaxonSecondary, fit=(adamw)(scheduler)(grad_step), label={[font=\bfseries, text=TaxonSecondary]above:2. Optimisation Dynamics}] (opt_group) {};
+        \end{scope}
+
+        \draw[arrow] (cb_loss) -| node[pos=0.25, below, font=\scriptsize] {Backpropagation} (adamw.south west);
+        \draw[arrow] (adamw) -- (scheduler);
+        \draw[arrow] (scheduler) -- (grad_step);
+
+        % 3. Validation Callbacks & Checkpointing
+        \node[stagebox=TaxonDark, right=2cm of adamw] (val_eval) {\textbf{Validation Evaluation}\\Top-1 Accuracy, Top-5 Accuracy\\Macro F1 Score across Taxa};
+        \node[stagebox=TaxonDark, below=0.8cm of val_eval] (early_stop) {\textbf{EarlyStopping Callback}\\Patience $p = 10$, Delta $\Delta_{\min} = 10^{-4}$\\Divergence Guardrail};
+        \node[stagebox=TaxonDark, below=0.8cm of early_stop] (checkpoint) {\textbf{Atomic Checkpointing}\\Serialize \texttt{head.pt} on validation best\\Rollback on Overfitting};
+
+        \begin{scope}[on background layer]
+            \node[groupbox=TaxonDark, fit=(val_eval)(early_stop)(checkpoint), label={[font=\bfseries, text=TaxonDark]above:3. Convergence \& Checkpointing}] (val_group) {};
+        \end{scope}
+
+        \draw[arrow] (grad_step) -| node[pos=0.25, below, font=\scriptsize] {Epoch Boundary} (val_eval.south west);
+        \draw[arrow] (val_eval) -- (early_stop);
+        \draw[arrow] (early_stop) -- (checkpoint);
+
+        % Feedback Loop
+        \draw[feedback] (early_stop.north) |- ++(0, 0.8cm) -| node[pos=0.25, above, font=\scriptsize] {Continue Training (Epoch Counter $e \leftarrow e + 1$)} (fwd_group.north);
+
+    \end{tikzpicture}%
+    }
+    \caption{Architecture of the decoupled classification head training loop, detailing the sequence from cached feature ingestion and Class-Balanced Loss regularisation, through AdamW cosine optimisation dynamics, to epoch-level early stopping and atomic model checkpointing.}
+    \label{fig:head_training_and_early_stopping}
+\end{figure}

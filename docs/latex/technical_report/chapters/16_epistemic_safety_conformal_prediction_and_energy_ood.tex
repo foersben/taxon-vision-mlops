@@ -34,6 +34,8 @@ Observations drawn from the in-distribution biological manifold exhibit concentr
 
 The selection of the temperature parameter $T$ critically modulates the sharpness of the energy surface. By default, the architecture employs $T = 1.0$, as empirical trials across the current taxonomic dataset demonstrated sufficient separation without necessitating artificial smoothing. Future iterations of the model may dynamically auto-tune $T$ depending upon the severity of the measured label smoothing or focal loss integration.
 
+\input{figures/fig_09_epistemic_safety_and_ood.tikz}
+
 \subsection{Stable LogSumExp Implementation and Numerical Arithmetic}
 
 The programmatic evaluation of the free energy equation requires careful management of floating-point arithmetic to preclude numerical overflow during the exponentiation phase. The \texttt{EnergyOODDetector} class, residing within \texttt{src/taxon\_vision/uncertainty/ood\_detector.py}, implements a stable formulation of the LogSumExp operation utilising max subtraction.

@@ -1,0 +1,75 @@
+\providecolor{TaxonPrimary}{HTML}{1976D2}
+\providecolor{TaxonSecondary}{HTML}{388E3C}
+\providecolor{TaxonDark}{HTML}{263238}
+\providecolor{TaxonAccent}{HTML}{F57C00}
+
+\begin{figure}[htbp]
+    \centering
+    \resizebox{\textwidth}{!}{
+    \begin{tikzpicture}[
+        node distance=1.5cm and 2cm,
+        font=\sffamily\small,
+        engine_box/.style={draw=TaxonPrimary, fill=TaxonPrimary!5, thick, rounded corners, rectangle, inner xsep=15pt, inner ysep=20pt},
+        runner_box/.style={draw=TaxonSecondary, fill=TaxonSecondary!5, thick, rounded corners, rectangle, inner xsep=15pt, inner ysep=20pt},
+        mlflow_box/.style={draw=TaxonAccent, fill=TaxonAccent!5, thick, rounded corners, rectangle, inner xsep=15pt, inner ysep=20pt},
+        component/.style={draw=TaxonDark, fill=white, thick, rounded corners, rectangle, align=center, minimum height=1.2cm, minimum width=4cm, drop shadow},
+        data/.style={draw=TaxonSecondary, fill=white, thick, cylinder, shape border rotate=90, aspect=0.25, align=center, minimum height=1.5cm, minimum width=2.5cm, drop shadow},
+        arrow/.style={-Stealth, thick, draw=TaxonDark},
+        dashed_arrow/.style={-Stealth, thick, dashed, draw=TaxonDark}
+    ]
+
+        % --- Optuna Bayesian Search Engine ---
+        \node[component] (sampler) {TPESampler\\(Tree-structured Parzen Estimator)};
+        \node[component, below=0.5cm of sampler, text width=5cm, align=left] (params) {
+            \textbf{Hyperparameter Space:}\\
+            $\bullet$ LR $\eta \in [10^{-4}, 10^{-2}]$\\
+            $\bullet$ WD $\lambda \in [10^{-6}, 10^{-3}]$\\
+            $\bullet$ CB Loss $\beta \in [0.99, 0.9999]$\\
+            $\bullet$ Dropout $p \in [0.0, 0.5]$
+        };
+        \node[data, right=1cm of sampler] (study_db) {Study Storage\\(SQLite / RDB)};
+
+        \begin{scope}[on background layer]
+            \node[engine_box, fit=(sampler) (params) (study_db), label={[font=\bfseries, text=TaxonPrimary]above:Optuna Bayesian Search Engine}] (optuna_engine) {};
+        \end{scope}
+
+        % --- Multi-Trial Execution & Early Stopping ---
+        \node[component, below=2cm of optuna_engine.south] (trial_runner) {Multi-Trial Execution\\(Concurrent GPU Slices)};
+        \node[component, right=1.5cm of trial_runner] (asha) {ASHAPruner\\(Intermediate Eval: $t=\{1, 3, 9, 27\}$)};
+        \node[component, below=1cm of asha] (prune_decision) {Terminate Bottom 50\%};
+        \node[component, below=1cm of trial_runner] (full_run) {Top-Performing Trials\\(Full Training Run)};
+
+        \begin{scope}[on background layer]
+            \node[runner_box, fit=(trial_runner) (asha) (prune_decision) (full_run), label={[font=\bfseries, text=TaxonSecondary]above:Multi-Trial Execution \& ASHA Pruning}] (runner_engine) {};
+        \end{scope}
+
+        % --- MLflow Tracking & Lineage ---
+        \node[component, right=2cm of runner_engine.east] (active_run) {Active Run Logging\\(Metrics \& Params)};
+        \node[data, below=0.5cm of active_run] (artifact_store) {Artifact Store\\(\texttt{head.pt}, Pareto plots)};
+        \node[component, below=0.5cm of artifact_store] (model_registry) {Model Registry\\(Candidate Champion)};
+
+        \begin{scope}[on background layer]
+            \node[mlflow_box, fit=(active_run) (artifact_store) (model_registry), label={[font=\bfseries, text=TaxonAccent]above:MLflow Tracking \& Lineage}] (mlflow_engine) {};
+        \end{scope}
+
+        % --- Connections ---
+        \draw[arrow] (sampler) -- (params) node[midway, right] {Samples};
+        \draw[arrow] (params) |- (trial_runner) node[near start, left] {Configures Trial};
+        \draw[arrow] (trial_runner) -- (asha) node[midway, above] {Epoch Metrics};
+        \draw[arrow] (asha) -- (prune_decision) node[midway, right] {Pruning Logic};
+        \draw[arrow] (prune_decision) -| (trial_runner) node[near start, below] {Abort Trial};
+        \draw[arrow] (asha) |- (full_run) node[near start, right] {Promote Top Rung};
+        
+        \draw[arrow] (trial_runner.south) ++(-1cm, 0) |- (study_db.south) ++(0, -2.5cm) -- (study_db.south) node[midway, left] {Report Objective};
+        
+        \draw[arrow] (full_run.east) -- ++(1cm, 0) |- (active_run.west) node[near start, right, yshift=-0.2cm] {Final Metrics};
+        \draw[arrow] (active_run) -- (artifact_store);
+        \draw[arrow] (artifact_store) -- (model_registry) node[midway, right] {Promote Best Run};
+
+        \draw[dashed_arrow] (study_db) -- (sampler) node[midway, above] {History};
+
+    \end{tikzpicture}
+    }
+    \caption{The integrated Bayesian hyperparameter optimisation loop, illustrating Optuna TPE sampling, ASHA early pruning at geometric epoch intervals, and continuous MLflow experimental tracking.}
+    \label{fig:optuna_asha_mlflow_loop}
+\end{figure}
