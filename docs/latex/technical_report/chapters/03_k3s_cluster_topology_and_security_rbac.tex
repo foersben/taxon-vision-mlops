@@ -2,6 +2,8 @@
 \chapter{K3s Cluster Topology and Security RBAC}
 \label{ch:k3s_cluster_topology}
 
+\input{figures/fig_02_host_and_cluster_topology.tikz}
+
 The deterministic execution of the TaxonVision-MLOps pipeline necessitates a robust, secure, and low-latency orchestration layer. To avoid the virtualisation overhead inherent in public cloud providers, the platform employs a bare-metal Kubernetes architecture. This chapter strictly documents the topology of the lightweight Kubernetes (k3s) cluster, the explicit namespace boundaries, the Role-Based Access Control (RBAC) schemas, and the Pod Security Standards that enforce strict isolation between the continuous integration (CI) controllers, the machine learning experimentation tracking servers, and the operator-facing inference workloads.
 
 \section{Lightweight Kubernetes Architecture on Bare-Metal}
