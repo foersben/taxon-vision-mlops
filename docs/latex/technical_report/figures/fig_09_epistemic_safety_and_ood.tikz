@@ -1,0 +1,88 @@
+\providecolor{TaxonPrimary}{HTML}{1976D2}
+\providecolor{TaxonSecondary}{HTML}{388E3C}
+\providecolor{TaxonDark}{HTML}{263238}
+\providecolor{TaxonAccent}{HTML}{D32F2F}
+
+\begin{figure}[htbp]
+    \centering
+    \resizebox{\textwidth}{!}{
+    \begin{tikzpicture}[
+        node distance=1.2cm and 1.5cm,
+        font=\sffamily\small,
+        stage_box/.style={draw=TaxonDark, fill=white, thick, rounded corners, rectangle, inner xsep=15pt, inner ysep=20pt, dashed},
+        component/.style={draw=TaxonPrimary, fill=TaxonPrimary!5, thick, rounded corners, rectangle, align=center, minimum height=1.2cm, minimum width=4.5cm, drop shadow},
+        decision/.style={draw=TaxonPrimary, fill=TaxonPrimary!10, thick, diamond, aspect=2.5, align=center, minimum width=4cm, minimum height=1.5cm, drop shadow},
+        terminal/.style={draw=TaxonSecondary, fill=TaxonSecondary!5, thick, rounded corners, rectangle, align=center, minimum height=1cm, minimum width=3cm, drop shadow},
+        triage/.style={draw=TaxonAccent, fill=TaxonAccent!10, thick, rounded corners, rectangle, align=center, minimum height=1cm, minimum width=3cm, drop shadow},
+        arrow/.style={-Stealth, thick, draw=TaxonDark},
+        lbl/.style={fill=white, inner sep=2pt, font=\footnotesize}
+    ]
+
+        % Stage 1: Helmholtz Free Energy OOD Filter
+        \node[component] (input) {Input: Logits $\mathbf{z}(x) \in \mathbb{R}^C$};
+        
+        \node[component, below=0.8cm of input] (energy_func) {Energy Function\\$E(x; T) = -T \log \sum_{c=1}^C \exp\left(\frac{z_c(x)}{T}\right)$};
+        
+        \node[decision, below=0.8cm of energy_func] (energy_decision) {Decision Boundary\\$E(x; T) \le \tau_{\text{energy}}$?};
+        
+        \node[triage, right=1.5cm of energy_decision] (ood_queue) {Out-of-Distribution (OOD)\\Artifact, Noise, Non-taxonomic\\$\to$ Human Review Queue};
+
+        \begin{scope}[on background layer]
+            \node[stage_box, fill=gray!5, fit=(input) (energy_func) (energy_decision) (ood_queue), label={[font=\bfseries, text=TaxonDark]above left:Stage 1: Helmholtz Free Energy OOD Filter}] (stage1) {};
+        \end{scope}
+
+        % Stage 2: Split Conformal Calibration & Prediction Set Generation
+        \node[component, below=1.5cm of energy_decision] (pred_set) {Runtime Prediction Set Construction\\$C(x) = \{ y \in \mathcal{Y} : \hat{\pi}(x)_y \ge 1 - \hat{q} \}$};
+        
+        \node[component, left=1.0cm of pred_set] (quantile) {Finite-Sample Quantile\\$\hat{q} = \text{Quantile}\left( \frac{\lceil (n+1)(1-\alpha) \rceil}{n} \right)$};
+        
+        \node[component, above=0.8cm of quantile] (calibration) {Calibration Phase\\Holdout Set: $(x_i, y_i)_{i=1}^n$\\$s_i = 1 - \hat{\pi}(x_i)_{y_i}$};
+        
+        \node[component, right=1.0cm of pred_set] (guarantee) {Mathematical Guarantee\\$\mathbb{P}(Y \in C(X)) \ge 1 - \alpha$};
+        
+        \begin{scope}[on background layer]
+            \node[stage_box, fill=gray!5, fit=(calibration) (quantile) (pred_set) (guarantee), label={[font=\bfseries, text=TaxonDark]above left:Stage 2: Split Conformal Calibration \& Prediction Set Generation}] (stage2) {};
+        \end{scope}
+
+        % Stage 3: Operational Decision Routing
+        \node[decision, below=1.5cm of pred_set] (set_size) {Evaluate Set Size\\$|C(x)|$};
+        
+        \node[terminal, left=0.5cm of set_size] (singleton) {Singleton Set ($|C(x)| = 1$)\\Automated Acceptance};
+        
+        \node[triage, right=0.5cm of set_size] (null_set) {Null Set ($|C(x)| = \emptyset$)\\Flagged for Expert Examination};
+        
+        \node[decision, below=1.2cm of set_size] (multi) {Ambiguous Multi-label\\$|C(x)| > 1$\\$|C(x)| \le k_{\text{threshold}}$?};
+        
+        \node[terminal, left=1.0cm of multi] (multi_accept) {Multi-candidate\\Set Returned};
+        
+        \node[triage, right=1.0cm of multi] (multi_triage) {Route to\\Human Triage};
+
+        \begin{scope}[on background layer]
+            \node[stage_box, fill=gray!5, fit=(set_size) (singleton) (null_set) (multi) (multi_accept) (multi_triage), label={[font=\bfseries, text=TaxonDark]above left:Stage 3: Operational Decision Routing}] (stage3) {};
+        \end{scope}
+
+        % Edges
+        \draw[arrow] (input) -- (energy_func);
+        \draw[arrow] (energy_func) -- (energy_decision);
+        
+        \draw[arrow] (energy_decision) -- node[lbl] {No ($>\tau_{\text{energy}}$)} (ood_queue);
+        \draw[arrow] (energy_decision) -- node[lbl] {Yes ($\le\tau_{\text{energy}}$)} (pred_set);
+        
+        \draw[arrow] (calibration) -- (quantile);
+        \draw[arrow] (quantile) -- (pred_set);
+        \draw[arrow, dashed] (pred_set) -- (guarantee);
+        
+        \draw[arrow] (pred_set) -- (set_size);
+        
+        \draw[arrow] (set_size) -- node[lbl, above] {$|C(x)| = 1$} (singleton);
+        \draw[arrow] (set_size) -- node[lbl, above] {$|C(x)| = \emptyset$} (null_set);
+        \draw[arrow] (set_size) -- node[lbl] {$|C(x)| > 1$} (multi);
+        
+        \draw[arrow] (multi) -- node[lbl, above] {Yes} (multi_accept);
+        \draw[arrow] (multi) -- node[lbl, above] {No} (multi_triage);
+
+    \end{tikzpicture}
+    }
+    \caption{Dual-gated epistemic safety pipeline illustrating the Helmholtz Free Energy out-of-distribution filter and split conformal prediction set routing.}
+    \label{fig:epistemic_safety_ood}
+\end{figure}

@@ -1,0 +1,147 @@
+% !TeX root = ../technical_report.tex
+\chapter{Bare-Metal Server Environment and Pixi Toolchain Interlock}
+\label{ch:bare_metal_host}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Physical host specs and Pixi deterministic multi-environment locking.
+% Key Hardware & System Specs:
+%   - Host name: hive-mind
+%   - Operating System: Ubuntu 26.04.1 LTS (codename 'resolute')
+%   - CPU: Intel Core i7-14700K (20C/28T: 8P + 12E, 3.4 GHz base / 5.5 GHz boost)
+%   - Motherboard: ASRock B760M Pro RS (Micro-ATX, DDR5, 3x M.2 slots)
+%   - RAM: 128 GB Crucial DDR5 Kit (slots A2 & B2, DDR5-5600 Non-ECC)
+%   - GPU: ZOTAC GAMING GeForce RTX 5070 Ti SOLID CORE (16 GB GDDR7, Blackwell SM 120 / Compute Capability 12.0, 300W TDP, 2.5-slot, 303.5 mm)
+%   - Storage: 1x 2TB Seagate FireCuda 530 Gen4 NVMe SSD (Phison E18, 2,550 TBW, slot M2_1 under heatsink armor)
+%   - NVIDIA Driver: 615.71.09, KMD Version: 615.71.09, CUDA UMD Version: 13.4
+% Toolchain Invariants:
+%   - Strict Pixi toolchain (.pixi/ directory, pixi.toml, pixi.lock, pyproject.toml)
+%   - Pinned environments: 'default', 'dev' (with CUDA 12.8 / cu128 PyTorch 2.7.0 supporting SM 120),
+%     'ci-dev' (CPU-only PyTorch for fast deterministic CI)
+%   - Absolute ban on bare python, pip, poetry, uv, and virtualenv (.venv/)
+%   - Justfile automation recipes (just test, just serve, just complexity, just lint, etc.)
+% -------------------------------------------------------------
+
+\section{Physical Compute Node Baseline}
+\label{sec:physical_compute_node}
+
+\begin{figure}[htbp]
+\centering
+\input{figures/fig_17_pixi_toolchain_dual_target.tikz}
+\caption{Bare-metal compute baseline and Pixi dual-target environment interlock.}
+\label{fig:pixi_toolchain_dual_target}
+\end{figure}
+
+The architectural foundation of the TaxonVision-MLOps ecosystem relies on a highly specified, bare-metal physical compute topology, designed to eliminate the hypervisor overhead typically associated with virtualised cloud environments. The principal workstation and training node, designated as \texttt{hive-mind}, operates on Ubuntu 26.04.1 LTS (codename `resolute'), leveraging Linux Kernel 6.8+ to ensure advanced scheduler capabilities and extensive peripheral hardware support. The utilisation of an x86\_64 architecture provides the necessary compatibility matrix for the compiled binary dependencies critical to the machine learning pipeline.
+
+Central to the computational capacity of the \texttt{hive-mind} node is the Intel Core i7-14700K processor (Raptor Lake Refresh microarchitecture), featuring 20 physical cores and 28 execution threads. The physical silicon incorporates an asymmetric hybrid topography comprising 8 Performance-cores (P-cores) with Hyper-Threading operating at a 3.4~GHz base and 5.5~GHz turbo boost frequency, alongside 12 Efficient-cores (E-cores) operating up to 4.3~GHz. The compute platform is anchored by an ASRock B760M Pro RS motherboard (Micro-ATX form factor, Intel B760 chipset), providing four DDR5 DIMM slots, triple M.2 storage connectivity, and PCIe 5.0 signalling integrity.
+
+System memory is provisioned through a 128~GB Crucial DDR5 kit operating at DDR5-5600 (installed specifically across primary memory channels in slots A2 and B2). This 128~GB memory pool establishes deterministic headroom for high-throughput in-memory dataset transformations, eliminating swap paging during multi-worker feature extraction.
+
+Neural acceleration is powered by the ZOTAC GAMING GeForce RTX 5070 Ti SOLID CORE graphics card. This accelerator represents the vanguard of the NVIDIA Blackwell microarchitecture, featuring Streaming Multiprocessor (SM) 120 and Compute Capability 12.0. Equipped with 16~Gigabytes of GDDR7 Video Random Access Memory (VRAM) across a 256-bit memory bus, the accelerator delivers massive memory bandwidth for high-resolution image batch processing. Communicating via a PCIe 5.0 interface at 32 Giga-transfers per second (GT/s) per lane within a 300-Watt Thermal Design Power (TDP) envelope, power delivery is routed through a single 16-pin 12V-2x6 connector. Within the Micro-ATX chassis, the card's 2.5-slot physical design (303.5~mm length) mandates highest-position power supply unit (PSU) bracket mounting to preserve unconstrained cable clearance and prevent 12V-2x6 harness stress.
+
+Primary persistent storage is anchored by a 2~TB Seagate FireCuda 530 Gen4 NVMe SSD, installed directly into motherboard slot M2\_1 (Hyper M.2 PCIe Gen4x4). Featuring 176-layer 3D TLC NAND, a dedicated 2~GB DDR4 DRAM cache, and the Phison PS5018-E18 controller, this drive delivers up to 7,300~MB/s sequential read bandwidth and an endurance rating of 2,550 Terabytes Written (TBW).
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}lXl@{}}
+\toprule
+\textbf{Subsystem} & \textbf{Component \& Architectural Specification} & \textbf{Operational Domain} \\
+\midrule
+CPU & Intel Core i7-14700K (20C/28T: 8P @ 5.5\,GHz, 12E @ 4.3\,GHz) & Compute Core \\
+Motherboard & ASRock B760M Pro RS (Micro-ATX, Intel B760, 3x M.2) & System Bus \\
+System Memory & 128\,GB Crucial DDR5-5600 (Dual-Channel, Slots A2 \& B2) & Host RAM \\
+GPU & ZOTAC GAMING RTX 5070 Ti SOLID CORE (16\,GB GDDR7, SM 120) & GPU Silicon \\
+Primary NVMe & 2\,TB Seagate FireCuda 530 Gen4 (Phison E18, 2,550 TBW, Slot M2\_1) & Data Plane \\
+Operating System & Ubuntu 26.04.1 LTS (\texttt{resolute}, Kernel 6.8+, x86\_64) & Host OS \\
+NVIDIA Toolchain & Driver 615.71.09 $\cdot$ KMD 615.71.09 $\cdot$ CUDA UMD 13.4 $\cdot$ Runtime 12.8 & Accelerator API \\
+\bottomrule
+\end{tabularx}
+\caption{Physical bare-metal host specification and component topology of the \texttt{hive-mind} node.}
+\label{tab:hardware_topology}
+\end{table}
+
+\subsection{Asymmetric Core Affinity and Memory Allocation Topology}
+\label{subsec:core_affinity_topology}
+
+To eliminate latency variance and resource contention across heterogeneous workloads, the platform enforces strict asymmetric CPU affinity pinning across the 28 execution threads:
+\begin{itemize}
+    \item \textbf{Tensor Execution \& Gradient Hot Loops (\texttt{taskset -c 0-15}):} The 16 threads associated with the 8 physical Performance-cores (cores 0--7 with SMT) are reserved exclusively for PyTorch model training forward/backward loops, Class-Balanced Loss computation, and low-latency ONNX Runtime inference sessions. This pinning guarantees uninterrupted access to dedicated 2\,MB L2 caches per P-core and the shared 33\,MB Intel Smart Cache (L3).
+    \item \textbf{Arrow I/O, Ingestion, \& Background Daemons (\texttt{taskset -c 16-27}):} The 12 single-threaded Efficient-cores (cores 8--19) execute asynchronous Apache Arrow columnar slicing, Tar archive decompression, DVC chunk transfers, HTTP gateway routing, and Prometheus metrics scraping. By isolating high-throughput I/O on E-cores, cache eviction on the mathematical hot loops is mathematically prevented.
+\end{itemize}
+
+Furthermore, the 128~GB system memory envelope is partitioned deterministically:
+\begin{itemize}
+    \item \textbf{Host OS, Daemons, \& K3s Control Plane (16\,GB):} Sustains the base operating system, systemd services, containerd runtime, and the single-node Kubernetes control plane.
+    \item \textbf{In-Memory Arrow Dataset \& Tensor Cache (64\,GB):} Provides a zero-copy memory-mapped buffer for pre-decoded biological image embeddings, taxonomic feature manifests, and active learning candidate pools.
+    \item \textbf{Ephemeral CI Runners \& DataLoader Worker Pools (32\,GB):} Accommodates concurrent test execution pods, parallel PyTorch dataloader worker memory pinning (\texttt{pin\_memory=True}), and Optuna Bayesian optimization trial buffers.
+    \item \textbf{Elastic Page Cache \& Safety Headroom (16\,GB):} Dynamic Linux page cache buffer ensuring zero disk thrashing during heavy burst ingestion.
+\end{itemize}
+
+In order to fully harness this computational capacity, the system necessitates a rigorous driver interlock. The host environment is strictly constrained to NVIDIA Driver version 615.71.09, synchronised with a Kernel Mode Driver (KMD) version 615.71.09, a Compute Unified Device Architecture (CUDA) User Mode Driver (UMD) version 13.4, and host compiler \texttt{nvcc} version 13.4.92. Because the NVIDIA user-mode driver preserves backward binary compatibility, containerised execution and the Pixi toolchain statically lock against the CUDA 12.8 (\texttt{cu128}) runtime. This CUDA 12.8 runtime is non-negotiable for dispatching compiled PTX and SASS machine code targeting the Blackwell microarchitecture (Compute Capability 12.0 / SM 120), as earlier deep learning binary releases omit the SM~120 kernel binaries and crash with a missing-kernel-image error.
+
+In stark contrast to the high-performance \texttt{hive-mind} node, the ecosystem must also accommodate disparate developer workstation baselines. For instance, edge deployment simulations and initial algorithm prototyping may occur on legacy hardware, such as the NVIDIA Quadro T2000, which relies on the older Turing architecture (SM 75). The discrepancy in compute capabilities between the primary training node and auxiliary workstations mandates a flexible yet highly reproducible software environment encapsulation strategy, ensuring that algorithmic logic remains invariant irrespective of the underlying physical acceleration substrate.
+
+The storage layer of the bare-metal host is engineered to saturate the PCIe 5.0 and Gen4 NVMe buses. The local storage layout isolates operating system execution from the machine learning data plane. A dedicated high-speed partition on the Seagate FireCuda 530 is reserved exclusively for Parquet batch streaming and the caching of decoded image tensors. This partition ensures deterministic I/O bandwidth guarantees, preventing the operating system's background telemetry and logging operations from preempting the read operations of the data loader workers. The mathematical formulation of the I/O throughput must satisfy the condition where the data supply rate exceeds the GPU consumption rate, expressed as:
+\[
+    \mathcal{B}_{\text{read}} \ge \frac{N \times S_{\text{tensor}}}{\mathcal{T}_{\text{forward}} + \mathcal{T}_{\text{backward}}}
+\]
+where $\mathcal{B}_{\text{read}}$ denotes the sustained bandwidth, $N$ the batch size, $S_{\text{tensor}}$ the physical size of the batch in memory, and the denominator represents the temporal duration of a single forward and backward propagation step. The strict hardware specification of the \texttt{hive-mind} node ensures this inequality is consistently maintained.
+
+\section{Multi-Target Toolchain and Pixi Environment Isolation}
+\label{sec:multi_target_toolchain}
+
+To eradicate the persistent ambiguities associated with traditional Python environment management—specifically the non-deterministic resolution algorithms of \texttt{pip} and the systemic fragility of \texttt{virtualenv}—the TaxonVision-MLOps architecture adopts the Pixi package manager. Built upon the Rattler resolver, Pixi provides pure binary Conda package management without the virtual environment overhead. The ecosystem enforces an absolute prohibition on the execution of bare \texttt{python}, \texttt{pip}, \texttt{poetry}, \texttt{uv}, and the creation of \texttt{.venv/} directories. All dependencies are hermetically sealed and resolved via SAT-based (Boolean satisfiability problem) dependency resolution mechanisms.
+
+The project configuration, declared within \texttt{pyproject.toml}, establishes a four-environment specification designed to cater seamlessly to the diverse execution contexts. The \texttt{dev} environment targets the full developer workstation environment (\texttt{features = ["dev", "gpu"]}) heavily augmented with GPU dependencies. It explicitly requests PyTorch 2.7.0, Torchvision 0.22.0, and Torchaudio 2.7.0, statically linked against the \texttt{cu128} (CUDA 12.8) distribution, which is imperative for compatibility with the SM 120 architecture of the RTX 5070 Ti. Additionally, the \texttt{dev} environment encompasses TensorRT, ONNX Runtime GPU dependencies, Optuna, and MLflow to facilitate downstream model exportation and inference optimisation.
+
+Conversely, the \texttt{ci-dev} environment is defined as a minimal CPU continuous integration runner (\texttt{features = ["dev", "cpu"]}). It substitutes the heavy CUDA binaries with PyTorch 2.5.1 sourced from the CPU-only channel. This architectural bifurcation ensures that ephemeral CI runners, which lack physical GPU accelerators, can execute the rapid test loops (\texttt{pytest}, \texttt{ruff}, \texttt{mypy}, pre-commit gates) deterministically without incurring the bandwidth and storage penalties associated with downloading multi-gigabyte CUDA libraries.
+
+Beyond development contexts, the platform defines the \texttt{-e ci} environment (\texttt{features = ["cpu"]}) to serve as a minimal CPU container serving environment for lightweight Docker deployments, explicitly distinct from the CI test execution environment (\texttt{ci-dev}). Furthermore, the \texttt{default} environment provides a minimal GPU runtime (\texttt{features = ["gpu"]}).
+
+The resolution logic prioritises specific package indices to prevent supply chain poisoning and ensure maximum performance. The package resolution mandates that base system libraries and scientific utilities are sourced strictly from \texttt{conda-forge}, whilst CUDA-accelerated PyTorch binaries are pulled securely from the official PyPI distribution index statically targeted to CUDA 12.8 (\texttt{https://download.pytorch.org/whl/cu128}). The foundational Conda configuration specifies:
+\[
+    \mathcal{C}_{\text{conda}} = \left\langle \texttt{conda-forge} \right\rangle, \quad \mathcal{I}_{\text{pypi}} = \left\langle \texttt{https://download.pytorch.org/whl/cu128} \right\rangle
+\]
+
+The cornerstone of this environmental reproducibility is the \texttt{pixi.lock} file. Unlike standard requirement files, \texttt{pixi.lock} serves as a cryptographic ledger. It records the exact uniform resource locators, the topological graph of the resolved dependencies, and the SHA-256 cryptographic hashes of every downloaded binary artefact. This immutability prevents upstream supply chain drift. When a developer or a deployment pipeline invokes \texttt{pixi install}, the system mathematically verifies the integrity of the fetched repodata against the locked hashes, throwing a fatal exception if a deviation is detected. This guarantees that the execution environment on the \texttt{hive-mind} node is bit-for-bit identical to the environment constructed inside a Docker container or an autonomous agent's sandbox.
+
+\section{Command Orchestration via Justfile}
+\label{sec:justfile_orchestration}
+
+The standardisation of execution protocols is administered through \texttt{just}, a command runner that implements a declarative command interface. The repository's \texttt{Justfile} serves as the singular source of truth for automation recipes, functioning as an executable runbook that abstracts the complexities of the underlying Pixi environments.
+
+A comprehensive analysis of the \texttt{Justfile} reveals a systematically categorised suite of recipes:
+\begin{itemize}
+    \item \texttt{just check}: Triggers the execution of all configured pre-commit quality hooks across the entire repository. This recipe acts as the primary quality gate prior to version control integration.
+    \item \texttt{just test}: Orchestrates the \texttt{pytest} framework, executing unit tests, integration tests, and critical mathematical invariant assertions, such as the conformal prediction marginal coverage tests.
+    \item \texttt{just train}: Initiates the model training pipeline, specifically invoking the Command Line Interface (CLI) for the Class-Balanced Loss classifier. It dynamically maps parameters such as epoch count and feature extractor backbone (for example, \texttt{mobilenetv4\_conv\_small}).
+    \item \texttt{just serve}: Boots the FastAPI asynchronous inference server and the corresponding Hypertext Markup Language (HTML) over HTMX operator dashboard, binding the process to localhost with live-reload capabilities.
+    \item \texttt{just complexity}: Evaluates the source code using the \texttt{complexipy} utility, verifying that neither the cyclomatic complexity (the number of linearly independent paths through the source code) nor the cognitive complexity exceeds predefined thresholds.
+    \item \texttt{just validate-okf}: Invokes the Open Knowledge Format (OKF v0.2) validation script to guarantee that all markdown documentation files adhere strictly to the project's metadata schema and link topology requirements.
+\end{itemize}
+
+The execution semantics of the \texttt{Justfile} enforce zero-wrapper execution. Every Python command is explicitly prefixed with \texttt{pixi run --frozen -e dev}. The \texttt{--frozen} flag enforces strict adherence to the \texttt{pixi.lock} file, preventing any inadvertent environment updates during execution. This explicit invocation avoids reliance on ambient environment variables or global state contamination.
+
+Furthermore, the \texttt{Justfile} implements sophisticated environment variable inheritance and dry-run capabilities. Recipes securely interpolate secrets, such as DagsHub authentication tokens retrieved via the Linux Secret Service Application Programming Interface (API), directly into the execution context without exposing them in the terminal history. The declarative nature of the file, structured with logical dependencies (for example, \texttt{just setup} invoking private routines like \texttt{\_setup-core}), ensures that complex multi-stage initialisations are executed idempotently.
+
+\section{Git Security and Pre-Commit Interception Engine}
+\label{sec:git_security}
+
+The preservation of codebase integrity and the attribution of modifications are strictly governed by a cryptographic commit interception engine. The architecture differentiates between two classes of actors: human operators (and local heuristic agents like Antigravity) and cloud-based autonomous agents (such as Jules).
+
+For local workstation operations, the system mandates cryptographic commit signing invariants. Every commit must be accompanied by a valid GNU Privacy Guard (GPG) or Secure Shell (SSH) signature, executed via \texttt{git commit -S}. This cryptographic assertion guarantees non-repudiation, ensuring that every line of code can be mathematically traced back to a verified author. In contrast, the autonomous agent Jules operates within a constrained cloud sandbox where local signing keys cannot be securely provisioned. Therefore, Jules is instructed to bypass the local \texttt{-S} flag and push directly to a Pull Request feature branch. The commit is subsequently signed by the GitHub Web-Flow entity upon the successful merge of the Pull Request, maintaining the chain of trust at the repository integration level.
+
+Before any code modification is permitted to enter the Git object database, it must traverse a formidable gauntlet of static analysis checks defined within \texttt{.pre-commit-config.yaml}. This configuration specifies twenty discrete interception hooks, categorised functionally:
+\begin{enumerate}
+    \item \textbf{Syntactic and Base Sanity Regulators:}\\Hooks such as \texttt{trailing-whitespace}, \texttt{end-of-file-fixer}, and\\\texttt{mixed-line-ending} enforce core ASCII file hygiene. The \texttt{check-added-large-files} hook prevents the accidental inclusion of multi-megabyte binary assets, which must be routed through Data Version Control (DVC) instead.
+    \item \textbf{Cryptographic and Secret Auditing:} The \texttt{gitleaks} hook scans the staged diffs for high-entropy strings, API keys, and asymmetric private keys, preventing the inadvertent leakage of credentials into the version control history.
+    \item \textbf{Static Analysis and Type Enforcement:} The \texttt{ruff-check} and \texttt{ruff-format} hooks perform rapid static analysis and deterministic code formatting, replacing disparate tools like Flake8 and Black. Simultaneously, the \texttt{mypy} hook enforces strict gradual typing annotations across the \texttt{src/} and \texttt{scripts/} directories, ensuring that the Python interpreter's dynamic nature does not mask underlying type mismatches.
+    \item \textbf{Documentation and Typographical Invariants:}\\The \texttt{markdownlint} and \texttt{verify-markdown-rules} hooks ensure strict compliance with internal documentation protocols, notably Rule 04, which dictates absolute formatting standards for ASCII hyphens, unordered lists, and blank line padding. The \texttt{codespell} hook performs lexicon validation, explicitly instructed to ignore domain-specific nomenclature such as \texttt{taxa} and \texttt{darwincore}.
+    \item \textbf{Notebook Sanitisation:} The \texttt{nbstripout} hook intercepts Jupyter notebook commits, algorithmically stripping the ephemeral output cells and execution counts to ensure that only the semantic logic is tracked, thereby preventing massive Git repository bloat.
+    \item \textbf{Domain-Specific Compliance:} The \texttt{validate-okf} hook parses markdown frontmatter to ensure compliance with the Open Knowledge Format v0.2. The \texttt{audit-license-compliance} hook scans the data ingestion pipeline, verifying mathematically and legally that citizen-science observations harvested from external sources conform to the permissible open-source licenses.
+    \item \textbf{Toolchain Enforcement:} The bespoke \texttt{check-pure-pixi} hook runs a system-level bash assertion to verify the absence of \texttt{.venv} directories and\\\texttt{uv.lock} files. The \texttt{enforce-author-identity} hook inspects the local Git configuration to ensure that \texttt{commit.gpgsign} evaluates to true, aborting the transaction if the developer has attempted to bypass the signing mandate.
+\end{enumerate}
+
+By interlocking the physical host topology with the deterministic Pixi resolver and the stringent pre-commit interception engine, the TaxonVision-MLOps ecosystem constructs an environment where computational reproducibility is not merely an aspiration, but a mathematically verified invariant.

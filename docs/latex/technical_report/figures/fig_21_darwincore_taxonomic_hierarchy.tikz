@@ -1,0 +1,114 @@
+\definecolor{BioGreen}{HTML}{1B5E20}
+\definecolor{BioTeal}{HTML}{00695C}
+\definecolor{BioAmber}{HTML}{E65100}
+\definecolor{BioBlue}{HTML}{0D47A1}
+\definecolor{BioSlate}{HTML}{37474F}
+\definecolor{BioBg}{HTML}{E8F5E9}
+
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    node distance=1.1cm and 1.6cm,
+    font=\footnotesize,
+    >=stealth,
+    entitybox/.style={
+        rectangle,
+        rounded corners=4pt,
+        draw=BioGreen,
+        fill=BioGreen!8,
+        thick,
+        inner sep=7pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=5.2cm
+    },
+    attrbox/.style={
+        rectangle,
+        rounded corners=4pt,
+        draw=BioAmber,
+        fill=BioAmber!10,
+        thick,
+        inner sep=7pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=5.2cm
+    },
+    treebox/.style={
+        rectangle,
+        rounded corners=4pt,
+        draw=BioBlue,
+        fill=BioBlue!8,
+        thick,
+        inner sep=7pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=5.4cm
+    },
+    groupbox/.style={
+        rectangle,
+        rounded corners=6pt,
+        draw=BioSlate!50,
+        fill=BioBg!30,
+        dashed,
+        inner sep=10pt
+    },
+    arrow/.style={
+        ->,
+        thick,
+        draw=BioSlate
+    }
+]
+
+% Column 1: Domain Schemas
+\node[entitybox] (obs) {
+    \textbf{\texttt{ObservationRecord} Schema}\\
+    \scriptsize \texttt{src/taxon\_vision/domain/observation.py}\\
+    \scriptsize $\bullet$ \texttt{observation\_id: str} (iNat / GBIF)\\
+    \scriptsize $\bullet$ \texttt{taxon: TaxonNode}\\
+    \scriptsize $\bullet$ \texttt{attribution: AttributionRecord}\\
+    \scriptsize $\bullet$ \texttt{latitude: [-90, 90]}, \texttt{longitude: [-180, 180]}\\
+    \scriptsize $\bullet$ \texttt{coordinate\_uncertainty: float}\\
+    \scriptsize $\bullet$ \texttt{quality\_grade: "research"} (Validation gate)
+};
+
+\node[attrbox, below=0.7cm of obs] (attr) {
+    \textbf{\texttt{AttributionRecord} \& Licensing}\\
+    \scriptsize \texttt{src/taxon\_vision/domain/license.py}\\
+    \scriptsize $\bullet$ \texttt{photographer\_name: str}\\
+    \scriptsize $\bullet$ \texttt{license\_code: OpenLicense} (CC0, CC-BY, CC-BY-NC)\\
+    \scriptsize $\bullet$ \texttt{license\_url: str}, \texttt{observation\_uuid: str}\\
+    \scriptsize $\bullet$ \textbf{Zero-tolerance} on unlicensed/copyrighted data
+};
+
+% Column 2: Taxonomic Tree & Hierarchy
+\node[treebox, right=1.6cm of obs] (node) {
+    \textbf{\texttt{TaxonNode} \& \texttt{TaxonomyCatalog}}\\
+    \scriptsize \texttt{src/taxon\_vision/domain/taxonomy.py}\\
+    \scriptsize $\bullet$ \texttt{taxon\_id: int}, \texttt{scientific\_name: str}\\
+    \scriptsize $\bullet$ \texttt{common\_name: str}, \texttt{rank: str}\\
+    \scriptsize $\bullet$ \texttt{parent\_id: int | None} (Adjacency list)\\
+    \scriptsize $\bullet$ Recursive lineage: $L(t) = \{t\} \cup L(p(t))$\\
+    \scriptsize $\bullet$ Acyclic directed graph invariant
+};
+
+\node[treebox, below=0.7cm of node] (lca) {
+    \textbf{Hierarchical Uncertainty \& LCA Mapping}\\
+    \scriptsize $\bullet$ Prediction Set: $\hat{C}(x) = \{t_1, t_2, \dots, t_k\}$\\
+    \scriptsize $\bullet$ Lowest Common Ancestor (LCA):\\
+    \scriptsize \phantom{$\bullet$ } $\operatorname*{argmax}_{t \in \bigcap_{c \in \hat{C}} L(c)} |L(t)|$\\
+    \scriptsize $\bullet$ Ascends from Species $\rightarrow$ Genus $\rightarrow$ Family\\
+    \scriptsize $\bullet$ Guarantees biologically sound abstraction
+};
+
+% Groupings
+\begin{scope}[on background layer]
+    \node[groupbox, fit=(obs)(attr), label={[font=\bfseries, text=BioGreen]above:DarwinCore Domain Entities}] (g1) {};
+    \node[groupbox, fit=(node)(lca), label={[font=\bfseries, text=BioBlue]above:Phylogenetic Graph \& LCA Mapping}] (g2) {};
+\end{scope}
+
+% Arrows
+\draw[arrow] (obs) -- (node) node[midway, above, font=\tiny] {References};
+\draw[arrow] (obs) -- (attr) node[midway, right, font=\tiny] {Enforces};
+\draw[arrow] (node) -- (lca);
+
+\end{tikzpicture}%
+}

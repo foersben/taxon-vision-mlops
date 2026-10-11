@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 import time
 import urllib.error
@@ -24,15 +25,15 @@ from pathlib import Path
 from typing import Any
 
 import torch
-import torch.nn as nn
-import torch.optim as optim
+from torch import nn, optim
 
 from taxon_vision.models.factory import create_feature_extractor, get_feature_dimension
 from taxon_vision.models.loss import ClassBalancedLoss
 from taxon_vision.models.training.checkpoint import _save_checkpoint
 from taxon_vision.models.training.embeddings import train_head_on_cached_embeddings
 from taxon_vision.models.training.tracking import _log_mlflow_metrics, _promote_model_if_better, mlflow_run_scope
-from taxon_vision.models.training.types import EmbeddingSplit, HeadTrainingConfig
+from taxon_vision.models.training.tuning import tune_hyperparameters
+from taxon_vision.models.training.types import EmbeddingSplit, HeadTrainingConfig, TuningConfig
 from taxon_vision.service.inference import load_taxa_catalog
 
 logger = logging.getLogger(__name__)
@@ -95,27 +96,68 @@ def _prepare_embedding_split(dim: int, num_classes: int) -> EmbeddingSplit:
     )
 
 
+def configure_cuda_memory_budget(fraction: float | None = None) -> float | None:
+    """Configure per-process CUDA memory fraction for safe multi-tenant GPU time-slicing.
+
+    Why:
+        Under NVIDIA Device Plugin time-slicing on shared single-GPU nodes (e.g. RTX 5070 Ti),
+        compute is time-multiplexed across virtual slices, but VRAM is shared globally. Unbounded
+        PyTorch allocations can trigger Out-Of-Memory (OOM) failures in co-located real-time
+        inference services. Capping training VRAM (e.g. to 70% / 11.2 GB) permanently reserves
+        sufficient memory for ONNX inference serving and system displays.
+
+    How:
+        Inspects CUDA availability. If available, reads `fraction` or the `TAXON_CUDA_MEMORY_FRACTION`
+        environment variable (defaulting to 0.7), and applies `torch.cuda.set_per_process_memory_fraction`.
+
+    Args:
+        fraction: Optional explicit memory fraction between 0.0 and 1.0.
+
+    Returns:
+        Applied memory fraction, or None if CUDA is unavailable.
+    """
+    if not torch.cuda.is_available():
+        return None
+
+    target_fraction = fraction
+    if target_fraction is None:
+        raw_env = os.getenv("TAXON_CUDA_MEMORY_FRACTION", "0.7")
+        try:
+            target_fraction = float(raw_env)
+        except ValueError:
+            target_fraction = 0.7
+
+    target_fraction = max(0.1, min(1.0, target_fraction))
+    torch.cuda.set_per_process_memory_fraction(target_fraction)
+    logger.info("Enforced CUDA per-process VRAM budget fraction: %.2f", target_fraction)
+    return target_fraction
+
+
 def run_training_pipeline(
     extractor: str = "mobilenetv4_conv_small",
-    epochs: int = 5,
-    batch_size: int = 16,
+    epochs: int = 15,
+    batch_size: int = 64,
     learning_rate: float = 0.001,
     checkpoint_path: Path | str | None = None,
     log_file: Path | str | None = None,
+    cuda_memory_fraction: float | None = None,
+    tune: bool = False,
+    n_trials: int = 15,
 ) -> dict[str, Any]:
     """Execute end-to-end classification head training on cached or synthetic embeddings.
 
     Why:
-        Orchestrates the foundational model head training workflow: loads taxonomic target classes, resolves feature extractor projection dimensionality, prepares embedding splits, initializes the linear classifier with Class-Balanced Loss, trains across specified epochs, saves weight checkpoints, and records metrics and model lineage in MLflow.
+        Orchestrates the foundational model head training workflow: loads taxonomic target classes, resolves feature extractor projection dimensionality, prepares embedding splits, optionally tunes hyperparameters via Bayesian optimization with Optuna, initializes the linear classifier with Class-Balanced Loss, trains across specified epochs with early stopping, saves weight checkpoints, and records metrics and model lineage in MLflow.
 
     How:
         1. Resolves taxa count and feature dimension.
         2. Prepares deterministic embedding splits and sample-per-class distributions.
-        3. Configures AdamW optimizer and ClassBalancedLoss with hyperparameter beta=0.99.
-        4. Enters `mlflow_run_scope` RAII context manager for clean tracking.
-        5. Executes optimization loop over cached representations.
-        6. Persists weights to checkpoint path and invalidates runtime inference cache.
-        7. Logs metrics, attaches execution logs, and performs model registry promotion inside the active run.
+        3. If `tune` is True, executes Optuna Bayesian search to find optimal LR, weight decay, dropout, and CB beta.
+        4. Configures AdamW optimizer and ClassBalancedLoss with optimal or default hyperparameters.
+        5. Enters `mlflow_run_scope` RAII context manager for clean tracking.
+        6. Executes optimization loop over cached representations with early stopping and learning rate scheduling.
+        7. Persists weights to checkpoint path and invalidates runtime inference cache.
+        8. Logs metrics, attaches execution logs, and performs model registry promotion inside the active run.
 
     Args:
         extractor: Name of the feature extractor backbone.
@@ -124,32 +166,63 @@ def run_training_pipeline(
         learning_rate: Optimizer learning rate.
         checkpoint_path: Optional custom file path to save the trained head weights.
         log_file: Optional path to an execution log file to record and attach to MLflow.
+        cuda_memory_fraction: Optional CUDA VRAM fraction limit under time-slicing.
+        tune: Whether to execute Optuna Bayesian hyperparameter search prior to final training.
+        n_trials: Number of Optuna evaluation trials when `tune` is enabled.
 
     Returns:
         Dictionary containing training metrics, checkpoint path, duration, and status.
     """
+    applied_vram_fraction = configure_cuda_memory_budget(cuda_memory_fraction)
     t0 = time.perf_counter()
-    logger.info("Initiating head training for extractor '%s' across %d epochs", extractor, epochs)
+    logger.info("Initiating head training for extractor '%s' across %d epochs (tune=%s)", extractor, epochs, tune)
 
     catalog = load_taxa_catalog()
     num_classes = len(catalog) if catalog else 10
     dim = _resolve_feature_dim(extractor)
     data = _prepare_embedding_split(dim, num_classes)
-
-    head = nn.Sequential(nn.Dropout(p=0.2), nn.Linear(dim, num_classes))
     samples = data.samples_per_class or [1] * num_classes
-    criterion = ClassBalancedLoss(samples_per_class=samples, beta=0.99)
-    optimizer = optim.AdamW(head.parameters(), lr=learning_rate)
-    config = HeadTrainingConfig(epochs=epochs, batch_size=batch_size)
+
+    if tune:
+        logger.info("Executing Optuna hyperparameter optimization across %d trials...", n_trials)
+        tuning_cfg = TuningConfig(
+            n_trials=n_trials,
+            epochs_per_trial=epochs,
+            batch_size=batch_size,
+            seed=42,
+        )
+        best_params, _ = tune_hyperparameters(data=data, num_classes=num_classes, config=tuning_cfg)
+        dropout_p = float(best_params.get("dropout", 0.2))
+        beta = float(best_params.get("beta", 0.99))
+        learning_rate = float(best_params.get("lr", learning_rate))
+        weight_decay = float(best_params.get("weight_decay", 1e-4))
+        batch_size = int(best_params.get("batch_size", batch_size))
+        noise_std = float(best_params.get("noise_std", 0.0))
+        head = nn.Sequential(nn.Dropout(p=dropout_p), nn.Linear(dim, num_classes))
+        criterion = ClassBalancedLoss(samples_per_class=samples, beta=beta)
+        optimizer = optim.AdamW(head.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    else:
+        noise_std = 0.0
+        head = nn.Sequential(nn.Dropout(p=0.2), nn.Linear(dim, num_classes))
+        criterion = ClassBalancedLoss(samples_per_class=samples, beta=0.99)
+        optimizer = optim.AdamW(head.parameters(), lr=learning_rate)
+
+    config = HeadTrainingConfig(epochs=epochs, batch_size=batch_size, noise_std=noise_std)
 
     params = {
         "extractor": extractor,
         "epochs": epochs,
         "batch_size": batch_size,
         "learning_rate": learning_rate,
+        "weight_decay": weight_decay if tune else 0.0,
+        "dropout": dropout_p if tune else 0.2,
+        "beta": beta if tune else 0.99,
+        "noise_std": noise_std,
         "num_classes": num_classes,
         "feature_dim": dim,
         "loss": "ClassBalancedLoss",
+        "optuna_tuned": tune,
+        "cuda_memory_fraction": applied_vram_fraction if applied_vram_fraction is not None else "cpu",
     }
     run_name = f"train_{extractor}_{int(time.time())}"
 
@@ -286,13 +359,30 @@ def train_cli(argv: list[str] | None = None) -> int:
         Exit code (0 for success, 1 for error).
     """
     parser = argparse.ArgumentParser(description="TaxonVision Model Head Training CLI")
-    parser.add_argument("--extractor", type=str, default="mobilenetv4_conv_small", help="Backbone feature extractor")
-    parser.add_argument("--epochs", type=int, default=5, help="Number of training epochs")
-    parser.add_argument("--batch-size", type=int, default=16, help="Mini-batch size")
+    parser.add_argument("--extractor", type=str, default="dinov3", help="Backbone feature extractor")
+    parser.add_argument("--epochs", type=int, default=15, help="Number of training epochs")
+    parser.add_argument("--batch-size", type=int, default=64, help="Mini-batch size")
     parser.add_argument("--lr", type=float, default=0.001, help="Learning rate")
     parser.add_argument("--checkpoint-path", type=str, default=None, help="Output checkpoint file path")
     parser.add_argument("--api-url", type=str, default=None, help="Optional running API server URL to trigger remotely")
     parser.add_argument("--log-file", type=str, default=None, help="Optional log file destination")
+    parser.add_argument(
+        "--cuda-memory-fraction",
+        type=float,
+        default=None,
+        help="Optional maximum fraction of GPU VRAM (0.0 to 1.0) for training under time-slicing (defaults to TAXON_CUDA_MEMORY_FRACTION or 0.7)",
+    )
+    parser.add_argument(
+        "--tune",
+        action="store_true",
+        help="Execute Optuna Bayesian hyperparameter search before final head training",
+    )
+    parser.add_argument(
+        "--n-trials",
+        type=int,
+        default=15,
+        help="Number of Optuna evaluation trials (when --tune is enabled)",
+    )
     args = parser.parse_args(argv)
 
     setup_logging(level=logging.INFO, log_file=args.log_file)
@@ -301,7 +391,13 @@ def train_cli(argv: list[str] | None = None) -> int:
         return _dispatch_remote_training(args.api_url, args.extractor, args.epochs, args.batch_size, args.lr)
 
     logger.info("Starting TaxonVision Training Pipeline [%s]", args.extractor)
-    logger.info("  Epochs: %d | Batch Size: %d | Learning Rate: %s", args.epochs, args.batch_size, args.lr)
+    logger.info(
+        "  Epochs: %d | Batch Size: %d | Learning Rate: %s | Tune: %s",
+        args.epochs,
+        args.batch_size,
+        args.lr,
+        args.tune,
+    )
 
     result = run_training_pipeline(
         extractor=args.extractor,
@@ -310,6 +406,9 @@ def train_cli(argv: list[str] | None = None) -> int:
         learning_rate=args.lr,
         checkpoint_path=args.checkpoint_path,
         log_file=args.log_file,
+        cuda_memory_fraction=args.cuda_memory_fraction,
+        tune=args.tune,
+        n_trials=args.n_trials,
     )
 
     logger.info("Training Completed Successfully")

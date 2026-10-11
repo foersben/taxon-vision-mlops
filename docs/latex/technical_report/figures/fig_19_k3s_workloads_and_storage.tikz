@@ -1,0 +1,137 @@
+\definecolor{K8sBlue}{HTML}{326CE5}
+\definecolor{K8sTeal}{HTML}{00796B}
+\definecolor{K8sAmber}{HTML}{FFA000}
+\definecolor{K8sRed}{HTML}{D32F2F}
+\definecolor{K8sSlate}{HTML}{37474F}
+\definecolor{K8sBg}{HTML}{F0F4C3}
+
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    node distance=1.1cm and 1.6cm,
+    font=\footnotesize,
+    >=stealth,
+    deploybox/.style={
+        rectangle,
+        rounded corners=5pt,
+        draw=K8sBlue,
+        fill=K8sBlue!8,
+        thick,
+        inner sep=7pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=5.4cm
+    },
+    podbox/.style={
+        rectangle,
+        rounded corners=4pt,
+        draw=K8sTeal,
+        fill=K8sTeal!8,
+        thick,
+        inner sep=7pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=5.4cm
+    },
+    servicebox/.style={
+        rectangle,
+        rounded corners=4pt,
+        draw=K8sAmber,
+        fill=K8sAmber!10,
+        thick,
+        inner sep=7pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=5.2cm
+    },
+    tunnelbox/.style={
+        rectangle,
+        rounded corners=4pt,
+        draw=K8sSlate,
+        fill=K8sSlate!10,
+        thick,
+        inner sep=7pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=5.2cm
+    },
+    groupbox/.style={
+        rectangle,
+        rounded corners=6pt,
+        draw=K8sSlate!50,
+        fill=K8sSlate!5,
+        dashed,
+        inner sep=10pt
+    },
+    arrow/.style={
+        ->,
+        thick,
+        draw=K8sSlate
+    }
+]
+
+% Column 1: Deployment & Pod Spec
+\node[deploybox] (deploy) {
+    \textbf{Deployment: \texttt{taxon-vision-api}}\\
+    \scriptsize $\bullet$ Namespace: \texttt{taxon-vision}\\
+    \scriptsize $\bullet$ Baseline Replicas: $N = 2$\\
+    \scriptsize $\bullet$ RollingUpdate: \texttt{maxSurge: 1}, \texttt{maxUnavailable: 0}\\
+    \scriptsize $\bullet$ Zero-Downtime Guarantee during updates
+};
+
+\node[podbox, below=0.6cm of deploy] (pod) {
+    \textbf{Pod Security \& Resource Bounds}\\
+    \scriptsize $\bullet$ Security: \texttt{runAsNonRoot: true}, UID/GID 10001\\
+    \scriptsize $\bullet$ Requests: CPU 200m, Memory 512MiB\\
+    \scriptsize $\bullet$ Limits: CPU 2, Memory 2GiB\\
+    \scriptsize $\bullet$ GPU Slice: \texttt{nvidia.com/gpu: "1"} (Time-Slicing)\\
+    \scriptsize $\bullet$ Image: \texttt{ghcr.io/foersben/taxon-vision-mlops:latest}
+};
+
+\node[podbox, below=0.6cm of pod] (probes) {
+    \textbf{Decoupled Probing Architecture}\\
+    \scriptsize $\bullet$ \textbf{Liveness Probe}: \texttt{/health} (Port 8000)\\
+    \scriptsize \phantom{$\bullet$ } Delay 15s, Period 20s (Instant check, zero I/O)\\
+    \scriptsize $\bullet$ \textbf{Readiness Probe}: \texttt{/health/ready} (Port 8000)\\
+    \scriptsize \phantom{$\bullet$ } Delay 5s, Period 5s (Warmup \& catalog validation)
+};
+
+% Column 2: Service & Ingress Routing
+\node[servicebox, right=1.6cm of deploy] (svc) {
+    \textbf{Service: \texttt{taxon-vision-api} (NodePort)}\\
+    \scriptsize $\bullet$ Selector: \texttt{app.kubernetes.io/name: taxon-vision-api}\\
+    \scriptsize $\bullet$ Container Port: 8000 (TCP)\\
+    \scriptsize $\bullet$ NodePort: \textbf{30080} (TCP)\\
+    \scriptsize $\bullet$ Native cluster-level load balancing across pods
+};
+
+\node[tunnelbox, below=0.8cm of svc] (tunnel) {
+    \textbf{Cloudflare Zero Trust Ingress Tunnel}\\
+    \scriptsize $\bullet$ Outbound daemon initiated from cluster enclave\\
+    \scriptsize $\bullet$ Binds directly to \texttt{NodePort 30080}\\
+    \scriptsize $\bullet$ \textbf{Zero open inbound ports} on host firewall\\
+    \scriptsize $\bullet$ Edge Web Application Firewall (WAF) \& DDoS protection
+};
+
+\node[deploybox, below=0.8cm of tunnel] (traffic) {
+    \textbf{Operator \& Machine Traffic Flow}\\
+    \scriptsize $\bullet$ REST Inference: \texttt{POST /predict}\\
+    \scriptsize $\bullet$ Telemetry: \texttt{GET /metrics} (Prometheus Scrape)\\
+    \scriptsize $\bullet$ Web Dashboard: \texttt{GET /} (Jinja2 + HTMX)\\
+    \scriptsize $\bullet$ Graceful \texttt{SIGTERM} shutdown on pod eviction
+};
+
+% Groupings
+\begin{scope}[on background layer]
+    \node[groupbox, fit=(deploy)(pod)(probes), label={[font=\bfseries, text=K8sBlue]above:Kubernetes Workload Topology}] (g1) {};
+    \node[groupbox, fit=(svc)(tunnel)(traffic), label={[font=\bfseries, text=K8sTeal]above:Service Exposure \& Zero Trust Ingress}] (g2) {};
+\end{scope}
+
+% Arrows
+\draw[arrow] (deploy) -- (pod);
+\draw[arrow] (pod) -- (probes);
+\draw[arrow] (pod.east) -- (svc.west) node[midway, above, font=\tiny] {Endpoints};
+\draw[arrow] (svc) -- (tunnel);
+\draw[arrow] (tunnel) -- (traffic);
+
+\end{tikzpicture}%
+}

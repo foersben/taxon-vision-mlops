@@ -1,0 +1,185 @@
+% !TeX root = ../technical_report.tex
+\chapter{Domain Modelling, DarwinCore Standards, and Taxonomic Trees}
+\label{ch:domain_modelling}
+
+The architectural integrity of the TaxonVision-MLOps pipeline is predicated upon a strict adherence to Domain-Driven Design (DDD) principles, specifically applied to the biological and spatial-temporal constraints of biodiversity informatics. By decoupling the core business logic—namely, the representation of taxonomic hierarchies, occurrence observations, and legal licensing metadata—from infrastructural concerns such as database serialisation and machine learning framework execution, the system achieves a highly modular, testable, and robust foundation. This chapter provides a rigorous examination of the domain layer, elucidating the implementation of the DarwinCore standards through Pydantic schemas, the mathematical mapping of taxonomic trees to hierarchical label spaces for machine learning, and the enforcement of open-source licensing compliance.
+
+\section{Domain-Driven Design for Biodiversity Informatics}
+\label{sec:ddd_biodiversity}
+
+\begin{figure}[htbp]
+\centering
+\input{figures/fig_21_darwincore_taxonomic_hierarchy.tikz}
+\caption{DarwinCore domain entity relationships and hierarchical lowest common ancestor mapping.}
+\label{fig:darwincore_taxonomic_hierarchy}
+\end{figure}
+
+In the context of computational biodiversity and machine learning, the domain layer serves as the single source of truth for the systemic representation of biological reality. Traditional implementations often tightly couple data models to Object-Relational Mapping (ORM) frameworks or specific deep learning tensor structures, leading to an erosion of architectural boundaries and a proliferation of implicit assumptions regarding data integrity. Conversely, the TaxonVision-MLOps architecture isolates the domain entities within the \texttt{src/taxon\_vision/domain/} namespace, entirely independent of storage paradigms or execution frameworks.
+
+The implementation relies on Pydantic v2 schemas for the definition of all domain entities. The utilisation of Pydantic introduces several critical advantages: rigorous type enforcement, high-performance validation implemented via Rust-based core logic, and predictable serialisation semantics. Every entity boundary is explicitly defined, ensuring that malformed or semantically invalid data is intercepted at the perimeter of the application, long before such data can propagate into the training pipelines or the model inference endpoints.
+
+This decoupling ensures that whether an observation originates from an upstream active learning queue, a synthetic data generator, or a direct API ingestion payload, it must pass through the identical validation logic. Consequently, the domain models represent a contract: any instantiated domain object is guaranteed to be mathematically and biologically coherent within the defined operational parameters of the system.
+
+Table \ref{tab:ddd_layers} outlines the separation of concerns achieved through this pattern, isolating the domain from peripheral concerns.
+
+\begin{table}[h]
+\centering
+\begin{tabularx}{\textwidth}{@{}llX@{}}
+\toprule
+\textbf{Layer} & \textbf{Responsibility} & \textbf{Frameworks / Implementation} \\
+\midrule
+Domain Layer & Biological rules, DarwinCore schemas, legal invariants & Pydantic v2, pure Python (no external dependencies) \\
+Application Layer & Model inference orchestration, active learning loops & FastAPI, MLflow, Optuna \\
+Infrastructure Layer & Database persistence, ONNX execution, S3 storage & DuckDB, ONNX Runtime, aiobotocore \\
+Presentation Layer & API endpoints, operator interfaces & FastAPI Routes, HTMX \\
+\bottomrule
+\end{tabularx}
+\caption{Layered Architecture separating the domain logic from infrastructural constraints.}
+\label{tab:ddd_layers}
+\end{table}
+
+\section[DarwinCore Standard Compliance and Taxonomic Rank Modelling]{DarwinCore Standard Compliance\\and Taxonomic Rank Modelling}
+\label{sec:darwincore_schema}
+
+The standardisation of biodiversity occurrence records is governed globally by the DarwinCore (DwC) standard. TaxonVision-MLOps maps its taxonomic domain entities directly to the DwC glossary, providing a consistent nomenclature that facilitates interoperability with international aggregators such as the Global Biodiversity Information Facility (GBIF) and iNaturalist.
+
+\subsection{The Taxonomic Node Entity}
+The fundamental unit of the biological hierarchy is represented by the \texttt{TaxonNode} entity. This model captures the essential metadata for any given node within the phylogenetic tree. Its definition within \texttt{src/taxon\_vision/domain/taxonomy.py} enforces the presence of strict biological attributes.
+
+The \texttt{TaxonNode} is defined as follows:
+
+\begin{minted}{python}
+class TaxonNode(BaseModel):
+    taxon_id: int = Field(..., description="Unique taxonomic ID")
+    scientific_name: str = Field(..., description="Binomial or uninomial scientific name")
+    common_name: str = Field(default="", description="Vernacular name")
+    rank: str = Field(default="species", description="Taxonomic rank (kingdom, class, species)")
+    parent_id: int | None = Field(default=None, description="Parent taxon node ID")
+\end{minted}
+
+The structure utilises an adjacency list paradigm, where each \texttt{TaxonNode} maintains an optional reference to its direct ancestor via the \texttt{parent\_id}. The \texttt{rank} attribute denotes the specific hierarchical level (e.g., kingdom, phylum, class, order, family, genus, species), providing the necessary semantics for granular subsetting and reporting. Table \ref{tab:darwincore_mapping} details the specific mapping from the internal model to the official DwC standard.
+
+\begin{table}[h]
+\centering
+\begin{tabularx}{\textwidth}{@{}llX@{}}
+\toprule
+\textbf{TaxonNode Attribute} & \textbf{DwC Term} & \textbf{Description} \\
+\midrule
+\texttt{taxon\_id} & \texttt{taxonID} & An identifier for the set of taxon information. \\
+\texttt{scientific\_name} & \texttt{scientificName} & The full scientific name, with authorship and date information if known. \\
+\texttt{common\_name} & \texttt{vernacularName} & A common or vernacular name. \\
+\texttt{rank} & \texttt{taxonRank} & The taxonomic rank of the most specific name in the scientificName. \\
+\texttt{parent\_id} & \texttt{parentNameUsageID} & An identifier for the name usage of the direct, most proximate higher-rank parent. \\
+\bottomrule
+\end{tabularx}
+\caption{Mapping of \texttt{TaxonNode} attributes to DarwinCore terms.}
+\label{tab:darwincore_mapping}
+\end{table}
+
+\subsection{The Taxonomy Catalog Aggregate}
+To manage the entirety of the supported taxa perimeter, the system employs the \texttt{TaxonomyCatalog} aggregate model. The catalog encapsulates a collection of \texttt{TaxonNode} instances and provides authoritative methods for tree navigation and entity resolution.
+
+\begin{minted}{python}
+class TaxonomyCatalog(BaseModel):
+    taxa: list[TaxonNode] = Field(default_factory=list)
+
+    def get_by_id(self, taxon_id: int) -> TaxonNode | None:
+        for t in self.taxa:
+            if t.taxon_id == taxon_id:
+                return t
+        return None
+\end{minted}
+
+The abstraction provided by the \texttt{TaxonomyCatalog} guarantees tree integrity. By iterating through the indexed taxa, the system can perform algorithmic traversals to construct the full lineage of any given node. This capability is paramount not merely for data visualisation, but as the foundational mathematical graph required by the subsequent machine learning classification modules.
+
+Let $T$ denote the set of all taxa defined within the \texttt{TaxonomyCatalog}. The function $p: T \rightarrow T \cup \{ \emptyset \}$ defines the parental relationship, such that for any taxon $t \in T$, $p(t)$ resolves to its parent taxon, or $\emptyset$ if $t$ is a root node (e.g., Kingdom). The complete lineage $L(t)$ of a taxon $t$ can thus be computed via recursive application:
+
+\begin{equation}
+L(t) = \begin{cases}
+\{t\} & \text{if } p(t) = \emptyset \\
+\{t\} \cup L(p(t)) & \text{otherwise}
+\end{cases}
+\end{equation}
+
+This rigorous definition underpins the hierarchical consistency checks executed during data validation phases. Furthermore, a valid taxonomy must adhere to the acyclic property; no sequence of parent traversal may ever result in a node visiting an ancestor that was previously resolved within the same trace.
+
+\section{Observation Entities and Spatiotemporal Metadata}
+\label{sec:observation_entities}
+
+The instantiation of a biological entity within a specific spatial and temporal context constitutes an occurrence observation. The TaxonVision-MLOps pipeline models this occurrence via the \texttt{ObservationRecord} schema, located in \texttt{src/taxon\_vision/domain/observation.py}. This schema functions as the primary composite entity, bridging the biological classification, the spatiotemporal localisation, and the digital media pointer.
+
+\begin{minted}{python}
+class ObservationRecord(BaseModel):
+    observation_id: str = Field(..., description="iNaturalist or GBIF observation ID")
+    taxon: TaxonNode = Field(..., description="Assigned taxonomic classification")
+    attribution: AttributionRecord = Field(..., description="Legal license attribution record")
+    image_url: str = Field(..., description="URL to primary photo")
+    latitude: float | None = Field(default=None, ge=-90.0, le=90.0)
+    longitude: float | None = Field(default=None, ge=-180.0, le=180.0)
+    observed_on: datetime | None = Field(default=None)
+    quality_grade: str = Field(default="research", description="Quality grade (e.g. research)")
+\end{minted}
+
+The encapsulation of spatial constraints is handled explicitly within the Pydantic field definitions, enforcing geographical bounds ($\text{latitude} \in [-90.0, 90.0]$, $\text{longitude} \in [-180.0, 180.0]$) while permitting optional null values for observations where coordinates are redacted or omitted. Observations with coordinates exceeding these physical geometric bounds are immediately intercepted and rejected by the schema validation logic, guaranteeing that spatial noise is filtered prior to any downstream training or feature extraction workflows.
+
+Furthermore, the \texttt{quality\_grade} field specifies the consensus level of the observation's identification. In citizen science platforms, records frequently transition from ``needs\_id'' to ``research'' grade upon community verification. By manifesting this attribute within the core domain model, the data ingestion pipeline can enforce subsetting rules, typically restricting the downstream training dataset strictly to ``research'' grade records to preserve the integrity of the predictive model. The domain guarantees that records passing validation strictly adhere to this expected vocabulary, preventing silent failures during large-scale Arrow streaming.
+
+The \texttt{ObservationRecord} holds a direct reference to a \texttt{TaxonNode}, representing the biological identification, and an \texttt{AttributionRecord}, linking the biological reality to its legal usage constraints. This explicit composite structure avoids the pitfalls of flat dictionaries, ensuring that operations requiring taxonomic or legal data always receive fully populated and strongly typed objects.
+
+\section{License Verification and Open Data Invariants}
+\label{sec:license_domain_invariants}
+
+The curation of a large-scale biological dataset necessitates a stringent legal framework to respect intellectual property and attribution requirements. The TaxonVision-MLOps domain explicitly addresses this through the \texttt{OpenLicense} and \texttt{AttributionRecord} entities found in \texttt{src/taxon\_vision/domain/license.py}. The domain layer is fundamentally responsible for protecting the system from ingesting copyrighted material without explicit permission.
+
+The \texttt{OpenLicense} entity is defined as a \texttt{StrEnum}, enumerating the exact subset of Creative Commons licenses approved for model training ingestion.
+
+\begin{minted}{python}
+class OpenLicense(StrEnum):
+    CC0 = "CC0"
+    CC_BY = "CC-BY"
+    CC_BY_NC = "CC-BY-NC"
+    CC_BY_SA = "CC-BY-SA"
+    CC_BY_ND = "CC-BY-ND"
+    CC_BY_NC_SA = "CC-BY-NC-SA"
+    CC_BY_NC_ND = "CC-BY-NC-ND"
+\end{minted}
+
+This enumeration strictly constrains the domain space of permissible licenses. When an observation is ingested, its associated license must map to one of these explicit values. Unrecognised or fully copyrighted licenses invoke a validation exception, ensuring that the machine learning corpora remain legally compliant and devoid of restricted material.
+
+Every \texttt{ObservationRecord} embeds an \texttt{AttributionRecord}, which structurally maintains the provenance of the media:
+
+\begin{minted}{python}
+class AttributionRecord(BaseModel):
+    photographer_name: str = Field(..., description="Name or username of photographer")
+    license_code: OpenLicense = Field(..., description="Creative commons license variant")
+    license_url: str = Field(..., description="Link to legal code")
+    observation_uuid: str = Field(..., description="UUID or identifier of observation")
+    source_portal: str = Field(default="iNaturalist", description="Originating repository")
+\end{minted}
+
+The integration of the \texttt{AttributionRecord} guarantees that downstream derived works and subsetted datasets retain full traceability to the original author. Moreover, this schema provides the foundation for the system's observability telemetry; metrics such as\\\texttt{model\_metadata\_total[status="licensed\_data"]} and \texttt{model\_retention\_hours} are updated based on the instantiation and lifespan of these domain entities. The adherence to rigorous licensing not only protects the developers from legal ramifications but also guarantees that the trained neural networks reflect the open-source community's ethos.
+
+\section{Integration with Model Heads and Label Encoders}
+\label{sec:integration_model_heads}
+
+The biological taxonomy, whilst structurally elegant as an adjacency list graph, is fundamentally incompatible with the vectorised integer outputs of standard deep learning classification heads. The transition from the domain layer to the machine learning framework necessitates a mathematically rigorous label encoding process. The domain models must seamlessly map to the tensor space without losing the semantic relationships established by the biological reality.
+
+The system must map the set of supported taxa to a contiguous sequence of integer indices $I = \{0, 1, \dots, N-1\}$, where $N$ represents the total number of classes. Let $f: T_{leaf} \rightarrow I$ denote this bijective mapping function, where $T_{leaf} \subset T$ represents the subset of terminal taxa (typically species or sub-species ranks) that constitute the operational output space of the model.
+
+During the initialisation of the training pipeline, the \texttt{TaxonomyCatalog} is serialised into a label encoder that deterministically constructs the mapping $f$. The inverse function, $f^{-1}: I \rightarrow T_{leaf}$, is subsequently utilised by the inference service to translate the argmax of the model's softmax activation back into a biologically coherent \texttt{TaxonNode}.
+
+Beyond basic classification, the preservation of the phylogenetic tree structure is critical for advanced machine learning evaluation techniques, specifically Out-Of-Distribution (OOD) detection and conformal prediction. The taxonomic tree defines a natural distance metric between any two taxa. The tree distance $d(t_a, t_b)$ between taxa $t_a$ and $t_b$ can be defined as the shortest path length in the undirected graph formed by the parental relations:
+
+\begin{equation}
+d(t_a, t_b) = |L(t_a)| + |L(t_b)| - 2 |L(t_a) \cap L(t_b)|
+\end{equation}
+
+where $|L(t)|$ denotes the cardinality of the lineage set of taxon $t$, and $L(t_a) \cap L(t_b)$ represents the common ancestral lineage.
+
+In the context of conformal prediction, the model produces a prediction set $\hat{C}(x)$ for an input image $x$ at a specified confidence level $1 - \alpha$. The utility of this prediction set is significantly enhanced by leveraging the hierarchical domain model. Rather than emitting an uninformative flat list of potential species, the system can compute the Lowest Common Ancestor (LCA) of the set:
+
+\begin{equation}
+\text{LCA}(\hat{C}(x)) = \operatorname*{argmax}_{t \in \bigcap_{c \in \hat{C}(x)} L(c)} |L(t)|
+\end{equation}
+
+If the prediction set contains species that are taxonomically distant, the LCA will ascend the tree to a higher rank (e.g., Family or Order), effectively communicating a broader, yet biologically correct, prediction. This mathematical bridging of the neural network's statistical uncertainty with the rigorous \texttt{TaxonomyCatalog} domain model represents the core innovation of the TaxonVision-MLOps uncertainty quantification engine. The decoupling achieved through the DDD paradigm ensures that this hierarchical reasoning remains isolated from the underlying tensor mechanics, preserving both biological truth and software maintainability.

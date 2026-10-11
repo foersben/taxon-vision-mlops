@@ -1,17 +1,12 @@
 ---
-type: Concept
+type: Reference
 title: Curriculum Baseline vs. TaxonVision-MLOps Production Architecture
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
 version: 1.0
 description: Exhaustive architectural and step-by-step comparative analysis between the academic MLOps curriculum baseline and the TaxonVision-MLOps production implementation.
 tags: [architecture, comparison, curriculum, mlops, dual-pipeline, conformal-prediction, airflow, mlflow]
-generated: {by: process:docs-librarian, at: "2026-10-06T12:00:00Z"}
-verified: {by: process:docs-librarian, at: "2026-10-06T12:00:00Z"}
-sources:
-  - resource: "docs/Species identification.pdf"
-  - resource: "docs/.archive/taxon_vision_mlops_master_plan.md"
-  - resource: "docs/latex/strategy_report/strategy_report.pdf"
+verified: {by: process:jules-agent}
 ---
 
 # Curriculum Baseline vs. TaxonVision-MLOps Architecture
@@ -77,11 +72,12 @@ The table below summarizes the key architectural dimensions across both paradigm
 
 * Focuses on understanding the prompt and viewing the kick-off recording.
 * Defines a simple classification problem on a small subset of 10 well-represented taxa.
-* Relies on standard exploratory data analysis in interactive Jupyter notebooks (MLOps Level 0).
+* Relies on naive university/curriculum architectures such as standard exploratory data analysis in monolithic interactive Jupyter notebooks (MLOps Level 0), unversioned local data, random splits, and a complete lack of uncertainty estimates.
 
 #### Phase 0 TaxonVision: Operational Maturity Specifications
 
 * Formulates the complete mathematical, physical, and legal constraints before writing code.
+* Replaces naive paradigms with TaxonVision-MLOps architectures guaranteeing data immutability via DVC, zero-copy streaming, Split Conformal prediction coverage guarantees, and zero-open-ports edge ingress topology via Cloudflare Tunnels.
 * Defines a formal four-tier operational maturity framework spanning from manual prototypes (Level 0) to Epistemic Safety (Level 4).
 * Formulates the long-tail problem: biological biodiversity naturally follows a Pareto distribution where head taxa have tens of thousands of observations while thousands of endangered species have fewer than ten observations.
 * Establishes hardware allocation rules: heterogeneous CPU pin-binding (P-cores for gradient math, E-cores for async I/O) on bare-metal workstations.

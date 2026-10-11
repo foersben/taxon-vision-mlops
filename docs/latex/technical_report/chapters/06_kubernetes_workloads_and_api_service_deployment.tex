@@ -1,0 +1,137 @@
+% !TeX root = ../technical_report.tex
+\chapter{Kubernetes Workloads and API Service Deployment}
+\label{ch:kubernetes_workloads_api}
+
+The deployment of deterministic machine learning workloads necessitates a rigorous orchestration paradigm. Moving beyond transient cloud environments, this chapter formally deconstructs the Kubernetes topology governing the TaxonVision Application Programming Interface (API) service. By examining the canonical deployment manifests, we establish the mathematical and structural justifications for replica configurations, zero-downtime rolling updates, deterministic hardware resource allocations, and cryptographically secure ingress architectures. The specifications analysed herein are grounded in the active Kubernetes manifests, specifically \texttt{deploy/k8s/api-deployment.yaml} and \texttt{deploy/k8s/nvidia-time-slicing-config.yaml}, alongside the underlying FastAPI composition root located at \texttt{src/taxon\_vision/service/api.py}. The objective of this formalisation is to demonstrate how continuous deployment of complex vision architectures can be achieved without compromising operational determinism or system stability.
+
+\section{API Deployment Specification}
+\label{sec:api_deployment_specification}
+
+\begin{figure}[htbp]
+\centering
+\input{figures/fig_19_k3s_workloads_and_storage.tikz}
+\caption{Kubernetes workload topology, pod security context, and NodePort zero-trust ingress.}
+\label{fig:k3s_workloads_and_storage}
+\end{figure}
+
+The foundational architecture of the TaxonVision inference service is encapsulated within a Kubernetes Deployment primitive, explicitly namespaced within the \texttt{taxon-vision} logical boundary. This topological isolation ensures that the MLOps pipeline remains entirely decoupled from cluster-level administration systems such as internal ingress controllers, log forwarders, and dynamic storage provisioners. The application operates as a self-contained entity, minimising interference from ancillary system components.
+
+The service defines a declarative replica configuration mandating exactly two concurrent pod instances ($N = 2$). This baseline multiplicity guarantees fundamental high availability at the application layer, facilitating request load balancing whilst establishing a requisite fault tolerance threshold. In the event of a catastrophic node hardware failure, anomalous memory consumption, or an unexpected kernel panic, the Kubernetes control plane is empowered to immediately reschedule the terminating pod. During this recovery phase, the surviving replica continues to multiplex the incoming inferential requests, ensuring that the continuous integration testing pipeline and external operator interfaces suffer no observable interruption. The mathematical probability of simultaneous failure for both isolated replicas is deemed statistically insignificant under standard operating conditions.
+
+The routing topology relies heavily on the standard Kubernetes label selector mechanism. The specification enforces the presence of universally recognisable identification tags, conforming rigorously to the canonical Kubernetes metadata schema. Specifically, the \texttt{app.kubernetes.io/name: taxon-vision-api} and \texttt{app.kubernetes.io/part-of: taxon-vision-mlops} labels are strictly mandated. These selectors act as the primary linkage mechanism binding the logical Service endpoint to the underlying physical pod IP addresses, thereby ensuring deterministic packet routing across the cluster networking interface.
+
+A critical requirement of the active machine learning continuous deployment lifecycle is the provision of zero-downtime model weight updates. To satisfy this rigid operational constraint, the deployment leverages a carefully tuned \texttt{RollingUpdate} strategy. This configuration prevents abrupt termination of active computational sessions when deploying newly quantised INT8 ONNX models or updating the foundational software dependencies.
+
+\begin{listing}[htbp]
+\begin{minted}[frame=lines,framesep=2mm,baselinestretch=1.2,fontsize=\footnotesize]{yaml}
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+\end{minted}
+\caption{Deployment update strategy extracting absolute zero-downtime guarantees.}
+\label{lst:rolling_update}
+\end{listing}
+
+As detailed in Listing \ref{lst:rolling_update}, the deployment strategy is mathematically constrained by two critical parameters: \texttt{maxSurge: 1} and \texttt{maxUnavailable: 0}. The \texttt{maxUnavailable} parameter, set unconditionally to zero, rigidly guarantees that the active service capacity never falls below the baseline specification of two functional replicas during a deployment rollout. Consequently, the scheduler must successfully provision and verify a new pod prior to initiating the termination of any existing workload.
+
+Simultaneously, the \texttt{maxSurge} parameter, configured to one, permits the temporary allocation of a third pod ($N_{surge} = 3$) during the transition phase. This precise categorisation of state transitions ensures that active inferential workloads remain uninterrupted. The model weights, API route schemas, and internal memory caches are seamlessly synchronised with the updated container images, completely transparently to the requesting clients.
+
+\section{Pod Security and Hardware Resource Allocations}
+\label{sec:pod_security_hardware}
+
+In strict adherence to the overarching principle of least privilege, the execution environment imposes unyielding user-space boundary constraints. The application container is explicitly and irrevocably prohibited from elevating to administrative root privileges. This structural limitation is critical in multi-tenant environments or scenarios where untrusted input might inadvertently trigger arbitrary code execution vulnerabilities.
+
+\begin{table}[htbp]
+\centering
+\caption{Security Context Configurations for the API Pod Template.}
+\label{tab:security_context}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Parameter} & \textbf{Specification} & \textbf{Security Rationale} \\ \midrule
+\texttt{runAsNonRoot} & \texttt{true} & Prevents root-level exploitation \\
+\texttt{runAsUser} & \texttt{10001} & Maps to unprivileged execution space \\
+\texttt{runAsGroup} & \texttt{10001} & Restricts file system ownership permissions \\ \bottomrule
+\end{tabular}
+\end{table}
+
+As enumerated in Table \ref{tab:security_context}, the process operates entirely within the constraints of User Identifier (UID) and Group Identifier (GID) 10001. This configuration fundamentally mitigates the risk of container escape vulnerabilities compromising the underlying host operating system. The utilisation of unprivileged execution mandates that any ephemeral file system interactions, such as caching ONNX intermediate representations, decoding telemetry payloads, or persisting temporary image artifacts, occur exclusively within strictly delineated directory spaces devoid of system-wide impact.
+
+Predictable latency and sustained throughput necessitate absolute determinism in the allocation of host hardware. The Kubernetes resource request and limit specifications act as a binding functional contract between the orchestrator and the execution environment. The deployment specifies a foundational memory request of 512 MiB and a central processing unit (CPU) allocation of 200 millicores ($200\text{m}$). These values represent the guaranteed baseline resources required to bootstrap the FastAPI process, interpret the ASGI application structures, and initiate the internal ONNX Runtime engine.
+
+The upper bound limits rigidly constrain execution to exactly 2 full CPU cores and 2 GiB of volatile memory. This strict memory ceiling prevents individual anomalous requests, such as the ingestion of abnormally large or maliciously malformed image payloads, from triggering cascading Out-Of-Memory (OOM) failures that might subsequently destabilise the adjacent node infrastructure.
+
+Furthermore, the real-time acceleration of the dense Vision Foundation Models (VFMs) mandates unencumbered access to the underlying graphical processing units. However, consumer hardware, such as the NVIDIA RTX 5070 Ti, lacks native physical Multi-Instance GPU (MIG) partitioning capabilities at the hardware level. To prevent a single replica from imposing an exclusive lock upon the entire silicon device, thereby stalling the deployment of the secondary replica, the system utilises the NVIDIA Kubernetes Device Plugin configured for advanced time-slicing (via \texttt{deploy/k8s/nvidia-time-slicing-config.yaml}). This sophisticated mechanism multiplexes the GPU execution context across four distinct virtual slices.
+
+\begin{listing}[htbp]
+\begin{minted}[frame=lines,framesep=2mm,baselinestretch=1.2,fontsize=\footnotesize]{yaml}
+resources:
+  requests:
+    cpu: "200m"
+    memory: "512Mi"
+  limits:
+    cpu: "2"
+    memory: "2Gi"
+    nvidia.com/gpu: "1"
+\end{minted}
+\caption{Resource allocation encompassing the virtualised GPU hardware slice.}
+\label{lst:resource_allocation}
+\end{listing}
+
+As demonstrated in Listing \ref{lst:resource_allocation}, the pod specification formally requests one such virtual slice (\texttt{nvidia.com/gpu: "1"}). The INT8 quantised ONNX runtime, due to its structurally minimised memory footprint, efficiently shares the unified Virtual Random Access Memory (VRAM) architecture. The software isolation guarantees that concurrent requests processed by distinct replicas are scheduled effectively by the driver without triggering pending-state starvation, thereby maximising the return on the underlying hardware investment.
+
+\section{Liveness and Readiness Probing Subsystem}
+\label{sec:health_probes_subsystem}
+
+Robust state management within distributed systems demands an explicit architectural distinction between application liveness (process vitality) and inferential readiness (model loading state). The Kubernetes kubelet relies on continuous, periodic probing to construct an accurate operational model of the pod lifecycle. To this end, the TaxonVision FastAPI service exposes two mathematically orthogonal health verification endpoints: \texttt{/health} and \texttt{/health/ready}.
+
+The liveness probe operates exclusively on the \texttt{/health} endpoint, which is meticulously engineered to execute instantaneously and entirely devoid of operational side-effects. The probe evaluates solely the functional integrity of the ASGI server and the responsiveness of the underlying Python asyncio event loop.
+
+\begin{table}[htbp]
+\centering
+\caption{Kubernetes Probe Timings, Delays, and Tolerance Thresholds.}
+\label{tab:probe_timings}
+\begin{tabular}{@{}llccc@{}}
+\toprule
+\textbf{Probe Type} & \textbf{Target Endpoint} & \textbf{Initial Delay (s)} & \textbf{Period (s)} & \textbf{Failure Threshold} \\ \midrule
+Liveness & \texttt{/health} & 15 & 20 & 3 \\
+Readiness & \texttt{/health/ready} & 5 & 5 & 2 \\ \bottomrule
+\end{tabular}
+\end{table}
+
+The liveness probe features an initial delay of 15 seconds, followed by periodic evaluations every 20 seconds with a failure threshold of 3. Crucially, this endpoint completely bypasses complex inferential logic, disk-based metric lookups, and computationally intensive model weight traversal. It instantaneously returns a lightweight JSON payload denoting the operational status (e.g., \texttt{\{"status": "healthy"\}}). If a computationally expensive operation were bound to this liveness probe, transient spikes in external inferential request volume could induce latency in the probe response, thereby artificially triggering a failure threshold breach. This scenario would lead to the catastrophic and completely unnecessary termination of functional pods, cascading into systemic failure under load as remaining pods become overwhelmed.
+
+Conversely, the readiness probe targets the distinct \texttt{/health/ready} path, polling aggressively every 5 seconds following a brief initial 5-second delay, with a tighter failure threshold of 2. This mechanism validates that the machine learning model weights are fully loaded into the active VRAM, that the hierarchical taxonomic categorisation tree is appropriately initialised in system memory, and that the ONNX Runtime session has successfully completed its mandatory warm-up cycle. The ingress controller strictly relies upon the positive assertion of this readiness state prior to dispatching any external traffic to the newly designated pod. This uncompromising separation of concerns ensures zero-error request routing during rolling updates, scaling events, and the initial system bootstrap phase.
+
+\section{Service Exposure and Ingress Architecture}
+\label{sec:service_exposure_ingress}
+
+Upon verification of pod readiness, network traffic must be deterministically routed from the external operator interface or automated CI pipelines to the internal application containers. The deployment achieves this abstraction via a Kubernetes Service manifest explicitly configured as a \texttt{NodePort} topology.
+
+The application container inherently binds its asynchronous listener to port 8000, governed by the injected \texttt{TAXON\_SERVICE\_\_PORT} environmental variable. The Kubernetes Service abstraction seamlessly and securely maps this internal container port to a statically defined external node port of 30080. This network topology deliberately circumvents the necessity for complex, stateful load balancer provisions typically native to public cloud ecosystems, instead leveraging the underlying host internal networking stack for maximum deterministic throughput and minimal latency overhead.
+
+\begin{listing}[htbp]
+\begin{minted}[frame=lines,framesep=2mm,baselinestretch=1.2,fontsize=\footnotesize]{yaml}
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: taxon-vision-api
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+    nodePort: 30080
+    protocol: TCP
+\end{minted}
+\caption{Service exposure configuration routing traffic via a deterministic NodePort mapping.}
+\label{lst:service_exposure}
+\end{listing}
+
+To facilitate external connectivity while simultaneously maintaining absolute cryptographic boundary security, the platform eschews traditional perimeter port forwarding and dynamic Domain Name System (DNS) exposure mechanisms. As rigorously delineated in the foundational strategy regarding physical infrastructure, the system leverages outbound-initiated Cloudflare Tunnels.
+
+The tunnel daemon, operating securely adjacent to the cluster on the internal network, binds directly to the \texttt{NodePort} 30080 endpoint. Because the connection is established outwardly to the global edge network from within the secure enclave, the bare-metal ingress architecture retains an uncompromising zero-open-ports topography. This fundamentally neutralises arbitrary external port-scanning reconnaissance, volumetric distributed denial-of-service (DDoS) attack vectors, and unauthorised access attempts against the local physical firewall. All external traffic is implicitly forced through the edge network's Web Application Firewall (WAF) prior to reaching the internal node.
+
+Finally, managing the connection lifecycle during pod termination events is critical for maintaining an uninterrupted service guarantee. Upon receipt of a SIGTERM UNIX signal from the orchestrator during a scaling down or automated update event, the FastAPI application immediately halts the acceptance of new connections and executes predefined graceful shutdown hooks. These routines ensure that any active, in-flight inferential requests are granted sufficient time to complete their mathematical computations and dispatch their final JSON payloads. Simultaneously, the Kubernetes Service abstraction proactively removes the terminating pod from the active routing pool, ensuring no new traffic is routed to a dying instance. This harmonised, coordinated draining process guarantees an immaculate transmission record, preserving the statistical integrity of the continuous MLOps evaluation metrics and maintaining operator trust in the deployed architecture.

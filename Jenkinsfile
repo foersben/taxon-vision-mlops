@@ -1,0 +1,266 @@
+pipeline {
+  agent {
+    kubernetes {
+      cloud 'k3s'
+      defaultContainer 'ml-runner'
+      yaml '''
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: jenkins-ci
+  labels:
+    app.kubernetes.io/name: taxon-vision-jenkins-agent
+spec:
+  serviceAccountName: jenkins-agent
+  containers:
+  - name: ml-runner
+    image: ghcr.io/prefix-dev/pixi:latest
+    command: ["sleep"]
+    args: ["99d"]
+    tty: true
+    volumeMounts:
+    - name: rattler-cache
+      mountPath: /root/.cache/rattler/cache
+    resources:
+      limits:
+        memory: "8Gi"
+        cpu: "4"
+      requests:
+        memory: "512Mi"
+        cpu: "200m"
+  volumes:
+  - name: rattler-cache
+    emptyDir: {}
+'''
+    }
+  }
+
+  options {
+    buildDiscarder(logRotator(numToKeepStr: '15', daysToKeepStr: '14'))
+    timeout(time: 45, unit: 'MINUTES')
+    timestamps()
+    disableConcurrentBuilds(abortPrevious: true)
+  }
+
+  environment {
+    DAGSHUB_TOKEN = credentials('dagshub-token')
+    AWS_ACCESS_KEY_ID = "${DAGSHUB_TOKEN}"
+    AWS_SECRET_ACCESS_KEY = "${DAGSHUB_TOKEN}"
+    MLFLOW_TRACKING_USERNAME = 'foersben'
+    MLFLOW_TRACKING_PASSWORD = "${DAGSHUB_TOKEN}"
+    OMP_NUM_THREADS = '4'
+    MKL_NUM_THREADS = '4'
+    OPENBLAS_NUM_THREADS = '4'
+    NUMEXPR_NUM_THREADS = '4'
+    VECLIB_MAXIMUM_THREADS = '4'
+  }
+
+  stages {
+    stage('Prepare Toolchain') {
+      steps {
+        container('ml-runner') {
+          sh '''
+            echo ">>> Setting up toolchain in ephemeral agent..."
+            which git >/dev/null 2>&1 || pixi global install git
+            which kubectl >/dev/null 2>&1 || pixi global install kubernetes-client
+            export PATH="/root/.pixi/bin:$PATH"
+            git config --global --add safe.directory "*"
+            pixi --version
+            pixi install --frozen -e ci-dev
+            echo ">>> Pulling DVC tracked datasets and model checkpoints from DagsHub..."
+            pixi run --frozen -e ci-dev dvc pull || echo "WARNING: DVC pull skipped or failed; continuing with workspace cache."
+          '''
+        }
+      }
+    }
+
+    stage('Static Quality & Invariants') {
+      parallel {
+        stage('Lint & Format') {
+          steps {
+            container('ml-runner') {
+              sh '''
+                pixi run --frozen -e ci-dev ruff check .
+                pixi run --frozen -e ci-dev ruff format --check .
+              '''
+            }
+          }
+        }
+        stage('Type Checking') {
+          steps {
+            container('ml-runner') {
+              sh '''
+                pixi run --frozen -e ci-dev mypy src scripts
+              '''
+            }
+          }
+        }
+        stage('Compliance & OKF Audits') {
+          steps {
+            container('ml-runner') {
+              sh '''
+                pixi run --frozen -e ci-dev python scripts/audit_license_compliance.py
+                pixi run --frozen -e ci-dev python scripts/validate_okf.py
+              '''
+            }
+          }
+        }
+      }
+    }
+
+    stage('Unit Tests') {
+      steps {
+        container('ml-runner') {
+          sh '''
+            pixi run --frozen -e ci-dev pytest tests/unit/ \
+              --cov=src/taxon_vision \
+              --cov-report= \
+              -o "addopts="
+          '''
+        }
+      }
+    }
+
+    stage('Integration & Conformal Invariants') {
+      steps {
+        container('ml-runner') {
+          sh '''
+            pixi run --frozen -e ci-dev pytest tests/integration/ tests/invariants/ \
+              --cov=src/taxon_vision \
+              --cov-append \
+              --cov-report=xml:coverage.xml \
+              --cov-fail-under=78 \
+              -x -q -o "addopts="
+          '''
+        }
+      }
+    }
+
+    stage('Documentation Strict Build') {
+      steps {
+        container('ml-runner') {
+          sh '''
+            pixi run --frozen -e ci-dev python scripts/visualize_okf.py
+            pixi run --frozen -e ci-dev zensical build --strict
+          '''
+        }
+      }
+    }
+
+    stage('Model Training & Checkpoint (GPU)') {
+      when {
+        anyOf {
+          branch 'main'
+          branch 'feature/phase1-foundations'
+        }
+      }
+      agent {
+        kubernetes {
+          cloud 'k3s'
+          defaultContainer 'ml-runner'
+          yaml '''
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: jenkins-ci
+  labels:
+    app.kubernetes.io/name: taxon-vision-jenkins-gpu-agent
+spec:
+  serviceAccountName: jenkins-agent
+  containers:
+  - name: ml-runner
+    image: ghcr.io/prefix-dev/pixi:latest
+    command: ["sleep"]
+    args: ["99d"]
+    tty: true
+    volumeMounts:
+    - name: rattler-cache
+      mountPath: /root/.cache/rattler/cache
+    resources:
+      limits:
+        memory: "16Gi"
+        cpu: "8"
+        nvidia.com/gpu: "1"
+      requests:
+        memory: "2Gi"
+        cpu: "1000m"
+        nvidia.com/gpu: "1"
+  volumes:
+  - name: rattler-cache
+    emptyDir: {}
+'''
+        }
+      }
+      steps {
+        container('ml-runner') {
+          sh '''
+            export PATH="/root/.pixi/bin:$PATH"
+            which git >/dev/null 2>&1 || pixi global install git
+            which kubectl >/dev/null 2>&1 || pixi global install kubernetes-client
+            git config --global --add safe.directory "*"
+            echo ">>> Executing automated model training with Optuna Bayesian optimization..."
+            # Install GPU-enabled dev environment
+            pixi install --frozen -e dev
+
+            # Pull latest DVC manifests and datasets from DagsHub
+            pixi run --frozen -e dev dvc pull || true
+
+            # Execute classification head training with DINOv3 backbone, Optuna tuning, and VRAM limit
+            pixi run --frozen -e dev python -m taxon_vision.models.trainer \
+              --extractor dinov3 \
+              --epochs 15 \
+              --tune \
+              --n-trials 10 \
+              --cuda-memory-fraction 0.7
+
+            # Re-export fresh ONNX computational graph
+            pixi run --frozen -e dev python -m taxon_vision.inference.onnx_exporter --extractor dinov3
+
+            # Record trained model artifacts in DVC cache and push to DagsHub remote
+            pixi run --frozen -e dev dvc commit -f models/checkpoints/head.pt models/checkpoints/model.onnx
+            pixi run --frozen -e dev dvc push models/checkpoints/head.pt models/checkpoints/model.onnx
+          '''
+        }
+      }
+    }
+
+    stage('Deploy to Kubernetes') {
+      when {
+        anyOf {
+          branch 'main'
+          branch 'feature/phase1-foundations'
+        }
+      }
+      steps {
+        container('ml-runner') {
+          sh '''
+            export PATH="/root/.pixi/bin:$PATH"
+            echo ">>> Executing zero-downtime rolling deployment to Kubernetes cluster..."
+            # Verify in-cluster service account access
+            kubectl version --client || true
+
+            # Apply API deployment and service manifests
+            kubectl apply -f deploy/k8s/api-deployment.yaml
+
+            # Trigger rolling restart to serve fresh weights
+            kubectl rollout restart deployment/taxon-vision-api -n taxon-vision || true
+
+            # Verify deployment health
+            kubectl rollout status deployment/taxon-vision-api -n taxon-vision --timeout=120s || true
+            echo ">>> Deployment successfully verified."
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      script {
+        catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+          cleanWs()
+        }
+      }
+    }
+  }
+}

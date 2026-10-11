@@ -1,0 +1,156 @@
+\providecolor{TaxonPrimary}{HTML}{1976D2}
+\providecolor{TaxonSecondary}{HTML}{388E3C}
+\providecolor{TaxonAccent}{HTML}{F57C00}
+\providecolor{TaxonDark}{HTML}{263238}
+
+\begin{figure}[htbp]
+    \centering
+    \resizebox{\textwidth}{!}{%
+    \begin{tikzpicture}[
+        node distance=0.8cm and 0.5cm,
+        font=\sffamily\footnotesize,
+        % Core styles
+        layer_box/.style={
+            rectangle, rounded corners, draw=TaxonDark, fill=gray!10, thick,
+            inner sep=12pt, align=center,
+        },
+        component_box/.style={
+            rectangle, rounded corners, draw=#1, fill=#1!10, thick,
+            minimum height=0.8cm, align=center,
+            drop shadow={opacity=0.2, shadow xshift=1mm, shadow yshift=-1mm}
+        },
+        data_flow/.style={
+            ->, >=Stealth, thick, TaxonDark
+        },
+        dashed_flow/.style={
+            ->, >=Stealth, thick, dashed, TaxonDark
+        },
+        % Group backgrounds
+        group_bg/.style={
+            rectangle, rounded corners, draw=#1!50, dashed, fill=#1!5, inner sep=15pt, yshift=-5pt
+        }
+    ]
+
+        % ==========================================
+        % 1. PyTorch to ONNX Export Layer
+        % ==========================================
+        \node[component_box=TaxonPrimary] (pytorch_ckpt) {
+            \textbf{PyTorch Checkpoint}\\
+            \texttt{head.pt} + Frozen Backbone\\
+            (FP32: $\sim$340 MB)
+        };
+
+        \node[component_box=TaxonPrimary, below=of pytorch_ckpt] (onnx_export) {
+            \textbf{\texttt{torch.onnx.export}}\\
+            Dynamic Axes: \texttt{batch\_size}\\
+            Opset 17
+        };
+
+        \node[component_box=TaxonPrimary, below=of onnx_export] (graph_opt) {
+            \textbf{Graph Optimisation}\\
+            Constant Folding \&\\
+            Operator Fusion (Conv+BN+ReLU)
+        };
+
+        \begin{scope}[on background layer]
+            \node[group_bg=TaxonPrimary, fit=(pytorch_ckpt) (onnx_export) (graph_opt), 
+                  label={[font=\sffamily\bfseries, text=TaxonPrimary]above:1. Computational Graph Export}] (export_group) {};
+        \end{scope}
+
+        \draw[data_flow] (pytorch_ckpt) -- (onnx_export);
+        \draw[data_flow] (onnx_export) -- (graph_opt);
+
+        % ==========================================
+        % 2. INT8 Quantisation Engine
+        % ==========================================
+        \node[component_box=TaxonSecondary, right=2cm of pytorch_ckpt] (calib_data) {
+            \textbf{Calibration Stream}\\
+            Validation Observations
+        };
+
+        \node[component_box=TaxonSecondary, right=2cm of onnx_export] (quant_op) {
+            \textbf{Static INT8 Calibration}\\
+            Insert QDQ Nodes\\
+            (QuantizeLinear / DequantizeLinear)
+        };
+
+        \node[component_box=TaxonSecondary, right=2cm of graph_opt] (quant_math) {
+            \textbf{Precision Transformation}\\
+            $q = \text{round}(x / S) + Z$\\
+            (INT8: $\sim$86 MB, 4x Compression)
+        };
+
+        \begin{scope}[on background layer]
+            \node[group_bg=TaxonSecondary, fit=(calib_data) (quant_op) (quant_math), 
+                  label={[font=\sffamily\bfseries, text=TaxonSecondary]above:2. Quantisation Architecture}] (quant_group) {};
+        \end{scope}
+
+        \draw[data_flow] (calib_data) -- (quant_op);
+        \draw[data_flow] (quant_op) -- (quant_math);
+        \draw[data_flow] (graph_opt) -- (quant_op);
+
+        % ==========================================
+        % 3. Zero-Allocation Runtime Engine
+        % ==========================================
+        \node[component_box=TaxonDark, right=2cm of calib_data] (ort_session) {
+            \textbf{\texttt{InferenceSession}}\\
+            \texttt{CUDAExecutionProvider}\\
+            Fail-soft to \texttt{CPUExecutionProvider}
+        };
+
+        \node[component_box=TaxonDark, below=of ort_session] (io_binding) {
+            \textbf{Zero-Allocation Hot-Path}\\
+            Pre-allocated \texttt{IOBinding} Buffers\\
+            No Python GIL lock
+        };
+
+        \node[component_box=TaxonDark, below=of io_binding] (thread_pool) {
+            \textbf{Concurrency}\\
+            Threadpool Execution
+        };
+
+        \begin{scope}[on background layer]
+            \node[group_bg=TaxonDark, fit=(ort_session) (io_binding) (thread_pool), 
+                  label={[font=\sffamily\bfseries, text=TaxonDark]above:3. Inference Engine}] (runtime_group) {};
+        \end{scope}
+
+        \draw[data_flow] (ort_session) -- (io_binding);
+        \draw[data_flow] (io_binding) -- (thread_pool);
+        \draw[data_flow] (quant_math) -- (ort_session);
+
+        % ==========================================
+        % 4. EigenCAM Interpretability
+        % ==========================================
+        \node[component_box=TaxonAccent, below=1.5cm of quant_math] (cam_extract) {
+            \textbf{Feature Map Extraction}\\
+            Last Convolutional / Attention Layer
+        };
+
+        \node[component_box=TaxonAccent, right=of cam_extract] (cam_svd) {
+            \textbf{Principal Component Saliency}\\
+            Projection onto $v_1$ of Activation Matrix
+        };
+
+        \node[component_box=TaxonAccent, right=of cam_svd] (cam_visual) {
+            \textbf{Visual Heatmap}\\
+            Aligned with Taxonomic Prediction
+        };
+
+        \begin{scope}[on background layer]
+            \node[group_bg=TaxonAccent, fit=(cam_extract) (cam_svd) (cam_visual), 
+                  label={[font=\sffamily\bfseries, text=TaxonAccent]above:4. Forward-Only Interpretability (EigenCAM)}] (cam_group) {};
+        \end{scope}
+
+        \draw[data_flow] (cam_extract) -- (cam_svd);
+        \draw[data_flow] (cam_svd) -- (cam_visual);
+        
+        % Connect Inference Engine to CAM
+        \draw[dashed_flow] (thread_pool) -- (cam_visual) node[midway, right] {Prediction Output};
+        \draw[dashed_flow] (runtime_group.south) |- (cam_extract.west) node[near start, left, align=right] {Activation\\Tensors};
+
+
+    \end{tikzpicture}%
+    }
+    \caption{End-to-end architecture of the TaxonVision ONNX inference pipeline, illustrating the progression from PyTorch graph export and INT8 precision quantisation, through the zero-allocation runtime session, culminating in EigenCAM visual interpretability.}
+    \label{fig:onnx_quantization_and_runtime}
+\end{figure}

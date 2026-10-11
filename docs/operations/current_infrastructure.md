@@ -17,10 +17,10 @@ TaxonVision, including the step-by-step instructions for reproducing and maintai
 
 ### Host Hardware Profile
 
-* **Node Identity:** Single-node bare-metal server (`hive-mind`) running Ubuntu 24.04 LTS.
+* **Node Identity:** Single-node bare-metal server (`hive-mind`) running Ubuntu 26.04.1 LTS (codename `resolute`).
 * **Processor (CPU):** Intel Core i7-14700K (20 physical cores, 28 threads).
 * **System Memory (RAM):** 128 GB DDR5.
-* **Graphics Hardware (GPU):** NVIDIA GeForce RTX 5070 Ti (16 GB VRAM).
+* **Graphics Hardware (GPU):** NVIDIA GeForce RTX 5070 Ti (16 GB VRAM, Blackwell, compute capability 12.0) with NVIDIA driver 615.71.09 (CUDA 13.4 user-mode driver).
 * **Storage:** NVMe SSD storage with Full Disk Encryption (LUKS).
 
 ### Remote Boot & Remote LUKS Decryption Setup
@@ -39,13 +39,17 @@ decryption before the root filesystem mounts.
 
 ### NVIDIA Drivers & Container Toolkit Setup
 
-To make the RTX 5070 Ti accessible to container engines, the proprietary NVIDIA driver (latest - version placeholder)
-and the NVIDIA Container Toolkit are installed directly on the Ubuntu host:
+To make the RTX 5070 Ti accessible to container engines, the proprietary NVIDIA driver
+and the NVIDIA Container Toolkit are installed directly on the Ubuntu host. The verified
+baseline is driver `615.71.09` reporting CUDA `13.4` (`nvidia-smi`). Because the CUDA user-mode
+driver is backward compatible, containers may ship an older CUDA runtime; for the Blackwell
+GPU this runtime must be CUDA 12.8 or newer, since earlier PyTorch builds contain no kernels
+for compute capability 12.0:
 
 ```bash
-# 1. Install proprietary NVIDIA graphics driver
+# 1. Install the recommended proprietary NVIDIA graphics driver
 sudo apt-get update
-sudo apt-get install -y nvidia-driver-595
+sudo ubuntu-drivers install
 
 # 2. Add NVIDIA Container Toolkit repository
 curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
@@ -92,12 +96,32 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
 sudo systemctl restart k3s
 ```
 
-1. **Deploy NVIDIA Kubernetes Device Plugin:** Deploy the device plugin daemonset so K3s
-   exposes `nvidia.com/gpu` allocatable resources:
+1. **Deploy NVIDIA Kubernetes Device Plugin & Time-Slicing Configuration:** Deploy the device plugin daemonset and apply the time-slicing ConfigMap so K3s exposes 4 virtual GPU slices for the physical RTX 5070 Ti:
 
 ```bash
-kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.16.1/deployments/static/gpu-feature-discovery-daemonset.yaml
-kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.16.1/deployments/static/nvidia-device-plugin.yml
+kubectl apply -f deploy/k8s/nvidia-time-slicing-config.yaml
+```
+
+Patch the device plugin daemonset to read the configuration:
+
+```bash
+kubectl patch daemonset nvidia-device-plugin-daemonset -n kube-system --patch '
+spec:
+  template:
+    spec:
+      containers:
+      - name: nvidia-device-plugin-ctr
+        env:
+        - name: CONFIG_FILE
+          value: /etc/config/config.yaml
+        volumeMounts:
+        - name: config
+          mountPath: /etc/config
+      volumes:
+      - name: config
+        configMap:
+          name: nvidia-device-plugin-config
+'
 ```
 
 1. **Verify GPU Capacity:**
@@ -106,7 +130,7 @@ kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.
 kubectl get nodes "-o=custom-columns=NAME:.metadata.name,GPU:.status.allocatable.nvidia\.com/gpu"
 ```
 
-The output confirms 1 allocatable `nvidia.com/gpu` on the node.
+The output confirms 4 allocatable `nvidia.com/gpu` virtual units on the `hive-mind` node, permitting concurrent multi-tenant execution across Web API inference, PyTorch batch training, and CI test runners without exclusive locking.
 
 ## Actions Runner Controller (ARC) Setup
 
@@ -230,54 +254,49 @@ transparently without needing GitHub Actions Repository Secrets.
 
 ### DVC Remote Configuration
 
-The repository DVC configuration routes to the DagsHub S3-compatible bucket:
+The repository DVC configuration routes to the DagsHub S3-compatible bucket (`s3://dvc` at `https://dagshub.com/foersben/taxon-vision-mlops.s3`):
 
 ```bash
-# Add DagsHub S3 remote to dvc configuration
-pixi run -e dev dvc remote add -d dagshub s3://taxon-vision-mlops
-pixi run -e dev dvc remote modify dagshub endpointurl https://dagshub.com/api/v1/repo-buckets/s3/foersben
+# S3-compatible remote on DagsHub
+pixi run -e dev dvc remote add -d dagshub s3://dvc
+pixi run -e dev dvc remote modify dagshub endpointurl https://dagshub.com/foersben/taxon-vision-mlops.s3
+```
+
+Local developers never commit credentials to `.dvc/config.local`. Instead, `just dvc-push` queries the token in-memory from KeePassXC via Secret Service:
+
+```bash
+# Push manifests and artifacts using ephemeral Secret Service tokens
+just dvc-push
 ```
 
 ## Core MLOps Ecosystem
 
-* **Package & Environment Management:** Strictly managed via `pixi`. We utilise a dual-environment strategy: `ci-dev` (CPU only) for continuous integration, and `dev` (GPU enabled) for local execution.
+* **Package & Environment Management:** Strictly managed via `pixi`. We utilise a dual-environment strategy: `ci-dev` (CPU only) for continuous integration, and `dev` (GPU enabled) for the remote GPU runners; model training is never executed on the developer workstation.
 * **Task Automation:** All pipeline steps, testing, and linting are executed via `just` (as defined in our `Justfile`).
 * **CI/CD Pipelines:** A robust `.github/workflows/ci.yml` triggers exclusively on pushes or pull requests to the `main` and `develop` branches. Deployments are secured via GitHub Environments (`taxon-vision-prod` and `taxon-vision-staging`), requiring manual administrator approval to prevent unauthorised execution on our bare-metal infrastructure.
 * **Data Versioning & Tracking:** We rely on DVC for dataset immutability and MLflow (hosted on DagsHub) for experiment tracking.
 
-## Planned CI Transition: GitHub Actions + Jenkins Hybrid
+## Production CI/CD Architecture: GitHub Actions + Jenkins Hybrid
 
-The current setup routes all work through GitHub Actions (ARC). As the training workloads
-grow and the need for granular GPU pod scheduling increases, the plan is to introduce a
-two-layer CI architecture:
+The system implements a production two-layer CI/CD architecture:
 
-* **Layer 1 - GitHub Actions (lightweight gates, current):** Lint, type checks, unit tests
-  (CPU), license audit, OKF validation, conformal audit, Docker builds, and DVC push/pull
-  continue to run on ARC runner pods. This layer is free, fast, and already in place.
-* **Layer 2 - Jenkins (heavy compute, planned):** On merge to `main`, GitHub Actions fires
-  a webhook to a self-hosted Jenkins instance running on the bare-metal cluster. Jenkins
-  then dispatches isolated Kubernetes pods for each pipeline stage:
-    * `Ingest` - CPU pod for DVC data pull and dataset hash extraction.
-    * `Train` - GPU pod executing the stripped `run_training_pipeline()` (pure ML, no
-      promotion logic).
-    * `Evaluate` - CPU pod querying MLflow to compare PR-AUC against the Production alias.
-    * `Promote` - CPU pod calling `set_registered_model_alias()` for Challenger / Production.
-    * `Deploy` - CPU pod issuing a rolling restart of the FastAPI Kubernetes deployment.
-
-This split keeps engineers in GitHub as the single control plane while delegating
-GPU-intensive work to a dedicated scheduler with proper resource limits per pod.
-See [training_pipeline.md](../model_engineering/training_pipeline.md) for the impact
-on `runner.py` and which functions will be deleted once Jenkins is in place.
+* **Layer 1 - GitHub Actions (lightweight gates):** Lint, type checks, unit tests (CPU), license audit, OKF validation, conformal audit, Docker builds, and DVC push/pull run on ARC runner pods.
+* **Layer 2 - Jenkins (heavy compute & continuous delivery):** A self-hosted Jenkins controller on the bare-metal host (`hive-mind`) receives webhooks through a zero-open-ports Cloudflare Tunnel. Jenkins dispatches ephemeral agent pods inside `k3s` via the `jenkins-agent` ServiceAccount across isolated pipeline stages:
+    * `Prepare Toolchain` - Provisions standalone `git` and `kubernetes-client` via Pixi, mounting the host NVMe Rattler cache for sub-second dependency resolution.
+    * `Static Quality & Invariants` - Executes Ruff linting, MyPy type checks, license compliance auditing, and OKF graph validation concurrently.
+    * `Unit & Integration Tests` - Runs pytest suites with 78% line coverage threshold and verifies split conformal coverage error bounds.
+    * `Documentation Strict Build` - Validates OKF knowledge graph and verifies doc integrity via `zensical build --strict`.
+    * `Model Training & Checkpoint (GPU)` - Runs on `main` using bare-metal GPU time-slicing on `hive-mind`, pulling DVC datasets, training with early stopping and best weight restoration, exporting ONNX, and logging to DagsHub MLflow.
+    * `Deployment Rollout` - Automatically applies [deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) and monitors zero-downtime rolling update status in the `taxon-vision` namespace.
 
 ## Outstanding Implementation Tasks
 
 * **Data Pipeline Execution:** Actual execution of DVC pipelines to ingest and transform iNaturalist/GBIF DarwinCore observation data.
 * **Model Training & Benchmarking:** Implementation of the multi-backbone Pareto benchmarking (`BioCLIP-2`, `DINOv3`, `MobileNetV4`) as defined in the strategy report.
 * **Inference Optimisation:** ONNX Runtime export with static INT8 ONNX PTQ for low-latency inference.
-* **Uncertainty Calibration:** Implementation of Split Conformal Prediction for coverage bounds and OOD detection logic.
-* **Web Service & Dashboard:** Development of the unified FastAPI machine REST API and the server-rendered Jinja2/HTMX operator dashboard.
+* **Uncertainty Calibration:** Verification of Split Conformal Prediction coverage bounds and OOD detection logic on full observation splits.
+* **Web Service & Dashboard:** Validation and enhancement of the unified FastAPI machine REST API and the server-rendered Jinja2/HTMX operator dashboard.
 * **Observability Stack:** Deployment of the Prometheus telemetry stack and Grafana dashboards for monitoring concept drift and latency budgets.
-* **Jenkins Integration:** Deploy Jenkins on the bare-metal cluster, configure the Kubernetes plugin for pod-per-stage scheduling, and wire the GitHub Actions webhook trigger on `main` merge. See the planned transition section above.
 
 ## Local Development Stack
 

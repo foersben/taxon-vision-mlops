@@ -1,0 +1,75 @@
+\providecolor{TaxonPrimary}{HTML}{1976D2}
+\providecolor{TaxonSecondary}{HTML}{388E3C}
+\providecolor{TaxonDark}{HTML}{263238}
+\providecolor{TaxonAccent}{HTML}{F57C00}
+
+\begin{figure}[htbp]
+    \centering
+    \resizebox{\textwidth}{!}{
+    \begin{tikzpicture}[
+        node distance=1.5cm and 1cm,
+        font=\sffamily\small,
+        base_box/.style={draw=TaxonDark, fill=white, thick, rounded corners, rectangle, align=center, drop shadow},
+        client_box/.style={base_box, minimum height=1.2cm, minimum width=3.5cm, fill=TaxonPrimary!10},
+        proxy_box/.style={base_box, minimum height=1cm, minimum width=10cm, fill=TaxonDark!10},
+        runtime_box/.style={draw=TaxonPrimary, fill=TaxonPrimary!5, thick, rounded corners, rectangle, inner xsep=15pt, inner ysep=20pt},
+        router_box/.style={base_box, minimum height=1.5cm, minimum width=4.5cm, fill=white},
+        threadpool_box/.style={base_box, minimum height=1.5cm, minimum width=10cm, fill=TaxonAccent!10},
+        htmx_box/.style={base_box, minimum height=1.5cm, minimum width=10cm, fill=TaxonSecondary!10},
+        ns_box/.style={draw=TaxonSecondary, fill=white, thick, rounded corners, rectangle, inner xsep=10pt, inner ysep=15pt, dashed},
+        arrow/.style={-Stealth, thick, draw=TaxonDark}
+    ]
+
+        % Clients Layer
+        \node[client_box] (machine_client) {Machine API Clients\\(curl, Mobile, Pipelines)};
+        \node[client_box, right=4cm of machine_client] (human_client) {Human Operators\\(Web Browsers)};
+
+        % Ingress Layer
+        \node[proxy_box, below=1.5cm of $(machine_client)!0.5!(human_client)$] (proxy) {Cloudflare Tunnel / Reverse Proxy};
+
+        % Draw arrows from clients to proxy
+        \draw[arrow] (machine_client) -- (proxy.165) node[midway, left] {REST / JSON};
+        \draw[arrow] (human_client) -- (proxy.15) node[midway, right] {HTTPS / HTMX};
+
+        % Runtime Box Background Container Setup
+        
+        % Uvicorn ASGI Worker
+        \node[base_box, fill=white, below=1.5cm of proxy, minimum height=1cm, minimum width=10cm] (uvicorn) {Uvicorn ASGI Workers};
+        \draw[arrow] (proxy) -- (uvicorn);
+
+        % AsyncIO Main Event Loop
+        \node[base_box, fill=white, below=0.8cm of uvicorn, minimum height=1cm, minimum width=10cm, draw=TaxonPrimary] (event_loop) {AsyncIO Main Event Loop (Non-blocking)};
+        \draw[arrow] (uvicorn) -- (event_loop);
+
+        % Routers
+        \node[router_box, below=1.2cm of event_loop.south west, anchor=north west, xshift=0.5cm] (api_router) {Machine API Router\\ \texttt{/predict, /health, /metrics}};
+        \node[router_box, below=1.2cm of event_loop.south east, anchor=north east, xshift=-0.5cm] (htmx_router) {Operator Hypermedia Router\\ \texttt{/dashboard, /triage}};
+
+        \draw[arrow] (event_loop.200) -- (api_router.north);
+        \draw[arrow] (event_loop.340) -- (htmx_router.north);
+
+        % AnyIO Threadpool
+        \node[threadpool_box, below=2cm of $(api_router)!0.5!(htmx_router)$] (threadpool) {AnyIO Threadpool Worker Offloading\\\texttt{anyio.to\_thread.run\_sync()}\\(PIL decoding, tensor resizing, ONNX matrix compute)};
+        
+        \draw[arrow, dashed] (api_router.south) -- (threadpool.165);
+        \draw[arrow, dashed] (htmx_router.south) -- (threadpool.15);
+
+        % HTMX Rendering Engine
+        \node[htmx_box, right=1.5cm of htmx_router] (htmx_render) {Server-Side Rendering \& Hypermedia\\Jinja2 template partials (\texttt{prediction\_card.html})\\HTMX: \texttt{hx-post, hx-swap="innerHTML"}};
+        
+        \draw[arrow] (htmx_router) -- (htmx_render) node[midway, above] {Renders};
+        
+        % Real-Time Display components attached to HTMX Box
+        \node[base_box, below=0.5cm of htmx_render, minimum width=5cm] (realtime) {Real-time display: top species,\\conformal sets, energy OOD\\alert, Grad-CAM heatmap};
+        \draw[arrow, dotted] (htmx_render) -- (realtime);
+
+        % Grouping FastAPI Core
+        \begin{scope}[on background layer]
+            \node[runtime_box, fit=(uvicorn) (event_loop) (api_router) (htmx_router) (threadpool), label={[font=\bfseries, text=TaxonPrimary]above left:FastAPI Core Runtime}] (fastapi_core) {};
+        \end{scope}
+
+    \end{tikzpicture}
+    }
+    \caption{Unified FastAPI dual-interface web service architecture illustrating the machine REST track and human HTMX hypermedia track offloading synchronous operations to the AnyIO threadpool.}
+    \label{fig:service_architecture_and_htmx}
+\end{figure}

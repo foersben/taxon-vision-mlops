@@ -13,8 +13,9 @@ def test_default_settings_loading() -> None:
     assert settings.model.image_size == 224
     assert settings.model.channels == 3
     assert "mobilenetv4_conv_small" in settings.model.backbone_registry
+    assert "dinov3" in settings.model.backbone_registry
     assert "bioclip-2" in settings.model.backbone_registry
-    assert settings.model.default_extractor == "mobilenetv4_conv_small"
+    assert settings.model.default_extractor == "dinov3"
     assert settings.mlflow.experiment_name == "taxon-vision-head-tuning"
     assert settings.conformal.alpha == 0.05
     assert settings.ood.energy_threshold == -12.5

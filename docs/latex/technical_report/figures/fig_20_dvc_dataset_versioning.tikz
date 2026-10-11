@@ -1,0 +1,120 @@
+\definecolor{DvcTeal}{HTML}{00897B}
+\definecolor{DvcAmber}{HTML}{FFA000}
+\definecolor{DvcPurple}{HTML}{8E24AA}
+\definecolor{DvcSlate}{HTML}{37474F}
+\definecolor{DvcBg}{HTML}{E0F2F1}
+
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    node distance=1.1cm and 1.6cm,
+    font=\footnotesize,
+    >=stealth,
+    gitbox/.style={
+        rectangle,
+        rounded corners=4pt,
+        draw=DvcTeal,
+        fill=DvcTeal!8,
+        thick,
+        inner sep=7pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=5.2cm
+    },
+    casbox/.style={
+        rectangle,
+        rounded corners=4pt,
+        draw=DvcAmber,
+        fill=DvcAmber!10,
+        thick,
+        inner sep=7pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=5.2cm
+    },
+    remotebox/.style={
+        rectangle,
+        rounded corners=4pt,
+        draw=DvcPurple,
+        fill=DvcPurple!8,
+        thick,
+        inner sep=7pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=5.2cm
+    },
+    groupbox/.style={
+        rectangle,
+        rounded corners=6pt,
+        draw=DvcSlate!50,
+        fill=DvcBg!30,
+        dashed,
+        inner sep=10pt
+    },
+    arrow/.style={
+        ->,
+        thick,
+        draw=DvcSlate
+    }
+]
+
+% Column 1: Git Tracked State
+\node[gitbox] (gitpointer) {
+    \textbf{Git Working Tree Pointer File}\\
+    \scriptsize \texttt{data/sample.dvc}\\
+    \scriptsize $\bullet$ \texttt{md5: f546997db8b542e87e4f006326d04aac.dir}\\
+    \scriptsize $\bullet$ \texttt{size: 37744}, \texttt{nfiles: 1}\\
+    \scriptsize $\bullet$ \texttt{path: sample}\\
+    \scriptsize Lightweight text pointer committed to Git
+};
+
+\node[gitbox, below=0.7cm of gitpointer] (lockfile) {
+    \textbf{Pipeline DAG Ledger (\texttt{dvc.lock})}\\
+    \scriptsize $\bullet$ Cryptographic hash of \texttt{data/manifests}\\
+    \scriptsize $\bullet$ Preserved as \texttt{dvc\_dataset\_hash} in MLflow\\
+    \scriptsize $\bullet$ Atomic link: Git commit SHA $\leftrightarrow$ Dataset snapshot\\
+    \scriptsize $\bullet$ Satisfies MLOps Reproducibility Rule 01
+};
+
+% Column 2: Content-Addressed Storage
+\node[casbox, right=1.6cm of gitpointer] (localcas) {
+    \textbf{Local Content-Addressed Storage}\\
+    \scriptsize \texttt{.dvc/cache/}\\
+    \scriptsize $\bullet$ 2-character directory sharding:\\
+    \scriptsize \phantom{$\bullet$ } \texttt{.dvc/cache/f5/46997db8b542...dir}\\
+    \scriptsize $\bullet$ Prevents ext4 inode exhaustion\\
+    \scriptsize $\bullet$ Hardlink/Symlink materialisation into workspace
+};
+
+\node[remotebox, below=0.7cm of localcas] (dagshub) {
+    \textbf{Remote CAS: DagsHub S3 Endpoint}\\
+    \scriptsize \texttt{https://dagshub.com/foersben/...s3}\\
+    \scriptsize $\bullet$ Bucket: \texttt{s3://dvc}\\
+    \scriptsize $\bullet$ Unified token authentication (\texttt{DAGSHUB\_TOKEN})\\
+    \scriptsize $\bullet$ Ephemeral agent hydration via \texttt{dvc pull}\\
+    \scriptsize $\bullet$ Fail-soft fallback on network partition
+};
+
+% Column 3: Workflows
+\node[casbox, right=1.6cm of localcas] (workflow) {
+    \textbf{Data Lifecycle Protocols}\\
+    \scriptsize $\bullet$ \texttt{dvc push}: Uploads novel MD5 chunks only\\
+    \scriptsize $\bullet$ \texttt{dvc pull}: Hydrates CI runner workspace\\
+    \scriptsize $\bullet$ \texttt{dvc status}: Real-time drift detection\\
+    \scriptsize $\bullet$ \texttt{dvc gc}: Prunes unreferenced local blobs
+};
+
+% Groupings
+\begin{scope}[on background layer]
+    \node[groupbox, fit=(gitpointer)(lockfile), label={[font=\bfseries, text=DvcTeal]above:Git Metadata Plane}] (g1) {};
+    \node[groupbox, fit=(localcas)(dagshub), label={[font=\bfseries, text=DvcAmber]above:Content-Addressed Storage (CAS)}] (g2) {};
+    \node[groupbox, fit=(workflow), label={[font=\bfseries, text=DvcPurple]above:Synchronisation Operations}] (g3) {};
+\end{scope}
+
+% Arrows
+\draw[arrow] (gitpointer) -- (localcas) node[midway, above, font=\tiny] {Resolves};
+\draw[arrow] (lockfile) -- (dagshub) node[midway, below, font=\tiny] {Verifies};
+\draw[arrow] (localcas) -- (dagshub) node[midway, right, font=\tiny] {\texttt{push} / \texttt{pull}};
+\draw[arrow] (localcas) -- (workflow);
+
+\end{tikzpicture}%
+}

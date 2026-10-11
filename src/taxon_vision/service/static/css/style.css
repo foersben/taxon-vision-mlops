@@ -86,3 +86,29 @@ body {
 .htmx-request.htmx-indicator {
   display: block !important;
 }
+
+.alert {
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-top: 1rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.alert.warning {
+  background-color: rgba(245, 158, 11, 0.15);
+  border: 1px solid #f59e0b;
+  color: #fbbf24;
+}
+
+.alert.danger {
+  background-color: rgba(239, 68, 68, 0.15);
+  border: 1px solid #ef4444;
+  color: #fca5a5;
+}
+
+.badge.empty {
+  background-color: #334155;
+  color: #94a3b8;
+  font-style: italic;
+}

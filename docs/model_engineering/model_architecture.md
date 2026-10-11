@@ -37,7 +37,7 @@ GPU training time for the classification stage to seconds rather than hours.
 
 The `factory.py` module provides a centralized registry-driven approach to instantiating
 all supported backbones. The canonical model names (e.g. `bioclip-2`, `dinov3`,
-`mobilenetv4_conv_small`) are resolved to their corresponding `timm` identifiers from the
+`vit_base_patch14_reg4_dinov2`, `mobilenetv4_conv_small`) are resolved to their corresponding `timm` identifiers from the
 application configuration file, eliminating hardcoded magic strings throughout the codebase.
 
 All backbones are loaded with:
@@ -120,6 +120,10 @@ from scarce classes.
 
 $$E_{N_i} = \frac{1 - \beta^{N_i}}{1 - \beta}, \quad W_i = \frac{1 - \beta}{1 - \beta^{N_i}}, \quad \sum_i W_i = K$$
 
+$$\mathcal{L}_{\text{CB}}(p, y) = -\frac{1 - \beta}{1 - \beta^{n_y}} \log(p_y)$$
+
+Where $\beta \to 1$ approximates standard class-frequency inverse weighting and intermediate $\beta \in [0.99, 0.9999]$ is optimal for long-tail species classification.
+
 * When $\beta \to 0$: weights collapse to uniform (standard cross-entropy).
 * When $\beta \to 1$: weights approach inverse class frequency.
 
@@ -146,6 +150,10 @@ sequenceDiagram
         FWD-->>Runner: scalar loss Tensor
     end
 ```
+
+## Multi-Head Hierarchical Taxonomic Loss
+
+Rather than relying solely on a single-head flat classification over terminal leaf nodes (e.g., thousands of species), the system can optionally project embeddings into a multi-head taxonomy (Class, Order, Family, Genus, Species). A hierarchical loss formulation ensures that coarse-grained taxonomic errors (e.g., misclassifying an insect as a bird) are penalized far more heavily than fine-grained errors (e.g., confusing two congeneric sparrow species).
 
 ## API Reference
 

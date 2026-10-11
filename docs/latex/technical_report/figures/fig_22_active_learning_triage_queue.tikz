@@ -1,0 +1,121 @@
+\definecolor{AlAmber}{HTML}{E65100}
+\definecolor{AlPurple}{HTML}{6A1B9A}
+\definecolor{AlTeal}{HTML}{00695C}
+\definecolor{AlSlate}{HTML}{37474F}
+\definecolor{AlBg}{HTML}{FFF3E0}
+
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    node distance=1.1cm and 1.6cm,
+    font=\footnotesize,
+    >=stealth,
+    acqbox/.style={
+        rectangle,
+        rounded corners=4pt,
+        draw=AlAmber,
+        fill=AlAmber!8,
+        thick,
+        inner sep=7pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=5.2cm
+    },
+    heapbox/.style={
+        rectangle,
+        rounded corners=4pt,
+        draw=AlPurple,
+        fill=AlPurple!8,
+        thick,
+        inner sep=7pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=5.4cm
+    },
+    humanbox/.style={
+        rectangle,
+        rounded corners=4pt,
+        draw=AlTeal,
+        fill=AlTeal!8,
+        thick,
+        inner sep=7pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=5.2cm
+    },
+    groupbox/.style={
+        rectangle,
+        rounded corners=6pt,
+        draw=AlSlate!50,
+        fill=AlBg!30,
+        dashed,
+        inner sep=10pt
+    },
+    arrow/.style={
+        ->,
+        thick,
+        draw=AlSlate
+    }
+]
+
+% Column 1: Acquisition & Referral Triggers
+\node[acqbox] (triggers) {
+    \textbf{Uncertainty Query Triggers}\\
+    \scriptsize $\bullet$ \textbf{Conformal Trigger}:\\
+    \scriptsize \phantom{$\bullet$ } Cardinality $|C(x)| > k_{\text{max}}$ OR Empty $|C(x)| = 0$\\
+    \scriptsize $\bullet$ \textbf{Inverted Margin}: $1.0 - (p_{(1)} - p_{(2)})$\\
+    \scriptsize $\bullet$ \textbf{Shannon Entropy}: $H(p) = -\sum p_i \log p_i$\\
+    \scriptsize $\bullet$ \textbf{Least Confidence}: $1.0 - \max_i p_i$
+};
+
+\node[acqbox, below=0.7cm of triggers] (payload) {
+    \textbf{\texttt{TriageItem} Structured Payload}\\
+    \scriptsize $\bullet$ \texttt{observation\_id: str}\\
+    \scriptsize $\bullet$ \texttt{uncertainty\_score: float}\\
+    \scriptsize $\bullet$ \texttt{conformal\_set\_size: int}\\
+    \scriptsize $\bullet$ \texttt{image\_url: str} (Decoupled image pointer)
+};
+
+% Column 2: In-Memory Priority Heap
+\node[heapbox, right=1.6cm of triggers] (heap) {
+    \textbf{\texttt{TriageQueue} Priority Max-Heap}\\
+    \scriptsize \texttt{src/taxon\_vision/active\_learning/triage\_queue.py}\\
+    \scriptsize $\bullet$ Stored tuple: \texttt{(-score, counter, item)}\\
+    \scriptsize $\bullet$ Python \texttt{heapq} min-heap inverted to max-heap\\
+    \scriptsize $\bullet$ Push complexity: $\mathcal{O}(\log N)$\\
+    \scriptsize $\bullet$ Pop complexity: $\mathcal{O}(\log N)$\\
+    \scriptsize $\bullet$ FIFO tie-breaking via monotonic counter
+};
+
+\node[heapbox, below=0.7cm of heap] (loop) {
+    \textbf{Continuous Retraining Trigger}\\
+    \scriptsize $\bullet$ Human feedback updates Parquet manifests\\
+    \scriptsize $\bullet$ Atomic DVC commit (\texttt{dvc.lock} update)\\
+    \scriptsize $\bullet$ Jenkins CI pipeline detects dataset mutation\\
+    \scriptsize $\bullet$ Automatic retraining of classification head
+};
+
+% Column 3: Operator Interface
+\node[humanbox, right=1.6cm of heap] (dashboard) {
+    \textbf{Human Review Dashboard}\\
+    \scriptsize $\bullet$ Server-rendered Jinja2 + HTMX\\
+    \scriptsize $\bullet$ Partial DOM swaps via AnyIO workers\\
+    \scriptsize $\bullet$ Prediction card: confidence \& conformal set\\
+    \scriptsize $\bullet$ Expert dispute resolution \& label correction
+};
+
+% Groupings
+\begin{scope}[on background layer]
+    \node[groupbox, fit=(triggers)(payload), label={[font=\bfseries, text=AlAmber]above:Epistemic Acquisition Plane}] (g1) {};
+    \node[groupbox, fit=(heap)(loop), label={[font=\bfseries, text=AlPurple]above:Priority Triage \& Loop Closure}] (g2) {};
+    \node[groupbox, fit=(dashboard), label={[font=\bfseries, text=AlTeal]above:Operator Interface}] (g3) {};
+\end{scope}
+
+% Arrows
+\draw[arrow] (triggers) -- (payload);
+\draw[arrow] (payload.east) -- ++(0.6,0) |- (heap.west);
+\draw[arrow] (heap) -- (dashboard) node[midway, above, font=\tiny] {\texttt{pop()}};
+\draw[arrow] (dashboard.south) |- (loop.east);
+\draw[arrow] (loop.west) -- ++(-0.6,0) |- (triggers.south);
+
+\end{tikzpicture}%
+}

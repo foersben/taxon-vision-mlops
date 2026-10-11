@@ -44,6 +44,14 @@ Universal academic benchmarks (such as ImageNet-1K or Tree-of-Life zero-shot) pr
 
 Because static literature numbers cannot predict runtime latency on target hardware, the platform relies on [`scripts/benchmark_pareto.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/benchmark_pareto.py) to dynamically profile p50/p95 latency, throughput, and memory footprint on the local silicon test suite.
 
+### Extended Pareto Trade-Off Dimensions
+
+When evaluating the optimal deployment strategy, the Pareto frontier expands across multiple competing metrics:
+
+* **Top-1 vs. Top-5 Accuracy:** While Top-1 accuracy is strictly evaluated for confident single-label assignments, Top-5 accuracy is a critical metric for taxonomic triage. Even if the precise species is ambiguous, ensuring the correct genus or family falls within the top 5 predictions is essential for human-in-the-loop review.
+* **CPU vs. GPU Inference Latency (ms):** Hardware targets drastically alter the Pareto frontier. Heavy Vision Transformers (like DINOv2 and BioCLIP-2) heavily leverage tensor parallelism, making them highly efficient on GPUs (under 15 ms). However, when deployed to edge CPUs, their self-attention mechanisms bottleneck, ballooning latency well beyond the 25 ms SLA. Conversely, MobileNetV4 maintains tight sub-20 ms bounds on standard CPU cores via inverted bottlenecks.
+* **Memory Footprint (MB):** Model parameters directly dictate RAM/VRAM consumption. Large backbones (e.g., BioCLIP-2 at ~86M parameters) consume substantial memory space, leaving less headroom for concurrent user requests. Edge architectures like MobileNetV4 (~3.8M parameters) allow zero-allocation execution strategies within highly constrained edge device memory pools.
+
 ```mermaid
 flowchart TD
     subgraph Pareto["Pareto Architectural Trade-Offs"]

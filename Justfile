@@ -133,11 +133,21 @@ ingest-data:
 # Train baseline classification head with Class-Balanced Loss
 [group("mlops")]
 train-baseline extractor="bioclip-2":
+	@TOKEN=$(secret-tool lookup Title DagsHub 2>/dev/null || secret-tool lookup service dagshub 2>/dev/null || true); \
+	if [ -n "$TOKEN" ]; then \
+		export MLFLOW_TRACKING_USERNAME="foersben"; \
+		export MLFLOW_TRACKING_PASSWORD="$TOKEN"; \
+	fi; \
 	pixi run --frozen -e dev python -m taxon_vision.models.trainer --extractor {{extractor}} --epochs 5
 
 # Run CLI training script (Phase 1 Baseline)
 [group("mlops")]
 train epochs="5" extractor="mobilenetv4_conv_small":
+	@TOKEN=$(secret-tool lookup Title DagsHub 2>/dev/null || secret-tool lookup service dagshub 2>/dev/null || true); \
+	if [ -n "$TOKEN" ]; then \
+		export MLFLOW_TRACKING_USERNAME="foersben"; \
+		export MLFLOW_TRACKING_PASSWORD="$TOKEN"; \
+	fi; \
 	pixi run --frozen -e dev python -m taxon_vision.models.trainer --epochs {{epochs}} --extractor {{extractor}}
 
 # Run CLI prediction script on an observation image
@@ -162,6 +172,28 @@ pareto:
 calibrate:
 	pixi run --frozen -e dev python scripts/calibrate_conformal.py --alpha 0.05
 
+# Push tracked datasets & models to DagsHub using in-memory Secret Service credentials
+[group("mlops")]
+dvc-push:
+	@TOKEN=$(secret-tool lookup Title DagsHub 2>/dev/null || secret-tool lookup service dagshub 2>/dev/null); \
+	if [ -z "$TOKEN" ]; then \
+	    echo "❌ Error: KeePassXC is locked or DagsHub token not found in Secret Service." >&2; \
+	    exit 1; \
+	fi; \
+	AWS_ACCESS_KEY_ID="$TOKEN" AWS_SECRET_ACCESS_KEY="$TOKEN" \
+	pixi run --frozen -e dev dvc push
+
+# Pull tracked datasets & models from DagsHub
+[group("mlops")]
+dvc-pull:
+	@TOKEN=$(secret-tool lookup Title DagsHub 2>/dev/null || secret-tool lookup service dagshub 2>/dev/null); \
+	if [ -z "$TOKEN" ]; then \
+	    echo "❌ Error: KeePassXC is locked or DagsHub token not found in Secret Service." >&2; \
+	    exit 1; \
+	fi; \
+	AWS_ACCESS_KEY_ID="$TOKEN" AWS_SECRET_ACCESS_KEY="$TOKEN" \
+	pixi run --frozen -e dev dvc pull
+
 # ── Serving & Web UI ────────────────────────────────────────────────────────
 
 # Start FastAPI inference and HTMX dashboard server with live reload
@@ -173,6 +205,11 @@ run-api:
 [group("app")]
 run:
 	@just run-api
+
+# Validate live Kubernetes deployment health, endpoints, and inference
+[group("app")]
+verify-deployment namespace="taxon-vision":
+	@bash scripts/verify_deployment.sh {{namespace}}
 
 # ── Documentation ───────────────────────────────────────────────────────────
 
