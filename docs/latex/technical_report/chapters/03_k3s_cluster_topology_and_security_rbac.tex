@@ -40,7 +40,7 @@ Network Policies are provisioned to enforce cross-namespace constraints. For ins
 \section{Role-Based Access Control (RBAC) Specification}
 \label{sec:rbac_specification}
 
-The security posture of the CI/CD pipeline is codified within the \texttt{deploy/k8s/jenkins-agent-rbac.yaml} manifest. Because the Jenkins controller requires the capacity to dynamically provision and terminate ephemeral machine learning runner pods, it necessitates elevated API permissions. However, granting cluster-admin privileges to the CI controller represents a catastrophic security vulnerability. Therefore, the architecture employs a rigorous Role-Based Access Control (RBAC) schema that strictly bounds the operational scope of the \texttt{jenkins-agent}.
+The security posture of the CI/CD pipeline is codified within the manifest\\\texttt{deploy/k8s/jenkins-agent-rbac.yaml}. Because the Jenkins controller requires the capacity to dynamically provision and terminate ephemeral machine learning runner pods, it necessitates elevated API permissions. However, granting cluster-admin privileges to the CI controller represents a catastrophic security vulnerability. Therefore, the architecture employs a rigorous Role-Based Access Control (RBAC) schema that strictly bounds the operational scope of the \texttt{jenkins-agent}.
 
 \subsection{ServiceAccount Scoping}
 The baseline identity is established via a dedicated Kubernetes ServiceAccount. The manifest provisions the \texttt{jenkins-agent} identity exclusively within the \texttt{jenkins-ci} namespace, ensuring that any API token derived from this account possesses no inherent global authority.
@@ -82,7 +82,7 @@ rules:
 \end{listing}
 
 \subsection{RoleBinding Guardrails}
-To operationalise the permissions, a \texttt{RoleBinding} securely associates the \texttt{jenkins-agent} ServiceAccount with the \texttt{jenkins-agent-role}. Because this is a \texttt{RoleBinding} and not a \texttt{ClusterRoleBinding}, the permissions are strictly confined to the \texttt{jenkins-ci} namespace. This serves as a critical containment mechanism: even in the event of a severe container escape vulnerability within the \texttt{ml-runner} environment, the compromised agent token cannot be leveraged to inspect secrets, modify workloads, or execute lateral movement into the \texttt{kube-system} or \texttt{taxon-vision} namespaces.
+To operationalise the permissions, a \texttt{RoleBinding} securely associates the \texttt{jenkins-agent} ServiceAccount with the role\\\texttt{jenkins-agent-role}. Because this is a \texttt{RoleBinding} and not a \texttt{ClusterRoleBinding}, the permissions are strictly confined to the \texttt{jenkins-ci} namespace. This serves as a critical containment mechanism: even in the event of a severe container escape vulnerability within the \texttt{ml-runner} environment, the compromised agent token cannot be leveraged to inspect secrets, modify workloads, or execute lateral movement into the \texttt{kube-system} or \texttt{taxon-vision} namespaces.
 
 \begin{listing}[H]
 \begin{minted}{yaml}

@@ -24,7 +24,7 @@ Table \ref{tab:ddd_layers} outlines the separation of concerns achieved through 
 
 \begin{table}[h]
 \centering
-\begin{tabular}{@{}lll@{}}
+\begin{tabularx}{\textwidth}{@{}llX@{}}
 \toprule
 \textbf{Layer} & \textbf{Responsibility} & \textbf{Frameworks / Implementation} \\
 \midrule
@@ -33,12 +33,12 @@ Application Layer & Model inference orchestration, active learning loops & FastA
 Infrastructure Layer & Database persistence, ONNX execution, S3 storage & DuckDB, ONNX Runtime, aiobotocore \\
 Presentation Layer & API endpoints, operator interfaces & FastAPI Routes, HTMX \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \caption{Layered Architecture separating the domain logic from infrastructural constraints.}
 \label{tab:ddd_layers}
 \end{table}
 
-\section{DarwinCore Standard Compliance and Taxonomic Rank Modelling}
+\section[DarwinCore Standard Compliance and Taxonomic Rank Modelling]{DarwinCore Standard Compliance\\and Taxonomic Rank Modelling}
 \label{sec:darwincore_schema}
 
 The standardisation of biodiversity occurrence records is governed globally by the DarwinCore (DwC) standard. TaxonVision-MLOps maps its taxonomic domain entities directly to the DwC glossary, providing a consistent nomenclature that facilitates interoperability with international aggregators such as the Global Biodiversity Information Facility (GBIF) and iNaturalist.
@@ -61,7 +61,7 @@ The structure utilises an adjacency list paradigm, where each \texttt{TaxonNode}
 
 \begin{table}[h]
 \centering
-\begin{tabular}{@{}llp{8cm}@{}}
+\begin{tabularx}{\textwidth}{@{}llX@{}}
 \toprule
 \textbf{TaxonNode Attribute} & \textbf{DwC Term} & \textbf{Description} \\
 \midrule
@@ -71,7 +71,7 @@ The structure utilises an adjacency list paradigm, where each \texttt{TaxonNode}
 \texttt{rank} & \texttt{taxonRank} & The taxonomic rank of the most specific name in the scientificName. \\
 \texttt{parent\_id} & \texttt{parentNameUsageID} & An identifier for the name usage of the direct, most proximate higher-rank parent. \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \caption{Mapping of \texttt{TaxonNode} attributes to DarwinCore terms.}
 \label{tab:darwincore_mapping}
 \end{table}
@@ -157,7 +157,7 @@ class AttributionRecord(BaseModel):
     source_portal: str = Field(default="iNaturalist", description="Originating repository")
 \end{minted}
 
-The integration of the \texttt{AttributionRecord} guarantees that downstream derived works and subsetted datasets retain full traceability to the original author. Moreover, this schema provides the foundation for the system's observability telemetry; metrics such as \texttt{model\_metadata\_total[status="licensed\_data"]} and \texttt{model\_retention\_hours} are updated based on the instantiation and lifespan of these domain entities. The adherence to rigorous licensing not only protects the developers from legal ramifications but also guarantees that the trained neural networks reflect the open-source community's ethos.
+The integration of the \texttt{AttributionRecord} guarantees that downstream derived works and subsetted datasets retain full traceability to the original author. Moreover, this schema provides the foundation for the system's observability telemetry; metrics such as\\\texttt{model\_metadata\_total[status="licensed\_data"]} and \texttt{model\_retention\_hours} are updated based on the instantiation and lifespan of these domain entities. The adherence to rigorous licensing not only protects the developers from legal ramifications but also guarantees that the trained neural networks reflect the open-source community's ethos.
 
 \section{Integration with Model Heads and Label Encoders}
 \label{sec:integration_model_heads}

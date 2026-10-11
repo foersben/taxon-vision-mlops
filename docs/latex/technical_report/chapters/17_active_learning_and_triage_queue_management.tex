@@ -83,7 +83,7 @@ class TriageQueue:
 \label{lst:triage_queue}
 \end{listing}
 
-The internal structure of the heap stores tuples formatted as \texttt{(-uncertainty\_score, sequence\_counter, item)}. The inclusion of a monotonic integer sequence counter is critical for maintaining determinism. In scenarios where multiple observations yield identical uncertainty scores, the strict FIFO (First-In, First-Out) fallback breaks ties, ensuring that older observations are consistently prioritised for review without necessitating complex comparative operator overloading on the underlying domain objects.
+The internal structure of the heap stores tuples formatted as\\\texttt{(-uncertainty\_score, sequence\_counter, item)}. The inclusion of a monotonic integer sequence counter is critical for maintaining determinism. In scenarios where multiple observations yield identical uncertainty scores, the strict FIFO (First-In, First-Out) fallback breaks ties, ensuring that older observations are consistently prioritised for review without necessitating complex comparative operator overloading on the underlying domain objects.
 
 Furthermore, the queue must enforce strict bounded memory constraints to prevent resource exhaustion during prolonged surges in environmental telemetry. When the heap cardinality exceeds its configured maximal capacity, the architecture institutes deterministic eviction policies, silently dropping the observations exhibiting the lowest comparative epistemic uncertainty in order to maintain system stability.
 

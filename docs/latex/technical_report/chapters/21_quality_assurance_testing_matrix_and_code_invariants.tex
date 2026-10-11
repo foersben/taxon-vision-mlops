@@ -71,7 +71,7 @@ The invariant test suite elevates quality assurance from functional correctness 
 
 \subsection{Empirical Conformal Coverage}
 
-In biological taxonomy classification, epistemic uncertainty quantification is paramount. The Split Conformal Prediction engine guarantees a theoretically proven minimum marginal coverage rate of $1 - \alpha$, provided the calibration and test samples are exchangeable. To ensure this mathematical property is not violated through code refactoring, the invariant test \texttt{test\_conformal\_coverage\_invariant.py} asserts empirical coverage. 
+In biological taxonomy classification, epistemic uncertainty quantification is paramount. The Split Conformal Prediction engine guarantees a theoretically proven minimum marginal coverage rate of $1 - \alpha$, provided the calibration and test samples are exchangeable. To ensure this mathematical property is not violated through code refactoring, the invariant test\\\texttt{test\_conformal\_coverage\_invariant.py} asserts empirical coverage. 
 
 By generating synthetic Dirichlet-distributed probability simplex vectors and synthetic label sets, the test calibrates a quantile threshold $\hat{q}$ and verifies that the resultant prediction sets encompass the true label in at least $1 - \alpha$ of the trials, maintaining strict mathematical sanity.
 
@@ -103,7 +103,7 @@ Latency minimisation on the hot inference path is an operational necessity. As o
 
 The \texttt{ONNXInferenceEngine} is explicitly structured to pre-allocate input and output binding tensors during its initialisation phase. By preserving a fixed operational graph and reusing memory buffers, the system ensures deterministic p95 execution latency boundaries. 
 
-This philosophy of clean architectural isolation is echoed by the pure Pixi invariant (\texttt{test\_pure\_pixi\_invariant.py}), which explicitly rejects legacy state mutations by forbidding dynamic \texttt{.venv} generation or unmanaged dependency artefacts within the repository structure.
+This philosophy of clean architectural isolation is echoed by the pure Pixi invariant\\(\texttt{test\_pure\_pixi\_invariant.py}), which explicitly rejects legacy state mutations by forbidding dynamic \texttt{.venv} generation or unmanaged dependency artefacts within the repository structure.
 
 \section{Property-Based Testing with Hypothesis}
 \label{sec:property_based_testing}

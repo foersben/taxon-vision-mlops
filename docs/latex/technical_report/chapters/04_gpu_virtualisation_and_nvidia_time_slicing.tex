@@ -77,7 +77,7 @@ The 16.0 GB GDDR7 VRAM is partitioned according to the following explicit policy
     \item \textbf{Slot 4: Elastic Headroom / Active Learning Batch Inference.} The final slot serves as an elastic buffer, allocated 4.0 GB of VRAM. It facilitates asynchronous active learning triage queues and periodic batch re-indexing of the cryptographic exemplar database without starving the real-time inference API.
 \end{enumerate}
 
-To mathematically and programmatically enforce these limits within PyTorch, the platform relies upon the \texttt{torch.cuda.set\_per\_process\_memory\_fraction} invariant. Within the execution runner (\texttt{src/taxon\_vision/models/training/runner.py}), the function \texttt{configure\_cuda\_memory\_budget} intercepts the initialisation sequence. For the training worker, a target fraction $f$ is defined. Given $M_{\text{train}} = 5.0\text{ GB}$ and $M_{\text{VRAM}} = 16\text{ GB}$, the fractional allocation evaluates to:
+To mathematically and programmatically enforce these limits within PyTorch, the platform relies upon the \texttt{torch.cuda.set\_per\_process\_memory\_fraction} invariant. Within the execution runner\\(\texttt{src/taxon\_vision/models/training/runner.py}), the function\\\texttt{configure\_cuda\_memory\_budget} intercepts the initialisation sequence. For the training worker, a target fraction $f$ is defined. Given $M_{\text{train}} = 5.0\text{ GB}$ and $M_{\text{VRAM}} = 16\text{ GB}$, the fractional allocation evaluates to:
 \[
 f = \frac{M_{\text{train}}}{M_{\text{VRAM}}} = \frac{5.0}{16.0} = 0.3125
 \]

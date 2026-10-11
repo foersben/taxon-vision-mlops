@@ -33,7 +33,7 @@ Furthermore, decoupling metric aggregation ensures that the computational resour
 \section{Prometheus Instrumentation and Metric Design}
 \label{sec:prometheus_instrumentation}
 
-The mathematical formalisation of model performance relies on three fundamental Prometheus metric types: Counters, Histograms, and Gauges. The \texttt{src/taxon\_vision/monitoring/telemetry.py} module centralises the definition and global registration of these metrics. By invoking these definitions directly upon module import, they are seamlessly attached to the global Prometheus client registry without requiring manual singleton instantiation.
+The mathematical formalisation of model performance relies on three fundamental Prometheus metric types: Counters, Histograms, and Gauges. The telemetry module\\\texttt{src/taxon\_vision/monitoring/telemetry.py} centralises the definition and global registration of these metrics. By invoking these definitions directly upon module import, they are seamlessly attached to the global Prometheus client registry without requiring manual singleton instantiation.
 
 \subsection{Metric Definitions}
 

@@ -9,9 +9,9 @@ The robust categorisation of biodiversity at a global scale strictly necessitate
 
 The acquisition of citizen-science imagery from platforms such as iNaturalist constitutes a fundamental component of the vision backbone training procedure. However, downloading multi-terabyte raw datasets directly to local block storage introduces severe performance bottlenecks and rapid storage exhaustion, colloquially referred to as the ``50 TB trap''. In order to circumvent this limitation, the platform employs a sophisticated, fully asynchronous data ingestion architecture that fundamentally decouples the retrieval of metadata from the physical realisation of the image buffers.
 
-The retrieval of metadata is orchestrated by the \texttt{INatClient} class, located within \texttt{src/taxon\_vision/data/inat\_client.py}. This component functions as an asynchronous HTTP client that strictly adheres to the iNaturalist REST API v1 terms of service, which mandates a maximum limit of 60 requests per minute. The client enforces this constraint through the calculation of a minimum request delay, invoking an \texttt{asyncio.sleep} throttle prior to dispatching any GET request via the \texttt{httpx.AsyncClient} library. This precise throttling mechanism prevents IP banning and ensures stable, long-term data extraction.
+The retrieval of metadata is orchestrated by the \texttt{INatClient} class, located within\\\texttt{src/taxon\_vision/data/inat\_client.py}. This component functions as an asynchronous HTTP client that strictly adheres to the iNaturalist REST API v1 terms of service, which mandates a maximum limit of 60 requests per minute. The client enforces this constraint through the calculation of a minimum request delay, invoking an \texttt{asyncio.sleep} throttle prior to dispatching any GET request via the \texttt{httpx.AsyncClient} library. This precise throttling mechanism prevents IP banning and ensures stable, long-term data extraction.
 
-Furthermore, the \texttt{INatClient} restricts queries explicitly to observations possessing a \texttt{quality\_grade=research} parameter. This strict filtering guarantees that only records that have achieved a community consensus regarding the taxonomic identification are ingested, thereby maintaining high label fidelity. The client subsequently sanitises the retrieved metadata by upgrading the resolution of the image locators; it replaces the \texttt{square} thumbnail URLs with \texttt{medium} resolution locators (typically 500 pixels along the longest dimension), providing sufficient spatial frequency data for the downstream neural feature extraction.
+Furthermore, the \texttt{INatClient} restricts queries explicitly to observations possessing a\\\texttt{quality\_grade=research} parameter. This strict filtering guarantees that only records that have achieved a community consensus regarding the taxonomic identification are ingested, thereby maintaining high label fidelity. The client subsequently sanitises the retrieved metadata by upgrading the resolution of the image locators; it replaces the \texttt{square} thumbnail URLs with \texttt{medium} resolution locators (typically 500 pixels along the longest dimension), providing sufficient spatial frequency data for the downstream neural feature extraction.
 
 For the physical retrieval of the image buffers, the architecture employs the \texttt{S3Streamer} component (\texttt{src/taxon\_vision/data/s3\_streamer.py}). Rather than buffering the entire dataset to local NVMe storage, this streamer lazily yields image data directly from the AWS Open Data S3 buckets. It maintains an open \texttt{httpx.Client} session with connection pooling, thereby minimising the overhead associated with the TCP handshake during the retrieval of millions of small objects. By yielding a lazy generator of \texttt{PIL.Image.Image} instances, the system restricts the active memory footprint to solely the image currently being processed by the worker thread.
 
@@ -60,11 +60,11 @@ A foundational tenet of the TaxonVision-MLOps project is absolute adherence to o
 
 The compliance mandates are explicitly codified within the Rule 05 Open License Compliance directive. The system permits only a strictly delineated subset of Creative Commons licenses: \texttt{CC0} (Public Domain Dedication), \texttt{CC-BY} (Attribution), and \texttt{CC-BY-NC} (Attribution-NonCommercial). The \texttt{LicenseFilter.is\_license\_permitted} method normalises the incoming license identifier by stripping whitespace, converting the string to uppercase, and replacing underscores with hyphens. It subsequently attempts validation against the \texttt{OpenLicense} enumeration (\texttt{src/taxon\_vision/domain/license.py}). If a license specifies ``NoDerivatives'' (\texttt{CC-BY-ND}) or enforces a restrictive ``ShareAlike'' clause (\texttt{CC-BY-SA}), or if the asset is proprietary, the observation is immediately rejected and expunged from the ingestion pipeline via the \texttt{filter\_observation\_records} mechanism.
 
-In addition to license string validation, the \texttt{LicenseFilter} enforces strict domain provenance via the \texttt{is\_static\_domain\_prohibited} method. Directly scraping raw image assets from \texttt{static.inaturalist.org} without authorisation circumvents the platform's terms of service. Therefore, the filter rejects any URL containing this static domain unless the \texttt{is\_open\_dataset\_verified} Boolean flag evaluates to true. This flag is only asserted when the asset is conclusively verified against the official AWS Open Data registry manifest, thereby ensuring that no unauthorised hotlinking occurs.
+In addition to license string validation, the \texttt{LicenseFilter} enforces strict domain provenance via the method\\\texttt{is\_static\_domain\_prohibited}. Directly scraping raw image assets from\\\url{static.inaturalist.org} without authorisation circumvents the platform's terms of service. Therefore, the filter rejects any URL containing this static domain unless the Boolean flag\\\texttt{is\_open\_dataset\_verified} evaluates to true. This flag is only asserted when the asset is conclusively verified against the official AWS Open Data registry manifest, thereby ensuring that no unauthorised hotlinking occurs.
 
 \begin{table}[htbp]
 \centering
-\begin{tabular}{@{}lll@{}}
+\begin{tabularx}{\textwidth}{@{}llX@{}}
 \toprule
 \textbf{License Identifier} & \textbf{Permitted (Rule 05)} & \textbf{Justification for Policy} \\
 \midrule
@@ -75,7 +75,7 @@ In addition to license string validation, the \texttt{LicenseFilter} enforces st
 \texttt{CC-BY-SA} & No & Enforces copyleft restrictions on downstream models. \\
 All Rights Reserved & No & Strict legal prohibition on replication and training. \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \caption{Admissibility matrix for citizen-science media licenses within TaxonVision.}
 \label{tab:license_admissibility}
 \end{table}

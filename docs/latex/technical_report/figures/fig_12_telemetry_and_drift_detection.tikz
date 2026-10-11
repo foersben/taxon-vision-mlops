@@ -21,9 +21,9 @@
         \node[component, right=of fastapi] (metrics) {Prometheus Exposition\\\texttt{/metrics}};
         \node[component, right=of metrics] (scraper) {Prometheus Scraper\\(Pull-based, 15-60s)};
         
-        \node[component, below=0.5cm of fastapi] (counter) {\texttt{taxon\_predictions\_total}\\(success, fallback, error)};
-        \node[component, below=0.5cm of metrics] (histogram) {\texttt{taxon\_inference\_latency\_seconds}\\(p50, p95, p99)};
-        \node[component, below=0.5cm of scraper] (gauge) {\texttt{taxon\_human\_referrals\_active}\\(Triage Queue)};
+        \node[component, below=0.5cm of fastapi, text width=3.2cm] (counter) {\texttt{\footnotesize taxon\_predictions\\\_total}\\(success, fallback, error)};
+        \node[component, below=0.5cm of metrics, text width=3.5cm] (histogram) {\texttt{\footnotesize taxon\_inference\\\_latency\_seconds}\\(p50, p95, p99)};
+        \node[component, below=0.5cm of scraper, text width=3.2cm] (gauge) {\texttt{\footnotesize taxon\_human\\\_referrals\_active}\\(Triage Queue)};
 
         \begin{scope}[on background layer]
             \node[container, fit=(fastapi) (metrics) (scraper) (counter) (histogram) (gauge), label={[font=\bfseries, text=TaxonPrimary]above:Prometheus Telemetry Layer}] (telemetry_layer) {};

@@ -38,7 +38,7 @@ The selection of the temperature parameter $T$ critically modulates the sharpnes
 
 \subsection{Stable LogSumExp Implementation and Numerical Arithmetic}
 
-The programmatic evaluation of the free energy equation requires careful management of floating-point arithmetic to preclude numerical overflow during the exponentiation phase. The \texttt{EnergyOODDetector} class, residing within \texttt{src/taxon\_vision/uncertainty/ood\_detector.py}, implements a stable formulation of the LogSumExp operation utilising max subtraction.
+The programmatic evaluation of the free energy equation requires careful management of floating-point arithmetic to preclude numerical overflow during the exponentiation phase. The detector\\\texttt{EnergyOODDetector} class, residing within \texttt{src/taxon\_vision/uncertainty/ood\_detector.py}, implements a stable formulation of the LogSumExp operation utilising max subtraction.
 
 \begin{listing}[htbp]
 \begin{minted}{python}
@@ -79,7 +79,7 @@ Deep learning models cannot be implicitly trusted to provide point-estimate clas
 
 \subsection{The Marginal Coverage Statistical Guarantee}
 
-The core mathematical invariant upheld by the \texttt{ConformalPredictionEngine} located in \texttt{src/taxon\_vision/uncertainty/conformal.py} is the assurance of a user-specified marginal coverage rate. For an input observation $X$ with an unknown true taxonomic label $Y$, the engine generates a prediction set $\mathcal{C}(X) \subseteq \mathcal{Y}$. The system strictly bounds the generalisation error by a nominal tolerance parameter $\alpha$, guaranteeing that the true label is contained within the prediction set with a probability of at least $1 - \alpha$:
+The core mathematical invariant upheld by the engine\\\texttt{ConformalPredictionEngine} located in\\\texttt{src/taxon\_vision/uncertainty/conformal.py} is the assurance of a user-specified marginal coverage rate. For an input observation $X$ with an unknown true taxonomic label $Y$, the engine generates a prediction set $\mathcal{C}(X) \subseteq \mathcal{Y}$. The system strictly bounds the generalisation error by a nominal tolerance parameter $\alpha$, guaranteeing that the true label is contained within the prediction set with a probability of at least $1 - \alpha$:
 
 \begin{equation}
     \mathbb{P}(Y \in \mathcal{C}(X)) \ge 1 - \alpha

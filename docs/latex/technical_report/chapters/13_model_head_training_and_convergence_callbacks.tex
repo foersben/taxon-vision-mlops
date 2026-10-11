@@ -79,7 +79,7 @@ Taxonomic datasets universally exhibit extreme long-tail Pareto distributions, r
 \section{Convergence Callbacks and Early Stopping}
 \label{sec:convergence_callbacks}
 
-The continuous orchestration of training epochs is governed by \texttt{src/taxon\_vision/models/training/runner.py}, which leverages sophisticated heuristics to regulate learning rates, monitor validation plateaus, and perform vital memory management. These configurations are formalised via data classes within \texttt{src/taxon\_vision/models/training/types.py}.
+The continuous orchestration of training epochs is governed by\\\texttt{src/taxon\_vision/models/training/runner.py}, which leverages sophisticated heuristics to regulate learning rates, monitor validation plateaus, and perform vital memory management. These configurations are formalised via data classes within \texttt{src/taxon\_vision/models/training/types.py}.
 
 \subsection{Dynamic Early Stopping}
 
@@ -123,7 +123,7 @@ In cloud-native, Kubernetes-orchestrated environments (\texttt{k3s}), containers
 
 To guarantee transactional integrity, the \texttt{\_save\_checkpoint} method employs an atomic rename strategy. The serialisation process first writes the entire state dictionary to a temporary, hidden file upon the disk (e.g., \texttt{.tmp}). Only upon the successful, complete materialisation of this file does the operating system execute an atomic rename operation (\texttt{os.replace}) to overwrite the active checkpoint file. This guarantees that any consuming process only ever reads a fully intact, complete checkpoint.
 
-Finally, upon successfully persisting the updated model weights, the function invokes \texttt{get\_classifier.cache\_clear()}. This forcibly invalidates the \texttt{lru\_cache} of the active FastAPI inference service, ensuring that all subsequent classification requests immediately load and evaluate the newly optimised linear head without necessitating a manual pod restart.
+Finally, upon successfully persisting the updated model weights, the function invokes\\\texttt{get\_classifier.cache\_clear()}. This forcibly invalidates the \texttt{lru\_cache} of the active FastAPI inference service, ensuring that all subsequent classification requests immediately load and evaluate the newly optimised linear head without necessitating a manual pod restart.
 
 \begin{table}[h]
 \centering
