@@ -1,0 +1,27 @@
+% !TeX root = ../technical_report.tex
+\chapter{Containerisation Architecture: Dockerfile and Composition Manifests}
+\label{ch:containerisation_architecture}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Container build strategies, security sandboxing, and service composition.
+% Repository Files:
+%   - Dockerfile
+%   - docker-compose.yaml
+%   - .dockerignore
+% Technical Details:
+%   - Dockerfile analysis: multi-stage build, Pixi binary copy from ghcr.io/prefix-dev/pixi,
+%     frozen lockfile installation (pixi install --frozen -e default), non-root user execution.
+%   - docker-compose.yaml topology: auxiliary storage and monitoring stacks (MinIO S3 storage,
+%     Prometheus metrics collector, Grafana dashboard), port mappings, network isolation.
+%   - Security and compliance: read-only root filesystems, minimal base image attack surface.
+% -------------------------------------------------------------
+
+\section{Multi-Stage Container Construction Strategy}
+\label{sec:dockerfile_construction}
+
+\section{Auxiliary Services and Docker Compose Topology}
+\label{sec:docker_compose_topology}
+
+\section{Container Hardening and Privilege Minimisation}
+\label{sec:container_hardening}

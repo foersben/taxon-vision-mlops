@@ -1,0 +1,30 @@
+% !TeX root = ../technical_report.tex
+\chapter{Data Ingestion Engine, Zero-Copy Arrow Streaming, and License Audits}
+\label{ch:data_ingestion_engine}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Citizen science data intake, zero-copy memory pipelines, and open licensing compliance.
+% Repository Files:
+%   - src/taxon_vision/data/inat_client.py
+%   - src/taxon_vision/data/s3_streamer.py
+%   - src/taxon_vision/data/license_filter.py
+%   - scripts/audit_license_compliance.py
+% Detailed Technical Concepts:
+%   - iNaturalist API Client: inat_client.py pagination, rate-limiting, JSON response parsing.
+%   - Zero-Copy Streaming: s3_streamer.py using Apache Arrow / PyArrow to stream Parquet chunks
+%     directly from S3 without writing 50 TB of static imagery to intermediate disk buffers.
+%   - Strict Open License Gate: license_filter.py enforcing whitelist (CC0, CC-BY, CC-BY-NC),
+%     rejection of unlicensed static domains, mandatory preservation of original photographer
+%     attributions and record URIs throughout DVC Parquet manifests.
+%   - CI Audit Verification: audit_license_compliance.py as a non-bypassable pre-commit check.
+% -------------------------------------------------------------
+
+\section{iNaturalist API Ingestion and Query Mechanics}
+\label{sec:inat_api_ingestion}
+
+\section{Zero-Copy Apache Arrow Streaming Pipeline}
+\label{sec:arrow_streaming_pipeline}
+
+\section{Open License Verification and Attribution Retention}
+\label{sec:open_license_verification}

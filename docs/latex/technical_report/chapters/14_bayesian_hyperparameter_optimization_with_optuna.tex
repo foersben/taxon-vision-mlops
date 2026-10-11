@@ -1,0 +1,36 @@
+% !TeX root = ../technical_report.tex
+\chapter{Bayesian Hyperparameter Optimization with Optuna TPE and ASHA}
+\label{ch:bayesian_hyperparameter_optimization}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Bayesian search engine, objective functions, pruning algorithms, and trial management.
+% Repository Files:
+%   - src/taxon_vision/models/training/tuning.py
+%   - src/taxon_vision/models/training/types.py (TuningConfig)
+%   - src/taxon_vision/models/training/runner.py
+% Detailed Technical Concepts:
+%   - Optuna Optimization Engine:
+%       * TPESampler: Tree-structured Parzen Estimator for Bayesian parameter estimation.
+%       * SuccessiveHalvingPruner: ASHA early stopping of poor trials (min_resource=2, reduction_factor=2).
+%   - HyperparameterObjective Class:
+%       * _sample_hyperparameters:
+%           - lr: 1e-4 to 1e-1 (log scale)
+%           - weight_decay: 1e-6 to 1e-2 (log scale)
+%           - dropout: 0.0 to 0.5
+%           - beta: 0.99 to 0.9999
+%           - batch_size: categorical [32, 64, 128]
+%           - noise_std: 0.0 to 0.05 (feature space jitter augmentation)
+%       * _start_mlflow_trial: nested MLflow child runs per trial with optuna.trial_number tags.
+%       * __call__: executes head training, invokes pruner callback per epoch, returns peak validation Macro PR-AUC (max(val_pr_auc)).
+%   - Winning Run Consolidation: _log_best_run logging optimal configuration and git/dvc tags to parent MLflow run.
+% -------------------------------------------------------------
+
+\section{Bayesian Optimization Principles and TPE Mechanics}
+\label{sec:tpe_mechanics}
+
+\section{Search Space Parameterisation and Objective Formulation}
+\label{sec:search_space_parameterisation}
+
+\section{Asynchronous Successive Halving (ASHA) Pruning in Practice}
+\label{sec:asha_pruning_in_practice}

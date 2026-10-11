@@ -1,0 +1,30 @@
+% !TeX root = ../technical_report.tex
+\chapter{Real-Time Telemetry, Prometheus Instrumentation, and Drift Detection}
+\label{ch:telemetry_and_drift}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Production telemetry, Prometheus scrapers, and embedding/feature drift detection.
+% Repository Files:
+%   - src/taxon_vision/monitoring/telemetry.py
+%   - src/taxon_vision/monitoring/drift.py
+%   - src/taxon_vision/service/routes/health.py (metrics endpoint)
+% Detailed Technical Concepts:
+%   - Prometheus Metric Exporters:
+%       * taxon_vision_predictions_total: Counter tracking requests by predicted class.
+%       * taxon_vision_prediction_latency_seconds: Histogram tracking p50, p95, p99 serving latency.
+%       * taxon_vision_conformal_set_size: Histogram monitoring distribution of conformal set cardinalities.
+%       * taxon_vision_ood_referrals_total: Counter tracking human triage routing frequency.
+%   - Feature and Concept Drift Mechanics (drift.py):
+%       * Wasserstein Distance: compute_wasserstein_drift on scalar prediction distributions.
+%       * Maximum Mean Discrepancy (MMD): multi-dimensional drift between baseline and incoming embeddings.
+% -------------------------------------------------------------
+
+\section{Prometheus Telemetry Instrumentation and Metrics Design}
+\label{sec:prometheus_instrumentation}
+
+\section{Serving Latency and Conformal Set Monitoring}
+\label{sec:serving_latency_monitoring}
+
+\section{Embedding Representation Drift via Wasserstein and MMD}
+\label{sec:embedding_drift_detection}

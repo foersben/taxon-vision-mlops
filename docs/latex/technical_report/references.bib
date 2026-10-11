@@ -1,0 +1,92 @@
+% SUMMARY AND SUITABILITY:
+% This paper introduces the foundational mathematics behind Split Conformal Prediction,
+% moving away from heuristic uncertainty (like softmax entropy) to distribution-free
+% statistical guarantees. It is highly suitable for your report because it provides the
+% exact mathematical backing (the $1 - \alpha$ marginal coverage theorem) used in
+% Chapter 6 to justify your "Conformal-Driven Lazy Execution" routing gate. It proves
+% mathematically why your 95% safety gate works regardless of the underlying data distribution.
+@article{angelopoulos2021gentle,
+title   = {A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification},
+author  = {Angelopoulos, Anastasios N. and Bates, Stephen},
+journal = {arXiv preprint arXiv:2107.07511},
+year    = {2021},
+url     = {https://arxiv.org/abs/2107.07511}
+}
+
+% SUMMARY AND SUITABILITY:
+% This CVPR 2019 paper formalises the concept of the "effective number of samples" to
+% dynamically re-weight loss functions in the presence of extreme long-tail data.
+% In global biodiversity, species distribution is a severe power-law (a few species have
+% millions of images, while rare ones have only a handful). This citation is perfectly
+% suitable for Chapter 4 to justify why your offline classification engine (Pipeline 1)
+% uses Class-Balanced Loss rather than standard Cross-Entropy to train the linear head.
+@inproceedings{cui2019classbalanced,
+title     = {Class-Balanced Loss Based on Effective Number of Samples},
+author    = {Cui, Yin and Jia, Menglin and Lin, Tsung-Yi and Song, Yang and Belongie, Serge},
+booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+pages     = {9268--9277},
+year      = {2019},
+publisher = {IEEE}
+}
+
+% SUMMARY AND SUITABILITY:
+% This comprehensive survey from the ACM covers modern active learning strategies for
+% deep neural networks, detailing uncertainty sampling and diversity-based query strategies.
+% It is suitable for Chapter 6 to cite the broader academic consensus on why random
+% sampling (first-in, first-out) is a catastrophic waste of expensive human annotation
+% time, justifying your integration of Label Studio and strategic triage queues.
+@article{ren2021deepactive,
+title   = {A Survey of Deep Active Learning},
+author  = {Ren, Pengzhen and Xiao, Yun and Chang, Xiaojun and Huang, Po-Yao and Li, Zhihui and Gupta, Brij B. and Chen, Xiaojiang and Wang, Xinwang},
+journal = {ACM Computing Surveys (CSUR)},
+volume  = {54},
+number  = {9},
+pages   = {1--40},
+year    = {2021},
+publisher = {ACM New York, NY}
+}
+
+% SUMMARY AND SUITABILITY:
+% This CVPR 2024 paper introduces BioCLIP, a vision foundation model strictly pre-trained
+% on the Tree of Life. It is arguably the most critical citation in your report. It justifies
+% your entire "frozen backbone" architecture in Chapter 4 and Chapter 5. By citing this,
+% you prove to the defense committee that extracting 512-dimensional vectors without
+% updating the transformer weights is not a shortcut, but a state-of-the-art transfer
+% learning methodology backed by recent literature.
+@inproceedings{stevens2024bioclip,
+title     = {BioCLIP: A Vision Foundation Model for the Tree of Life},
+author    = {Stevens, Samuel and Wu, Jiaman and Thompson, Matthew J. and Campolongo, Elizabeth G. and Song, Chan Hee and Carlyn, David E. and Dong, Li and Dahdul, Wasila M. and Stewart, Charles and Berger-Wolf, Tanya and Chao, Wei-Lun and Su, Yu},
+booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+pages     = {19412--19424},
+year      = {2024},
+publisher = {IEEE}
+}
+
+% SUMMARY AND SUITABILITY:
+% This CVPR 2018 paper introduces the iNaturalist dataset, detailing the extreme scale
+% and noise inherent in citizen-science field photography. It is highly suitable for
+% Chapters 1 and 5. Citing this proves you understand the specific topographical
+% challenges of your domain (environmental clutter, convergent evolution) and justifies
+% your architectural decision to use "Parent-Child Visual Chunking" to crop out
+% background noise before embedding the image.
+@inproceedings{vanhorn2018inaturalist,
+title     = {The iNaturalist Species Classification and Detection Dataset},
+author    = {Van Horn, Grant and Mac Aodha, Oisin and Song, Yang and Cui, Yin and Sun, Chen and Shepard, Alex and Adam, Hartwig and Perona, Pietro and Belongie, Serge},
+booktitle = {Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
+pages     = {8769--8778},
+year      = {2018},
+publisher = {IEEE}
+}
+
+% SUMMARY AND SUITABILITY:
+% BONUS CITATION: Because your report explicitly mentions "BADGE" (Batch Active Learning
+% by Diverse Gradient Embeddings) and its mathematical formula in Chapter 6, you should
+% officially cite the original paper that invented it. This proves your algorithmic choices
+% are backed by top-tier ICLR literature.
+@inproceedings{ash2020deep,
+title     = {Deep Batch Active Learning by Diverse Gradient Embeddings},
+author    = {Ash, Jordan T. and Zhang, Chicheng and Krishnamurthy, Akshay and Langford, John and Agarwal, Alekh},
+booktitle = {International Conference on Learning Representations (ICLR)},
+year      = {2020},
+url       = {https://openreview.net/forum?id=ryghZJBKPS}
+}

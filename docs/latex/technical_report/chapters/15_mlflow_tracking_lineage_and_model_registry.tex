@@ -1,0 +1,34 @@
+% !TeX root = ../technical_report.tex
+\chapter{Experiment Tracking, Cryptographic Lineage, and MLflow Model Registry}
+\label{ch:mlflow_tracking_and_registry}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Experiment provenance, RAII tracking scopes, DagsHub remote MLflow, and model promotion.
+% Repository Files:
+%   - src/taxon_vision/models/training/tracking.py
+% Detailed Technical Concepts:
+%   - Remote Server Infrastructure:
+%       * DagsHub MLflow tracking endpoint (https://dagshub.com/foersben/taxon-vision-mlops.mlflow).
+%       * Credentials handling via MLFLOW_TRACKING_USERNAME and MLFLOW_TRACKING_PASSWORD.
+%   - RAII Lifecycle Scope (mlflow_run_scope):
+%       * Deterministic lifecycle bounds (Resource Acquisition Is Initialization).
+%       * Catches exceptions to mark runs as FAILED, ensures FINISHED on success.
+%       * Offline resiliency: degrades gracefully if remote server is unreachable.
+%   - End-to-End Cryptographic Lineage:
+%       * git.commit_sha and git.branch extracted dynamically.
+%       * dvc_dataset_hash parsed directly from dvc.lock (ingestion stage output MD5).
+%       * Hardware tags (cuda_memory_fraction, GPU arch).
+%   - Automated Model Promotion Lifecycle (_promote_model_if_better):
+%       * Model registered under 'taxon_vision_classifier'.
+%       * Aliases: Production, Challenger (if candidate outperforms baseline Macro PR-AUC), Archived (if worse).
+% -------------------------------------------------------------
+
+\section{Experiment Tracking Architecture on DagsHub}
+\label{sec:dagshub_experiment_tracking}
+
+\section{Deterministic Lifecycle Management via RAII Scopes}
+\label{sec:raii_lifecycle_management}
+
+\section{Cryptographic Lineage Capture and Automated Model Promotion}
+\label{sec:cryptographic_lineage_and_promotion}

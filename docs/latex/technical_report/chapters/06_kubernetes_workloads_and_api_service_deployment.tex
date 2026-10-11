@@ -1,0 +1,27 @@
+% !TeX root = ../technical_report.tex
+\chapter{Kubernetes Workloads, Service Manifests, and Rolling Updates}
+\label{ch:kubernetes_workloads}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Production deployment architecture, health probes, and zero-downtime serving.
+% Repository Files:
+%   - deploy/k8s/api-deployment.yaml
+% Manifest Elements to Deconstruct:
+%   - Deployment metadata: namespace 'taxon-vision', label selectors (app: taxon-vision-api).
+%   - Replicas and rolling update strategy: maxSurge: 1, maxUnavailable: 0.
+%   - Health check probes:
+%       * livenessProbe targeting /health/live (initialDelaySeconds: 15, periodSeconds: 20)
+%       * readinessProbe targeting /health/ready (initialDelaySeconds: 10, periodSeconds: 10)
+%   - Prometheus scrape annotations: prometheus.io/scrape: "true", prometheus.io/port: "8000", path: "/metrics".
+%   - Service specification: ClusterIP mapping internal port 8000 to cluster network.
+% -------------------------------------------------------------
+
+\section{API Deployment Specification}
+\label{sec:api_deployment_specification}
+
+\section{Health Probes and Zero-Downtime Rolling Restarts}
+\label{sec:health_probes_and_rolling_restarts}
+
+\section{Kubernetes Service Abstraction and Routing}
+\label{sec:kubernetes_service_abstraction}

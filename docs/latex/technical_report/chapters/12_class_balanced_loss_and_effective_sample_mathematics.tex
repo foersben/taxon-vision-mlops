@@ -1,0 +1,32 @@
+% !TeX root = ../technical_report.tex
+\chapter{Class-Balanced Loss Formulation and Long-Tail Gradient Dynamics}
+\label{ch:class_balanced_loss}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Cui et al. (CVPR 2019) loss implementation and mathematical dynamics on Pareto distributions.
+% Repository Files:
+%   - src/taxon_vision/models/loss.py
+% Mathematical Derivations & Code Details:
+%   - Extreme Long-Tail Distribution: Zipfian / Pareto scaling of biological species sightings.
+%   - Effective Number of Samples (Cui et al., 2019):
+%       * E_n = (1 - \beta^n) / (1 - \beta) where \beta \in [0, 1) captures feature space volume overlap.
+%       * As n -> \infty, E_n saturates at 1 / (1 - \beta).
+%       * As n -> 1, E_n \approx n.
+%   - Class-Balanced Weights:
+%       * W_i = (1 - \beta) / (1 - \beta^{N_i})
+%       * Normalisation: \sum_{i=1}^K W_i = K (mean class weight equals 1.0).
+%   - Numerical Safety: clamping minimum sample count to 1.0 to avoid zero-division; PyTorch buffer registration.
+%   - Loss Computation: F.cross_entropy(logits, targets, weight=device_weights).
+%   - Contrast Analysis: why CB-CE beats unweighted cross-entropy (prevents tail representation collapse)
+%     and naive inverse frequency (avoids explosive gradient spikes from rare noisy singletons).
+% -------------------------------------------------------------
+
+\section{The Biological Long-Tail Pareto Distribution}
+\label{sec:biological_long_tail}
+
+\section{Effective Number of Samples Mathematical Derivation}
+\label{sec:effective_number_mathematics}
+
+\section{PyTorch Implementation and Numerical Stabilisation}
+\label{sec:cb_pytorch_implementation}

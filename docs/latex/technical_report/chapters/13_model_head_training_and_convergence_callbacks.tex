@@ -1,0 +1,35 @@
+% !TeX root = ../technical_report.tex
+\chapter{Classification Head Architecture, Optimization Loops, and Callbacks}
+\label{ch:classification_head_training}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Classifier head geometry, training loops over cached vectors, and convergence callbacks.
+% Repository Files:
+%   - src/taxon_vision/models/head.py
+%   - src/taxon_vision/models/training/types.py (EmbeddingSplit, HeadTrainingConfig)
+%   - src/taxon_vision/models/training/embeddings.py
+%   - src/taxon_vision/models/training/loops.py
+% Technical & Implementation Details:
+%   - Head Architecture: TaxonClassifier (Dropout(p) followed by Linear(dim, num_classes)).
+%   - Data Containers: EmbeddingSplit (shape validation, feature_dim property, get_samples_per_class).
+%   - Decomposed Optimization Routines:
+%       * _train_cached_epoch: mini-batch permutations, noise_std representation jitter injection, AdamW step.
+%       * _evaluate_cached_split: tensorized forward pass under no_grad, Macro F1 and Macro PR-AUC calculation.
+%       * _track_checkpoint: dynamic best score tracking and deepcopy state-dict retention.
+%       * _should_stop_early: early stopping and ASHA pruning threshold evaluation.
+%   - Active Callbacks:
+%       * Restore best weights (restore_best_weights: True)
+%       * ReduceLROnPlateau (factor=0.5, patience=reduce_lr_patience)
+%       * Early stopping (patience=early_stopping_patience)
+%   - Cognitive Complexity Invariants: keeping cyclomatic and cognitive complexity <= 15 (complexipy check).
+% -------------------------------------------------------------
+
+\section{Classification Head Geometry and Transfer Learning}
+\label{sec:classification_head_geometry}
+
+\section{Cached Embedding Training Loop and Mini-Batch Dynamics}
+\label{sec:cached_embedding_training_loop}
+
+\section{Convergence Callbacks and Best-Weight Restoration}
+\label{sec:convergence_callbacks}

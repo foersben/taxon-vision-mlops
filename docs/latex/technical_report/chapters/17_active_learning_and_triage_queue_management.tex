@@ -1,0 +1,29 @@
+% !TeX root = ../technical_report.tex
+\chapter{Active Learning Strategy and Priority Triage Queue}
+\label{ch:active_learning_strategy}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Query strategies, uncertainty ranking, and human-in-the-loop expert review queues.
+% Repository Files:
+%   - src/taxon_vision/active_learning/query.py
+%   - src/taxon_vision/active_learning/triage_queue.py
+% Detailed Technical Concepts:
+%   - Query Acquisition Strategies (query.py):
+%       * Margin Sampling: s(x) = p_{(1)}(x) - p_{(2)}(x). Measures ambiguity between the top two predicted candidates.
+%       * BADGE (Batch Active Learning by Diverse Gradient Embeddings): sampling diverse representations in gradient space.
+%   - Triage Queue Data Structure (triage_queue.py):
+%       * Priority-ranked FIFO/Heap container for observations requiring expert review.
+%       * push, pop, and queue inspections with thread-safe access.
+%       * Invariant validation: maximum bounded capacity, non-destructive observation payload retention.
+%   - Annotation Feedback Loop: human expert verification updating DVC manifests for retraining cycles.
+% -------------------------------------------------------------
+
+\section{Uncertainty-Based Query Acquisition Mechanics}
+\label{sec:uncertainty_query_mechanics}
+
+\section{Priority Triage Queue Implementation}
+\label{sec:priority_triage_queue}
+
+\section{Closing the Continuous Retraining Annotation Loop}
+\label{sec:annotation_retraining_loop}

@@ -1,0 +1,32 @@
+% !TeX root = ../technical_report.tex
+\chapter{Epistemic Safety: Split Conformal Prediction and Energy-Based OOD Rejection}
+\label{ch:epistemic_safety}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Distribution-free error guarantees, conformal set generation, and energy-based OOD detection.
+% Repository Files:
+%   - src/taxon_vision/uncertainty/conformal.py
+%   - src/taxon_vision/uncertainty/ood_detector.py
+% Detailed Technical Concepts:
+%   - Epistemic Risk in Autonomous Vision: dangers of overconfident softmax predictions on unseen taxa.
+%   - Split Conformal Prediction (conformal.py):
+%       * Non-conformity score: s_i = 1 - \hat{p}_{y_i}(x_i).
+%       * Conformal quantile calibration: \hat{q} at level \lceil (n+1)(1-\alpha) \rceil / n on holdout calibration split.
+%       * Prediction set: C(x) = \{y \in \mathcal{Y} : \hat{p}_y(x) \ge 1 - \hat{q}\}.
+%       * Mathematical Coverage Guarantee: P(Y \in C(X)) \ge 1 - \alpha.
+%   - Energy-Based Out-of-Distribution Detection (ood_detector.py):
+%       * Helmholtz Free Energy score: E(x; T) = -T \log \sum_{i=1}^K \exp(z_i / T).
+%       * Temperature scaling parameter T (default: 1.0).
+%       * Energy threshold filtering: inputs with E(x) > \tau_{energy} rejected before conformal evaluation.
+%   - Human Referral Gate: empty prediction sets (C(x) = \emptyset) or sets exceeding cardinal size k route to expert triage.
+% -------------------------------------------------------------
+
+\section{The Epistemic Safety Problem in Biological Vision}
+\label{sec:epistemic_safety_problem}
+
+\section{Split Conformal Prediction and Statistical Coverage Bounds}
+\label{sec:split_conformal_prediction}
+
+\section{Helmholtz Free Energy Out-of-Distribution Detection}
+\label{sec:helmholtz_energy_ood}

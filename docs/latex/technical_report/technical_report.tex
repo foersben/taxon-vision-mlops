@@ -1,0 +1,109 @@
+\documentclass[10pt,a4paper,oneside]{book}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{geometry}
+\geometry{a4paper, margin=1.2in}
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta, shapes.geometric, calc, decorations.pathreplacing, backgrounds, fit, shadows}
+\usepackage[plainpages=false,pdfpagelabels]{hyperref}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{parskip}
+\usepackage{xcolor}
+
+% --- Pipeline diagram colour palette ---
+\definecolor{mblue}{HTML}{E3F2FD}
+\definecolor{mblueborder}{HTML}{1976D2}
+\definecolor{mgreen}{HTML}{E8F5E9}
+\definecolor{mgreenborder}{HTML}{2E7D32}
+\definecolor{morange}{HTML}{FFF3E0}
+\definecolor{morangeborder}{HTML}{E65100}
+\definecolor{mgray}{HTML}{F5F5F5}
+\definecolor{mgrayborder}{HTML}{616161}
+\definecolor{mpurple}{HTML}{F3E5F5}
+\definecolor{mpurpleborder}{HTML}{7B1FA2}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{caption}
+\usepackage{minted}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{fancyhdr}
+
+% Formatting for minted code blocks
+\setminted{
+    fontsize=\footnotesize,
+    breaklines=true,
+    breakanywhere=false,
+    frame=lines,
+    framesep=2.5mm,
+    linenos=true,
+    numbersep=8pt,
+    tabsize=4
+}
+
+% Header/Footer styling
+\setlength{\headheight}{26pt}
+\addtolength{\topmargin}{-12pt}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\leftmark}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% Title Formatting
+\title{\Huge \textbf{TaxonVision-MLOps}\\[0.5cm] 
+\LARGE \textit{Comprehensive Technical Implementation Guide}\\[0.5cm]
+\Large Systems Architecture, Infrastructure, and Codebase Reference}
+\author{\Large Benjamin Förster}
+\date{\today}
+
+\begin{document}
+
+\frontmatter
+\pagenumbering{alph}
+\maketitle
+\pagenumbering{roman}
+
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+This technical report serves as an exhaustive, implementation-level architectural manual and code base reference for the TaxonVision-MLOps platform. Designed to document every structural component, configuration file, deployment manifest, mathematical loss formulation, and runtime daemon in the active repository, this document provides complete visibility into the physical server topology (\texttt{hive-mind} running Ubuntu 26.04.1 LTS, NVIDIA Driver 615.71.09, CUDA 13.4, and the NVIDIA GeForce RTX 5070 Ti with Blackwell SM~120), the lightweight Kubernetes (k3s) cluster partitioned into \texttt{jenkins-ci} and \texttt{taxon-vision} namespaces, the Cloudflare Zero Trust ingress tunnel, and the four-slot NVIDIA GPU time-slicing device plugin. Furthermore, this manual dissects the pure Pixi multi-environment toolchain, the automated DagsHub storage remote for Data Version Control (DVC) and MLflow tracking, the Cui et al. Class-Balanced Loss dynamics on biological long-tail Pareto distributions, the Optuna Bayesian hyperparameter optimisation engine, Split Conformal Prediction, Energy-Based Out-of-Distribution rejection, and the unified FastAPI and HTMX operator dashboard. Every configuration parameter, file extension, and container specification is strictly analysed based upon active codebase evidence.
+
+\tableofcontents
+
+\mainmatter
+
+\input{chapters/01_repository_architecture_and_file_topology}
+\input{chapters/02_bare_metal_host_and_toolchain_interlock}
+\input{chapters/03_k3s_cluster_topology_and_security_rbac}
+\input{chapters/04_gpu_virtualisation_and_nvidia_time_slicing}
+\input{chapters/05_containerisation_dockerfile_and_compose_manifests}
+\input{chapters/06_kubernetes_workloads_and_api_service_deployment}
+\input{chapters/07_declarative_jenkins_ci_and_ephemeral_agents}
+\input{chapters/08_data_ingestion_arrow_streaming_and_licensing}
+\input{chapters/09_dvc_dataset_versioning_and_dagshub_remote}
+\input{chapters/10_domain_modelling_and_darwincore_taxonomic_hierarchy}
+\input{chapters/11_vision_backbone_factory_and_feature_caching}
+\input{chapters/12_class_balanced_loss_and_effective_sample_mathematics}
+\input{chapters/13_model_head_training_and_convergence_callbacks}
+\input{chapters/14_bayesian_hyperparameter_optimization_with_optuna}
+\input{chapters/15_mlflow_tracking_lineage_and_model_registry}
+\input{chapters/16_epistemic_safety_conformal_prediction_and_energy_ood}
+\input{chapters/17_active_learning_and_triage_queue_management}
+\input{chapters/18_onnx_runtime_acceleration_and_quantization_engine}
+\input{chapters/19_fastapi_service_architecture_and_htmx_operator_interface}
+\input{chapters/20_telemetry_prometheus_metrics_and_drift_detection}
+\input{chapters/21_quality_assurance_testing_matrix_and_code_invariants}
+\input{chapters/22_open_knowledge_format_and_agentic_governance}
+\input{chapters/23_developer_operations_and_engineering_runbooks}
+
+\backmatter
+\nocite{*}
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}

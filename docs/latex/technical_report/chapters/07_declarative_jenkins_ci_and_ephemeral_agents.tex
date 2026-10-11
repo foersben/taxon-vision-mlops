@@ -1,0 +1,35 @@
+% !TeX root = ../technical_report.tex
+\chapter{Declarative Jenkins Pipeline and Ephemeral Kubernetes Agents}
+\label{ch:declarative_jenkins_ci}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Continuous integration architecture, Kubernetes agent pod lifecycle, and pipeline stages.
+% Repository Files:
+%   - Jenkinsfile
+%   - deploy/k8s/jenkins-agent-rbac.yaml
+% Deconstruct in Full Technical Detail:
+%   - Agent pod definition: kubernetes plugin (cloud 'k3s'), container 'ml-runner' (ghcr.io/prefix-dev/pixi:latest).
+%   - Volume mounts: emptyDir 'rattler-cache' mounted to /root/.cache/rattler/cache for instant lock resolution.
+%   - Resource requests & limits: nvidia.com/gpu: "1" binding to time-slicing slice on RTX 5070 Ti.
+%   - Environment credentials: DAGSHUB_TOKEN, MLFLOW tracking credentials, AWS S3 keys.
+%   - Detailed Stage Breakdown:
+%       * Stage 1: Prepare Toolchain (pixi install -e ci-dev, dvc pull cache)
+%       * Stage 2: Static Quality & Invariants (parallel: Lint & Format, Type Checking, Compliance & OKF)
+%       * Stage 3: Unit Tests & Coverage (pytest tests/ with coverage fail-under gates)
+%       * Stage 4: Integration & Conformal Invariants (pytest tests/integration/ tests/invariants/)
+%       * Stage 5: Documentation Strict Build (visualize_okf.py, zensical build --strict)
+%       * Stage 6: Model Training & Checkpoint (GPU) (when: main or feature/phase1-foundations, pixi -e dev,
+%                  Optuna 10 trials, ONNX re-export, dvc push checkpoints)
+%       * Stage 7: Deploy to Kubernetes (kubectl apply api-deployment.yaml, rollout restart, rollout status verification)
+%       * Post action: cleanWs() workspace sanitisation.
+% -------------------------------------------------------------
+
+\section{Declarative Pipeline Architecture and Pod Template}
+\label{sec:declarative_pipeline_architecture}
+
+\section{Ephemeral Agent Lifecycle and Cache Volume Mounting}
+\label{sec:agent_lifecycle_and_caching}
+
+\section{Stage-by-Stage Execution and Promotion Gates}
+\label{sec:stage_by_stage_execution}

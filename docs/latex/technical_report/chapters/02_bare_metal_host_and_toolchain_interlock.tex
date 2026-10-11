@@ -1,0 +1,29 @@
+% !TeX root = ../technical_report.tex
+\chapter{Bare-Metal Server Environment and Pixi Toolchain Interlock}
+\label{ch:bare_metal_host}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Physical host specs and Pixi deterministic multi-environment locking.
+% Key Hardware & System Specs:
+%   - Host name: hive-mind
+%   - Operating System: Ubuntu 26.04.1 LTS (codename 'resolute')
+%   - NVIDIA Driver: 615.71.09, KMD Version: 615.71.09, CUDA UMD Version: 13.4
+%   - GPU: NVIDIA GeForce RTX 5070 Ti (16 GB GDDR7, Blackwell SM 120 / Compute Capability 12.0, 300W TDP)
+%   - Developer workstation contrast: Quadro T2000 (Turing SM 75)
+% Toolchain Invariants:
+%   - Strict Pixi toolchain (.pixi/ directory, pixi.toml, pixi.lock, pyproject.toml)
+%   - Pinned environments: 'default', 'dev' (with CUDA 12.8 / cu128 PyTorch 2.7.0 supporting SM 120),
+%     'ci-dev' (CPU-only PyTorch for fast deterministic CI)
+%   - Absolute ban on bare python, pip, poetry, uv, and virtualenv (.venv/)
+%   - Justfile automation recipes (just test, just serve, just complexity, just lint, etc.)
+% -------------------------------------------------------------
+
+\section{Physical Compute Node Baseline}
+\label{sec:physical_compute_node}
+
+\section{Multi-Target Toolchain and Pixi Environment Isolation}
+\label{sec:multi_target_toolchain}
+
+\section{Command Orchestration via Justfile}
+\label{sec:justfile_orchestration}

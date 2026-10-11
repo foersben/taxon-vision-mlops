@@ -1,0 +1,36 @@
+% !TeX root = ../technical_report.tex
+\chapter{Open Knowledge Format (OKF v0.2) and Master Agent Routing}
+\label{ch:agentic_governance_and_okf}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Machine-actionable documentation governance, OKF v0.2 frontmatter, and multi-agent routing.
+% Repository Files:
+%   - AGENTS.md (Root Master Agent Router)
+%   - .agents/AGENTS.md
+%   - .agents/index.md (Jules routing decision matrix)
+%   - .agents/roles/ (role definitions: @orchestrator, @model-engineer, etc.)
+%   - .agents/workflows/
+%   - .agents/skills/
+%   - scripts/validate_okf.py
+%   - scripts/visualize_okf.py
+% Detailed Technical Concepts:
+%   - Open Knowledge Format (OKF v0.2) Specification:
+%       * Strict YAML frontmatter requirements (type, title, status, stale_after, version, description, tags, generated, verified).
+%       * Trust tiers and freshness verification (§5.3, §5.5).
+%       * Automated audit script (validate_okf.py) gating pre-commit.
+%   - Interactive Knowledge Graph (visualize_okf.py):
+%       * D3.js force-directed interactive visualization of markdown knowledge items.
+%   - Master Agent Routing Protocol:
+%       * Routing decision matrix preventing blind crawls and unbounded token consumption.
+%       * Git signing protocol: local agents sign commits (git commit -S), cloud sandbox agents (Jules) push PR feature branches.
+% -------------------------------------------------------------
+
+\section{Open Knowledge Format (OKF v0.2) Schema and Trust Tiers}
+\label{sec:okf_schema_and_trust_tiers}
+
+\section{Multi-Agent Governance and Decision Routing Matrices}
+\label{sec:agent_routing_matrices}
+
+\section{Automated Validation Scripts and D3 Knowledge Graph Visualization}
+\label{sec:okf_validation_and_d3_graph}

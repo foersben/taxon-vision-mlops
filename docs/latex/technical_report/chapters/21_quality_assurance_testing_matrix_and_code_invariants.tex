@@ -1,0 +1,34 @@
+% !TeX root = ../technical_report.tex
+\chapter{Quality Assurance: Pytest Matrix, Invariant Testing, and Complexity Budgets}
+\label{ch:quality_assurance_and_invariants}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Testing architecture, hypothesis property testing, pre-commit gates, and complexity limits.
+% Repository Files:
+%   - tests/unit/ (test_active_learning.py, test_class_balanced_loss.py, test_cli_and_training.py,
+%     test_config.py, test_conformal_bounds.py, test_data_components.py, test_license_filter.py,
+%     test_models_components.py, test_monitoring.py, test_ood_energy.py, test_quantizer.py, test_taxonomy.py)
+%   - tests/integration/ (test_api_endpoints.py)
+%   - tests/invariants/ (test_conformal_coverage.py)
+%   - scripts/verify_deployment.sh
+%   - .pre-commit-config.yaml
+% Detailed Technical Concepts:
+%   - Test Matrix Architecture: fast CPU mock fixtures, CUB-200 synthetic calibration tests, zero GPU dependencies in CI.
+%   - Mathematical Invariant Assertions:
+%       * Conformal empirical coverage guaranteeing >= (1 - \alpha) on holdout sets.
+%       * Class-Balanced Loss weight normalization invariants (\sum W_i = K).
+%       * Zero-allocation inference invariants.
+%   - Cognitive Complexity Enforcement:
+%       * complexipy src/ --failed ensuring no function exceeds cognitive complexity threshold 15.
+%   - Deployment Verification: verify_deployment.sh automated smoke testing against running Kubernetes pods.
+% -------------------------------------------------------------
+
+\section{Testing Architecture and Test Matrix Topology}
+\label{sec:test_matrix_topology}
+
+\section{Mathematical Invariant Assertions and Property-Based Testing}
+\label{sec:mathematical_invariants}
+
+\section{Cognitive Complexity Budgets and Pre-Commit Quality Gates}
+\label{sec:complexity_and_precommit_gates}

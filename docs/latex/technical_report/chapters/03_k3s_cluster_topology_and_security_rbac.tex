@@ -1,0 +1,29 @@
+% !TeX root = ../technical_report.tex
+\chapter{Lightweight Kubernetes (k3s) Cluster Topology and Security RBAC}
+\label{ch:k3s_cluster_topology}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Kubernetes runtime, ingress edge, namespace partitioning, and security policies.
+% Repository Files:
+%   - deploy/k8s/jenkins-agent-rbac.yaml
+% Infrastructure Context:
+%   - System daemon: k3s (single-node lightweight Kubernetes cluster) on hive-mind
+%   - Network Edge: Cloudflare Zero Trust Tunnel (outbound-only tunnel, eliminating open public ports)
+%   - Namespace Partitioning:
+%       * 'jenkins-ci': Dedicated namespace for CI/CD ephemeral agent pods
+%       * 'taxon-vision': Production namespace hosting API services and model serving
+%   - RBAC Specifications:
+%       * ServiceAccount: jenkins-agent
+%       * Role: jenkins-agent-role (pod management, exec, logs, port-forward in jenkins-ci namespace)
+%       * ClusterRole / RoleBinding granting rolling update permissions on taxon-vision deployments
+% -------------------------------------------------------------
+
+\section{Cluster Architecture and Network Edge}
+\label{sec:cluster_architecture}
+
+\section{Namespace Partitioning and Multi-Tenant Segregation}
+\label{sec:namespace_partitioning}
+
+\section{Role-Based Access Control (RBAC) Specification}
+\label{sec:rbac_specification}

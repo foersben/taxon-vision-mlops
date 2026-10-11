@@ -1,0 +1,38 @@
+% !TeX root = ../technical_report.tex
+\chapter{FastAPI REST Service and Server-Rendered HTMX Operator Dashboard}
+\label{ch:fastapi_service_architecture}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Dual-mode web application architecture, REST endpoints, and HTMX interactive UI.
+% Repository Files:
+%   - src/taxon_vision/service/api.py
+%   - src/taxon_vision/service/schemas.py
+%   - src/taxon_vision/service/inference.py
+%   - src/taxon_vision/service/routes/predict.py
+%   - src/taxon_vision/service/routes/health.py
+%   - src/taxon_vision/service/routes/train.py
+%   - src/taxon_vision/service/routes/explain.py
+%   - src/taxon_vision/service/routes/views.py
+%   - src/taxon_vision/service/templates/dashboard.html
+% Detailed Technical Concepts:
+%   - Unified Web Service Architecture: FastAPI powering machine JSON REST endpoints and Jinja2/HTMX operator UI.
+%   - Route Endpoints:
+%       * /predict: multipart image upload, energy OOD filter check, conformal prediction set generation.
+%       * /health/live and /health/ready: Kubernetes liveness and readiness probe targets.
+%       * /metrics: Prometheus metrics emission.
+%       * /train: remote training dispatch endpoint for headless CI/CD execution.
+%       * /explain: visual CAM heatmap generation.
+%   - HTMX Server-Rendered Interface:
+%       * Lightweight HTML fragments swapped via hx-post and hx-target, zero client-side React/Node bloat.
+%       * Real-time triage inspection, image drag-and-drop, interactive conformal threshold sliders.
+% -------------------------------------------------------------
+
+\section{Unified REST and Web Application Architecture}
+\label{sec:unified_web_service_architecture}
+
+\section{API Schemas, Endpoints, and Inference Routing}
+\label{sec:api_schemas_and_endpoints}
+
+\section{Server-Rendered HTMX Operator Interface}
+\label{sec:htmx_operator_interface}

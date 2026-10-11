@@ -1,0 +1,34 @@
+% !TeX root = ../technical_report.tex
+\chapter{ONNX Export, Zero-Allocation Runtime, and INT8 Quantization}
+\label{ch:onnx_runtime_optimization}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Model compilation, ONNX Runtime execution engine, INT8 calibration, and explainability.
+% Repository Files:
+%   - src/taxon_vision/inference/onnx_exporter.py
+%   - src/taxon_vision/inference/onnx_engine.py
+%   - src/taxon_vision/inference/quantizer.py
+%   - src/taxon_vision/inference/cam.py
+% Detailed Technical Concepts:
+%   - ONNX Graph Export (onnx_exporter.py):
+%       * PyTorch tracing via torch.onnx.export (opset version 17).
+%       * Dynamic batch axis definition: dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}}.
+%   - Zero-Allocation Inference Engine (onnx_engine.py):
+%       * C++ backed ONNX Runtime InferenceSession with CPU/CUDA execution providers.
+%       * Pre-allocated NumPy buffer ingestion, zero heap reallocation on the hot serving path.
+%   - INT8 Quantization Pipeline (quantizer.py):
+%       * Dynamic quantization (quantize_onnx_dynamic) for rapid weight quantization.
+%       * Static quantization (quantize_onnx_static) using TaxonCalibrationDataReader for activation calibration.
+%   - Visual Explainability (cam.py):
+%       * generate_heatmap: EigenCAM / Grad-CAM visual heatmap generation for taxonomist verification.
+% -------------------------------------------------------------
+
+\section{Computational Graph Export and Dynamic Axes}
+\label{sec:onnx_graph_export}
+
+\section{Zero-Allocation C++ Inference Execution Engine}
+\label{sec:zero_allocation_inference_engine}
+
+\section{INT8 Quantization Calibration and Class Activation Mapping}
+\label{sec:quantization_and_cam}

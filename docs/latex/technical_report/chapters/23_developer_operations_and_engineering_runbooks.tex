@@ -1,0 +1,30 @@
+% !TeX root = ../technical_report.tex
+\chapter{Developer Operations, Environment Setup, and Engineering Runbooks}
+\label{ch:developer_runbooks}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Standard operating procedures, onboarding runbooks, troubleshooting, and maintenance protocols.
+% Repository Files:
+%   - docs/operations/index.md
+%   - docs/operations/jenkins_ci_infrastructure.md
+%   - docs/operations/implementation_status.md
+%   - scripts/unlock_taxon.sh
+%   - scripts/verify_deployment.sh
+% Operational Procedures to Document:
+%   - Workstation Onboarding: installing Pixi, running 'just install', environment lock verification.
+%   - DVC Remote Sync Runbook: configuring DagsHub credentials, executing dvc pull / dvc push.
+%   - Local Testing and Quality Check Runbook: 'just test', 'just lint', 'just complexity', 'just okf-validate'.
+%   - Remote Jenkins GPU Execution Runbook: inspecting Kubernetes pods in jenkins-ci namespace,
+%     debugging time-slicing slot allocation on hive-mind, troubleshooting PyTorch cu128 / Blackwell kernels.
+%   - Rollout and Emergency Rollback Runbook: kubectl rollout undo deployment/taxon-vision-api in taxon-vision namespace.
+% -------------------------------------------------------------
+
+\section{Developer Workstation Onboarding and Environment Setup}
+\label{sec:workstation_onboarding}
+
+\section{Dataset Synchronization and Remote Storage Runbook}
+\label{sec:dataset_sync_runbook}
+
+\section{Cluster Operations, GPU Debugging, and Emergency Rollback}
+\label{sec:cluster_ops_and_rollback}

@@ -1,0 +1,31 @@
+% !TeX root = ../technical_report.tex
+\chapter{Data Version Control (DVC) and Remote Storage Topology}
+\label{ch:dvc_storage_topology}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Cryptographic data versioning, pipeline DAGs, and DagsHub S3 remote architecture.
+% Repository Files:
+%   - dvc.yaml
+%   - dvc.lock
+%   - .dvcignore
+%   - .dvc/config
+% Detailed Technical Concepts:
+%   - DVC Pipeline DAG (dvc.yaml):
+%       * Stage dependencies (deps) and tracked outputs (outs).
+%       * Ingestion stage emitting immutable Parquet manifests to data/manifests.
+%   - Cryptographic Integrity: dvc.lock MD5 hashes, ensuring end-to-end dataset immutability.
+%   - Remote Storage Topology:
+%       * S3-compatible object store hosted on DagsHub (https://dagshub.com/foersben/taxon-vision-mlops.s3).
+%       * Authentication via AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY bound from DAGSHUB_TOKEN.
+%   - Developer & CI Workflow: dvc pull in CI to restore caches, dvc push to sync trained checkpoints (head.pt, model.onnx).
+% -------------------------------------------------------------
+
+\section{DVC Pipeline Graph and Cryptographic Manifests}
+\label{sec:dvc_pipeline_graph}
+
+\section{DagsHub S3-Compatible Remote Storage Architecture}
+\label{sec:dagshub_remote_architecture}
+
+\section{Synchronization Lifecycles in CI/CD and Local Workstations}
+\label{sec:dvc_sync_lifecycles}

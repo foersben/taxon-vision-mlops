@@ -1,0 +1,31 @@
+% !TeX root = ../technical_report.tex
+\chapter{Vision Backbone Factory and Representation Extraction Caching}
+\label{ch:vision_backbone_factory}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Foundation vision backbones, model factory patterns, and representation caching.
+% Repository Files:
+%   - src/taxon_vision/models/factory.py
+% Technical Details:
+%   - Model Factory Design (factory.py):
+%       * create_feature_extractor: instantiates backbones using timm and Hugging Face hubs.
+%       * Candidate Backbones:
+%           - DINOv3 (ViT-Base / timm/vit_base_patch16_224.dino) -> 768-dim features
+%           - BioCLIP-2 (imageomics/bioclip-2) -> 768-dim features
+%           - DINOv2 (vit_base_patch14_dinov2) -> 768-dim features
+%           - MobileNetV4 (mobilenetv4_conv_small.e1200_r224_in1k) -> 1280-dim features
+%       * get_feature_dimension: dynamic inspection of penultimate pooling layers.
+%   - Feature Caching Architecture:
+%       * extract_and_cache_features: runs forward pass over images once and persists embeddings to disk.
+%       * Why: decouples expensive 300M-parameter backbone forward passes from rapid linear head optimization.
+% -------------------------------------------------------------
+
+\section{Foundation Vision Backbone Portfolio}
+\label{sec:foundation_vision_backbones}
+
+\section{Extensible Feature Extractor Factory Architecture}
+\label{sec:feature_extractor_factory}
+
+\section{Representation Extraction and Disk-Caching Strategy}
+\label{sec:representation_caching_strategy}

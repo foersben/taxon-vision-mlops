@@ -1,0 +1,29 @@
+% !TeX root = ../technical_report.tex
+\chapter{GPU Virtualisation, NVIDIA Device Plugin, and VRAM Quotas}
+\label{ch:gpu_virtualisation}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Single-GPU multi-tenant slicing and memory safety invariants.
+% Repository Files:
+%   - deploy/k8s/nvidia-time-slicing-config.yaml
+%   - src/taxon_vision/models/training/runner.py (configure_cuda_memory_budget)
+% Engineering Context:
+%   - Architectural Challenge: A single 16 GB RTX 5070 Ti must concurrently serve
+%     latency-critical REST predictions and execute heavy Optuna/PyTorch training.
+%   - NVIDIA Container Toolkit & K8s Device Plugin:
+%       * Time-slicing ConfigMap partitioning the physical GPU into 4 virtual slices (replicas: 4).
+%   - PyTorch Memory Management:
+%       * Time-slicing multiplexes compute, but VRAM remains globally shared.
+%       * configure_cuda_memory_budget enforces torch.cuda.set_per_process_memory_fraction(0.70)
+%         (or TAXON_CUDA_MEMORY_FRACTION), leaving 4.8 GB permanently reserved for serving & OS.
+% -------------------------------------------------------------
+
+\section{The Single-GPU Multi-Tenancy Challenge}
+\label{sec:gpu_multi_tenancy_challenge}
+
+\section{NVIDIA Device Plugin Time-Slicing Configuration}
+\label{sec:time_slicing_configuration}
+
+\section{Deterministic VRAM Budget Capping and OOM Prevention}
+\label{sec:vram_budget_capping}

@@ -1,0 +1,27 @@
+% !TeX root = ../technical_report.tex
+\chapter{Domain Modelling, DarwinCore Standards, and Taxonomic Trees}
+\label{ch:domain_modelling}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Biological entity modeling, DarwinCore schemas, and taxonomic tree representations.
+% Repository Files:
+%   - src/taxon_vision/domain/taxonomy.py
+%   - src/taxon_vision/domain/observation.py
+%   - src/taxon_vision/domain/license.py
+% Detailed Technical Concepts:
+%   - DarwinCore Standard: taxonID, scientificName, vernacularName, kingdom, phylum, class, order, family, genus, specificEpithet.
+%   - TaxonomyCatalog (taxonomy.py): in-memory indexed catalog, get_by_id lookups, biological tree hierarchy.
+%   - Observation Domain Entity (observation.py): observation ID, spatial coordinates (latitude, longitude),
+%     temporal metadata (observed_on timestamps), image URI pointers, quality grade consensus ("research grade").
+%   - Open License Domain Entity (license.py): LicenseType enum, attribution formatting, strict license validation rules.
+% -------------------------------------------------------------
+
+\section{DarwinCore Taxon Schema and Catalog Implementation}
+\label{sec:darwincore_schema}
+
+\section{Observation Entities and Spatiotemporal Metadata}
+\label{sec:observation_entities}
+
+\section{License Verification Domain Invariants}
+\label{sec:license_domain_invariants}
