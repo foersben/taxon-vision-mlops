@@ -21,6 +21,13 @@ The deployment infrastructure and execution automation are similarly segregated.
 \subsection{Separation of Mutable Data Artifacts}
 Perhaps the most critical separation is the exclusion of large, mutable binary artifacts from the version control system. The \texttt{data/} directory serves as a lightweight manifestation of the remote data topography. Rather than storing physical images or extracted embeddings, it houses cryptographic pointer files governed by Data Version Control (DVC), such as \texttt{sample.dvc}. This isolation protects the Git repository from unbounded bloat whilst simultaneously ensuring bit-for-bit reproducibility of the datasets used during training and validation. The \texttt{.dvc/config} ensures that pointers securely map to the remote DagsHub S3 blob storage, maintaining the lineage of the data without incurring the heavy storage cost within the Git tree itself.
 
+\begin{figure}[htbp]
+    \centering
+    \input{figures/fig_01_repo_file_topology.tikz}
+    \caption{Repository architecture and file topology mapping monorepo subsystems to file extension semantics.}
+    \label{fig:repo_topology}
+\end{figure}
+
 \section{Directory Anatomy and Manifest Invariants}
 \label{sec:directory_anatomy}
 
