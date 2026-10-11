@@ -25,8 +25,77 @@
 \section{The Biological Long-Tail Pareto Distribution}
 \label{sec:biological_long_tail}
 
+In the domain of biological observation, data categorisation, and large-scale ecological monitoring, empirical datasets exhibit an inherent and inescapable power-law, or Zipfian, distribution. This statistical phenomenon represents a fundamental structural and mathematical challenge in training robust, large-scale computer vision models. The observation frequencies of taxa span several orders of magnitude, decaying inversely proportional to their rank. At the uppermost echelon of this distribution lie the head classes, comprising common, geographically ubiquitous, or often urban-dwelling species such as universally recognised birds, plants, and synanthropic insects. These abundant taxa routinely accumulate tens or hundreds of thousands of distinct, high-quality visual observations. At the opposite extreme stretches the profound biological long-tail, encapsulating rare, elusive, geographically restricted, or critically endangered taxa. These minority classes frequently register fewer than five verifiable observations across the entire global monitoring network.
+
+When optimising deep neural networks on such extreme Pareto distributions using the standard unweighted Cross-Entropy loss criterion, the gradient descent dynamics become severely pathological. In a mini-batch stochastic gradient descent (SGD) environment, the expected value of the loss gradient is overwhelmingly dominated by the vast numerical superiority of the majority classes. During the optimisation trajectory, the feature representations of the minority classes suffer from catastrophic collapse. The network, driven by the geometry of the loss landscape, implicitly learns to ignore the rare taxa. It effectively collapses the decision boundaries of minority classes into the continuous feature space already occupied by the dominant species, thereby maximising overall top-1 accuracy at the direct, unrecoverable expense of minority class recall. This representation learning collapse renders the resulting model ecologically invalid for biodiversity assessment, as the rare taxa are almost universally those of the greatest conservation and scientific interest.
+
+A classical countermeasure to this structural imbalance involves the application of naive inverse class frequency weighting. In this theoretical paradigm, the loss contribution of each discrete observation is linearly scaled by the reciprocal of the total observation count for its corresponding ground-truth class. However, this approach introduces an opposite, yet equally destructive, mathematical pathology. The reciprocal scaling mechanism generates extreme gradient magnitude variance for the rarest outliers. A single noisy, atypical, or mislabelled observation belonging to a rare taxon, when amplified by a massive inverse frequency multiplier, produces explosive and highly unstable gradient updates. These volatile updates systematically destabilise the momentum buffers of modern adaptive optimisers, such as Adam and AdamW. The resultant non-convergent, oscillatory training dynamics fail to discover generalised minima. Consequently, neither the unweighted baseline nor the naive inverse frequency paradigm offers a mathematically sound framework for optimising deep networks over ecological long-tail distributions.
+
 \section{Effective Number of Samples Mathematical Derivation}
 \label{sec:effective_number_mathematics}
 
-\section{PyTorch Implementation and Numerical Stabilisation}
+To resolve the irreconcilable dichotomy between gradient domination by head classes and gradient explosion originating from rare classes, Cui et al. (CVPR 2019) introduced a mathematically rigorous framework predicated on the volume of data overlap in continuous feature space. The core thesis of this framework posits that as the number of samples in a specific class increases, the marginal informational value of each additional sample diminishes monotonically. This phenomenon is analytically modelled via a random walk volume overlap process operating within the high-dimensional feature manifold of the deep neural network.
+
+Instead of treating each discrete observation as an independent, strictly non-overlapping unit of information, the formulation defines a continuous effective number of samples, denoted mathematically as $E_N$. The theoretical assumption is that the total volume of the feature space encompassing all possible semantic and visual variations of a specific biological taxon is finite. A single sample covers a small sub-volume within this bounded space. Subsequent samples drawn independently from the identical class distribution will, with increasing geometric probability, fall into a region of the feature space that is already covered by the union of previous samples. The expected volume of this union of subsets provides the mathematical basis for the effective sample size, bounding the influence of hyper-abundant classes.
+
+Given an empirical count of $N_i$ training examples for a specific category or class $i$, the effective number of samples is formally derived as a geometric series:
+
+\[
+  E_{N_i} = \frac{1 - \beta^{N_i}}{1 - \beta}
+\]
+
+where the hyperparameter $\beta \in [0, 1)$ quantifies the feature space volume overlap. Conceptually, $\beta$ dictates the precise geometric rate at which the marginal information of continuously added samples decays. In typical large-scale vision applications, $\beta$ is closely bounded near unity, conventionally taking values within the logarithmic range $[0.9, 0.9999]$.
+
+The profound theoretical elegance of this formulation lies in its seamless, continuous interpolation between uniform weighting and inverse frequency weighting. We can rigorously examine the asymptotic behaviour at the two extremal boundaries of the hyperparameter $\beta$.
+
+First, consider the lower limit as $\beta \to 0$. In this scenario, the volume overlap is defined as absolute zero, implying that every collected sample provides completely novel, mutually exclusive, and non-overlapping information. The effective sample size expression elegantly evaluates to unity:
+
+\[
+  \lim_{\beta \to 0} E_{N_i} = 1
+\]
+
+Under this boundary condition, the calculated effective volume is perfectly uniform across all taxonomic classes, operating completely regardless of their empirical observation counts. The subsequent weighting mechanism thus collapses precisely back to the standard uniform, unweighted Cross-Entropy formulation.
+
+Second, consider the upper limit as $\beta \to 1$. In this case, the overlap approaches absolute unity, and we must apply L'Hôpital's rule to formally evaluate the indeterminate limit:
+
+\[
+  \lim_{\beta \to 1} E_{N_i} = \lim_{\beta \to 1} \frac{\frac{\partial}{\partial \beta}(1 - \beta^{N_i})}{\frac{\partial}{\partial \beta}(1 - \beta)} = \lim_{\beta \to 1} \frac{-N_i \beta^{N_i - 1}}{-1} = N_i
+\]
+
+As $\beta$ converges asymptotically towards $1$, the effective number of samples converges directly to the raw, unmodified empirical count $N_i$. In this specific operational regime, weighting the loss criterion by the reciprocal of the effective sample size perfectly recovers the classical inverse class frequency weighting. Therefore, the parameter $\beta$ provides a continuous, highly controllable spectrum of mathematical regularisation. It empowers the optimisation landscape to balance the informational geometry of the long-tail distribution safely between the catastrophic extremes of feature collapse and gradient explosion.
+
+\section{Weight Normalisation and Implementation Details}
 \label{sec:cb_pytorch_implementation}
+
+Translating this continuous theoretical model into a robust PyTorch tensor operation requires exceptionally strict attention to numerical stability, gradient scaling, and deterministic execution semantics. The optimal class weight $W_i$ for a given taxonomic class $i$ is defined as strictly inversely proportional to its mathematical effective sample volume:
+
+\[
+  W_i = \frac{1 - \beta}{1 - \beta^{N_i} + \epsilon}
+\]
+
+where $\epsilon = 10^{-8}$ is a strictly small positive constant injected purposefully into the denominator to proactively prevent division-by-zero singularities. This regularisation is particularly critical in streaming, data-parallel, or dynamic dataset contexts. In active learning architectures, certain highly rare classes might temporarily register zero observations during specific training folds or cross-validation splits, making this numerical safeguard an indispensable operational requirement.
+
+Furthermore, a critical mathematical normalisation constraint must be rigorously enforced across the entire set of all classes to fundamentally preserve the total gradient magnitude scale of the loss function. If the dynamically computed weights are applied naively without geometric normalisation, the overall magnitude of the computed loss and consequently the magnitude of the backward gradients propagated through the layers of the network will be arbitrarily scaled by the empirically chosen value of $\beta$. To systematically counteract this scalar distortion, the raw weights are strictly normalised such that their linear sum precisely equals the total number of distinct classes $K$:
+
+\[
+  \sum_{i=1}^K W_i = K
+\]
+
+This rigid normalisation protocol ensures that the arithmetic mean class weight remains strictly equal to $1.0$. By anchoring the mean weight to unity, the global learning rate calibration of the chosen optimiser is preserved unconditionally across different values of $\beta$. In the TaxonVision codebase, specifically within the module \texttt{src/taxon\_vision/models/loss.py}, the \texttt{ClassBalancedLoss} class architecture enforces this constraint algorithmically during the instantiation lifecycle.
+
+To guarantee numerical stability during the initialisation phase, the empirical sample counts are ingested as an array of double-precision floating-point numbers (\texttt{numpy.float64}). To further safeguard against undefined mathematical behaviour, the minimum operational sample count is clamped strictly to $1.0$ via the \texttt{numpy.maximum} primitive before any exponential operations are executed. The final, mathematically normalised weights are subsequently cast down to single-precision \texttt{torch.float32} tensors for hardware execution.
+
+Crucially, these static weights are registered as a persistent tensor buffer within the \texttt{torch.nn.Module} hierarchy using the standard \texttt{register\_buffer} directive. This critical architectural decision ensures that the pre-calculated static class weights are seamlessly and automatically migrated to the active physical execution device, whether that be a CUDA GPU cluster or an Apple Silicon MPS endpoint, directly alongside the trainable model parameters during distributed training orchestration. Simultaneously, this registration paradigm prevents the weights from being erroneously treated as trainable parameters and updated by the optimiser's backward pass. The actual objective loss is then computed with peak hardware efficiency using the native \texttt{torch.nn.functional.cross\_entropy} function, which seamlessly accepts the pre-computed \texttt{device\_weights} tensor via its keyword arguments.
+
+\section{Integration with Classification Heads and Optuna Tuning}
+\label{sec:integration_and_optuna_tuning}
+
+The robust, large-scale utilisation of the Class-Balanced Loss mandates flawless dynamic parameter integration within the automated operational training pipelines. Within the \texttt{taxon\_vision.models.trainer} sub-package, the initialisation of the loss module requires the exact, deterministic extraction of categorical population statistics. During the construction of the computational training graph, the sequence \texttt{samples\_per\_class} is dynamically computed and extracted from the immutable parquet file metadata of the current training data split, canonically represented by the \texttt{EmbeddingSplit} object. This deterministic, programmatic linkage guarantees absolutely that the loss weights accurately and exclusively reflect the empirical distribution of the exact data subset ingested by the current epoch. It completely circumvents any potential statistical data leakage from held-out validation or test splits, ensuring epistemically sound evaluation metrics.
+
+The rigorous determination of the mathematically optimal volume overlap parameter $\beta$ is highly non-trivial. The exact optimal scalar value is extraordinarily sensitive to the specific taxonomic resolution, geographical scope, and dataset geometry of the operational deployment. Consequently, $\beta$ is treated as a primary, top-level tunable hyperparameter within the broader architectural optimisation strategy. Within the specific script \texttt{src/taxon\_vision/models/training/tuning.py}, automated Bayesian hyperparameter optimisation is orchestrated via the highly robust Optuna framework. The multidimensional search space for $\beta$ is constructed as a continuous log-uniform distribution, typically and strictly bounded between the values $0.99$ and $0.9999$. This specific logarithmic range deliberately focuses the search algorithm's sampling density on the extreme asymptotic regime where the most critical variance-bias trade-offs manifest for biological taxonomic data.
+
+The Optuna \texttt{HyperparameterObjective} function dynamically couples the Tree-structured Parzen Estimator (TPE) probabilistic sampling algorithm with the aggressive Asynchronous Successive Halving Algorithm (ASHA) early stopping pruner. During the continuous automated search process, candidate configurations of $\beta$, evaluated in precise conjunction with the network learning rate, the weight decay magnitude, and the regularisation dropout rate, are iteratively evaluated in isolated execution trials. The classification linear head, parametrised explicitly with the dynamically instantiated \texttt{ClassBalancedLoss}, is trained natively on pre-computed, cached ONNX representation embeddings.
+
+To strictly enforce computational efficiency budgets, the integrated ASHA pruner rapidly and deterministically terminates underperforming hyperparameter trials based on their intermediate validation Macro PR-AUC scores. This metric, the Area Under the Precision-Recall Curve calculated via strict macro-averaging, is specifically and exclusively chosen as the terminal objective function. Unlike standard overall micro-accuracy, Macro PR-AUC remains strictly unbiased in the presence of extreme class imbalance. It heavily and proportionately penalises models that collapse their predictive distributions on minority taxa, ensuring that algorithmic generalisation extends safely deep into the long-tail.
+
+The entire hyperparameter trajectory across the Optuna search, including the specific configuration of the effective sample size loss weighting parameters, is serially tracked by the central MLflow telemetry server. This comprehensive serialisation provides full historical lineage, ensuring total auditability and reproducibility for the optimisation sequence of the taxonomic classifier. Through this intricate, deterministic integration of the effective sample size mathematics with aggressive Bayesian tuning algorithms, the overall pipeline guarantees mathematically provable, Pareto-optimal performance across both the ubiquitous head classes and the critically endangered biological species located in the deepest extreme of the power-law tail.
