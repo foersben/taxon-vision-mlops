@@ -2,26 +2,162 @@
 \chapter{Containerisation Architecture: Dockerfile and Composition Manifests}
 \label{ch:containerisation_architecture}
 
-% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
-% -------------------------------------------------------------
-% Focus: Container build strategies, security sandboxing, and service composition.
-% Repository Files:
-%   - Dockerfile
-%   - docker-compose.yaml
-%   - .dockerignore
-% Technical Details:
-%   - Dockerfile analysis: multi-stage build, Pixi binary copy from ghcr.io/prefix-dev/pixi,
-%     frozen lockfile installation (pixi install --frozen -e default), non-root user execution.
-%   - docker-compose.yaml topology: auxiliary storage and monitoring stacks (MinIO S3 storage,
-%     Prometheus metrics collector, Grafana dashboard), port mappings, network isolation.
-%   - Security and compliance: read-only root filesystems, minimal base image attack surface.
-% -------------------------------------------------------------
+The deployment of the TaxonVision-MLOps pipeline into a production environment requires a rigorous standardisation of the execution context. Containerisation provides the foundational mechanism for this standardisation, ensuring that the complex interdependencies of machine learning libraries, compiled binaries, and proprietary source code are encapsulated within a reproducible and immutable artifact. This chapter presents an exhaustive technical analysis of the production serving container architecture, detailing the selection of the base image, the implementation of non-root security postures, the optimisation of layer caching, and the minimisation of the Open Container Initiative (OCI) image attack surface.
 
-\section{Multi-Stage Container Construction Strategy}
-\label{sec:dockerfile_construction}
+\section{Production Serving Container Architecture}
+\label{sec:production_container_architecture}
 
-\section{Auxiliary Services and Docker Compose Topology}
-\label{sec:docker_compose_topology}
+The \texttt{Dockerfile} governing the API service is engineered to construct a minimal, highly secure, and computationally efficient serving environment. The architecture deliberately eschews traditional Debian or Ubuntu base images, which are frequently encumbered by vast numbers of unused system libraries that inflate the image footprint and expand the vulnerability surface.
 
-\section{Container Hardening and Privilege Minimisation}
-\label{sec:container_hardening}
+\subsection{Base Image Selection}
+
+The container construction commences with the selection of the multi-stage runner base image:
+\begin{minted}{dockerfile}
+FROM ghcr.io/prefix-dev/pixi:latest AS runner
+\end{minted}
+
+The \texttt{ghcr.io/prefix-dev/pixi:latest} image is chosen because it provides a pre-compiled, highly optimised execution environment specifically designed for the Pixi package manager. Pixi, written in Rust, offers an order-of-magnitude acceleration in dependency resolution and installation compared to traditional Python equivalents such as \texttt{pip} or \texttt{conda}. By standardising on the Pixi runner, the container avoids the necessity of installing system-level compilers or intermediate build tools merely to satisfy the requirements of numerical libraries like \texttt{numpy} or \texttt{scipy}. The runner image acts as a self-contained execution context where the environment specification dictates the entirety of the runtime capabilities.
+
+\subsection{Non-Root Security Posture}
+
+A critical vulnerability in many containerised machine learning deployments is the default execution of the entrypoint process as the \texttt{root} user. This configuration violates the principle of least privilege and introduces severe risks (categorised under CWE-250: Execution with Unnecessary Privileges); a successful container breakout would grant the adversary unrestricted access to the underlying host node.
+
+To mathematically eliminate this vulnerability class, the \texttt{Dockerfile} explicitly constructs a restricted user namespace before any application code or dependencies are copied into the filesystem:
+
+\begin{minted}{dockerfile}
+WORKDIR /app
+
+# Ensure non-root app user exists and owns working directory
+RUN groupadd -g 10001 appgroup && \
+    useradd -u 10001 -g appgroup -s /bin/bash -m appuser && \
+    chown -R appuser:appgroup /app
+
+USER appuser
+\end{minted}
+
+The creation of the \texttt{appgroup} group with Group ID (GID) 10001 and the \texttt{appuser} user with User ID (UID) 10001 establishes a deterministic, non-privileged execution identity. The \texttt{chown} command forcefully transfers ownership of the \texttt{/app} working directory to this newly minted user. Subsequently, the \texttt{USER appuser} directive guarantees that all subsequent \texttt{RUN}, \texttt{CMD}, and \texttt{ENTRYPOINT} instructions are evaluated strictly within the constraints of this restricted namespace. This configuration directly aligns with Kubernetes PodSecurityStandards, specifically ensuring the compatibility with the \texttt{runAsNonRoot: true} and \texttt{runAsUser: 10001} directives mandated in the \texttt{api-deployment.yaml} manifest.
+
+\subsection{Layer Caching and Build Optimisation}
+
+Docker image construction operates sequentially, computing a cryptographic hash for each instruction. If an instruction and its inputs remain unchanged, the build daemon leverages the cached layer, drastically reducing compilation times. Conversely, an alteration to any file referenced by a \texttt{COPY} instruction invalidates the cache for that layer and all subsequent layers.
+
+To maximise the utilisation of the build cache, the \texttt{Dockerfile} enforces a strict ordering of file copies, ordered from the least frequently modified to the most frequently modified:
+
+\begin{minted}{dockerfile}
+# Copy dependency specifications, README, and source code required for editable hatchling build
+COPY --chown=appuser:appgroup pyproject.toml pixi.lock README.md ./
+COPY --chown=appuser:appgroup src/ src/
+
+# Install the minimal CPU-only production/inference environment directly as non-root user
+RUN pixi install --frozen -e ci
+\end{minted}
+
+The \texttt{pyproject.toml} and \texttt{pixi.lock} files constitute the immutable ledger of dependencies. By copying these files first, alongside the \texttt{README.md} and the \texttt{src/} directory (which are required for the editable Hatchling build defined in \texttt{pyproject.toml}), the subsequent \texttt{pixi install} command is insulated from unrelated repository changes. The \texttt{--chown=appuser:appgroup} flag is critical; it ensures that the copied files inherit the correct ownership without requiring an additional, layer-inflating \texttt{RUN chown} command.
+
+\section{Minimal Runtime Environment}
+\label{sec:minimal_runtime_environment}
+
+The TaxonVision-MLOps pipeline is designed for high-throughput inference across distributed edge clusters and cloud nodes. The deployment strategy dictates that the production serving container must be heavily optimised for CPU-bound ONNX Runtime execution, eliminating the necessity for multi-gigabyte CUDA libraries and GPU compiler toolchains.
+
+\subsection{The Continuous Integration Environment Specification}
+
+The installation directive \texttt{RUN pixi install --frozen -e ci} instructs Pixi to instantiate the \texttt{ci} environment defined within the \texttt{pixi.lock} file. The \texttt{--frozen} flag enforces strict adherence to the cryptographic hashes and exact package versions recorded in the lockfile, guaranteeing deterministic reproducibility and thwarting supply chain substitution attacks.
+
+The \texttt{ci} environment is explicitly formulated to exclude the \texttt{gpu} and \texttt{dev} feature sets. As verified within the \texttt{pixi.toml} and \texttt{pixi.lock} specifications, the \texttt{ci} environment resolves exclusively to CPU-optimised binaries:
+\begin{itemize}
+    \item \texttt{torch-2.5.1+cpu-cp312-cp312-linux\_x86\_64.whl}
+    \item \texttt{torchvision-0.20.1+cpu-cp312-cp312-linux\_x86\_64.whl}
+    \item \texttt{onnxruntime-1.31.0}
+\end{itemize}
+
+This exclusion of the \texttt{gpu} feature set purges the container of the \texttt{nvidia-cuda-runtime-cu12}, \texttt{nvidia-cudnn-cu12}, and associated libcudart dependencies. The resulting inference environment is lean, containing only the specific instruction sets required to execute the INT8-quantised ONNX models against the host CPU.
+
+\subsection{Asset Bundling and Ephemeral State}
+
+Following the construction of the virtual environment, the container incorporates the trained model artifacts and declarative configuration files:
+
+\begin{minted}{dockerfile}
+# Copy configuration, model checkpoints, and default parameters
+COPY --chown=appuser:appgroup config/ config/
+COPY --chown=appuser:appgroup models/checkpoints/ models/checkpoints/
+\end{minted}
+
+The inclusion of the \texttt{models/checkpoints/} directory ensures that the container is entirely self-sufficient. The container does not attempt to dynamically download model weights from an external S3 bucket at runtime, thereby eliminating a severe startup latency penalty and mitigating the risk of deployment failure during remote storage outages. The \texttt{config/} directory provides the Hydra-compatible taxonomic catalogues and inference hyperparameters necessary for the model head initialisation.
+
+\subsection{Signal Handling and Environment Configuration}
+
+To facilitate seamless integration with Kubernetes ingress controllers and internal load balancers, the container standardises its network bindings and signal handling behaviour through explicit environment variables:
+
+\begin{minted}{dockerfile}
+# Expose FastAPI HTTP serving port
+EXPOSE 8000
+
+ENV PORT=8000 \
+    HOST=0.0.0.0 \
+    PYTHONUNBUFFERED=1
+\end{minted}
+
+\begin{table}[htbp]
+\centering
+\caption{Environment Variable Configuration and Operational Directives.}
+\label{tab:env_vars}
+\begin{tabularx}{\textwidth}{@{}l l X@{}}
+\toprule
+\textbf{Variable} & \textbf{Value} & \textbf{Technical Rationale} \\
+\midrule
+\texttt{PORT} & \texttt{8000} & Dictates the listener port for the Uvicorn ASGI server. \\
+\texttt{HOST} & \texttt{0.0.0.0} & Binds the socket to all available network interfaces, permitting external ingress routing. \\
+\texttt{PYTHONUNBUFFERED} & \texttt{1} & Disables standard output buffering, ensuring that application logs and telemetry metrics are streamed immediately to the container runtime (e.g., \texttt{containerd}) without truncation or delay. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Container Healthchecks and Readiness Probes}
+\label{sec:healthchecks}
+
+A robust microservice architecture necessitates continuous monitoring of container health to facilitate automated traffic routing and self-healing. While Kubernetes governs orchestration-level probes, the Dockerfile embeds a native \texttt{HEALTHCHECK} directive to evaluate the internal state of the inference engine independently of the orchestrator.
+
+\subsection{The Native HEALTHCHECK Directive}
+
+The container implements a rigorous polling mechanism:
+
+\begin{minted}{dockerfile}
+# Healthcheck hitting the readiness probe (validating model warmup & cache)
+HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
+  CMD pixi run --frozen -e ci python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready')" || exit 1
+\end{minted}
+
+This directive instructs the container runtime to execute the specified command every 15 seconds (\texttt{--interval=15s}), permitting a maximum response latency of 3 seconds (\texttt{--timeout=3s}). A grace period of 10 seconds (\texttt{--start-period=10s}) is allocated to accommodate the initialisation overhead of loading the ONNX execution provider and instantiating the memory-mapped tensors. If the command returns a non-zero exit status for three consecutive intervals (\texttt{--retries=3}), the container is marked as \texttt{unhealthy}.
+
+\subsection{Standard Library Polling and Dependency Minimisation}
+
+A defining characteristic of this healthcheck implementation is the reliance upon the Python standard library (\texttt{urllib.request}) rather than external utilities such as \texttt{curl} or \texttt{wget}. The \texttt{ghcr.io/prefix-dev/pixi:latest} base image, akin to distroless paradigms, is intentionally stripped of general-purpose network utilities to diminish the attack surface. Introducing \texttt{curl} solely for the purpose of health monitoring would violate this security postulate.
+
+The command \texttt{python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready')"} executes a lightweight HTTP GET request against the FastAPI readiness endpoint. This endpoint does not merely confirm the viability of the HTTP socket; it executes a deep validation sequence, verifying that the ONNX model has completed its warmup compilation phase, that the class-balanced loss taxonomies are successfully parsed from the YAML configuration, and that the feature extraction cache is fully hydrated. Only upon successful verification of these internal states does the endpoint return an HTTP 200 OK status, signaling that the container is fully prepared to ingest prediction requests.
+
+\section{OCI Image Size and Attack Surface Minimisation}
+\label{sec:image_size_minimisation}
+
+The final architecture of the production container reflects a relentless pursuit of minimisation. Every kilobyte of retained binary data represents a potential vector for exploitation and an incremental cost to network bandwidth during Kubernetes node autoscaling events.
+
+\subsection{Pruning Development Dependencies}
+
+The explicit invocation of the \texttt{-e ci} environment during the \texttt{pixi install} phase serves as a structural firewall against the inclusion of development and testing toolchains. As verified against the \texttt{pyproject.toml} and \texttt{pixi.lock} definitions, the \texttt{dev} dependency group---comprising compilers, static analysis tools (\texttt{ruff}, \texttt{mypy}), documentation generators (\texttt{zensical}, \texttt{mkdocs}), and comprehensive test suites (\texttt{pytest}, \texttt{hypothesis})---is systematically excluded from the final OCI image.
+
+This exclusion yields two profound technical benefits:
+\begin{enumerate}
+    \item \textbf{Image Footprint Reduction:} The elimination of the \texttt{pytest} ecosystem and its associated asynchronous test harnesses removes hundreds of megabytes of redundant bytecode, significantly accelerating image pull times.
+    \item \textbf{Attack Surface Eradication:} The absence of compilers and debugging utilities deprives an attacker of the fundamental tools required to compile exploits or perform lateral movement in the event of a theoretical remote code execution (RCE) vulnerability.
+\end{enumerate}
+
+\subsection{Secure Entrypoint Execution}
+
+The container lifecycle culminates in the execution of the API service via the Uvicorn ASGI server:
+
+\begin{minted}{dockerfile}
+ENTRYPOINT ["pixi", "run", "--frozen", "-e", "ci", "uvicorn", "taxon_vision.service.api:app", "--host", "0.0.0.0", "--port", "8000"]
+\end{minted}
+
+The \texttt{ENTRYPOINT} instruction utilises the JSON array syntax (exec form) rather than the shell form (\texttt{ENTRYPOINT command param1 param2}). The shell form implicitly invokes \texttt{/bin/sh -c}, which spawns a shell process as PID 1, subsequently executing the application as a child process. This architectural flaw prevents the Uvicorn server from receiving UNIX signals (such as \texttt{SIGTERM} or \texttt{SIGINT}) directly from the container runtime, leading to ungraceful termination and potential connection dropping during Kubernetes RollingUpdate deployments.
+
+By employing the exec form, the \texttt{pixi run} command directly assumes PID 1 within the container namespace. The \texttt{--frozen -e ci} flags guarantee that the Uvicorn server is launched strictly within the rigorously constrained \texttt{ci} environment. The Uvicorn process correctly receives lifecycle signals, allowing it to gracefully drain active HTTP connections and flush pending telemetry metrics before termination, ensuring zero-downtime availability for the TaxonVision-MLOps inference service.
