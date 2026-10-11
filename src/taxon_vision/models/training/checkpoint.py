@@ -4,10 +4,11 @@
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 from taxon_vision.config import get_settings
 from taxon_vision.service.inference import get_classifier
@@ -38,9 +39,7 @@ def _save_checkpoint(head: nn.Module, checkpoint_path: Path | str | None) -> Pat
     target_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(head.state_dict(), target_path)
 
-    try:
+    with contextlib.suppress(Exception):
         get_classifier.cache_clear()
-    except Exception:
-        pass
 
     return target_path

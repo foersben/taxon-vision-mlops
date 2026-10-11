@@ -1,0 +1,120 @@
+% !TeX root = ../technical_report.tex
+\chapter{Active Learning and Triage Queue Management}
+\label{ch:active_learning}
+
+\section{The Human-in-the-Loop Active Learning Paradigm}
+\label{sec:al_paradigm}
+
+\begin{figure}[htbp]
+\centering
+\input{figures/fig_22_active_learning_triage_queue.tikz}
+\caption{Human-in-the-loop active learning feedback loop, uncertainty acquisition triggers, and priority triage queue.}
+\label{fig:active_learning_triage_queue}
+\end{figure}
+
+The operational deployment of deep neural networks in ecological workflows introduces significant economic and statistical constraints. In biodiversity monitoring, the underlying data distribution is inherently long-tailed. Random sampling strategies inadvertently over-index on canonical, commonly occurring species, such as domestic cats or common dandelions. This naive approach starves rare or morphologically ambiguous sister taxa of the necessary training signal required to refine decision boundaries. Compounding this statistical challenge is the economic reality of data annotation: labelling ambiguous biological specimens necessitates the expertise of domain taxonomists, rendering manual review a strictly finite and expensive resource.
+
+To mitigate these constraints, the TaxonVision architecture implements a robust human-in-the-loop active learning paradigm. By systematically querying the model for uncertainty estimates, the system identifies and isolates observations that will provide the maximal marginal information gain per unit of labelling effort. Rather than unconditionally storing and reviewing all inbound telemetry, the system dynamically routes unlabelled samples into a prioritised triage queue, allowing human operators to focus exclusively on highly contested or anomalous records.
+
+This continuous feedback loop is governed by dual query triggers that refer samples for taxonomic review. The primary trigger operates on the foundation of Split Conformal Prediction, which provides marginal coverage guarantees. If the cardinality of the admissible conformal prediction set $|C(x)|$ exceeds a defined threshold $k_{\text{max}}$, or if the set is entirely empty (indicating high epistemic uncertainty or an out-of-distribution anomaly), the observation is automatically referred for human intervention. The secondary trigger relies on active acquisition queries computed directly from the softmax probability distributions. By evaluating mathematical formulations of uncertainty, the system continuously ranks observations based on the ambiguity of the network's internal representation, thereby ensuring that the labelling budget is allocated strictly to instances that will most effectively reduce the model's generalisation error upon retraining.
+
+
+\section{Sample Acquisition Strategies}
+\label{sec:acquisition_strategies}
+
+The efficacy of the active learning pipeline depends entirely on the mathematical robustness of the sample acquisition functions. These functions operate over the normalised class probability vectors emitted by the classification head, systematically ranking observations based on epistemic uncertainty. The system evaluates three primary uncertainty sampling formulations to quantify predictive ambiguity.
+
+Firstly, Shannon Entropy provides a comprehensive measure of distributional uncertainty across the entire categorical output space. For a given probability vector $p$ distributed over $K$ modelled taxa, the entropy $H(p)$ is defined as:
+\[
+H(p) = -\sum_{i=1}^K p_i \log p_i
+\]
+Observations that produce a uniform probability distribution across all classes exhibit maximal entropy, indicating severe network confusion. Conversely, a one-hot distribution yields zero entropy, representing absolute certainty.
+
+Secondly, Margin Sampling evaluates the separation boundary between the top two candidate classes. This strategy operates on the premise that the most contested decisions are those where the model struggles to discriminate between the primary and secondary hypotheses, which is particularly relevant when classifying morphologically similar sister taxa. Given a sorted probability vector where $p_{(1)}$ represents the highest probability and $p_{(2)}$ represents the second highest, the margin $M(p)$ is:
+\[
+M(p) = p_{(1)} - p_{(2)}
+\]
+The system prioritises instances with the smallest margins. To standardise this metric into an uncertainty score where higher values represent greater ambiguity, the inverted margin is computed as $1.0 - M(p)$. The programmatic implementation of this logic vectorises the operation across inference batches in order to maintain high throughput:
+
+\begin{listing}[htbp]
+\begin{minted}{python}
+def margin_sampling(probs: np.ndarray) -> np.ndarray:
+    sorted_probs = np.sort(probs, axis=-1)
+    margin = sorted_probs[:, -1] - sorted_probs[:, -2]
+    result: np.ndarray = np.asarray(1.0 - margin)
+    return result
+\end{minted}
+\caption{Vectorised multi-class margin sampling implementation.}
+\label{lst:margin_sampling}
+\end{listing}
+
+Thirdly, Least Confidence sampling provides a computationally inexpensive heuristic by examining only the most probable class assignment. The least confidence score $LC(p)$ is defined as the residual probability mass not assigned to the predicted class:
+\[
+LC(p) = 1 - \max_i p_i
+\]
+
+While pure uncertainty sampling effectively identifies ambiguous instances, it is susceptible to sampling bias, often selecting clusters of redundant observations drawn from similar out-of-distribution regions. To counteract this pathology, the active learning engine incorporates diversity and representativeness trade-offs during batch acquisition. By integrating CoreSet geometric query concepts, the system frames sample selection as a facility location problem within the intermediate feature space. This ensures that the acquired batch of observations spans the entire operational domain, maximising the geometric diversity of the selected subset and providing a balanced gradient signal during subsequent retraining iterations.
+
+\section{In-Memory Triage Queue Architecture}
+\label{sec:triage_queue}
+
+To operationalise the continuous referral of ambiguous biological observations, the TaxonVision active learning engine relies on an ephemeral, in-memory triage queue. Because human taxonomic verification operates at a severely constrained throughput relative to the high-velocity stream of field observations, naively storing and sorting all referred instances incurs prohibitive computational and memory overhead. An un-indexed list sort executed upon every insertion would impose an unacceptable $\mathcal{O}(N \log N)$ complexity penalty, rapidly degrading system responsiveness as the staging tier scales.
+
+To resolve this bottleneck, the architecture implements the \texttt{TriageQueue} as a thread-safe priority heap. By leveraging a binary max-heap, the system mathematically guarantees a strict $\mathcal{O}(\log N)$ worst-case time complexity for both enqueuing new observations and dequeuing the most uncertain instances. In Python, this is achieved by negating the epistemic uncertainty score prior to insertion into the native min-heap implementation.
+
+\begin{listing}[htbp]
+\begin{minted}{python}
+class TriageQueue:
+    def __init__(self) -> None:
+        self._heap: list[tuple[float, int, TriageItem]] = []
+        self._counter: int = 0
+
+    def push(self, item: TriageItem) -> None:
+        heapq.heappush(self._heap, (-item.uncertainty_score, self._counter, item))
+        self._counter += 1
+
+    def pop(self) -> TriageItem | None:
+        if not self._heap:
+            return None
+        _, _, item = heapq.heappop(self._heap)
+        return item
+\end{minted}
+\caption{Binary max-heap implementation of the active learning triage queue.}
+\label{lst:triage_queue}
+\end{listing}
+
+The internal structure of the heap stores tuples formatted as\\\texttt{(-uncertainty\_score, sequence\_counter, item)}. The inclusion of a monotonic integer sequence counter is critical for maintaining determinism. In scenarios where multiple observations yield identical uncertainty scores, the strict FIFO (First-In, First-Out) fallback breaks ties, ensuring that older observations are consistently prioritised for review without necessitating complex comparative operator overloading on the underlying domain objects.
+
+Furthermore, the queue must enforce strict bounded memory constraints to prevent resource exhaustion during prolonged surges in environmental telemetry. When the heap cardinality exceeds its configured maximal capacity, the architecture institutes deterministic eviction policies, silently dropping the observations exhibiting the lowest comparative epistemic uncertainty in order to maintain system stability.
+
+Observations entering the queue are serialised into structured triage payloads, encapsulated by the \texttt{TriageItem} data class. These payloads aggregate the essential context required by domain experts to adjudicate ambiguous classifications.
+
+\begin{listing}[htbp]
+\begin{minted}{python}
+@dataclass
+class TriageItem:
+    observation_id: str
+    uncertainty_score: float
+    conformal_set_size: int
+    image_url: str
+\end{minted}
+\caption{Structured payload definition for prioritised taxonomic review.}
+\label{lst:triage_item}
+\end{listing}
+
+The \texttt{TriageItem} securely binds the unique string identifier of the raw telemetry record to its computed scalar epistemic uncertainty measure (such as the inverted margin score). It also includes the cardinality of the admissible conformal prediction set $|C(x)|$, providing operators with an immediate proxy for model confusion. Finally, the payload incorporates a storage locator (remote or local URI) for the raw visual imagery, ensuring that human taxonomists possess the complete visual context necessary to resolve the prediction dispute. By decoupling these lightweight structural pointers from the heavy image bitstreams, the priority queue maintains a highly constrained memory footprint of strictly $\mathcal{O}(N)$ space complexity.
+
+\section{Human Review Lifecycle and Retraining Loop}
+\label{sec:review_lifecycle}
+
+The ultimate objective of the active learning pipeline is to structurally integrate human taxonomic expertise into the continuous model refinement process. This integration relies on a highly responsive, server-rendered hypermedia interface that enables MLOps operators and field ecologists to interact directly with the underlying algorithmic uncertainty.
+
+Rather than relying on heavy Single-Page Application (SPA) client frameworks, the TaxonVision dashboard is engineered using server-side Jinja2 templating augmented by HTMX attributes. This architectural decision permits targeted DOM insertions and partial HTML swaps without incurring the overhead of full-page refreshes.
+
+When an operator reviews an ambiguous observation from the triage queue, the visual inference pipeline is executed asynchronously off the main event loop via AnyIO threadpool workers. This prevents I/O blocking and guarantees that concurrent user interactions remain fluid. The resulting HTMX prediction card dynamically renders rich visual indicators detailing the model's confidence, out-of-distribution referral flags, and the bounding intervals of the conformal prediction set.
+
+During the formal human review lifecycle, operators examine these partials to perform taxonomic validation and dispute resolution. If the model's primary classification is correct despite high uncertainty, the observation serves as a hard positive example for the gradient signal. Conversely, if the conformal set contains the true species but the top-1 point prediction is incorrect, the human operator assigns the correct ground truth label, thereby neutralising the dispute.
+
+Once an operator submits a corrected taxonomic assignment, the feedback ingestion subsystem immediately updates the corresponding observation annotations located within the central parquet data manifests. This metadata mutation subsequently triggers an automated data version control event, executing a cryptographic hash of the modified dataset and writing a new DVC snapshot to the repository. The DVC commit guarantees strict data-model lineage by cryptographically binding the newly labelled observations to the active learning iteration cycle.
+
+Finally, the updated \texttt{dvc.lock} file acts as a catalyst for the continuous integration apparatus. A declarative Jenkins CI pipeline, executing on ephemeral Kubernetes agents within the \texttt{jenkins-ci} namespace, detects the mutation in the data topology and initiates the automated retraining loop. The pipeline provisions the required GPU virtualisation resources, downloads the revised dataset from the DagsHub remote via S3 protocols, and fine-tunes the trainable linear heads of the frozen Timm vision backbones using the augmented training split. By iteratively funnelling the most difficult, highly informative examples back into the optimiser, the human-in-the-loop architecture progressively dampens the impact of the long-tailed ecological distribution and converges toward higher marginal coverage and accuracy.

@@ -1,0 +1,91 @@
+% !TeX root = ../technical_report.tex
+\chapter{Vision Backbone Factory and Feature Caching Engine}
+\label{ch:vision_backbone_factory}
+
+The operational deployment of fine-grained biological classifiers in production environments necessitates a rigorous equilibrium between predictive accuracy and computational efficiency. Deep neural networks, specifically those leveraging high-capacity attention mechanisms or densely parameterized convolutions, impose substantial computational burdens during both training and inference. To mitigate these constraints while maximising adaptability across diverse taxonomic domains, the TaxonVision architecture formally decouples the extraction of robust visual representations from the subsequent linear classification phase. This chapter mathematically details the architectural abstractions underlying the foundation model factory, the mechanics of representation extraction, the engineering invariants governing the persistent embedding caching engine, and the resulting multi-objective performance optimisations.
+
+\section{Backbone Factory Architecture}
+\label{sec:backbone_factory_architecture}
+
+At the core of the platform's vision pipeline is the \texttt{BackboneFactory} abstraction, instantiated via the \texttt{src/taxon\_vision/models/factory.py} module. This module provides a unified, type-safe interface for instantiating diverse foundational vision architectures through the \texttt{timm} (PyTorch Image Models) ecosystem and the Hugging Face model hub. By encapsulating model instantiation, parameter freezing, and dimensional introspection within a singular factory pattern, the architecture ensures that downstream components remain entirely agnostic to the underlying feature extractor's internal topology.
+
+\subsection{Candidate Foundation Models}
+
+The factory systematically supports a curated portfolio of candidate backbones, each occupying a distinct position on the Pareto frontier of accuracy, inference latency, and computational cost. The dynamic registry maps canonical model identifiers to explicit weights:
+
+\begin{itemize}
+    \item \textbf{DINOv3 (\texttt{vit\_small\_patch16\_dinov3})}: Representing the state-of-the-art in self-supervised vision transformer foundation models, DINOv3 extracts dense morphological representations without relying on explicit taxonomic supervision. The architecture employs dedicated register tokens that eliminate high-norm artefacts in smooth background regions, thereby preserving fine-grained morphological features such as insect wing venation. It yields a compact $384$-dimensional dense feature vector, facilitating highly efficient vector database indexing.
+    \item \textbf{BioCLIP-2}\\(\texttt{hf-hub:imageomics/bioclip-2}): This domain-adapted vision-language model incorporates robust biological priors, having been contrastively pre-trained across vast swathes of the Tree of Life. With approximately 86 million parameters, it maps visual morphology directly to a $512$-dimensional semantic embedding space. While excelling in zero-shot and few-shot contexts on specialised taxa, its physical footprint necessitates strict memory management.
+    \item \textbf{DINOv2 (\texttt{vit\_small\_patch14\_dinov2.lvd142m})}: A predecessor to DINOv3, DINOv2 remains a highly dense visual baseline. Utilising a ViT-Small architecture with a patch size of 14, it similarly produces a $384$-dimensional representation and serves as a highly robust general-purpose foundational prior for comparative baseline benchmarking.
+    \item \textbf{MobileNetV4 (\texttt{mobilenetv4\_conv\_small.e2400\_r224\_in1k})}: Engineered specifically for ultra-low latency edge deployment and offline environments, this universal inverted bottleneck architecture contains merely 3.8 million parameters. Emitting a $960$-dimensional pooled feature vector, it ensures tight sub-$20\text{ ms}$ inference bounds on standard CPU cores, completely bypassing the memory and latency penalties associated with heavy self-attention mechanisms.
+\end{itemize}
+
+\subsection{Parameter Freezing and Dimensional Introspection}
+
+Upon instantiation via the \texttt{create\_feature\_extractor} routine, the factory systematically removes the classification head (\texttt{num\_classes=0}), returning dense pooled feature embeddings rather than categorical logits. Furthermore, the routine enforces strict parameter freezing across the entire backbone by setting \texttt{requires\_grad = False} and shifting the module into deterministic evaluation mode (\texttt{eval()}). This physical isolation completely halts gradient tracking and stochastic operations (such as dropout or batch normalisation running statistics updates), forming the structural prerequisite for the decoupled training topology.
+
+Crucially, the factory dynamically resolves the output feature embedding dimension via the \texttt{get\_feature\_dimension} function. Rather than relying on hardcoded configurations, the system executes a deterministic single-sample forward pass using a zero-initialised dummy tensor. The dimensions of this dummy tensor are injected from the centralised \texttt{taxon\_vision.config} schema, ensuring that the resolved dimensionality (e.g. 384, 512, or 960) remains absolutely synchronised with the instantiated weights. This exact feature dimension is subsequently utilised to parameterise the downstream linear classification head and configure the traversal depth of the Hierarchical Navigable Small World (HNSW) retrieval graphs.
+
+\begin{figure}[htbp]
+\centering
+\input{figures/fig_07_vision_backbone_and_feature_caching.tikz}
+\caption{Vision backbone factory dispatch, parameter freezing, memory-mapped feature caching, and linear head architecture.}
+\label{fig:vision_backbone_and_feature_caching}
+\end{figure}
+
+\section{Feature Extraction and Embedding Pre-Computation}
+\label{sec:feature_extraction_precomputation}
+
+The standard supervised training paradigm of executing end-to-end backpropagation across deep neural networks during every training epoch is mathematically redundant when fine-tuning heavily parameterised foundation models for new classification tasks. Propagating gradients through over 100 million parameters simply to update a lightweight terminal linear layer wastes immense computational resources and heavily constrains the speed of hyperparameter iteration.
+
+\subsection{The Decoupled Extraction Paradigm}
+
+To circumvent this severe inefficiency, the TaxonVision architecture employs a mathematically rigorous two-stage methodology. The first stage consists of a pure forward-pass feature extraction phase. The entire dataset is passed through the frozen vision foundation model exactly once. The resulting dense, high-dimensional representations are extracted and persisted to storage.
+
+The \texttt{extract\_features} function is explicitly wrapped in the \texttt{torch.inference\_mode()} context manager. This execution mode bypasses the PyTorch autograd engine entirely, suppressing the allocation of gradient buffers and the construction of the dynamic computational graph. By eliminating these graph-building overheads, tensor allocations remain strictly bound to the immediate activation memory, substantially elevating the maximum permissible batch size and optimising GPU memory throughput.
+
+\subsection{Batch Extraction Mechanics and Tensor Normalisation}
+
+During the extraction phase, the images are strictly normalised using channel-wise standardisation factors derived from the pre-training distribution (typically ImageNet statistics, configured via the application schema). The extraction loop systematically iterates over the \texttt{DataLoader}, projecting each $4\text{D}$ image batch tensor, denoted as $X \in \mathbb{R}^{B \times C \times H \times W}$, into a $2\text{D}$ representation tensor $Z \in \mathbb{R}^{B \times D}$, where $D$ represents the backbone's feature dimension.
+
+The resultant activation tensors are immediately detached from the active device and transferred to host CPU memory. This continuous offloading strictly prevents the exhaustion of precious GPU VRAM, allowing the architecture to process datasets scaling to millions of biological observations on heavily constrained bare-metal hardware.
+
+\section{Persistent Embedding Caching System}
+\label{sec:persistent_embedding_caching}
+
+Once extracted, the gigabyte-scale arrays of feature embeddings and their associated ground-truth taxonomic labels must be reliably persisted and efficiently loaded during subsequent training invocations. The \texttt{src/taxon\_vision/models/training/embeddings.py} module dictates the mathematical and physical invariants governing this caching engine.
+
+\subsection{On-Disk Serialisation and Key Generation}
+
+The integrity of the cache is paramount; if the caching system erroneously serves stale representations that do not precisely correspond to the current dataset state or backbone architecture, the resulting model will suffer catastrophic catastrophic divergence. To enforce absolute mathematical reproducibility, the caching system implements a cryptographically secure invalidation invariant.
+
+Cache files are stored on disk with a uniquely generated hash key. This deterministic cache key is synthesised by hashing a strictly ordered concatenation of critical parameters:
+\begin{enumerate}
+    \item The precise canonical identifier of the active foundational backbone\\(e.g., \texttt{vit\_small\_patch16\_dinov3}).
+    \item A cryptographic hash (MD5 or SHA-256) of the underlying dataset manifest, specifically tracking the DVC dataset versioning file, thereby detecting any alterations to the constituent images or labelling matrices.
+    \item The serialised parameters of the image transformation pipeline, particularly the spatial resolution ($224 \times 224$) and normalisation constants, ensuring that alterations to the input pre-processing immediately invalidate the historical cache.
+\end{enumerate}
+If any of these invariants diverge, the system gracefully bypasses the cache and forces a full re-extraction over the active hardware.
+
+\subsection{Memory-Mapped Tensor Loading}
+
+Loading massive datasets into memory natively poses severe engineering challenges. A dataset comprising 500,000 biological observations projected into a $768$-dimensional FP32 space consumes approximately 1.5 gigabytes of memory purely for the embedding vectors, excluding labels and runtime overhead. Attempting to allocate these contiguous arrays entirely within the system RAM can rapidly trigger out-of-memory (OOM) faults, particularly during parallel hyperparameter tuning trials executed via Optuna.
+
+To guarantee operational stability, the caching engine inherently supports memory mapping via \texttt{mmap\_mode}. By writing the contiguous NumPy or PyTorch tensors to disk using a memory-mapped format, the operating system's virtual memory manager is permitted to treat the file on disk as though it were resident in RAM. When the PyTorch \texttt{DataLoader} subsequently requests a specific mini-batch permutation during the \texttt{\_train\_cached\_epoch} execution, the operating system transparently pages only the specifically requested memory chunks into the active physical memory.
+
+This memory-mapping architecture explicitly severs the correlation between the absolute dataset size and the peak RAM allocation, allowing the TaxonVision pipeline to train robust linear heads on datasets that vastly exceed the physical memory constraints of the underlying node, whilst maintaining high-throughput sequential reads.
+
+\section{Throughput and Resource Benchmarking}
+\label{sec:throughput_and_resource_benchmarking}
+
+The mathematical decoupling of feature extraction from gradient optimisation fundamentally transforms the computational complexity of the training lifecycle, yielding radical accelerations in iteration latency.
+
+\subsection{Complexity and Speedup Analysis}
+
+Consider an architecture where a standard epoch involves computing a forward pass, loss calculation, backward pass, and weight update over the complete dataset. For a foundation model comprising $P$ parameters (where $P > 100 \times 10^6$ for large ViT models), the floating-point operations (FLOPs) required per epoch are heavily dominated by the backbone matrix multiplications.
+
+By caching the representations, the computational complexity of the subsequent classification head training collapses. The gradient backpropagation is strictly restricted to the terminal linear layer. The new time complexity per epoch is fundamentally bound by $\mathcal{O}(N \times D \times K)$, where $N$ is the number of samples, $D$ is the feature dimension, and $K$ is the number of taxonomic classes.
+
+Empirical benchmarking of the TaxonVision platform on a bare-metal NVIDIA RTX 5070 Ti demonstrates that executing a single training epoch through an end-to-end BioCLIP-2 architecture requires multiple minutes and entirely saturates the GPU VRAM. Conversely, iterating over the pre-computed, memory-mapped embedding split requires less than two seconds per epoch. This translates to an operational speedup exceeding $50\times$, empowering data scientists to execute exhaustive Bayesian hyperparameter searches across hundreds of trials within the time previously required to complete a singular traditional training run.
+
+Furthermore, because the backbone remains entirely dormant during head optimisation, the static memory footprint of the GPU drops drastically. This ensures that the training pipeline easily complies with the strict 70\% \texttt{TAXON\_CUDA\_MEMORY\_FRACTION} limit, perfectly preserving the remaining 30\% of the memory pool for zero-downtime serving and live inference queries under concurrent workloads.

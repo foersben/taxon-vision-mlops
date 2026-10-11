@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import torch
 from PIL import Image
 
 from taxon_vision.inference.cli import main as predict_cli_main
@@ -26,8 +27,31 @@ def test_run_training_pipeline_direct() -> None:
 
 
 def test_train_cli_execution() -> None:
-    ret = train_cli(["--epochs", "1", "--batch-size", "16"])
+    ret = train_cli(["--epochs", "1", "--batch-size", "16", "--cuda-memory-fraction", "0.7"])
     assert ret == 0
+
+
+def test_configure_cuda_memory_budget_cpu_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    from taxon_vision.models.training.runner import configure_cuda_memory_budget
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    assert configure_cuda_memory_budget(0.7) is None
+
+
+def test_configure_cuda_memory_budget_cuda_mocked(monkeypatch: pytest.MonkeyPatch) -> None:
+    from taxon_vision.models.training.runner import configure_cuda_memory_budget
+
+    called_fractions: list[float] = []
+
+    def _mock_set_fraction(frac: float) -> None:
+        called_fractions.append(frac)
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "set_per_process_memory_fraction", _mock_set_fraction)
+
+    applied = configure_cuda_memory_budget(0.75)
+    assert applied == 0.75
+    assert called_fractions == [0.75]
 
 
 def test_training_module_execution() -> None:

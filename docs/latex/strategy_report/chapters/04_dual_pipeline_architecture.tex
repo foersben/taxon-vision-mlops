@@ -31,8 +31,8 @@ Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely be
 
 % Nodes
 \node[box] (git) {Git Push\\(Codebase)};
-\node[box, right=of git] (gh_actions) {GitHub Actions\\(Lint \& Unit Test)};
-\node[box, right=of gh_actions] (runner) {Bare-Metal Runner\\(RTX 5070 Ti)};
+\node[box, right=of git] (gh_actions) {GitHub\\(Gates \& Webhook)};
+\node[box, right=of gh_actions] (runner) {Jenkins Agent Pod\\(k3s, RTX 5070 Ti)};
 \node[db, below=of runner] (dvc) {DVC S3 Remote\\(DagsHub)};
 \node[box, below=of gh_actions] (training) {Training \& ONNX\\Quantisation};
 \node[box, left=of training] (mlflow) {MLflow Registry\\(Safety Gate)};
@@ -56,23 +56,34 @@ Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely be
 
 In order to transition from manual experimentation to a Level 3 MLOps deployment, the independent pipelines must be strictly governed by Continuous Integration and Continuous Deployment (CI/CD) triggers.
 
-When engineers push codebase modifications to the central repository, GitHub Actions cloud runners immediately execute lightweight static analysis and logical unit tests. Upon passing, a secure webhook triggers the self-hosted, bare-metal GPU runner to initiate the heavy execution graph. In order to authenticate with the tracking infrastructure, the GitHub Actions runner injects encrypted repository secrets (for example, \texttt{MLFLOW\_TRACKING\_URI}) directly into the local execution environment.
+Two cooperating layers implement these triggers. When engineers push codebase modifications to the central repository, GitHub Actions executes lightweight static analysis and logical unit tests on CPU-only runner pods. In parallel, a signed GitHub webhook reaches a self-hosted Jenkins controller through an outbound-only Cloudflare Tunnel. The controller owns no executors of its own: it schedules each build as an ephemeral agent pod inside the k3s cluster of the bare-metal host and removes the pod on completion. Credentials for the tracking infrastructure, in particular the DagsHub access token, are held in the Jenkins credential store and are exposed to the build as environment variables for the duration of the run only.
 
-As the training pipeline initialises, it binds the MLflow telemetry directly to the exact Git commit SHA that triggered the run, thereby ensuring absolute cryptographic provenance between the source code and the resulting model weights:
+As the training pipeline initialises, it is specified to bind the MLflow telemetry to the exact Git commit that triggered the run, thereby ensuring cryptographic provenance between the source code and the resulting model weights:
 \begin{minted}{python}
-mlflow.set_tag("git.commit", os.environ.get("GITHUB_SHA"))
+mlflow.set_tag("git.commit", os.environ.get("GIT_COMMIT"))
 \end{minted}
 
 Crucially, the CI/CD pipeline enforces an automated epistemic safety gate prior to deployment. Before any compiled model is allowed to enter the registry, a standalone invariant test loads the candidate ONNX graph and evaluates it against a holdout calibration dataset. The script formally asserts that the empirical marginal coverage of the Split Conformal Prediction set, $|C|$, meets or exceeds the mathematical bound $1 - \alpha$ (for example, $95\%$ coverage, where $\alpha=0.05$). If the empirical coverage falls below this strict threshold, the pipeline throws a fatal assertion error, blocking the Git merge and effectively preventing the uncalibrated model from reaching production.
 
-If the safety gate is cleared, the system programmatically interacts with the MLflow API to transition the newly validated artefact from a staging environment directly into production readiness:
+If the safety gate is cleared, the system programmatically interacts with the MLflow API. The candidate is compared with the model carrying the \texttt{Production} alias by validation Macro PR-AUC: a better candidate is marked as \texttt{Challenger}, whereas an inferior one is archived. The promotion of a \texttt{Challenger} to \texttt{Production} remains a deliberate step after deployment testing, so that at most two competing models are active at any time:
 \begin{minted}{python}
-client.transition_model_version_stage(
-    name="TaxonVision-Backbone", 
-    version=mv.version, 
-    stage="Production"
+client.set_registered_model_alias(
+    name="taxon_vision_classifier",
+    alias="Challenger",
+    version=mv.version,
 )
 \end{minted}
+
+\section{Automated Training on the Main Branch}
+\label{sec:main_training}
+
+On the main branch, the Jenkins pipeline continues beyond the quality gates and executes the training stage on the bare-metal host. The stage is deliberately placed after the documentation build, so that no GPU time is spent on a revision that would fail one of the earlier gates. It proceeds as follows:
+\begin{enumerate}
+    \item The frozen GPU environment is installed from the dependency lock file, and the versioned dataset is pulled from the DagsHub DVC remote.
+    \item The classification head is trained on the embeddings of the configured backbone (DINOv3 by default) within an epoch budget of 15 and a mini-batch size of 64, under the process-level VRAM cap of Section~\ref{sec:gpu_partitioning}. A Bayesian hyperparameter search (Section~\ref{sec:hyperparameter_opt}) can be requested beforehand by a command-line switch.
+    \item The ONNX graph is re-exported, and the resulting head checkpoint and graph are pushed to the DVC remote.
+    \item A rolling restart of the serving deployment loads the fresh artefacts without interrupting service: the Kubernetes rolling-update strategy admits one additional pod and no unavailable pod, and a readiness probe withholds traffic until the new pod has loaded the model.
+\end{enumerate}
 
 \section{Convergence at the Serving Boundary}
 \label{sec:serving_convergence}

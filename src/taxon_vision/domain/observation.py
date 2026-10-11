@@ -15,6 +15,8 @@ from taxon_vision.domain.taxonomy import TaxonNode
 class ObservationRecord(BaseModel):
     """Validated observation conforming to DarwinCore standard.
 
+    An observation is a record of an interaction between a person and an organism at a specific time and place.  Each observation can have multiple media (images or sounds) associated with it. However, for the purpose of this project, we only consider the primary image of the observation.
+
     Attributes:
         observation_id: Unique identifier of observation
         taxon: Taxonomic classification of observation

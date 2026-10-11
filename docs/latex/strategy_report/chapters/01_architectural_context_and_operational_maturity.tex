@@ -34,7 +34,7 @@ By framing the infrastructure as an automated pipeline, the architecture mandate
 \midrule
 \textbf{0: Manual} & Isolated interactive notebooks; manual state handoffs. & Localized algorithm prototyping. \\
 \textbf{1: Pipeline} & Automated Directed Acyclic Graphs (DAGs); basic data validation. & Establishing a continuous training baseline. \\
-\textbf{2: CI/CD} & GitHub Actions integration; dynamic ONNX graph export. & Rapid, repeatable code releases. \\
+\textbf{2: CI/CD} & GitHub Actions and Jenkins integration; dynamic ONNX graph export. & Rapid, repeatable code releases. \\
 \textbf{3: Feedback} & Automated telemetry scraping; Active Learning triage queues. & Data-engine iterations and real-time concept drift detection. \\
 \textbf{4: Safety} & Split Conformal Prediction; Energy-Based OOD rejection. & Distribution-free coverage guarantees ($1 - \alpha$). \\
 \bottomrule
@@ -42,3 +42,18 @@ By framing the infrastructure as an automated pipeline, the architecture mandate
 \end{table}
 
 The comprehensive architecture diagram presented on the following page serves as the visual synthesis of this maturity framework. It maps the end-to-end TaxonVision-MLOps deployment strategy, detailing the physical separation between the offline classification engine and the continuous taxonomic Multimodal Knowledge Graph (MMKG). Furthermore, it illustrates the critical convergence of these dual pipelines at the inference serving boundary, where epistemic safety gates and active learning feedback loops guarantee sustained operational reliability.
+
+\section{Remote-Only Execution Principle}
+\label{sec:remote_only}
+
+A further design decision concerns the location at which computation takes place. The developer workstation is deliberately not provisioned for model training. It serves as an authoring, linting and orchestration plane, whereas every training run, hyperparameter search and ONNX compilation is executed on the bare-metal host described in Chapter~\ref{ch:infrastructure_topology}. These jobs are dispatched by the CI/CD controller only after all quality gates have been passed. This principle has three consequences:
+\begin{itemize}
+    \item \textbf{Reproducibility:} Each run starts from an ephemeral container and a frozen dependency lock file, so that the execution environment cannot drift between runs.
+    \item \textbf{Auditability:} The cryptographic dataset hash recorded by DVC is logged to the experiment tracker together with the metrics of every run, which links each model version to the exact data state it was trained on.
+    \item \textbf{Resource isolation:} Long-running GPU workloads cannot degrade the interactive responsiveness of the development machine, and they are scheduled alongside the serving workload under an explicit memory budget (Section~\ref{sec:gpu_partitioning}).
+\end{itemize}
+
+\section{Normative Architecture and Implementation Status}
+\label{sec:normative_status}
+
+This report distinguishes between the normative target architecture and the state of its implementation. Chapters~\ref{ch:infrastructure_topology} to~\ref{ch:hardware_math} describe the target architecture and the mathematical properties it is required to satisfy. The implementation status verified against the code base, including known deviations and open items, is consolidated in Section~\ref{sec:impl_status} of Chapter~\ref{ch:conclusion}. Numerical values given as design defaults, for example epoch budgets or batch sizes, are engineering guidelines and not measured results.

@@ -3,6 +3,7 @@
 """Inference service module encapsulating model loading, prediction, and uncertainty."""
 
 import io
+import logging
 import time
 from functools import lru_cache
 from pathlib import Path
@@ -18,6 +19,9 @@ from taxon_vision.config import get_settings
 from taxon_vision.models.factory import create_feature_extractor, get_feature_dimension
 from taxon_vision.models.head import TaxonClassifier
 from taxon_vision.uncertainty.conformal import ConformalPredictionEngine
+from taxon_vision.uncertainty.ood_detector import EnergyOODDetector
+
+logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
@@ -44,16 +48,16 @@ def get_classifier() -> TaxonClassifier:
     """Instantiate, restore checkpoint weights, and cache the vision classifier model.
 
     Why:
-        Deep neural network models (e.g. MobileNetV4, DINOv2) require tens or hundreds of megabytes of memory and non-trivial weight initialization time. Instantiating a new model per request would exhaust process memory and cause hundred-millisecond cold starts. Caches a single eval-mode TaxonClassifier instance in process memory.
+        Deep neural network models (e.g. DINOv3, MobileNetV4) require tens or hundreds of megabytes of memory and non-trivial weight initialization time. Instantiating a new model per request would exhaust process memory and cause hundred-millisecond cold starts. Caches a single eval-mode TaxonClassifier instance in process memory.
 
     How:
-        Loads backbone architecture configured in project settings, retrieves feature projection dimension, instantiates a TaxonClassifier with the corresponding linear classification head, restores checkpoint weights from disk if available, and locks the model in evaluation mode (`eval()`).
+        Loads backbone architecture configured in project settings with pre-trained weights (`pretrained=True`), retrieves feature projection dimension, instantiates a TaxonClassifier with the corresponding linear classification head, restores checkpoint weights from disk if available and shape-compatible, and locks the model in evaluation mode (`eval()`).
 
     Returns:
         Cached TaxonClassifier ready for zero-gradient evaluation.
     """
     settings = get_settings()
-    backbone = create_feature_extractor(settings.model.default_extractor, pretrained=False)
+    backbone = create_feature_extractor(settings.model.default_extractor, pretrained=True)
     dim = get_feature_dimension(backbone)
     num_classes = len(load_taxa_catalog())
 
@@ -62,7 +66,15 @@ def get_classifier() -> TaxonClassifier:
     checkpoint_path = Path(__file__).resolve().parent.parent.parent.parent / settings.model.head_checkpoint_path
 
     if checkpoint_path.exists():
-        classifier.head.load_state_dict(torch.load(checkpoint_path, weights_only=True))
+        state_dict = torch.load(checkpoint_path, weights_only=True)
+        if "1.weight" in state_dict and state_dict["1.weight"].shape == classifier.head[1].weight.shape:
+            classifier.head.load_state_dict(state_dict)
+        else:
+            logger.warning(
+                "Head checkpoint shape mismatch (%s vs %s); using initialized head",
+                state_dict.get("1.weight", torch.tensor([])).shape,
+                classifier.head[1].weight.shape,
+            )
 
     classifier.eval()
     return classifier
@@ -82,6 +94,22 @@ def get_conformal_engine() -> ConformalPredictionEngine:
         The cached ConformalPredictionEngine singleton.
     """
     return ConformalPredictionEngine()
+
+
+@lru_cache(maxsize=1)
+def get_ood_detector() -> EnergyOODDetector:
+    """Instantiate and cache the energy-based out-of-distribution detector.
+
+    Why:
+        Detects uninformative, non-biological, or out-of-catalog observations using
+        Helmholtz free energy scoring. Caching a singleton detector avoids re-reading
+        configuration parameters on each request.
+
+    Returns:
+        The cached EnergyOODDetector singleton.
+    """
+    settings = get_settings()
+    return EnergyOODDetector(energy_threshold=settings.ood.energy_threshold)
 
 
 @lru_cache(maxsize=1)
@@ -159,15 +187,23 @@ def run_prediction(image_bytes: bytes) -> dict[str, Any]:
     classifier = get_classifier()
     with torch.no_grad():
         logits = classifier(tensor)  # Shape: (1, num_classes)
-        probabilities = torch.softmax(logits, dim=1).numpy()[0]
+        logits_np = logits.squeeze(0).cpu().numpy()
+        probabilities = torch.softmax(logits, dim=1).cpu().numpy()[0]
 
     # Extract top prediction
     top1_idx = int(np.argmax(probabilities))
     top1_prob = float(probabilities[top1_idx])
 
+    # Out-of-distribution energy detection
+    ood_detector = get_ood_detector()
+    is_ood = ood_detector.is_ood(logits_np)
+
     # Uncertainty quantification
     conformal_engine = get_conformal_engine()
     pred_set_indices, is_uncertain = conformal_engine.predict_set(probabilities)
+
+    # Empty conformal set or OOD indicates uncertainty requiring human triage
+    requires_human_review = is_uncertain or is_ood or (len(pred_set_indices) == 0)
 
     # Map to taxa names
     predicted_taxon = taxa_catalog[top1_idx]
@@ -180,6 +216,7 @@ def run_prediction(image_bytes: bytes) -> dict[str, Any]:
         "common_name": predicted_taxon["common_name"],
         "confidence": top1_prob,
         "conformal_set": conformal_set_names,
-        "requires_human_review": is_uncertain,
+        "is_ood": is_ood,
+        "requires_human_review": requires_human_review,
         "latency_ms": elapsed_time_ms,
     }

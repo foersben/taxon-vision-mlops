@@ -1,0 +1,66 @@
+\definecolor{TaxonPrimary}{HTML}{1976D2}
+\definecolor{TaxonSecondary}{HTML}{388E3C}
+\definecolor{TaxonDark}{HTML}{263238}
+
+\begin{figure}[htbp]
+    \centering
+    \resizebox{\textwidth}{!}{
+    \begin{tikzpicture}[
+        node distance=1cm,
+        font=\sffamily\small,
+        host_box/.style={draw=TaxonDark, fill=gray!10, thick, rounded corners, rectangle, inner xsep=20pt, inner ysep=20pt},
+        k3s_box/.style={draw=TaxonPrimary, fill=TaxonPrimary!5, thick, rounded corners, rectangle, inner xsep=15pt, inner ysep=25pt},
+        ns_box/.style={draw=TaxonSecondary, fill=white, thick, rounded corners, rectangle, inner xsep=10pt, inner ysep=15pt, dashed},
+        component/.style={draw=TaxonDark, fill=white, thick, rounded corners, rectangle, align=center, minimum height=1cm, minimum width=3.5cm, drop shadow},
+        arrow/.style={-Stealth, thick, draw=TaxonDark}
+    ]
+
+        % Kube-system Namespace
+        \node[component] (coredns) {CoreDNS\\(Service Discovery)};
+        \node[component, below=of coredns] (nvplugin) {NVIDIA Device Plugin\\(DaemonSet)};
+        \begin{scope}[on background layer]
+            \node[ns_box, fit=(coredns) (nvplugin), label={[font=\bfseries, text=TaxonSecondary]above:Namespace: kube-system}] (kube_system) {};
+        \end{scope}
+
+        % Taxon-vision Namespace
+        \node[component, right=1.5cm of coredns] (api_svc) {NodePort 30080\\(Service)};
+        \node[component, below=of api_svc] (api_dep) {taxon-vision-api\\(Deployment: 2 Pods)};
+        \begin{scope}[on background layer]
+            \node[ns_box, fit=(api_svc) (api_dep), label={[font=\bfseries, text=TaxonSecondary]above:Namespace: taxon-vision}] (taxon_vision) {};
+        \end{scope}
+
+        % Jenkins-ci Namespace
+        \node[component, right=1.5cm of api_svc] (jenkins_ctrl) {Jenkins Controller};
+        \node[component, below=of jenkins_ctrl] (jenkins_agent) {jenkins-agent\\(Ephemeral Pods)};
+        \begin{scope}[on background layer]
+            \node[ns_box, fit=(jenkins_ctrl) (jenkins_agent), label={[font=\bfseries, text=TaxonSecondary]above:Namespace: jenkins-ci}] (jenkins_ci) {};
+        \end{scope}
+
+        % K3s Cluster Box
+        \begin{scope}[on background layer]
+            \node[k3s_box, fit=(kube_system) (taxon_vision) (jenkins_ci), label={[font=\bfseries, text=TaxonPrimary]above:K3s Single-Node Control Plane \& Worker (Flannel VXLAN CNI)}] (k3s_cluster) {};
+        \end{scope}
+
+        % Ingress Layer (Cloudflared)
+        \node[component, above=2cm of k3s_cluster] (cloudflared) {Cloudflare Zero-Trust Tunnel\\\texttt{cloudflared} daemon};
+
+        % Host Box
+        \begin{scope}[on background layer]
+            \node[host_box, fit=(cloudflared) (k3s_cluster), label={[font=\bfseries, text=TaxonDark]above:Physical Bare-Metal Host: \texttt{hive-mind} (Ubuntu 26.04.1 LTS, AMD Ryzen 9 9950X 16C/32T, 64\,GB DDR5 ECC, RTX 5070 Ti 16GB, NVMe)}] (host) {};
+        \end{scope}
+
+        % External users
+        \node[component, fill=TaxonPrimary!20, above=1.5cm of cloudflared] (external) {External HTTPS Traffic};
+
+        % Edges
+        \draw[arrow] (external) -- (cloudflared) node[midway, right] {Terminated at Edge};
+        \draw[arrow] (cloudflared) -- (api_svc);
+        \draw[arrow] (cloudflared) -- (jenkins_ctrl);
+        \draw[arrow] (api_svc) -- (api_dep);
+        \draw[arrow, dashed] (jenkins_ctrl) -- (jenkins_agent) node[midway, right] {Spawns};
+
+    \end{tikzpicture}
+    }
+    \caption{Hardware-to-cluster hosting topology illustrating the bare-metal host, zero-trust ingress, and Kubernetes namespace segmentation.}
+    \label{fig:host_and_cluster_topology}
+\end{figure}

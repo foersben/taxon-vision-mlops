@@ -8,9 +8,9 @@ service:
   allowed_mime_types: ["image/jpeg", "image/png", "image/webp"]
 
 model:
-  default_extractor: "mobilenetv4_conv_small"
+  default_extractor: "dinov3"
   fallback_extractor: "mobilenetv4_conv_small.e2400_r224_in1k"
-  available_extractors: ["bioclip-2", "dinov3_vits14", "dinov2_vits14", "mobilenetv4_conv_small", "efficientnet_b0"]
+  available_extractors: ["bioclip-2", "dinov3", "dinov3_vits14", "dinov2_vits14", "mobilenetv4_conv_small", "efficientnet_b0"]
   image_size: 224
   channels: 3
   mean: [0.485, 0.456, 0.406]
@@ -20,7 +20,8 @@ model:
   temperature: 1.0
   backbone_registry:
     bioclip-2: "hf-hub:imageomics/bioclip-2"
-    dinov3_vits14: "vit_small_patch14_dinov3"
+    dinov3: "vit_small_patch16_dinov3"
+    dinov3_vits14: "vit_small_patch16_dinov3"
     dinov2_vits14: "vit_small_patch14_dinov2.lvd142m"
     mobilenetv4_conv_small: "mobilenetv4_conv_small.e2400_r224_in1k"
     efficientnet_b0: "efficientnet_b0.ra_in1k"

@@ -60,6 +60,7 @@ venv/
 # Site documentation
 /site/
 site/
+docs/viz.html
 
 # Data & Model weights (DVC tracked)
 data/raw/
@@ -84,6 +85,7 @@ uv.lock
 *.log
 *.out
 *.toc
+*.synctex.gz
 _minted*/
 
 # Personal Scripts

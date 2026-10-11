@@ -25,6 +25,20 @@ def health() -> dict[str, str]:
     return {"status": "healthy", "service": "taxon-vision-mlops"}
 
 
+@router.get("/health/ready")
+def health_ready() -> dict[str, str]:
+    """Perform a readiness probe validating service initialization.
+
+    Why:
+        Kubernetes readiness probes require a dedicated endpoint to ensure
+        traffic is only routed to pods that have completed initialization.
+
+    Returns:
+        Dictionary reporting readiness status and service identifier.
+    """
+    return {"status": "ready", "service": "taxon-vision-mlops"}
+
+
 @router.get("/metrics")
 def metrics() -> Response:
     """Expose Prometheus telemetry metrics for scraping.

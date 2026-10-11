@@ -1,0 +1,129 @@
+\definecolor{DockerBlue}{HTML}{0288D1}
+\definecolor{DockerGreen}{HTML}{2E7D32}
+\definecolor{DockerAmber}{HTML}{F57F17}
+\definecolor{DockerSlate}{HTML}{455A64}
+\definecolor{DockerBg}{HTML}{ECEFF1}
+
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    node distance=1.1cm and 1.6cm,
+    font=\footnotesize,
+    >=stealth,
+    layerbox/.style={
+        rectangle,
+        rounded corners=4pt,
+        draw=DockerBlue,
+        fill=DockerBlue!8,
+        thick,
+        inner sep=7pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=5.5cm
+    },
+    secbox/.style={
+        rectangle,
+        rounded corners=4pt,
+        draw=DockerGreen,
+        fill=DockerGreen!8,
+        thick,
+        inner sep=7pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=5.5cm
+    },
+    runtimebox/.style={
+        rectangle,
+        rounded corners=4pt,
+        draw=DockerAmber,
+        fill=DockerAmber!8,
+        thick,
+        inner sep=7pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=5.5cm
+    },
+    groupbox/.style={
+        rectangle,
+        rounded corners=6pt,
+        draw=DockerSlate!50,
+        fill=DockerBg!50,
+        dashed,
+        inner sep=10pt
+    },
+    arrow/.style={
+        ->,
+        thick,
+        draw=DockerSlate
+    }
+]
+
+% Column 1: Image Construction & Layer Hierarchy
+\node[layerbox] (base) {
+    \textbf{Base Image Specification}\\
+    \scriptsize \texttt{FROM ghcr.io/prefix-dev/pixi:latest AS runner}\\
+    \scriptsize $\bullet$ High-performance Rust binary runtime\\
+    \scriptsize $\bullet$ Distroless-adjacent minimal footprint\\
+    \scriptsize $\bullet$ No redundant system build packages
+};
+
+\node[secbox, below=0.6cm of base] (nonroot) {
+    \textbf{Non-Root Security Hardening (UID 10001)}\\
+    \scriptsize \texttt{RUN groupadd -g 10001 appgroup \&\& \textbackslash{}}\\
+    \scriptsize \phantom{RUN } \texttt{useradd -u 10001 -g appgroup appuser}\\
+    \scriptsize \texttt{USER appuser}\\
+    \scriptsize $\bullet$ Eliminates CWE-250 (Unnecessary Privileges)\\
+    \scriptsize $\bullet$ Complies with Kubernetes \texttt{runAsNonRoot: true}
+};
+
+\node[layerbox, below=0.6cm of nonroot] (deps) {
+    \textbf{Cached Dependency Layering}\\
+    \scriptsize \texttt{COPY --chown=appuser:appgroup pyproject.toml pixi.lock ./}\\
+    \scriptsize \texttt{COPY --chown=appuser:appgroup src/ src/}\\
+    \scriptsize \texttt{RUN pixi install --frozen -e ci}\\
+    \scriptsize $\bullet$ CPU-only PyTorch 2.5.1 + ONNX Runtime 1.31.0\\
+    \scriptsize $\bullet$ Purges CUDA libraries ($\approx$3\,GB reduction)
+};
+
+% Column 2: Runtime Assets, Probing & Entrypoint
+\node[runtimebox, right=1.6cm of base] (assets) {
+    \textbf{Self-Contained Model Assets}\\
+    \scriptsize \texttt{COPY --chown=appuser:appgroup config/ config/}\\
+    \scriptsize \texttt{COPY --chown=appuser:appgroup models/checkpoints/ ...}\\
+    \scriptsize $\bullet$ Fully bundled INT8 ONNX \& PyTorch heads\\
+    \scriptsize $\bullet$ \textbf{Zero} runtime S3 network pulls at container start\\
+    \scriptsize $\bullet$ Deterministic sub-500\,ms bootstrap
+};
+
+\node[runtimebox, below=0.6cm of assets] (health) {
+    \textbf{Native Healthcheck Probe}\\
+    \scriptsize \texttt{HEALTHCHECK --interval=15s --timeout=3s ...}\\
+    \scriptsize \texttt{CMD pixi run --frozen -e ci python -c \textbackslash{}}\\
+    \scriptsize \phantom{CMD } \texttt{"import urllib.request; urlopen('.../ready')"}\\
+    \scriptsize $\bullet$ Uses Python \texttt{urllib.request} (Zero curl/wget)\\
+    \scriptsize $\bullet$ Asserts ONNX session warmup \& catalog hydration
+};
+
+\node[secbox, below=0.6cm of health] (entrypoint) {
+    \textbf{Exec-Form Signal Handling (PID 1)}\\
+    \scriptsize \texttt{ENTRYPOINT ["pixi", "run", "--frozen", "-e", "ci",}\\
+    \scriptsize \phantom{ENTRYPOINT } \texttt{"uvicorn", "taxon\_vision.service.api:app",}\\
+    \scriptsize \phantom{ENTRYPOINT } \texttt{"--host", "0.0.0.0", "--port", "8000"]}\\
+    \scriptsize $\bullet$ Bypasses shell wrapping (\texttt{/bin/sh -c})\\
+    \scriptsize $\bullet$ Propagates \texttt{SIGTERM} directly for zero-downtime drain
+};
+
+% Groupings
+\begin{scope}[on background layer]
+    \node[groupbox, fit=(base)(nonroot)(deps), label={[font=\bfseries, text=DockerBlue]above:OCI Layer Construction \& Security}] (g1) {};
+    \node[groupbox, fit=(assets)(health)(entrypoint), label={[font=\bfseries, text=DockerGreen]above:Runtime Execution \& Probing}] (g2) {};
+\end{scope}
+
+% Arrows
+\draw[arrow] (base) -- (nonroot);
+\draw[arrow] (nonroot) -- (deps);
+\draw[arrow] (deps.east) -- ++(0.8,0) |- (assets.west);
+\draw[arrow] (assets) -- (health);
+\draw[arrow] (health) -- (entrypoint);
+
+\end{tikzpicture}%
+}

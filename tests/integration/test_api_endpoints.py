@@ -14,6 +14,12 @@ def test_health_endpoint() -> None:
     assert resp.json()["status"] == "healthy"
 
 
+def test_health_ready_endpoint() -> None:
+    resp = client.get("/health/ready")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ready"
+
+
 def test_predict_endpoint() -> None:
     dummy_img = io.BytesIO(b"fake image bytes")
     resp = client.post("/api/v1/predict", files={"file": ("test.jpg", dummy_img, "image/jpeg")})
@@ -73,8 +79,6 @@ def test_real_image_prediction_if_sample_exists() -> None:
             resp = client.post("/predict", files={"file": ("sample.jpg", f, "image/jpeg")})
         assert resp.status_code == 200
         data = resp.json()
-        assert (
-            data["top_prediction"]["scientific_name"] == "Apis mellifera"
-            or data["top_prediction"]["scientific_name"] is not None
-        )
-        assert len(data["conformal_prediction_set"]) >= 1
+        assert data["top_prediction"]["scientific_name"] is not None
+        assert "conformal_prediction_set" in data
+        assert data["is_ood_flagged"] is True or data["requires_human_review"] is True

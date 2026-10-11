@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import mlflow
-import torch.nn as nn
+from torch import nn
 
 from taxon_vision.config import get_settings
 
@@ -125,6 +125,16 @@ def mlflow_run_scope(
         dataset_hash = _get_dvc_dataset_hash()
         if dataset_hash:
             mlflow.log_param("dvc_dataset_hash", dataset_hash)
+
+        try:
+            import subprocess
+
+            git_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+            git_branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
+            mlflow.set_tag("git.commit_sha", git_sha)
+            mlflow.set_tag("git.branch", git_branch)
+        except Exception as git_err:
+            logger.debug("Could not resolve git lineage tags: %s", git_err)
     except Exception as err:
         logger.debug("MLflow tracking setup skipped or unavailable: %s", err)
         active_run = None
@@ -188,11 +198,35 @@ def _promote_model_if_better(model: nn.Module, pr_auc: float) -> None:
     mlflow.log_metric("val_promotion_score", pr_auc)
 
     model_name = "taxon_vision_classifier"
+    input_dim = 1280
+    for module in model.modules():
+        if isinstance(module, nn.Linear):
+            input_dim = module.in_features
+            break
+
+    import torch
+
+    dummy_input = torch.randn(1, input_dim).numpy()
+
     try:
-        model_info = mlflow.pytorch.log_model(model, "model", registered_model_name=model_name)
-    except Exception as err:
-        logger.warning("Failed to log model to registry: %s", err)
-        return
+        model_info = mlflow.pytorch.log_model(
+            model,
+            name="model",
+            registered_model_name=model_name,
+            input_example=dummy_input,
+        )
+    except Exception:
+        try:
+            model_info = mlflow.pytorch.log_model(
+                model,
+                name="model",
+                registered_model_name=model_name,
+                input_example=dummy_input,
+                serialization_format="pickle",
+            )
+        except Exception as err:
+            logger.warning("Failed to log model to registry: %s", err)
+            return
 
     client = MlflowClient()
     try:

@@ -1,0 +1,113 @@
+\providecolor{TaxonPrimary}{HTML}{1976D2}
+\providecolor{TaxonSecondary}{HTML}{2E7D32}
+\providecolor{TaxonAccent}{HTML}{E65100}
+\providecolor{TaxonDark}{HTML}{212121}
+\providecolor{mgray}{HTML}{F5F5F5}
+\providecolor{mgrayborder}{HTML}{616161}
+
+\begin{figure}[htbp]
+    \centering
+    \resizebox{\textwidth}{!}{%
+    \begin{tikzpicture}[
+        node distance=1.2cm and 2cm,
+        font=\footnotesize,
+        >=stealth,
+        % Styles
+        headerbox/.style={
+            rectangle,
+            rounded corners=4pt,
+            draw=TaxonPrimary!80,
+            fill=TaxonPrimary!8,
+            thick,
+            inner sep=8pt,
+            align=left,
+            drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+            minimum width=6cm
+        },
+        bodybox/.style={
+            rectangle,
+            rounded corners=4pt,
+            draw=TaxonSecondary!80,
+            fill=TaxonSecondary!8,
+            thick,
+            inner sep=8pt,
+            align=left,
+            drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+            minimum width=6cm
+        },
+        auditbox/.style={
+            rectangle,
+            rounded corners=4pt,
+            draw=TaxonAccent!80,
+            fill=TaxonAccent!8,
+            thick,
+            inner sep=8pt,
+            align=center,
+            drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+            minimum width=6cm
+        },
+        rolebox/.style={
+            rectangle,
+            rounded corners=4pt,
+            draw=TaxonDark!80,
+            fill=mgray,
+            thick,
+            inner sep=6pt,
+            align=left,
+            drop shadow={opacity=0.1, shadow xshift=1pt, shadow yshift=-1pt},
+            minimum width=5.5cm
+        },
+        groupbox/.style={
+            rectangle,
+            rounded corners=6pt,
+            draw=mgrayborder,
+            fill=mgray,
+            dashed,
+            inner sep=12pt
+        },
+        connector/.style={
+            ->,
+            thick,
+            draw=mgrayborder
+        }
+    ]
+
+    % Left Panel: OKF v0.2 Knowledge Document Anatomy
+    \node[headerbox] (yaml) {\textbf{YAML Frontmatter Schema}\\ \scriptsize $\bullet$ \texttt{title} \\ \scriptsize $\bullet$ \texttt{type} (Guideline, Concept, Architecture, Runbook) \\ \scriptsize $\bullet$ \texttt{status} (stable, draft, deprecated) \\ \scriptsize $\bullet$ \texttt{stale\_after} (ISO 8601 UTC) \\ \scriptsize $\bullet$ \texttt{version}, \texttt{tags}};
+    \node[bodybox, below=0.5cm of yaml] (markdown) {\textbf{Document Body}\\ \scriptsize $\bullet$ GitHub-Flavored Markdown \\ \scriptsize $\bullet$ Strict Hyphenation (\texttt{-}) \\ \scriptsize $\bullet$ Unordered lists (\texttt{*}) \\ \scriptsize $\bullet$ Zero trailing whitespace};
+    \node[auditbox, below=0.8cm of markdown] (audit) {\textbf{Automated Audit Gate}\\ \scriptsize \texttt{scripts/validate\_okf.py} \\ \scriptsize Verifies parsing integrity, freshness compliance, \\ \scriptsize and frontmatter correctness across \texttt{.agents/}};
+
+    \begin{scope}[on background layer]
+        \node[groupbox, fit=(yaml)(markdown)(audit), label={[font=\bfseries, text=TaxonPrimary]above:OKF v0.2 Knowledge Document Anatomy}] (okf_group) {};
+    \end{scope}
+
+    \draw[connector] (yaml) -- (markdown);
+    \draw[connector] (markdown) -- (audit);
+
+    % Right Panel: AI Role Decision Matrix & Path Routing
+    \node[rolebox, right=2.5cm of yaml.north east, anchor=north] (r1) {\textbf{1. \texttt{@orchestrator}}\\ \scriptsize PM \& OKF enforcement};
+    \node[rolebox, below=0.15cm of r1] (r2) {\textbf{2. \texttt{@taxonomic-architect}}\\ \scriptsize DarwinCore schema \& taxon tree};
+    \node[rolebox, below=0.15cm of r2] (r3) {\textbf{3. \texttt{@mlops-data-engineer}}\\ \scriptsize Arrow streaming \& DVC S3 pipelines};
+    \node[rolebox, below=0.15cm of r3] (r4) {\textbf{4. \texttt{@model-engineer}}\\ \scriptsize Timm backbone \& loss implementations};
+    \node[rolebox, below=0.15cm of r4] (r5) {\textbf{5. \texttt{@inference-optimizer}}\\ \scriptsize ONNX Runtime INT8 \& CAM interpretability};
+    \node[rolebox, below=0.15cm of r5] (r6) {\textbf{6. \texttt{@uncertainty-safety-engineer}}\\ \scriptsize Conformal prediction \& Helmholtz energy OOD};
+
+    \node[rolebox, right=0.3cm of r1] (r7) {\textbf{7. \texttt{@active-learning-engineer}}\\ \scriptsize Triage queue \& human review};
+    \node[rolebox, below=0.15cm of r7] (r8) {\textbf{8. \texttt{@observability-engineer}}\\ \scriptsize Prometheus metrics \& Wasserstein drift};
+    \node[rolebox, below=0.15cm of r8] (r9) {\textbf{9. \texttt{@api-and-ui-developer}}\\ \scriptsize FastAPI REST \& HTMX views};
+    \node[rolebox, below=0.15cm of r9] (r10) {\textbf{10. \texttt{@qa-automator}}\\ \scriptsize Testing matrix \& code invariants};
+    \node[rolebox, below=0.15cm of r10] (r11) {\textbf{11. \texttt{@docs-librarian}}\\ \scriptsize LaTeX technical report \& OKF graph};
+    \node[rolebox, below=0.15cm of r11] (r12) {\textbf{12. \texttt{@git-operator}}\\ \scriptsize GPG signed commits \& releases};
+
+    \begin{scope}[on background layer]
+        \node[groupbox, fit=(r1)(r6)(r7)(r12), label={[font=\bfseries, text=TaxonDark]above:AI Role Decision Matrix \& Path Routing (\texttt{.agents/AGENTS.md})}] (role_group) {};
+    \end{scope}
+
+    % Connection between OKF and Roles
+    \draw[connector, dashed, <->] (okf_group.east) -- (role_group.west) node[midway, above, font=\scriptsize, align=center] {Context \& \\ Enforcement};
+
+    \end{tikzpicture}%
+    }
+    \caption{Open Knowledge Format (OKF v0.2) architecture and path-scoped AI agent role routing matrix.}
+    \label{fig:okf_agentic_governance}
+\end{figure}

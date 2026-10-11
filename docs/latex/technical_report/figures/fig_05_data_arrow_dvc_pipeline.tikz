@@ -1,0 +1,67 @@
+% Standalone TikZ Figure 05: Data Arrow & DVC Lineage Pipeline
+\providecolor{TaxonPrimary}{HTML}{1976D2}
+\providecolor{TaxonSecondary}{HTML}{388E3C}
+\providecolor{TaxonAccent}{HTML}{F57C00}
+\providecolor{TaxonDark}{HTML}{212121}
+
+\begin{tikzpicture}[
+    node distance=1.5cm and 1cm,
+    font=\sffamily\small,
+    source/.style={cylinder, draw=TaxonDark, fill=TaxonPrimary!15, thick, aspect=0.25, minimum height=1.5cm, minimum width=3.5cm, shape border rotate=90, align=center, text width=4cm, drop shadow},
+    process/.style={rectangle, draw=TaxonDark, fill=TaxonSecondary!15, thick, rounded corners, minimum width=6cm, minimum height=1.2cm, align=center, text width=6cm, drop shadow},
+    gate/.style={diamond, draw=TaxonAccent, fill=TaxonAccent!15, thick, aspect=2, text width=2.5cm, align=center, drop shadow},
+    artifact/.style={rectangle, draw=TaxonPrimary, fill=TaxonPrimary!10, thick, minimum width=4cm, minimum height=1.2cm, align=center, text width=4.5cm, drop shadow},
+    arrow/.style={-{Stealth[scale=1.2]}, thick, TaxonDark},
+    dashed_arrow/.style={-{Stealth[scale=1.2]}, thick, dashed, TaxonDark},
+    stage_box/.style={rectangle, draw=TaxonDark!40, dashed, inner sep=15pt, rounded corners=5pt}
+]
+
+% 1. Ingestion Stage
+\node[source] (gbif) {GBIF DarwinCore\\Archives};
+\node[source, right=1.5cm of gbif] (inat) {iNaturalist Open Data\\Registry (AWS S3 mirror)};
+
+\node[process, below=1.5cm of $(gbif)!0.5!(inat)$] (streamer) {\textbf{S3Streamer}\\Chunked retrieval avoiding full-dataset RAM buffering};
+
+% 2. Gating Stage
+\node[gate, below=2cm of streamer] (license) {LicenseFilter\\Open Licensing};
+\node[rectangle, draw=TaxonSecondary, fill=TaxonSecondary!10, rounded corners, right=0.5cm of license, text width=4.5cm, align=center, drop shadow] (admitted) {\textbf{Admitted}\\CC0, CC-BY, CC-BY-NC\\(Photographer attribution\\record preserved)};
+\node[rectangle, draw=TaxonAccent, fill=TaxonAccent!10, rounded corners, left=0.5cm of license, text width=4.5cm, align=center, drop shadow] (rejected) {\textbf{Rejected}\\CC-BY-ND, All-Rights-Reserved,\\unverified static domain hotlinks};
+
+% 3. Serialisation Stage
+\node[process, below=2cm of license] (arrow_serial) {\textbf{Apache Arrow}\\RecordBatch \& Table};
+\node[artifact, below=1.2cm of arrow_serial] (parquet) {\textbf{observations.parquet}\\Snappy-compressed\\serialisation};
+
+% 4. Versioning Stage
+\node[process, below=2cm of parquet] (dvc_hash) {\textbf{DVC Content-Addressed Storage}\\MD5 hash computation over\\dataset manifest directory};
+
+\node[artifact, left=0.5cm of dvc_hash] (dvc_file) {\textbf{data/sample.dvc}\\Pointer generation\\(md5, size, nfiles)\\(Git commit tracking only\\small text files)};
+\node[artifact, right=0.5cm of dvc_hash] (dagshub) {\textbf{DagsHub S3 Endpoint}\\\texttt{s3://dvc} via HTTPS HMAC credentials\\\texttt{dvc push} synchronisation};
+
+% Background stages
+\begin{scope}[on background layer]
+    \node[stage_box, fill=TaxonPrimary!5, fit=(gbif) (inat) (streamer)] (stage1) {};
+    \node[anchor=north west, font=\bfseries\color{TaxonPrimary}] at (stage1.north west) {1. Streaming Ingestion};
+
+    \node[stage_box, fill=TaxonSecondary!5, fit=(license) (admitted) (rejected)] (stage2) {};
+    \node[anchor=north west, font=\bfseries\color{TaxonSecondary}] at (stage2.north west) {2. Ingestion Gate};
+
+    \node[stage_box, fill=TaxonAccent!5, fit=(arrow_serial) (parquet)] (stage3) {};
+    \node[anchor=north west, font=\bfseries\color{TaxonAccent}] at (stage3.north west) {3. Columnar Serialisation};
+
+    \node[stage_box, fill=TaxonDark!5, fit=(dvc_hash) (dvc_file) (dagshub)] (stage4) {};
+    \node[anchor=north west, font=\bfseries\color{TaxonDark}] at (stage4.north west) {4. Versioning Stage};
+\end{scope}
+
+% Arrows
+\draw[arrow] (gbif) -- (streamer);
+\draw[arrow] (inat) -- (streamer);
+\draw[arrow] (streamer) -- (license);
+\draw[arrow] (license) -- node[above, font=\bfseries\color{TaxonSecondary}] {Pass} (admitted);
+\draw[arrow] (license) -- node[above, font=\bfseries\color{TaxonAccent}] {Fail} (rejected);
+\draw[arrow] (admitted.south) |- (arrow_serial.east);
+\draw[arrow] (arrow_serial) -- (parquet);
+\draw[arrow] (parquet) -- (dvc_hash);
+\draw[arrow] (dvc_hash) -- node[above] {Pointer} (dvc_file);
+\draw[arrow] (dvc_hash) -- node[above] {Sync} (dagshub);
+
+\end{tikzpicture}

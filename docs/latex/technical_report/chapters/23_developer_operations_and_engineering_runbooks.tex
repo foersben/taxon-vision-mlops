@@ -1,0 +1,177 @@
+% !TeX root = ../technical_report.tex
+\chapter{Developer Operations, Environment Setup, and Engineering Runbooks}
+\label{ch:developer_runbooks}
+
+% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
+% -------------------------------------------------------------
+% Focus: Standard operating procedures, onboarding runbooks, troubleshooting, and maintenance protocols.
+% Repository Files:
+%   - docs/operations/index.md
+%   - docs/operations/jenkins_ci_infrastructure.md
+%   - docs/operations/implementation_status.md
+%   - scripts/unlock_taxon.sh
+%   - scripts/verify_deployment.sh
+% Operational Procedures to Document:
+%   - Workstation Onboarding: installing Pixi, running 'just install', environment lock verification.
+%   - DVC Remote Sync Runbook: configuring DagsHub credentials, executing dvc pull / dvc push.
+%   - Local Testing and Quality Check Runbook: 'just test', 'just lint', 'just complexity', 'just okf-validate'.
+%   - Remote Jenkins GPU Execution Runbook: inspecting Kubernetes pods in jenkins-ci namespace,
+%     debugging time-slicing slot allocation on hive-mind, troubleshooting PyTorch cu128 / Blackwell kernels.
+%   - Rollout and Emergency Rollback Runbook: kubectl rollout undo deployment/taxon-vision-api in taxon-vision namespace.
+% -------------------------------------------------------------
+
+\section{Developer Workstation Onboarding and Environment Setup}
+\label{sec:workstation_onboarding}
+
+The TaxonVision platform enforces absolute determinism for all developer environments, circumventing the dependency drift typically associated with local \texttt{virtualenv} or system-level Python installations. This determinism is achieved through a rigid, zero-configuration bootstrap sequence leveraging the Pixi package manager. The onboarding procedure requires that the local workstation operates on a modern Linux kernel equipped with \texttt{glibc}, alongside an NVIDIA proprietary driver stack (version 550.xx or higher) to support the CUDA 12.8 user-mode components required for Blackwell architecture execution. Furthermore, standard tooling including Git and Pixi must be available in the system execution path.
+
+The initial hydration of the repository environment is initiated by a single deterministic command which resolves the strict cryptographic hashes embedded in the \texttt{pixi.lock} file.
+
+\begin{minted}{bash}
+# Initialise the deterministic developer environment
+pixi install -e dev
+\end{minted}
+
+Following the environment resolution, developers must authenticate with the DagsHub S3-compatible remote storage in order to facilitate Data Version Control (DVC) operations. The system avoids plaintext credential files; instead, credentials are automatically resolved from the local Linux Secret Service (via KeePassXC). Finally, to guarantee that no unformatted or syntactically invalid code permeates the repository, all mandatory Git pre-commit hooks are installed locally.
+
+\begin{minted}{bash}
+# Register Git pre-commit hooks for quality enforcement
+pixi run --frozen -e dev pre-commit install
+\end{minted}
+
+For local validation of infrastructure components such as Prometheus, Grafana, and MinIO object storage without polluting the host operating system, a dedicated Docker Compose topology is provided as a fallback.
+
+\begin{minted}{bash}
+# Initialise local telemetry and storage infrastructure
+docker compose -f docker-compose.local.yaml up -d
+\end{minted}
+
+
+\section{Day-to-Day Development Operations}
+\label{sec:day_to_day_operations}
+
+The TaxonVision repository abstracts all complex development sequences, testing gates, and pipeline orchestrations through a central command runner defined in the \texttt{Justfile}. This abstraction ensures that commands executed locally on developer workstations precisely mirror the automation sequences executed within the remote continuous integration clusters.
+
+To preserve codebase integrity and syntactic conformity, all static analysis and linting operations are grouped under the \texttt{just check} recipe. This command triggers the \texttt{ruff} linter and formatter, alongside the \texttt{mypy} strict type checker.
+
+\begin{minted}{bash}
+# Execute all pre-commit quality hooks across the repository
+just check
+\end{minted}
+
+Software robustness is guaranteed via comprehensive test suites and cognitive complexity scanning. The \texttt{just test} operation invokes the \texttt{pytest} framework with strict coverage enforcement, whilst \texttt{just complexity} utilises the \texttt{complexipy} module to detect and reject functions exceeding cognitive complexity thresholds.
+
+\begin{minted}{bash}
+# Execute the pytest suite with coverage enforcement
+just test
+
+# Scan cognitive complexity thresholds
+just complexity
+\end{minted}
+
+When local verification of machine learning logic is required, developers may initiate the PyTorch model head training sequence. This workflow, invoked via \texttt{just train}, simulates the entire feature extraction, class-balanced loss computation, and Optuna hyperparameter tuning lifecycle on the local hardware before pushing to the remote GPU orchestrator.
+
+\begin{minted}{bash}
+# Initiate PyTorch head training and Optuna tuning
+just train
+\end{minted}
+
+Finally, for integration testing of the Application Programming Interface (API) and the unified operator interface, the \texttt{just serve} directive launches the FastAPI service. This provisions the REST endpoints and the HTMX dashboard on the local loopback interface at \texttt{http://127.0.0.1:8000}, enabling real-time inspection of inference latency and conformal prediction boundaries.
+
+\begin{minted}{bash}
+# Launch the local FastAPI service on port 8000
+just serve
+\end{minted}
+
+\section{Disaster Recovery and Operational Runbooks}
+\label{sec:cluster_ops_and_rollback}
+
+\input{figures/fig_16_disaster_recovery_and_runbooks.tikz}
+
+The operational complexity of managing bare-metal Kubernetes clusters interwoven with hardware-accelerated machine learning workloads necessitates rigorous diagnostic and recovery procedures. The following runbooks formalise the response to common systemic failures.
+
+\subsection{Runbook 1: GPU Hardware Preemption and Time-Slicing Contention}
+Because consumer graphics cards omit Multi-Instance GPU (MIG) hardware isolation, the cluster relies on software time-slicing multiplexing. Should a rogue pod aggressively bypass memory fraction budgets (\texttt{TAXON\_CUDA\_MEMORY\_FRACTION}), the host may experience catastrophic CUDA Out-Of-Memory (OOM) events, starving concurrent inference pods.
+
+\textbf{Diagnosis:} Inspect the node allocations to verify if all virtual slots are consumed.
+\begin{minted}{bash}
+kubectl get nodes "-o=custom-columns=NAME:.metadata.name,GPU:.status.allocatable.nvidia\.com/gpu"
+\end{minted}
+
+\textbf{Resolution:} Reset the NVIDIA Kubernetes device plugin to flush stale memory locks and restore time-slicing boundaries.
+\begin{minted}{bash}
+kubectl rollout restart daemonset nvidia-device-plugin-daemonset -n kube-system
+\end{minted}
+
+\subsection{Runbook 2: Corrupted DVC Storage and Cache Rehydration}
+Data Version Control (DVC) caches are immutable by design, but physical disk failures, abrupt power losses, or aborted Parquet serialisations may corrupt local object hashes. When training pipelines fail with \texttt{ChecksumMismatchError}, the local cache must be purged and rehydrated from the remote DagsHub S3 bucket.
+
+\textbf{Resolution:} Clear the offending cache block and execute a clean remote pull.
+\begin{minted}{bash}
+rm -rf .dvc/cache/*
+just dvc-pull
+\end{minted}
+
+\subsection{Runbook 3: Zero-Downtime Deployment Rollback}
+The CI/CD pipeline enforces a zero-downtime rolling update via the \texttt{maxSurge: 1} invariant. If a newly deployed FastAPI pod passes initial readiness probes but subsequently exhibits catastrophic regression during inference (e.g., ONNX Runtime segmentation faults), the rollout must be reverted immediately to preserve API stability.
+
+\textbf{Resolution:} Revert the deployment to the previous known-stable \texttt{ReplicaSet}.
+\begin{minted}{bash}
+kubectl rollout undo deployment/taxon-vision-api -n taxon-vision
+\end{minted}
+
+\subsection{Runbook 4: Jenkins Agent Node Drain and Ephemeral Pod Stuck in Pending}
+Jenkins orchestrates CI/CD jobs via ephemeral pods in the \texttt{jenkins-ci} namespace. If these pods languish indefinitely in a \texttt{Pending} state, the root cause typically involves either an inability to bind to the host-path Persistent Volume Claims (PVC) for the Rattler cache, or a failure in Role-Based Access Control (RBAC) authorisation via the \texttt{jenkins-agent} ServiceAccount.
+
+\textbf{Diagnosis:} Inspect the events of the pending pod to ascertain the scheduling failure.
+\begin{minted}{bash}
+kubectl describe pods -n jenkins-ci -l jenkins/label=ml-runner
+\end{minted}
+
+\textbf{Resolution:} Verify that the \texttt{jenkins-deployer-role} bindings are intact, and if necessary, cordon and drain the node to evict deadlocked workloads before uncordoning.
+
+\section{Implementation Status Matrix}
+\label{sec:implementation_status_matrix}
+
+This section outlines the implementation status, mapping what is currently operational in the Phase 1 codebase versus what is scheduled for Phase 2/3.
+
+\begin{table}[htbp]
+\centering
+\caption{Implementation Status Matrix (Phase 1 vs Phase 2/3)}
+\label{tab:implementation_status}
+\begin{tabularx}{\textwidth}{@{}X X@{}}
+\toprule
+\textbf{Fully Implemented \& Verified in Phase 1} & \textbf{Planned / Phase 2 \& 3 Roadmap} \\ \midrule
+Pixi dual-target toolchain (\texttt{dev}, \texttt{ci-dev}, \texttt{ci}, \texttt{default}) with cryptographic \texttt{pixi.lock}. & Real biological backbone feature pre-computation replacing synthetic training fixtures. \\ \addlinespace
+Single-node k3s on bare-metal \texttt{hive-mind} with NVIDIA time-slicing (4 slots). & Live automated webhook retraining trigger from Prometheus/Evidently drift thresholds. \\ \addlinespace
+Cloudflare Zero-Trust Tunnel with outbound-only routing. & Full bidirectional Label Studio annotation synchronization loop via DagsHub. \\ \addlinespace
+Jenkins ephemeral agent pipeline with PyTorch 2.7.0 \texttt{cu128} on Blackwell SM 120. & Vision RAG multimodal knowledge graph and HNSW rank fusion. \\ \addlinespace
+DVC dataset versioning with DagsHub S3 remote and KeePassXC secret resolution. & \\ \addlinespace
+DarwinCore taxonomic hierarchy models and strict CC0 / CC-BY / CC-BY-NC license validation. & \\ \addlinespace
+Pre-cached feature training loop with Class-Balanced Loss, Optuna ASHA pruning, and MLflow logging. & \\ \addlinespace
+Split Conformal Prediction engine with mathematical coverage guarantee ($1 - \alpha$). & \\ \addlinespace
+Energy-based out-of-distribution (OOD) detection score. & \\ \addlinespace
+Wasserstein-1 embedding drift detector ($W_1$ norm distance) and two-tier drift strategy. & \\ \addlinespace
+BADGE active learning diversity query strategy. & \\ \addlinespace
+Unified FastAPI service with server-rendered Jinja2/HTMX operator dashboard and INT8 ONNX runtime fallback. & \\ \bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Maintenance Runbooks and Dependency Lifecycle}
+\label{sec:maintenance_runbooks}
+
+Continuous maintenance of the repository's cryptographic dependency graph is a critical operational requirement. Over time, upstream Conda and PyPI packages will release security patches and performance optimisations. Updating these dependencies must remain strictly deterministic to avoid regressions across the ephemeral Jenkins runners.
+
+To safely advance the dependency graph, the engineer must invoke the Pixi package manager to resolve the updated dependencies and cryptographically regenerate the \texttt{pixi.lock} file.
+
+\begin{minted}{bash}
+# Deterministically update the dependency graph
+pixi update
+\end{minted}
+
+Furthermore, the introduction of new dependencies poses significant legal risks for open-source repositories. To mitigate licensing violations, any modification to the dependency graph mandates the execution of the automated licence auditing script prior to committing the updated lockfile. This script traverses the entire PyPI and Conda metadata tree, asserting that all newly introduced packages adhere to permissive open-source licences (e.g., MIT, Apache-2.0, BSD).
+
+\begin{minted}{bash}
+# Audit open-source licence compliance across all dependencies
+pixi run -e dev python scripts/audit_license_compliance.py
+\end{minted}

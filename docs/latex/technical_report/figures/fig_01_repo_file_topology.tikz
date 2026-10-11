@@ -1,0 +1,81 @@
+\definecolor{TaxonPrimary}{HTML}{1976D2}
+\definecolor{TaxonSecondary}{HTML}{2E7D32}
+\definecolor{TaxonAccent}{HTML}{E65100}
+\definecolor{mgray}{HTML}{F5F5F5}
+\definecolor{mgrayborder}{HTML}{616161}
+
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    node distance=1.5cm and 2cm,
+    font=\footnotesize,
+    >=stealth,
+    % Styles
+    corebox/.style={
+        rectangle,
+        rounded corners=4pt,
+        draw=TaxonPrimary!80,
+        fill=TaxonPrimary!8,
+        thick,
+        inner sep=8pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=4.5cm,
+        minimum height=1.2cm
+    },
+    extbox/.style={
+        rectangle,
+        rounded corners=4pt,
+        draw=TaxonSecondary!80,
+        fill=TaxonSecondary!8,
+        thick,
+        inner sep=8pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=4.5cm,
+        minimum height=1.2cm
+    },
+    groupbox/.style={
+        rectangle,
+        rounded corners=6pt,
+        draw=mgrayborder,
+        fill=mgray,
+        dashed,
+        inner sep=12pt
+    },
+    connector/.style={
+        ->,
+        thick,
+        draw=mgrayborder
+    }
+]
+
+% Nodes for Monorepo Core Subsystems
+\node[corebox] (src) {\textbf{\texttt{src/taxon\_vision/}}\\ {\scriptsize Domain, Models, Uncertainty, Service, Data}};
+\node[corebox, below=0.6cm of src] (config) {\textbf{\texttt{config/}}\\ {\scriptsize Hydra hierarchies}};
+\node[corebox, below=0.6cm of config] (deploy) {\textbf{\texttt{deploy/}}\\ {\scriptsize Kubernetes, Docker}};
+\node[corebox, right=1.0cm of src] (scripts) {\textbf{\texttt{scripts/}}\\ {\scriptsize Audits, Validation}};
+\node[corebox, below=0.6cm of scripts] (tests) {\textbf{\texttt{tests/}}\\ {\scriptsize Unit, Invariants}};
+\node[corebox, below=0.6cm of tests] (agents) {\textbf{\texttt{.agents/}}\\ {\scriptsize OKF Governance}};
+
+% Grouping Core Subsystems
+\begin{scope}[on background layer]
+    \node[groupbox, fit=(src)(config)(deploy)(scripts)(tests)(agents), label={[font=\bfseries, text=TaxonPrimary]above:Monorepo Core Subsystems}] (core_group) {};
+\end{scope}
+
+% Nodes for File Extension Invariants
+\node[extbox, right=2.0cm of scripts] (dvc) {\textbf{\texttt{.dvc}}\\ {\scriptsize CAS pointer}};
+\node[extbox, below=0.3cm of dvc] (parquet) {\textbf{\texttt{.parquet}}\\ {\scriptsize Arrow observation tables}};
+\node[extbox, below=0.3cm of parquet] (onnx) {\textbf{\texttt{.onnx}}\\ {\scriptsize Serving graph}};
+\node[extbox, below=0.3cm of onnx] (pt) {\textbf{\texttt{.pt}}\\ {\scriptsize Trained PyTorch weights}};
+\node[extbox, below=0.3cm of pt] (pixi) {\textbf{\texttt{pixi.lock} / \texttt{pixi.toml}}\\ {\scriptsize Environment seal}};
+
+% Grouping File Extension Invariants
+\begin{scope}[on background layer]
+    \node[groupbox, fit=(dvc)(parquet)(onnx)(pt)(pixi), label={[font=\bfseries, text=TaxonSecondary]above:File Extension Invariants}] (ext_group) {};
+\end{scope}
+
+% Arrows
+\draw[connector] (core_group.east) -- ++(1,0) |- (ext_group.west);
+
+\end{tikzpicture}%
+}
