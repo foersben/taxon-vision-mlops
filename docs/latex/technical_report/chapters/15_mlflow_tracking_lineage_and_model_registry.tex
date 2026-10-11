@@ -2,33 +2,36 @@
 \chapter{Experiment Tracking, Cryptographic Lineage, and MLflow Model Registry}
 \label{ch:mlflow_tracking_and_registry}
 
-% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
-% -------------------------------------------------------------
-% Focus: Experiment provenance, RAII tracking scopes, DagsHub remote MLflow, and model promotion.
-% Repository Files:
-%   - src/taxon_vision/models/training/tracking.py
-% Detailed Technical Concepts:
-%   - Remote Server Infrastructure:
-%       * DagsHub MLflow tracking endpoint (https://dagshub.com/foersben/taxon-vision-mlops.mlflow).
-%       * Credentials handling via MLFLOW_TRACKING_USERNAME and MLFLOW_TRACKING_PASSWORD.
-%   - RAII Lifecycle Scope (mlflow_run_scope):
-%       * Deterministic lifecycle bounds (Resource Acquisition Is Initialization).
-%       * Catches exceptions to mark runs as FAILED, ensures FINISHED on success.
-%       * Offline resiliency: degrades gracefully if remote server is unreachable.
-%   - End-to-End Cryptographic Lineage:
-%       * git.commit_sha and git.branch extracted dynamically.
-%       * dvc_dataset_hash parsed directly from dvc.lock (ingestion stage output MD5).
-%       * Hardware tags (cuda_memory_fraction, GPU arch).
-%   - Automated Model Promotion Lifecycle (_promote_model_if_better):
-%       * Model registered under 'taxon_vision_classifier'.
-%       * Aliases: Production, Challenger (if candidate outperforms baseline Macro PR-AUC), Archived (if worse).
-% -------------------------------------------------------------
-
 \section{Experiment Tracking Architecture on DagsHub}
 \label{sec:dagshub_experiment_tracking}
+The rigorous quantification of experimental outcomes is a foundational prerequisite for iterative model optimisation. In order to centralise experiment metadata across distributed training nodes and ephemeral continuous integration agents, the platform integrates MLflow as its primary telemetric ledger. The remote tracking server is hosted externally at \texttt{https://dagshub.com/foersben/taxon-vision-mlops.mlflow}, thereby decoupling the experiment database from local storage constraints.
+
+Authentication against the remote DagsHub endpoint operates exclusively through non-interactive environment credentials. Within the declarative Jenkins pipeline, the \texttt{MLFLOW\_TRACKING\_USERNAME} and \texttt{MLFLOW\_TRACKING\_PASSWORD} environment variables are securely provisioned via the \texttt{DAGSHUB\_TOKEN} credential. This strict non-interactive protocol ensures that CI/CD training loops proceed autonomously, while local developer environments replicate this behaviour by exporting equivalent tokens into their initialisation scripts.
+
+Experiment naming schemes are strictly enforced via the declarative configuration schema (\texttt{settings.mlflow.experiment\_name}). This guarantees that runs are canonically grouped, preventing metadata fragmentation. Furthermore, hyperparameter optimisation phases, executed via Optuna Bayesian search, naturally generate nested run hierarchies; individual trials are registered as child runs beneath a singular parent execution, thereby preserving structural clarity within the MLflow interface.
 
 \section{Deterministic Lifecycle Management via RAII Scopes}
 \label{sec:raii_lifecycle_management}
+The orchestration of machine learning training loops frequently encounters unpredictable termination events, such as out-of-memory anomalies or network partitions. Unhandled exceptions during these events traditionally leave orphaned, corrupted runs in the registry. To eradicate this fragility, the platform enforces Resource Acquisition Is Initialization (RAII) semantics through the \texttt{mlflow\_run\_scope} context manager.
 
-\section{Cryptographic Lineage Capture and Automated Model Promotion}
+This deterministic scope bounds the lifetime of an MLflow execution. Upon initialisation, the context manager actively configures the tracking URI, instantiates the run, and records the initial hyperparameter dictionaries alongside cryptographic data hashes. During execution, it yields the active run object to the underlying training loop. Should an unhandled exception propagate, the context manager intercepts the failure and safely terminates the run by mutating its status to \texttt{FAILED} prior to re-raising the exception. In the absence of errors, execution log file artefacts are attached, and the run resolves formally as \texttt{FINISHED}.
+
+Crucially, this architecture incorporates graceful offline degradation. If the DagsHub tracking server becomes unreachable due to a network partition, the context manager intercepts the connection fault, emits a local debug notice, and yields \texttt{None}. This guarantees that disconnected CI tests or local workstation development loops are never impeded by transient telemetry failures.
+
+\section{Cryptographic Data-Model Lineage and Immutable Invariants}
 \label{sec:cryptographic_lineage_and_promotion}
+A fundamental invariant of auditable MLOps pipelines is end-to-end traceability: every compiled model checkpoint must be cryptographically linked to the precise dataset snapshot utilised during its training. This invariant is mechanised by the \texttt{\_get\_dvc\_dataset\_hash} routine, which surgically parses the \texttt{dvc.lock} manifest prior to training. By traversing the Directed Acyclic Graph (DAG) defined within the lock file, the routine extracts the MD5 checksum corresponding to the \texttt{data/manifests} output artefact.
+
+This dataset checksum is subsequently persisted as the \texttt{dvc\_dataset\_hash} parameter within the MLflow run. Concurrently, the Git commit SHA (\texttt{git.commit\_sha}) and active branch identifier (\texttt{git.branch}) are extracted via shell invocation and bound as immutable run tags. Additional parameters, including the vision backbone architecture and the PyTorch per-process memory fraction (\texttt{cuda-memory-fraction}), are logged alongside these lineage markers. Consequently, any given checkpoint can be retroactively audited to determine its exact computational provenance.
+
+\section{Metric Telemetry and Visualisation Curves}
+\label{sec:metric_telemetry}
+Real-time evaluation of generalisation capacity is achieved by streaming per-epoch metrics to the remote tracking server. The \texttt{\_log\_mlflow\_metrics} subroutine iterates over the evaluation history, sequentially emitting the training loss (\texttt{train\_loss}), validation loss (\texttt{val\_loss}), top-1 accuracy (\texttt{val\_accuracy}), balanced F1 score (\texttt{val\_f1}), and Macro PR-AUC (\texttt{val\_pr\_auc}) at discrete epoch steps. This chronological streaming enables the immediate visualisation of convergence trajectories and the early identification of overfitting phenomena. Furthermore, the overall training latency is quantified via the \texttt{duration\_seconds} metric, allowing continuous profiling of execution efficiency across varied infrastructure tiers.
+
+\section{Artefact Persistence and MLflow Model Registry Promotion}
+\label{sec:model_promotion}
+Upon successful completion of the training epoch loop, physical artefacts encompassing the trained PyTorch classification head (\texttt{head.pt}), the quantised computational graph (\texttt{model.onnx}), and Optuna study parameter visualisations are serialised and persisted as MLflow artefacts.
+
+Automated continuous deployment necessitates programmatic gating for model promotion. This gating logic is formalised within the \texttt{\_promote\_model\_if\_better} subroutine. Following artefact registration under the canonical name \texttt{taxon\_vision\_classifier}, the newly trained candidate is evaluated against the current production baseline. The evaluation criterion is strictly the Macro PR-AUC score (\texttt{val\_promotion\_score}), ensuring that generalisation across both dominant and rare taxa is preserved.
+
+If the candidate outperforms the incumbent \texttt{Production} alias, it is automatically tagged with the \texttt{Challenger} alias, signalling its readiness for canary deployment. Conversely, inferior models are relegated to the \texttt{Archived} state. In the event that no baseline production model exists, the initial candidate is intrinsically promoted to \texttt{Production}. This mathematically rigorous promotion matrix guarantees that algorithmic regressions are systemically blocked from entering the production serving environment.
