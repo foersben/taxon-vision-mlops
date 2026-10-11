@@ -140,7 +140,7 @@ This directive instructs the container runtime to execute the specified command 
 
 A defining characteristic of this healthcheck implementation is the reliance upon the Python standard library (\texttt{urllib.request}) rather than external utilities such as \texttt{curl} or \texttt{wget}. The \texttt{ghcr.io/prefix-dev/pixi:latest} base image, akin to distroless paradigms, is intentionally stripped of general-purpose network utilities to diminish the attack surface. Introducing \texttt{curl} solely for the purpose of health monitoring would violate this security postulate.
 
-The command \texttt{python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready')"} executes a lightweight HTTP GET request against the FastAPI readiness endpoint. This endpoint does not merely confirm the viability of the HTTP socket; it executes a deep validation sequence, verifying that the ONNX model has completed its warmup compilation phase, that the class-balanced loss taxonomies are successfully parsed from the YAML configuration, and that the feature extraction cache is fully hydrated. Only upon successful verification of these internal states does the endpoint return an HTTP 200 OK status, signaling that the container is fully prepared to ingest prediction requests.
+The command \texttt{python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready')"} executes a lightweight HTTP GET request against the FastAPI readiness endpoint (\texttt{/health/ready}). In the active service implementation (\texttt{src/taxon\_vision/service/routes/health.py}), this probe returns an immediate payload \texttt{\{"status": "ready", "service": "taxon-vision-mlops"\}}, confirming that the ASGI process has completed its initialisation sequence, mounted its application routes, and established its TCP listener. Crucially, the architectural design decouples the probe from runtime disk I/O, database queries, and live model tensor operations. Heavy neural network instantiation, ONNX session graph compilation, and taxonomic catalogue loading are executed strictly once during application startup lifespan memoisation. Keeping the readiness probe lightweight and non-blocking prevents false-positive timeouts, flapping pod statuses, and cascading container restarts during high CPU load.
 
 \section{OCI Image Size and Attack Surface Minimisation}
 \label{sec:image_size_minimisation}
@@ -168,3 +168,70 @@ ENTRYPOINT ["pixi", "run", "--frozen", "-e", "ci", "uvicorn", "taxon_vision.serv
 The \texttt{ENTRYPOINT} instruction utilises the JSON array syntax (exec form) rather than the shell form (\texttt{ENTRYPOINT command param1 param2}). The shell form implicitly invokes \texttt{/bin/sh -c}, which spawns a shell process as PID 1, subsequently executing the application as a child process. This architectural flaw prevents the Uvicorn server from receiving UNIX signals (such as \texttt{SIGTERM} or \texttt{SIGINT}) directly from the container runtime, leading to ungraceful termination and potential connection dropping during Kubernetes RollingUpdate deployments.
 
 By employing the exec form, the \texttt{pixi run} command directly assumes PID 1 within the container namespace. The \texttt{--frozen -e ci} flags guarantee that the Uvicorn server is launched strictly within the rigorously constrained \texttt{ci} environment. The Uvicorn process correctly receives lifecycle signals, allowing it to gracefully drain active HTTP connections and flush pending telemetry metrics before termination, ensuring zero-downtime availability for the TaxonVision-MLOps inference service.
+
+\section{Local Composition Manifest: Infrastructure Telemetry and Storage Stack}
+\label{sec:local_composition_manifest}
+
+In addition to the standalone production serving container, the repository provides declarative orchestration for local development and observability infrastructure via Docker Compose. The configuration file \texttt{docker-compose.local.yaml} codifies a reproducible local topology comprising an S3-compatible object store, a Prometheus time-series metric scraper, and a Grafana dashboard server.
+
+\begin{listing}[htbp]
+\begin{minted}{yaml}
+version: '3.8'
+
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: taxon_minio
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # Web UI
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: taxon_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yaml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: taxon_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+volumes:
+  minio_data:
+  prometheus_data:
+  grafana_data:
+\end{minted}
+\caption{Docker Compose manifest (\texttt{docker-compose.local.yaml}) defining local MinIO, Prometheus, and Grafana services.}
+\label{lst:docker_compose_local}
+\end{listing}
+
+\subsection{Service Topology and Operational Configuration}
+
+The composition manifest coordinates three interconnected services, establishing clear network and persistence boundaries:
+
+\begin{itemize}
+    \item \textbf{MinIO Object Storage (\texttt{minio}):} Deployed using the official \texttt{minio/minio:latest} image under container name \texttt{taxon\_minio}. It exposes port 9000 for AWS S3-compatible API communication (utilised by local DVC streaming pipelines and dataset caching) and port 9001 for the interactive administrative web console. Default local credentials (\texttt{minioadmin:minioadmin}) are configured via environment variables, and the object store persists raw observation data within the named Docker volume \texttt{minio\_data:/data}.
+    \item \textbf{Prometheus Scraper (\texttt{prometheus}):} Deployed via \texttt{prom/prometheus:latest} under container name \texttt{taxon\_prometheus} on port 9090. The daemon mounts the host configuration file \texttt{./config/prometheus.yaml} read-only to configure scrape targets. Crucially, the directive \texttt{extra\_hosts: ["host.docker.internal:host-gateway"]} configures internal container DNS resolution, enabling Prometheus running inside the container network to seamlessly scrape the host-bound FastAPI inference service operating at \texttt{http://host.docker.internal:8000/metrics}. Time-series telemetry samples are persisted across restarts in the named volume \texttt{prometheus\_data:/prometheus}.
+    \item \textbf{Grafana Visualization Server (\texttt{grafana}):} Deployed via \texttt{grafana/grafana:latest} on port 3000, bound to the container name \texttt{taxon\_grafana}. It declares an explicit operational dependency (\texttt{depends\_on: [prometheus]}), ensuring the metrics ingestion pipeline is initialised before dashboard queries are served. Dashboard layout definitions and user authentication states are saved in \texttt{grafana\_data:/var/lib/grafana}.
+\end{itemize}
+
+This composition manifest decouples telemetry collection and object storage from the core Python application runtime. Local developers can instantiate the complete operational observability and data tier via a single command (\texttt{docker compose -f docker-compose.local.yaml up -d}) while executing the FastAPI application directly within the Pixi environment (\texttt{pixi run -e dev api}), providing identical metric scraping semantics to the production Kubernetes cluster.

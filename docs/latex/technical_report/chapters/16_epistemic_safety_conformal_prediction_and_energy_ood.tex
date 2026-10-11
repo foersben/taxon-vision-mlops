@@ -32,7 +32,7 @@ For a given input observation $x$, let the vision backbone and terminal classifi
 
 Observations drawn from the in-distribution biological manifold exhibit concentrated, high-magnitude logit activations for their respective ground-truth classes, yielding highly negative (low) free energy scores. In stark contrast, out-of-distribution inputs---comprising corrupted sensor frames, synthetic artefacts, blank captures, or non-target domains---generate diffuse, low-magnitude logit distributions, resulting in elevated free energy scores approaching or even exceeding zero.
 
-The selection of the temperature parameter $T$ critically modulates the sharpness of the energy surface. By default, the architecture employs $T = 1.0$, as empirical trials across the current taxonomic dataset demonstrated sufficient separation without necessitating artificial smoothing. Future iterations of the model may dynamically auto-tune $T$ depending upon the severity of the measured label smoothing or focal loss integration.
+The selection of the temperature parameter $T$ critically modulates the sharpness of the energy surface. In the active implementation, the architecture fixes $T = 1.0$, as empirical trials across the taxonomic dataset demonstrate clean separation without necessitating artificial variance scaling.
 
 \input{figures/fig_09_epistemic_safety_and_ood.tikz}
 

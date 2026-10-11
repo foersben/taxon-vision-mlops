@@ -116,12 +116,11 @@ class ObservationRecord(BaseModel):
     image_url: str = Field(..., description="URL to primary photo")
     latitude: float | None = Field(default=None, ge=-90.0, le=90.0)
     longitude: float | None = Field(default=None, ge=-180.0, le=180.0)
-    coordinate_uncertainty: float | None = Field(default=None, ge=0.0)
     observed_on: datetime | None = Field(default=None)
     quality_grade: str = Field(default="research", description="Quality grade (e.g. research)")
 \end{minted}
 
-The encapsulation of the spatial constraints is handled explicitly within the Pydantic field definitions, enforcing geographical bounds ($\text{latitude} \in [-90.0, 90.0]$, $\text{longitude} \in [-180.0, 180.0]$). The inclusion of \texttt{coordinate\_uncertainty} allows the system to filter observations with low spatial precision, which is particularly relevant when performing geospatial clustering or habitat modelling alongside visual identification. Observations with invalid coordinates or excessive uncertainty radii are inherently rejected by the schema validation logic, guaranteeing that anomalous geospatial noise is filtered prior to any spatial embedding or geospatial analysis.
+The encapsulation of spatial constraints is handled explicitly within the Pydantic field definitions, enforcing geographical bounds ($\text{latitude} \in [-90.0, 90.0]$, $\text{longitude} \in [-180.0, 180.0]$) while permitting optional null values for observations where coordinates are redacted or omitted. Observations with coordinates exceeding these physical geometric bounds are immediately intercepted and rejected by the schema validation logic, guaranteeing that spatial noise is filtered prior to any downstream training or feature extraction workflows.
 
 Furthermore, the \texttt{quality\_grade} field specifies the consensus level of the observation's identification. In citizen science platforms, records frequently transition from ``needs\_id'' to ``research'' grade upon community verification. By manifesting this attribute within the core domain model, the data ingestion pipeline can enforce subsetting rules, typically restricting the downstream training dataset strictly to ``research'' grade records to preserve the integrity of the predictive model. The domain guarantees that records passing validation strictly adhere to this expected vocabulary, preventing silent failures during large-scale Arrow streaming.
 
