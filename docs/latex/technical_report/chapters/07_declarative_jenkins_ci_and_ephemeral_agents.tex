@@ -1,35 +1,121 @@
 % !TeX root = ../technical_report.tex
-\chapter{Declarative Jenkins Pipeline and Ephemeral Kubernetes Agents}
+\chapter{Declarative Jenkins Continuous Integration and Ephemeral Kubernetes Agents}
 \label{ch:declarative_jenkins_ci}
 
-% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
-% -------------------------------------------------------------
-% Focus: Continuous integration architecture, Kubernetes agent pod lifecycle, and pipeline stages.
-% Repository Files:
-%   - Jenkinsfile
-%   - deploy/k8s/jenkins-agent-rbac.yaml
-% Deconstruct in Full Technical Detail:
-%   - Agent pod definition: kubernetes plugin (cloud 'k3s'), container 'ml-runner' (ghcr.io/prefix-dev/pixi:latest).
-%   - Volume mounts: emptyDir 'rattler-cache' mounted to /root/.cache/rattler/cache for instant lock resolution.
-%   - Resource requests & limits: nvidia.com/gpu: "1" binding to time-slicing slice on RTX 5070 Ti.
-%   - Environment credentials: DAGSHUB_TOKEN, MLFLOW tracking credentials, AWS S3 keys.
-%   - Detailed Stage Breakdown:
-%       * Stage 1: Prepare Toolchain (pixi install -e ci-dev, dvc pull cache)
-%       * Stage 2: Static Quality & Invariants (parallel: Lint & Format, Type Checking, Compliance & OKF)
-%       * Stage 3: Unit Tests & Coverage (pytest tests/ with coverage fail-under gates)
-%       * Stage 4: Integration & Conformal Invariants (pytest tests/integration/ tests/invariants/)
-%       * Stage 5: Documentation Strict Build (visualize_okf.py, zensical build --strict)
-%       * Stage 6: Model Training & Checkpoint (GPU) (when: main or feature/phase1-foundations, pixi -e dev,
-%                  Optuna 10 trials, ONNX re-export, dvc push checkpoints)
-%       * Stage 7: Deploy to Kubernetes (kubectl apply api-deployment.yaml, rollout restart, rollout status verification)
-%       * Post action: cleanWs() workspace sanitisation.
-% -------------------------------------------------------------
+The continuous integration and continuous deployment (CI/CD) methodology constitutes the fundamental circulatory system of the machine learning operations lifecycle. In the context of the TaxonVision-MLOps platform, manual execution of quality assurance testing, dependency resolution, hyperparameter optimisation, and deployment manifest application is explicitly forbidden. Instead, the platform relies upon a strictly declarative Jenkins pipeline architecture, which dynamically provisions ephemeral, isolated compute environments within a managed Kubernetes cluster. This chapter details the comprehensive technical implementation of this architecture, strictly mapping every theoretical concept to its concrete manifestation within the repository's \texttt{Jenkinsfile} and the associated Kubernetes Role-Based Access Control (RBAC) definitions located in \texttt{deploy/k8s/jenkins-agent-rbac.yaml}. The ensuing exposition delineates the dynamic lifecycle of ephemeral pod agents, the rigorous cryptographic isolation of cloud storage credentials, the sequential pipeline execution matrix, and the ultimate cleanup resilience mechanics. The rigorous standardisation achieved through this declarative paradigm ensures a high degree of automation and repeatability across all stages of the software development lifecycle, thus minimising the probability of human error during complex integration manoeuvres.
 
-\section{Declarative Pipeline Architecture and Pod Template}
-\label{sec:declarative_pipeline_architecture}
+\section{Dynamic Ephemeral Pod Lifecycle in Kubernetes}
+\label{sec:dynamic_ephemeral_pod}
 
-\section{Ephemeral Agent Lifecycle and Cache Volume Mounting}
-\label{sec:agent_lifecycle_and_caching}
+The foundational principle of the TaxonVision-MLOps deployment strategy is the eradication of persistent, mutable execution states. Traditional static CI runners accumulate latent configurations and residual artefacts over successive executions, leading to deterministic failure divergence, commonly termed ``configuration drift''. To neutralise this vulnerability, the Jenkins architecture is integrated with the Kubernetes agent plugin, dynamically provisioning a pristine execution environment for every invocation of the pipeline. This approach intrinsically aligns with the principles of immutable infrastructure, whereby the execution context is instantiated entirely from a deterministic specification rather than being modified in place.
 
-\section{Stage-by-Stage Execution and Promotion Gates}
-\label{sec:stage_by_stage_execution}
+The agent declaration within the \texttt{Jenkinsfile} explicitly targets the \texttt{k3s} cloud provider. This integration is formally declared as follows, specifying the deployment within the isolated \texttt{jenkins-ci} namespace:
+
+\begin{minted}{groovy}
+pipeline {
+  agent {
+    kubernetes {
+      cloud 'k3s'
+      defaultContainer 'ml-runner'
+      yaml '''
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: jenkins-ci
+  labels:
+    app.kubernetes.io/name: taxon-vision-jenkins-agent
+spec:
+  serviceAccountName: jenkins-agent
+  ...
+      '''
+    }
+  }
+}
+\end{minted}
+
+\subsection{Security Context and Role-Based Access Control}
+
+The execution of privileged actions, particularly deploying modifications to the production cluster environment, necessitates a meticulously scoped security context. The ephemeral pod is assigned the service account \texttt{jenkins-agent}, residing within the \texttt{jenkins-ci} namespace. The configuration defined in \texttt{deploy/k8s/jenkins-agent-rbac.yaml} establishes a robust principle of least privilege.
+
+Within the \texttt{jenkins-ci} namespace, the agent is granted restricted capabilities to manage its own execution logs and execution state. Furthermore, a secondary RoleBinding associates the \texttt{jenkins-agent} service account with the \texttt{jenkins-deployer-role} in the target \texttt{taxon-vision} namespace. This cross-namespace authorisation strictly confines the agent's mutability vectors to the management of \texttt{deployments}, \texttt{services}, and \texttt{pods} required for the final zero-downtime deployment phase, thereby mitigating the risk of systemic cluster compromise. This deliberate segmentation prevents a compromised CI agent from escalating its privileges across the wider Kubernetes cluster architecture.
+
+\subsection{Containerisation Strategy and Resource Allocation}
+
+The workload is executed within a unified container environment named \texttt{ml-runner}. Crucially, the image is pinned to the minimal \texttt{ghcr.io/prefix-dev/pixi:latest}, guaranteeing an environment pre-equipped with the Pixi multi-environment package manager. To prevent premature termination whilst the Jenkins controller orchestrates the stages, the container is initiated with a persistent sleep command (\texttt{command: ["sleep"]}, \texttt{args: ["99d"]}).
+
+Machine learning workloads impose extreme demands upon the computational substrate. The ephemeral pod specification strictly codifies resource requests and limits. The container is guaranteed a baseline allocation of 512Mi memory and 200m CPU. However, to accommodate the intensive requirements of Bayesian hyperparameter tuning and model compilation, it is permitted to burst to limits of 8Gi memory and 4 CPU cores. Most significantly, the specification mandates the provisioning of a hardware accelerator via the NVIDIA device plugin: \texttt{nvidia.com/gpu: "1"}. This critical declaration ensures the pod is scheduled exclusively onto a node possessing an available time-sliced GPU partition, an absolute prerequisite for executing the stage responsible for the classification head training. The orchestration of these hardware resources is non-negotiable for achieving acceptable latency during the Bayesian optimisation phase.
+
+\subsection{Package Caching Strategy}
+
+To prevent catastrophic latency amplification during dependency resolution, a strategic caching mechanism is implemented. An \texttt{emptyDir: \{\}} volume named \texttt{rattler-cache} is mounted at \texttt{/root/.cache/rattler/cache} within the container filesystem. This directory caches the downloaded Conda and PyPI packages handled by the underlying rattler library. While the volume is ephemeral to the pod's lifespan, it persists across the parallel and sequential execution stages of a single pipeline run, drastically accelerating the repeated \texttt{pixi install} invocations occurring in disparate stages. This strategic use of local caching mitigates the network overhead associated with repeatedly pulling voluminous software packages from external registries.
+
+\section{Credential Management and Cloud Storage Authentication}
+\label{sec:credential_management}
+
+The necessity for continuous integration systems to interact with external services, specifically the DagsHub remote storage and MLflow tracking server, introduces severe credential management vulnerabilities. The pipeline explicitly rejects the anti-pattern of embedding cryptographic secrets within container images or configuration files. Instead, it relies upon Jenkins' internal credential store and environmental injection.
+
+The pipeline environment block defines a pristine isolation matrix. A single administrative secret, identified within Jenkins as \texttt{dagshub-token}, is retrieved and injected dynamically into the ephemeral execution context.
+
+\begin{minted}{groovy}
+  environment {
+    DAGSHUB_TOKEN = credentials('dagshub-token')
+    AWS_ACCESS_KEY_ID = "${DAGSHUB_TOKEN}"
+    AWS_SECRET_ACCESS_KEY = "${DAGSHUB_TOKEN}"
+    MLFLOW_TRACKING_USERNAME = 'foersben'
+    MLFLOW_TRACKING_PASSWORD = "${DAGSHUB_TOKEN}"
+  }
+\end{minted}
+
+This token is subsequently multiplexed to satisfy disparate authentication protocols. For the Data Version Control (DVC) S3-compatible remote storage endpoint, the token is mapped onto the standard \texttt{AWS\_ACCESS\_KEY\_ID} and \texttt{AWS\_SECRET\_ACCESS\_KEY} environment variables. Simultaneously, it serves as the \texttt{MLFLOW\_TRACKING\_PASSWORD} for authenticating experimental telemetry streams to the MLflow server. This architecture guarantees that the tokens remain strictly as in-memory environment variables, confined to the lifespan of the running pod, and are never written to physical disk or logged into standard output streams. This rigorous approach fundamentally secures the platform against token exfiltration vulnerabilities that commonly afflict poorly architected CI pipelines.
+
+\section{Stage-by-Stage Pipeline Architecture}
+\label{sec:stage_architecture}
+
+The pipeline executes a rigorous sequence of quality gates, culminating in model training and deployment. This deterministic directed acyclic graph ensures that code regressions, mathematical invalidations, and structural anomalies are intercepted long before they contaminate the production runtime environment. The stages are architected to fail fast, thereby providing immediate feedback to the engineering team and halting the progression of fundamentally flawed modifications.
+
+\subsection{Stage 1: Prepare Toolchain}
+
+The initial stage prepares the operational substrate. Within the \texttt{ml-runner} container, the pipeline dynamically provisions necessary external clients, specifically \texttt{git} and \texttt{kubernetes-client}, ensuring absolute standardisation across all potential base node configurations. The core project environment is then materialised using \texttt{pixi install --frozen -e ci-dev}, ensuring deterministic dependency resolution based strictly upon the \texttt{pixi.lock} file. Finally, the stage synchronises the multi-gigabyte dataset and model assets from the DagsHub remote using \texttt{dvc pull}, establishing the complete context for subsequent testing and training. This deterministic initialisation guarantees that subsequent stages operate upon a mathematically defined known-good state.
+
+\subsection{Stage 2: Static Quality and Invariants}
+
+To maximise computational throughput, static analysis is parallelised into three concurrent execution branches.
+\begin{itemize}
+    \item \textbf{Lint and Format:} The Ruff linter and formatter (\texttt{ruff check .} and \texttt{ruff format --check .}) enforce absolute syntactic consistency and stylistic compliance.
+    \item \textbf{Type Checking:} Mypy (\texttt{mypy src scripts}) statically verifies the type integrity of the entire codebase, preventing subtle runtime type errors that are particularly pernicious in complex tensor manipulations.
+    \item \textbf{Compliance and OKF Audits:} Custom analytical scripts are executed to ensure holistic repository integrity. The \texttt{audit\_license\_compliance.py} script guarantees the absence of incompatible open-source licenses, whilst \texttt{validate\_okf.py} enforces rigorous adherence to the Open Knowledge Format standard for documentation metadata.
+\end{itemize}
+The concurrent execution of these static gates minimises the overall pipeline duration, allowing the immediate identification of fundamental syntactic or logical errors prior to the commencement of computationally expensive testing phases.
+
+\subsection{Stage 3: Unit Tests and Coverage}
+
+The unit testing phase executes the Pytest suite against the core source directory. The crucial mechanism here is the enforcement of a strict coverage threshold via the \texttt{--cov-fail-under=78} argument. Any codebase modification that depresses the test coverage metric below 78\% results in an immediate, deterministic pipeline failure, mechanically enforcing a culture of comprehensive test authoring. This threshold acts as an objective barrier against the accretion of untested and therefore unverified logical pathways within the core system.
+
+\subsection{Stage 4: Integration and Conformal Invariants}
+
+This stage evaluates the structural integrity of the integration pathways and enforces the mathematical assertions underlying the uncertainty estimation framework. Executing with the \texttt{-x -q} flags ensures early exit upon the first encountered failure, immediately terminating the pipeline in the event of an invariant violation. This rigorous gatekeeping guarantees that the Split Conformal Prediction algorithms and the energy-based out-of-distribution (OOD) rejection thresholds operate within their mathematically defined bounds. The validation of these invariants is non-negotiable for ensuring the platform's epistemic reliability and generalisability.
+
+\subsection{Stage 5: Documentation Strict Build}
+
+The integrity of the knowledge base is verified through a strict build process. The pipeline executes \texttt{visualize\_okf.py} to dynamically generate accurate graph representations of the Open Knowledge Format metadata. Subsequently, \texttt{zensical build --strict} is executed, generating the final documentation artefacts. The \texttt{--strict} flag guarantees that any broken reference, malformed LaTeX equation, or syntax violation within the documentation immediately fails the pipeline, preserving the repository as a pristine, error-free encyclopaedia. The objective is to treat technical documentation with the identical level of stringency as the executable codebase.
+
+\subsection{Stage 6: Model Training and Checkpoint (GPU)}
+
+This advanced stage operates conditionally, triggering exclusively upon commits merged into the \texttt{main} or \texttt{feature/phase1-foundations} branches. It instantiates the full \texttt{dev} environment and initiates the Bayesian hyperparameter tuning sequence using Optuna. The training script is invoked with parameters enforcing a rigorous optimisation protocol: \texttt{--tune --n-trials 10 --cuda-memory-fraction 0.7}. This dictates the execution of ten separate trials, strictly limiting the GPU VRAM allocation to 70\% to prevent out-of-memory cascading failures on the time-sliced GPU partition.
+
+Upon identification of the optimal configuration, the pipeline executes the \texttt{onnx\_exporter} to serialise the resultant computational graph into the highly optimised ONNX format. The stage concludes by pushing both the updated PyTorch weights (\texttt{head.pt}) and the accelerated ONNX artifact (\texttt{model.onnx}) back to the DagsHub remote via \texttt{dvc push}, thereby memorialising the specific algorithmic outcome of the integration pipeline. The explicit tracking of these binaries guarantees the complete reproducibility of the derived intelligence.
+
+\subsection{Stage 7: Deploy to Kubernetes}
+
+The final execution phase authorises the rollout to the production cluster. The pipeline applies the Kubernetes manifest using \texttt{kubectl apply -f deploy/k8s/api-deployment.yaml}. The critical component of this deployment is the subsequent \texttt{kubectl rollout restart deployment/taxon-vision-api -n taxon-vision} command, which triggers a zero-downtime rolling update. The pipeline continuously monitors the rollout status, imposing a rigorous 120-second timeout (\texttt{--timeout=120s}). Should the new pods fail to achieve readiness within this window, the rollout is flagged as failed, preserving the stability of the antecedent deployment iteration. This automated orchestration eliminates the manual intervention previously required to propagate novel machine learning capabilities into the active production environment.
+
+\section{Resilience, Cleanup, and Pipeline Options}
+\label{sec:resilience_cleanup}
+
+Systemic resilience encompasses not merely successful execution, but also rigorous cleanup and constraint management. The Jenkins pipeline is heavily instrumented with configuration options designed to maintain pristine operational environments and prevent runaway resource consumption. The enforcement of these administrative constraints is essential for maintaining the long-term viability of the shared execution infrastructure.
+
+The global \texttt{options} block implements a stringent garbage collection policy. The \texttt{buildDiscarder(logRotator(numToKeepStr: '15', daysToKeepStr: '14'))} directive limits historical log retention to fifteen builds or a maximum of fourteen days, ensuring the Jenkins master node filesystem is not exhausted by extensive log accumulation. A global execution timeout of forty-five minutes (\texttt{timeout(time: 45, unit: 'MINUTES')}) prevents rogue or deadlocked processes from indefinitely occupying the ephemeral compute nodes.
+
+Furthermore, the \texttt{disableConcurrentBuilds(abortPrevious: true)} directive ensures a linear execution topology. If a rapid succession of commits is pushed, previous concurrent runs are immediately aborted, conserving computational bandwidth for the most recent and relevant execution context. This policy optimises resource utilisation by preemptively terminating computations that have been effectively superseded by subsequent modifications.
+
+Finally, irrespective of pipeline success or failure, a rigorous \texttt{post \{ always \{ cleanWs() \} \}} block is executed. This directive enforces absolute workspace hygiene, guaranteeing that no residual data files, cached matrices, or intermediate compilation artefacts persist within the ephemeral container's filesystem. While the pod itself is ultimately terminated by Kubernetes, this explicit workspace deletion guarantees a sanitised teardown sequence, fundamentally preserving the stateless architecture of the CI/CD integration process. The orchestration of these discrete mechanisms results in a mathematically predictable, reproducible, and fault-tolerant release engineering pipeline.
