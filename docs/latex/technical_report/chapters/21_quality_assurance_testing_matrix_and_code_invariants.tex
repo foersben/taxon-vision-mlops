@@ -17,7 +17,7 @@ Executing a comprehensive testing suite directly on local hardware often necessi
 
 \subsection{Environmental Segregation: CPU versus GPU}
 
-The \texttt{ci-dev} environment target constructs a strictly minimal, CPU-bound execution space. This target deliberately strips away the heavy CUDA telemetry packages, multi-gigabyte PyTorch GPU binaries, and TensorRT compilation toolchains. Its objective is to enable near-instantaneous continuous integration feedback and developer pre-commit hook execution. It allows the core logic---FastAPI request routing, metadata filtering, and pipeline orchestration---to be tested with minimal computational overhead. 
+The \texttt{ci-dev} environment target constructs a strictly minimal, CPU-bound execution space. This target deliberately strips away the heavy CUDA telemetry packages, multi-gigabyte PyTorch GPU binaries, and TensorRT compilation toolchains. Its objective is to enable near-instantaneous continuous integration feedback and developer pre-commit hook execution. It allows the core logic -- FastAPI request routing, metadata filtering, and pipeline orchestration -- to be tested with minimal computational overhead. 
 
 Conversely, the \texttt{dev} environment targets full-stack development, requiring GPU acceleration and the complete PyTorch module suite. This environment facilitates the execution of rigorous hardware profiling tests, conformal calibration passes, and full-scale end-to-end training runs, ensuring that model deployment operates correctly under realistic hardware topologies.
 

@@ -85,6 +85,7 @@ uv.lock
 *.log
 *.out
 *.toc
+*.synctex.gz
 _minted*/
 
 # Personal Scripts

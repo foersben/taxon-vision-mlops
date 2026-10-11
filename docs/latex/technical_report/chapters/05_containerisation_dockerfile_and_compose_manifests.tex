@@ -149,7 +149,7 @@ The final architecture of the production container reflects a relentless pursuit
 
 \subsection{Pruning Development Dependencies}
 
-The explicit invocation of the \texttt{-e ci} environment during the \texttt{pixi install} phase serves as a structural firewall against the inclusion of development and testing toolchains. As verified against the \texttt{pyproject.toml} and \texttt{pixi.lock} definitions, the \texttt{dev} dependency group---comprising compilers, static analysis tools (\texttt{ruff}, \texttt{mypy}), documentation generators (\texttt{zensical}, \texttt{mkdocs}), and comprehensive test suites (\texttt{pytest}, \texttt{hypothesis})---is systematically excluded from the final OCI image.
+The explicit invocation of the \texttt{-e ci} environment during the \texttt{pixi install} phase serves as a structural firewall against the inclusion of development and testing toolchains. As verified against the \texttt{pyproject.toml} and \texttt{pixi.lock} definitions, the \texttt{dev} dependency group -- comprising compilers, static analysis tools (\texttt{ruff}, \texttt{mypy}), documentation generators (\texttt{zensical}, \texttt{mkdocs}), and comprehensive test suites (\texttt{pytest}, \texttt{hypothesis}) -- is systematically excluded from the final OCI image.
 
 This exclusion yields two profound technical benefits:
 \begin{enumerate}
