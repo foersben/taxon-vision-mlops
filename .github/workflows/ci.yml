@@ -16,7 +16,7 @@ env:
 
 jobs:
   quality-gate:
-    name: Code, Security & Type Quality
+    name: Code & Context Quality
     runs-on: [k3s-pod, gpu, taxon-vision]
     environment:
       name: ${{ github.ref == 'refs/heads/main' && 'taxon-vision-prod' || 'taxon-vision-staging' }}
