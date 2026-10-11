@@ -17,7 +17,7 @@ dependencies = [
     "timm>=1.0.14",
     "numpy>=1.26.0",
     "pillow>=11.0.0",
-    "polars>=1.20.0",
+    "polars>=1.20.0,<2",
     "duckdb>=1.1.0",
     "scikit-learn>=1.6.0",
     "scipy>=1.14.0",
@@ -115,6 +115,7 @@ platforms = ["linux-64"]
 [tool.pixi.pypi-options]
 index-strategy = "unsafe-best-match"
 extra-index-urls = [
+    "https://download.pytorch.org/whl/cu128",
     "https://download.pytorch.org/whl/cu121",
     "https://download.pytorch.org/whl/cpu",
 ]
@@ -145,9 +146,9 @@ cuda-nvcc = "12.*"
 cudnn = ">=9.0,<10"
 
 [tool.pixi.feature.gpu.pypi-dependencies]
-torch = { version = "==2.5.1", index = "https://download.pytorch.org/whl/cu121" }
-torchvision = { version = "==0.20.1", index = "https://download.pytorch.org/whl/cu121" }
-torchaudio = { version = "==2.5.1", index = "https://download.pytorch.org/whl/cu121" }
+torch = { version = "==2.7.0", index = "https://download.pytorch.org/whl/cu128" }
+torchvision = { version = "==0.22.0", index = "https://download.pytorch.org/whl/cu128" }
+torchaudio = { version = "==2.7.0", index = "https://download.pytorch.org/whl/cu128" }
 onnxruntime-gpu = ">=1.20.0"
 
 [tool.pixi.feature.cpu.pypi-dependencies]

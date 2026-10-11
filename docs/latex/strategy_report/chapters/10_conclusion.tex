@@ -35,10 +35,10 @@ Inference service and dashboard & implemented & FastAPI with a server-rendered H
 Split conformal prediction and energy-based OOD & implemented & Conformal sets in the serving path; energy score in the uncertainty module. \\
 Prometheus instrumentation & implemented & Metrics endpoint of the serving application. \\
 Jenkins controller and k3s agents & implemented & Outbound-only Cloudflare Tunnel, ephemeral agent pods, rolling deployment, four-slot time-slicing configuration. \\
+GPU access of the agent pod & implemented & Agent pod in \texttt{Jenkinsfile} configured with an \texttt{nvidia.com/gpu: 1} resource limit and request binding directly to k3s time-slicing slots. \\
+GPU-capable PyTorch build & implemented & Pinned toolchain upgraded to PyTorch 2.7.0 with CUDA~12.8 (\texttt{cu128}), natively supporting Blackwell SM~120 under the host's CUDA~13.4 driver (Section~\ref{sec:host_baseline}). \\
 \midrule
 Main-branch training stage & partial & Stage declared for the main branch, but it currently operates on a seeded synthetic embedding split; wiring the cached features of the real dataset is outstanding. \\
-GPU access of the agent pod & partial & The agent pod does not yet request an \texttt{nvidia.com/gpu} resource; the request must be added in order to bind the training stage to a time-slicing slot. \\
-GPU-capable PyTorch build & partial & The pinned build targets CUDA~12.1, whereas the Blackwell architecture of the RTX~5070~Ti requires CUDA~$\geq 12.8$ (Section~\ref{sec:host_baseline}); an upgrade of the toolchain is required before any GPU run. \\
 Conformal invariant on the candidate model & partial & The coverage invariant gates the source code, but is not yet applied to the freshly trained candidate before promotion. \\
 Drift detection and active learning & partial & MMD and BADGE query modules exist; neither is connected to a schedule, an alert or a webhook. \\
 Container composition for grading & partial & The compose file covers object storage, Prometheus and Grafana only. \\
@@ -53,4 +53,4 @@ Optional Streamlit demonstration & planned & HTMX dashboard serves as the baseli
 \end{tabularx}
 \end{table}
 
-Three items determine the critical path towards a first genuine GPU training run: the replacement of the synthetic split by cached backbone features, the GPU resource request of the agent pod, and the upgrade of the PyTorch build to a CUDA release that supports compute capability~12.0. Until these are completed, all reported hyperparameter and promotion decisions must be interpreted as an exercise of the pipeline mechanics rather than as empirical evidence regarding model quality.
+With the agent pod GPU allocation and the CUDA~12.8 toolchain upgrade completed, the primary item remaining on the critical path towards genuine GPU model convergence is the replacement of the synthetic split by pre-cached foundation backbone features. Until real biological embeddings are wired, reported hyperparameter and promotion decisions reflect verified pipeline execution rather than converged biological classification quality.

@@ -7,7 +7,7 @@ version: 1.0
 description: Tracking the progress and remaining effort for the MLOps Project Phases 1-3.
 tags: [roadmap, status, project-management, mlops]
 generated: {by: process:okf-updater, at: "2026-10-06T19:50:00Z"}
-verified: {by: process:okf-updater, at: "2026-10-10T23:45:00Z"}
+verified: {by: process:okf-updater, at: "2026-10-11T00:05:00Z"}
 ---
 
 # Implementation Status: MLOps Roadmap
@@ -92,8 +92,8 @@ When a new classification head finishes training, it is automatically logged to 
 To maintain absolute scientific and engineering integrity, the following implementation discrepancies between target architecture and active repository state are documented:
 
 * **Synthetic Placeholder Training Split:** In `taxon_vision.models.training.runner`, `_prepare_embedding_split` constructs synthetic random embeddings ($N=150$) to validate pipeline mechanics. Real foundation feature extraction is implemented in `taxon_vision.models.backbones.factory.extract_and_cache_features` but is not yet wired to the training CLI runner.
-* **Jenkins Agent Pod GPU Requests:** In `Jenkinsfile`, the `Model Training & Checkpoint (GPU)` stage executes within the `ml-runner` pod template, but the pod specification currently requests only CPU (`cpu: 4`, `memory: 8Gi`) without an explicit `nvidia.com/gpu: 1` resource request.
-* **Blackwell Toolchain Incompatibility:** The repository environment (`pyproject.toml`, `pixi.lock`) is pinned to `torch==2.5.1` with `cu121`. The host GPU is an NVIDIA GeForce RTX 5070 Ti (Blackwell, compute capability 12.0), which requires CUDA $\ge 12.8$ and PyTorch $\ge 2.7$ for native SM 120 kernel execution.
+* **Jenkins Agent Pod GPU Allocation:** Resolved. In `Jenkinsfile`, the `ml-runner` pod template specifies `nvidia.com/gpu: 1` limits and requests, binding dynamically to the 4-replica time-slicing configuration on `hive-mind`.
+* **Blackwell Toolchain Upgrade:** Resolved. Environment manifests (`pyproject.toml`, `pixi.lock`) are upgraded to PyTorch 2.7.0 targeting CUDA 12.8 (`cu128`), natively supporting SM 120 kernels on the host's NVIDIA Driver 615.71.09 / CUDA 13.4 UMD.
 * **Error Masking in CI Pipeline:** Several commands in `Jenkinsfile` are suffixed with `|| true`, which masks runtime failures in test or training steps.
 * **Coverage Gate Inconsistency:** Line coverage threshold is set to 78% in `Jenkinsfile`, whereas `.github/workflows/ci.yml` enforces an 80% threshold.
 * **Optuna Evaluation Objective:** In `taxon_vision.models.training.tuning`, the objective function returns `history["val_pr_auc"][-1]` (last epoch score) rather than the best checkpoint score achieved during the trial.

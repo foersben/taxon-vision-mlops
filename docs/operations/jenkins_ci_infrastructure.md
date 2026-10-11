@@ -356,9 +356,11 @@ spec:
       limits:
         memory: "8Gi"
         cpu: "4"
+        nvidia.com/gpu: "1"
       requests:
         memory: "512Mi"
         cpu: "200m"
+        nvidia.com/gpu: "1"
   volumes:
   - name: rattler-cache
     emptyDir: {}
