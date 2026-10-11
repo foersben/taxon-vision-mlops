@@ -1,36 +1,105 @@
 % !TeX root = ../technical_report.tex
-\chapter{Bayesian Hyperparameter Optimization with Optuna TPE and ASHA}
+\chapter{Bayesian Hyperparameter Optimisation with Optuna TPE and ASHA}
 \label{ch:bayesian_hyperparameter_optimization}
 
-% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
-% -------------------------------------------------------------
-% Focus: Bayesian search engine, objective functions, pruning algorithms, and trial management.
-% Repository Files:
-%   - src/taxon_vision/models/training/tuning.py
-%   - src/taxon_vision/models/training/types.py (TuningConfig)
-%   - src/taxon_vision/models/training/runner.py
-% Detailed Technical Concepts:
-%   - Optuna Optimization Engine:
-%       * TPESampler: Tree-structured Parzen Estimator for Bayesian parameter estimation.
-%       * SuccessiveHalvingPruner: ASHA early stopping of poor trials (min_resource=2, reduction_factor=2).
-%   - HyperparameterObjective Class:
-%       * _sample_hyperparameters:
-%           - lr: 1e-4 to 1e-1 (log scale)
-%           - weight_decay: 1e-6 to 1e-2 (log scale)
-%           - dropout: 0.0 to 0.5
-%           - beta: 0.99 to 0.9999
-%           - batch_size: categorical [32, 64, 128]
-%           - noise_std: 0.0 to 0.05 (feature space jitter augmentation)
-%       * _start_mlflow_trial: nested MLflow child runs per trial with optuna.trial_number tags.
-%       * __call__: executes head training, invokes pruner callback per epoch, returns peak validation Macro PR-AUC (max(val_pr_auc)).
-%   - Winning Run Consolidation: _log_best_run logging optimal configuration and git/dvc tags to parent MLflow run.
-% -------------------------------------------------------------
-
-\section{Bayesian Optimization Principles and TPE Mechanics}
+\section{Bayesian Optimisation Principles and TPE Mechanics}
 \label{sec:tpe_mechanics}
+
+The parameterisation of neural network architectures necessitates a methodical approach to hyperparameter search, particularly when scaling to large, long-tailed biological distributions. Historically, grid search and uniform random sampling have dominated hyperparameter tuning; however, these techniques exhibit severe limitations in high-dimensional continuous spaces. Grid search suffers from the curse of dimensionality, scaling exponentially with the number of parameters. Uniform random sampling, whilst theoretically capable of discovering optimal configurations asymptotically, lacks any intelligent adaptive mechanism to focus computational resources on promising regions of the hyperparameter landscape. In the context of the TaxonVision architecture, where model head training iterations on frozen backbones are relatively rapid yet cumulatively expensive across hundreds of trials, a sequential model-based optimisation strategy is mathematically mandatory.
+
+Bayesian optimisation provides a probabilistic framework for the global optimisation of black-box functions. It constructs a surrogate model of the objective function and utilises an acquisition function to direct sampling towards areas of the search space that are either unexplored (exploration) or predicted to yield high performance (exploitation). Within the TaxonVision implementation, this is achieved through the Tree-Structured Parzen Estimator (TPE) algorithm, integrated via the Optuna optimisation framework. Unlike traditional Gaussian Process (GP) based Bayesian optimisation, which models the posterior probability $p(y|x)$ directly (where $x$ represents the hyperparameter configuration and $y$ denotes the validation metric), the TPE algorithm models the conditional probability $p(x|y)$ and the marginal probability $p(y)$.
+
+The fundamental principle of the TPE approach is the bifurcation of the observation history into two distinct non-parametric Parzen window densities. Given a predefined threshold $y^*$, typically defined as a specific quantile (e.g., the top $15\%$ of observed trials) of the objective values, the algorithm constructs two probability density functions:
+\begin{equation}
+    p(x|y) =
+    \begin{cases}
+    \ell(x) & \text{if } y < y^* \\
+    g(x) & \text{if } y \geq y^*
+    \end{cases}
+\end{equation}
+In this formulation, assuming maximisation of the validation metric, $\ell(x)$ represents the density formed by the hyperparameters that yielded objective values below the threshold (suboptimal configurations), and $g(x)$ constitutes the density of hyperparameters that exceeded the threshold (superior configurations). By maintaining these dual densities, the TPE algorithm effectively partitions the search space.
+
+To guide the selection of the subsequent hyperparameter configuration, the algorithm evaluates the Expected Improvement (EI) acquisition function. The EI is mathematically defined as the expectation of the improvement over the current best observation, which can be shown to be proportional to the ratio of the two densities:
+\begin{equation}
+    \text{EI}(x) \propto \frac{g(x)}{\ell(x)}
+\end{equation}
+By maximising this ratio, the TPE sampler systematically selects configurations $x$ that have a high probability under $g(x)$ and a correspondingly low probability under $\ell(x)$. This elegant formulation balances the exploration of the parameter space with the exploitation of known performant regions, without the severe computational overhead of inverting covariance matrices required by traditional GP surrogates. Consequently, TPE is exceptionally well-suited for the conditional and continuous parameter spaces defined in the TaxonVision tuning module, permitting rapid convergence upon optimal hyperparameter combinations for the linear classification head.
 
 \section{Search Space Parameterisation and Objective Formulation}
 \label{sec:search_space_parameterisation}
 
+The rigorous definition of the hyperparameter search space is critical to the success of the Bayesian optimisation process. In the TaxonVision architecture, this is encapsulated within the \texttt{HyperparameterObjective} class situated in \texttt{src/taxon\_vision/models/training/tuning.py}. The objective function evaluates discrete and continuous variables governing the optimisation algorithm, regularisation mechanisms, and the loss function. The primary objective is the maximisation of the Macro Precision-Recall Area Under the Curve (Macro PR-AUC) evaluated on the validation embedding split, ensuring that the classification head generalises across all taxa, including underrepresented long-tail species.
+
+The search space is formally delineated via the \texttt{\_sample\_hyperparameters} method of the objective class. For continuous variables that span multiple orders of magnitude, log-uniform distributions are mathematically appropriate to ensure uniform exploration density across scales. The distributions are strictly defined as follows:
+\begin{itemize}
+    \item \textbf{Learning Rate ($\eta$)}: The step size for the AdamW optimiser is sampled from a log-uniform distribution, $\eta \sim \text{LogUniform}(10^{-4}, 10^{-1})$. This broad range accommodates the differing convergence dynamics associated with the disparate feature geometries produced by various backbones (e.g., DINOv2 versus MobileNetV4).
+    \item \textbf{Weight Decay ($\lambda$)}: L2 regularisation is identically sampled on a logarithmic scale, $\lambda \sim \text{LogUniform}(10^{-6}, 10^{-2})$. This parameter governs the penalisation of large weights in the classification head, providing a critical counterbalance to the potential overfitting induced by high-dimensional embedding spaces.
+    \item \textbf{Dropout Probability ($p$)}: To mitigate co-adaptation of features in the fully connected layers, dropout is applied. The probability is sampled uniformly, $p \sim \text{Uniform}(0.0, 0.5)$.
+    \item \textbf{Class-Balanced Loss Beta ($\beta$)}: The effective number of samples metric is governed by $\beta$, controlling the asymptotic saturation of class weights. This parameter is critically constrained to a uniform distribution, $\beta \sim \text{Uniform}(0.99, 0.9999)$. The precise tuning of $\beta$ is paramount for alleviating the dominance of head classes in the long-tailed biological datasets.
+    \item \textbf{Feature Noise Standard Deviation ($\sigma$)}: Manifold regularisation via isotropic Gaussian noise injection into the input embeddings is parameterised by $\sigma \sim \text{Uniform}(0.0, 0.05)$. This augments the effective training data distribution, enhancing the robustness of the decision boundaries.
+    \item \textbf{Batch Size ($B$)}: The mini-batch dimension is sampled from a categorical distribution, $B \sim \text{Categorical}(\{32, 64, 128\})$, to assess the trade-off between gradient variance and computational throughput.
+\end{itemize}
+
+Upon sampling a configuration, the \texttt{\_construct\_components} method instantiates a sequential neural network head, the \texttt{ClassBalancedLoss} criterion, and the \texttt{AdamW} optimiser. The \texttt{\_\_call\_\_} method then triggers the epochal training loop against pre-computed feature representations (defined by the \texttt{EmbeddingSplit} object). The formulation of the objective value is derived directly from the validation history:
+\begin{equation}
+    \text{Objective}(x) = \max_{e \in \{1, \dots, E\}} \text{Macro PR-AUC}^{(e)}(x)
+\end{equation}
+where $E$ is the maximum number of epochs permitted per trial, as defined in the \texttt{TuningConfig}.
+
 \section{Asynchronous Successive Halving (ASHA) Pruning in Practice}
 \label{sec:asha_pruning_in_practice}
+
+While the TPE algorithm efficiently selects hyperparameter configurations, the evaluation of these configurations necessitates full training cycles, consuming considerable GPU compute. To mitigate the expenditure of resources on suboptimal regions of the search space, early termination of unpromising trials is imperative. The TaxonVision framework implements the Asynchronous Successive Halving Algorithm (ASHA) via Optuna's \texttt{SuccessiveHalvingPruner}.
+
+ASHA operates on the principle of aggressive early stopping. It periodically assesses the performance of all active trials at specific computational rungs (epochs). Trials that fall in the lower percentiles of performance relative to their peers are ruthlessly terminated, whilst the top performers are promoted to subsequent rungs for further training. This is theoretically superior to synchronous successive halving, as it eliminates the bottleneck of waiting for a cohort of trials to complete a specific rung before promotion decisions can be executed.
+
+In \texttt{src/taxon\_vision/models/training/tuning.py}, the pruner is configured with a minimum resource requirement (\texttt{min\_resource=2}) and a reduction factor (\texttt{reduction\_factor=2}). This parameterisation implies that every trial is guaranteed at least two epochs of execution to overcome initial instability before it becomes eligible for pruning. Subsequently, at every epoch $e \geq 2$, the algorithm retains only the top $1 / 2$ of trials, terminating the remainder.
+
+This mechanism is seamlessly integrated into the objective function via a callback function injected into the \texttt{HeadTrainingConfig}. At the culmination of each validation epoch, the callback executes the following operations:
+\begin{listing}[htbp]
+\begin{minted}[frame=lines, framesep=2mm, baselinestretch=1.2, bgcolor=white, fontsize=\footnotesize]{python}
+def pruner_callback(epoch: int, val_pr_auc: float) -> bool:
+    """Pruner callback function.
+
+    Args:
+        epoch: Epoch number.
+        val_pr_auc: Validation PR-AUC.
+
+    Returns:
+        True if training should be pruned, False otherwise.
+    """
+    trial.report(val_pr_auc, step=epoch)
+    return trial.should_prune()
+\end{minted}
+\caption{Pruning Callback Implementation in \texttt{HyperparameterObjective}}
+\label{lst:pruner_callback}
+\end{listing}
+
+The \texttt{trial.report} invocation updates the internal state of the Optuna study with the intermediate validation metric. Subsequently, \texttt{trial.should\_prune()} evaluates the ASHA logic. If the function evaluates to true, the training loop is aborted, and an \texttt{optuna.TrialPruned()} exception is raised. This graceful exception handling is caught by the Optuna engine, officially marking the trial state as pruned without raising an application-level fault. Consequently, GPU resources are immediately reallocated to newly sampled, potentially more lucrative hyperparameter configurations, drastically reducing the temporal overhead of the optimisation study.
+
+\section{Best Trial Restoration and Final Model Checkpointing}
+\label{sec:best_trial_restoration}
+
+The culmination of the Bayesian optimisation process is the extraction of the globally optimal hyperparameter configuration and its subsequent utilisation for final model training. Within the \texttt{tune\_hyperparameters} orchestration function, the conclusion of the study yields a comprehensive history of the surrogate landscape. The extraction of the winning configuration is executed programmatically via the \texttt{study.best\_params} attribute.
+
+To ensure meticulous tracking of the experimental lineage, the entire hyperparameter study is deeply integrated with MLflow. During the optimisation phase, the \texttt{\_start\_mlflow\_trial} method initiates a nested, child MLflow run for each individual trial. This run records the sampled parameters and, critically, logs the epochal validation metrics (including loss, accuracy, F1 score, and PR-AUC) via the \texttt{\_log\_trial\_metrics} function. This permits granular, retrospective inspection of the training dynamics for any specific configuration, and facilitates the generation of parameter importance diagrams and objective contour plots within the MLflow interface.
+
+Following the completion of the study, the optimal configuration is consolidated via the \texttt{\_log\_best\_run} function. This operation creates a distinct MLflow run entitled \texttt{optuna\_best\_model}, acting as a definitive record of the optimisation outcome.
+\begin{listing}[htbp]
+\begin{minted}[frame=lines, framesep=2mm, baselinestretch=1.2, bgcolor=white, fontsize=\footnotesize]{python}
+def _log_best_run(best_params: dict[str, Any], best_value: float, active: bool) -> None:
+    # ... setup logic ...
+    with mlflow.start_run(run_name="optuna_best_model"):
+        mlflow.log_params(best_params)
+        mlflow.log_metric("best_val_pr_auc", best_value)
+        mlflow.set_tag("optuna.optimization_algorithm", "TPE+ASHA")
+        mlflow.set_tag("pipeline.stage", "Phase1_Step3_Tuning")
+        # ... artifact tracking ...
+\end{minted}
+\caption{Consolidation of the optimal trial configuration in MLflow.}
+\label{lst:log_best_run}
+\end{listing}
+
+Crucially, this consolidated run records the Data Version Control (DVC) dataset hash and the precise Git commit SHA (\texttt{git.commit\_sha}) and branch identifier. This cryptographic linkage guarantees that the provenance of the optimal hyperparameters is intrinsically tied to the exact state of the source code and the training data, fulfilling the strict reproducibility mandates of the MLOps pipeline.
+
+Ultimately, the \texttt{run\_training\_pipeline} orchestrator in \texttt{src/taxon\_vision/models/training/runner.py} harnesses the returned \texttt{best\_params} to configure the final instantiation of the \texttt{AdamW} optimiser and the \texttt{ClassBalancedLoss} criterion. A final, definitive training loop is executed using these superior parameters, unrestricted by the aggressive pruning mechanisms of the study phase. Upon conclusion, the model head weights that achieved the peak validation PR-AUC are seamlessly restored to the classifier, and the state dictionary is serialised to disk via the \texttt{\_save\_checkpoint} utility, typically targeting \texttt{models/checkpoints/head.pt}. This rigorous, automated pipeline ensures that the TaxonVision architecture is consistently deployed with mathematically optimal, empirically validated hyperparameters.
