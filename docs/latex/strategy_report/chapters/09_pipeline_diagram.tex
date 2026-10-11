@@ -39,7 +39,7 @@
 };
 
 \node[fill=black!4, draw=black!25, rounded corners=2pt, inner sep=2.5pt, font=\footnotesize\bfseries, align=center] at (0, 14.7) {
-    \textbf{Target:} Bare-Metal Host (RTX 5070 Ti, i7-14700K) $\cdot$ Remote-Only Training\\ % \quad$\vert$\quad
+    \textbf{Target:} Bare-Metal Host (RTX 5070 Ti, Ryzen 9 9950X) $\cdot$ Remote-Only Training\\ % \quad$\vert$\quad
     \textbf{Epistemic Guarantee:} Conformal Coverage $1-\alpha \ge 0.95$\\
     \textbf{Inference SLA:} Fast Path $<25$\,ms p95
 };
@@ -135,7 +135,7 @@
     \textbullet\ \textbf{Rank Fusion (RRF):} $w_{\mathrm{vis}} \cdot \mathrm{Sim}_{\cos}(z) + w_{\mathrm{geo}} \cdot \mathrm{Prior}_{\mathrm{geo}}(\mathrm{coord},\,\mathrm{month})$\\[0.8mm]
     \textbf{Observability \& Epistemic Monitoring:}\\
     \textbullet\ Prometheus metrics: Latency histograms, conformal set size tracking, OOD rate\\
-    \textbullet\ \textbf{MMD Drift Detector:} Maximum Mean Discrepancy on $\mathbb{R}^{768}$ feature space
+    \textbullet\ \textbf{Wasserstein-1 Drift Detector:} Norm-projected $W_1$ distance on feature space
 };
 
 \node[box={5.1cm}] (k8s) at (5.65, -1.9) {%
@@ -232,7 +232,7 @@
 \draw[arrow, draw=morangeborder, line width=1.4pt, rounded corners=3mm]
     (k8s.east) -- (8.8, -1.4) -- (8.8, 12.4) -- (cicd.east);
 \node[lbl, rotate=-90, text=morangeborder, draw=morangeborder!50] at (8.8, 5.5)
-    {MMD Feature Drift Alert (Retrain Webhook)};
+    {Wasserstein-1 Feature Drift Alert (Retrain Webhook)};
 
 \end{tikzpicture}%
   }%

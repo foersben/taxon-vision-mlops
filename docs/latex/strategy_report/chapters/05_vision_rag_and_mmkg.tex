@@ -13,7 +13,7 @@ The platform actively circumvents this computational barrier by curating a deter
 \begin{enumerate}
     \item \textbf{Validation Tier:} Observations must hold official \texttt{research\_grade} status, confirming agreement across three or more independent community experts.
     \item \textbf{Licence Compliance:} Records must possess open-access metadata headers matching Creative Commons Zero (\texttt{CC0}), Creative Commons Attribution (\texttt{CC-BY}), or Attribution-NonCommercial (\texttt{CC-BY-NC}). Commercial or share-alike variants (\texttt{CC-BY-ND}, \texttt{CC-BY-SA}) are explicitly dropped at the ingestion boundary.
-    \item \textbf{Signal Quality:} Raw photographs must exceed a minimum resolution of $1024 \times 1024$ pixels. Furthermore, upstream zero-shot object detection must isolate the primary organism with a detection confidence score greater than $0.85$.
+    \item \textbf{Signal Quality:} Raw candidate photographs must exceed a minimum resolution of $1024 \times 1024$ pixels in original source repositories for exemplar inclusion, while the streaming ingestion pipeline pulls $500\text{px}$ medium locators for fast Arrow serialization. Furthermore, upstream zero-shot object detection must isolate the primary organism with a detection confidence score greater than $0.85$.
     \item \textbf{Diversity Sampling:} The catalogue selects up to 50 exemplar observations per taxon. In order to capture seasonal and geographical morphological variations, observations are partitioned into discrete spatial clusters using Uber H3 hexagonal spatial cells at Resolution 4.
 \end{enumerate}
 
