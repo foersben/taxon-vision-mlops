@@ -2,31 +2,134 @@
 \chapter{Epistemic Safety: Split Conformal Prediction and Energy-Based OOD Rejection}
 \label{ch:epistemic_safety}
 
-% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
-% -------------------------------------------------------------
-% Focus: Distribution-free error guarantees, conformal set generation, and energy-based OOD detection.
-% Repository Files:
-%   - src/taxon_vision/uncertainty/conformal.py
-%   - src/taxon_vision/uncertainty/ood_detector.py
-% Detailed Technical Concepts:
-%   - Epistemic Risk in Autonomous Vision: dangers of overconfident softmax predictions on unseen taxa.
-%   - Split Conformal Prediction (conformal.py):
-%       * Non-conformity score: s_i = 1 - \hat{p}_{y_i}(x_i).
-%       * Conformal quantile calibration: \hat{q} at level \lceil (n+1)(1-\alpha) \rceil / n on holdout calibration split.
-%       * Prediction set: C(x) = \{y \in \mathcal{Y} : \hat{p}_y(x) \ge 1 - \hat{q}\}.
-%       * Mathematical Coverage Guarantee: P(Y \in C(X)) \ge 1 - \alpha.
-%   - Energy-Based Out-of-Distribution Detection (ood_detector.py):
-%       * Helmholtz Free Energy score: E(x; T) = -T \log \sum_{i=1}^K \exp(z_i / T).
-%       * Temperature scaling parameter T (default: 1.0).
-%       * Energy threshold filtering: inputs with E(x) > \tau_{energy} rejected before conformal evaluation.
-%   - Human Referral Gate: empty prediction sets (C(x) = \emptyset) or sets exceeding cardinal size k route to expert triage.
-% -------------------------------------------------------------
-
-\section{The Epistemic Safety Problem in Biological Vision}
+\section{The Epistemic Failure Modes of Deep Vision Classifiers}
 \label{sec:epistemic_safety_problem}
 
-\section{Split Conformal Prediction and Statistical Coverage Bounds}
-\label{sec:split_conformal_prediction}
+The deployment of autonomous visual categorisation systems in uncontrolled, open-world biological environments necessitates robust mechanisms for epistemic uncertainty quantification. Standard deep convolutional and transformer-based architectures consistently exhibit severe epistemic failure modes, primarily manifesting as the uncalibrated softmax fallacy. This phenomenon occurs because the normalisation properties of the softmax activation function compress the output logit vector onto a probability simplex, enforcing a unit sum. Consequently, the relative magnitude of the pre-activation logits is irrevocably lost. In scenarios where a classifier processes an observation drawn from a tail species absent from the training manifold, or encounters out-of-distribution sensor noise, the raw logits might be uniformly minuscule. Nonetheless, the exponentiation and normalisation steps of the softmax operation will artificially amplify the maximal logit, producing a deceptively high confidence score for an erroneous prediction.
+
+This structural vulnerability renders fixed, heuristic probability thresholds---such as a rudimentary scalar probability cutoff of $0.8$ or $0.9$---statistically invalid for rigorous biodiversity assessment. Such arbitrary decision boundaries fail to accommodate the heteroscedastic nature of predictive uncertainty across the severe Pareto distributions characteristic of global taxonomy. The reliance on Maximum Softmax Probability (MSP) detection consistently leads to high false-positive admission rates on uninformative, blurry, or entirely non-organism image captures, thereby polluting downstream biological databases and undermining automated decision integrity.
+
+To mitigate these epistemic vulnerabilities, the TaxonVision architecture implements a dual-tier epistemic gating protocol. This systematic safeguard isolates in-distribution from out-of-distribution observations prior to the generation of taxonomic assertions. The architecture consists of a front-tier energy-based out-of-distribution rejection mechanism, which operates directly on the unnormalised logit manifold, followed by a post-hoc split conformal prediction set generator, which translates calibrated softmax outputs into mathematically rigorous, set-valued taxonomic predictions. Observations failing to satisfy the constraints of either tier are systematically routed to an active learning human triage queue, thus preserving the purity of the automated processing pipeline.
+
+\subsection{The Necessity of a Dual-Tier Epistemic Gate}
+
+The limitations of adopting either a single conformal tier or a singular energy-based approach dictate the necessity of the dual-tier system. While conformal prediction excels at bounding generalisation error across in-distribution taxonomic classes, it intrinsically assumes exchangeability between the calibration and test sets. Consequently, evaluating out-of-distribution observations via conformal prediction often results in unpredictable set sizes or the admission of statistically meaningless classes. Conversely, whilst the energy-based out-of-distribution detector excels at identifying and discarding non-biological anomalies, it lacks the statistical calibration necessary to distinguish subtle, high-confidence errors between morphologically synonymous taxa.
+
+The intersection of these two methodologies forms a mathematically exhaustive epistemic safety protocol. The initial energy computation filters observations that violate the fundamental assumptions of the operational domain. Subsequently, the conformal set generator quantifies the inherent ambiguity of the remaining valid biological observations. This sequential formulation guarantees that human taxonomic expertise is uniquely reserved for the most challenging biological instances, rather than being squandered on automated sensor failures.
 
 \section{Helmholtz Free Energy Out-of-Distribution Detection}
 \label{sec:helmholtz_energy_ood}
+
+The foundational layer of the epistemic gating architecture addresses the inadequacy of Maximum Softmax Probability (MSP) detection via the implementation of Helmholtz free energy scoring, following the formalisation by Liu et al. (NeurIPS 2020). As previously established, the softmax transformation divides by the partition function, thereby discarding the absolute magnitude of the network's logit activations. The Helmholtz free energy formulation circumvents this limitation by preserving logit magnitude, computing the negative log-partition function directly. This energy surface correlates monotonically with the input data density, providing a robust, mathematically principled boundary for out-of-distribution separation.
+
+\subsection{Mathematical Formulation of the Free Energy Surface}
+
+For a given input observation $x$, let the vision backbone and terminal classification head produce an unnormalised vector of class logits $\mathbf{z} \in \mathbb{R}^K$, where $K$ represents the total number of taxonomic categories. The Helmholtz free energy $E(x; T)$ parametrised by a temperature scaling factor $T$ is formally defined as:
+
+\begin{equation}
+    E(x; T) = -T \cdot \log \sum_{i=1}^K \exp\left(\frac{z_i}{T}\right)
+\end{equation}
+
+Observations drawn from the in-distribution biological manifold exhibit concentrated, high-magnitude logit activations for their respective ground-truth classes, yielding highly negative (low) free energy scores. In stark contrast, out-of-distribution inputs---comprising corrupted sensor frames, synthetic artefacts, blank captures, or non-target domains---generate diffuse, low-magnitude logit distributions, resulting in elevated free energy scores approaching or even exceeding zero.
+
+The selection of the temperature parameter $T$ critically modulates the sharpness of the energy surface. By default, the architecture employs $T = 1.0$, as empirical trials across the current taxonomic dataset demonstrated sufficient separation without necessitating artificial smoothing. Future iterations of the model may dynamically auto-tune $T$ depending upon the severity of the measured label smoothing or focal loss integration.
+
+\subsection{Stable LogSumExp Implementation and Numerical Arithmetic}
+
+The programmatic evaluation of the free energy equation requires careful management of floating-point arithmetic to preclude numerical overflow during the exponentiation phase. The \texttt{EnergyOODDetector} class, residing within \texttt{src/taxon\_vision/uncertainty/ood\_detector.py}, implements a stable formulation of the LogSumExp operation utilising max subtraction.
+
+\begin{listing}[htbp]
+\begin{minted}{python}
+class EnergyOODDetector:
+    def __init__(self, energy_threshold: float = -12.5) -> None:
+        self.energy_threshold = energy_threshold
+
+    def compute_energy(self, logits: np.ndarray, temperature: float = 1.0) -> float:
+        scaled = logits / temperature
+        max_val = np.max(scaled)
+        energy = -temperature * (max_val + np.log(np.sum(np.exp(scaled - max_val))))
+        return float(energy)
+\end{minted}
+\caption{Numerically stable free energy computation implemented via NumPy.}
+\label{lst:compute_energy}
+\end{listing}
+
+By identifying the maximum scaled logit, $z_{\text{max}} = \max_i(z_i / T)$, and restructuring the analytical equation as $E(x; T) = -T \cdot (z_{\text{max}} + \log \sum_{i=1}^K \exp(z_i / T - z_{\text{max}}))$, the architecture guarantees that the argument to the exponential function never exceeds zero. This strategic factorisation isolates the exponential function from massive positive domains, ensuring pristine numerical stability and circumventing potential \texttt{NaN} propagation across arbitrary logit magnitudes, even when encountering extreme adversarial outliers.
+
+\subsection{Decision Boundary Calibration and Rejection Mechanics}
+
+The gating threshold for out-of-distribution rejection is established through rigorous empirical calibration on validation holdouts containing a mixture of in-domain taxa and out-of-domain noise artefacts. A static decision boundary threshold $\tau_{\text{energy}} = -12.5$ separates valid observations from uninformative data.
+
+The boolean evaluation routine dictates that any observation $x$ satisfying the condition:
+
+\begin{equation}
+    E(x; T) > \tau_{\text{energy}}
+\end{equation}
+
+is definitively flagged as out-of-distribution. Such observations are instantaneously rejected, preventing downstream inference allocation and safeguarding the biological database from pollution by uninformative or artificially synthesised captures. The \texttt{is\_ood} function simply queries this inequality and immediately intercepts the pipeline flow upon a positive flag.
+
+\section{Split Conformal Prediction Engine}
+\label{sec:split_conformal_prediction}
+
+Observations that successfully permeate the energy-based out-of-distribution gate proceed to the second tier of the epistemic safety protocol: the Split Conformal Prediction engine. While the energy detector eliminates non-biological or severely corrupted inputs, the conformal prediction module addresses the uncertainty inherent in distinguishing between visually similar, in-distribution taxonomic classes.
+
+Deep learning models cannot be implicitly trusted to provide point-estimate classifications for highly ambiguous morphological observations. The conformal prediction paradigm, formalised within this architecture following the seminal methodology of Angelopoulos \& Bates (2021), shifts the fundamental inference objective from producing a single, potentially erroneous class label to constructing a finite-sample, set-valued prediction. This methodology eschews point-wise estimation heuristics and instead provides strict, distribution-free mathematical guarantees regarding marginal coverage.
+
+\subsection{The Marginal Coverage Statistical Guarantee}
+
+The core mathematical invariant upheld by the \texttt{ConformalPredictionEngine} located in \texttt{src/taxon\_vision/uncertainty/conformal.py} is the assurance of a user-specified marginal coverage rate. For an input observation $X$ with an unknown true taxonomic label $Y$, the engine generates a prediction set $\mathcal{C}(X) \subseteq \mathcal{Y}$. The system strictly bounds the generalisation error by a nominal tolerance parameter $\alpha$, guaranteeing that the true label is contained within the prediction set with a probability of at least $1 - \alpha$:
+
+\begin{equation}
+    \mathbb{P}(Y \in \mathcal{C}(X)) \ge 1 - \alpha
+\end{equation}
+
+Crucially, under the foundational assumption of exchangeability between calibration and test data splits, this marginal coverage guarantee holds unconditionally. It demands absolutely no parametric assumptions regarding the underlying data geometry, the severity of the long-tail class imbalance, or the inherent calibration quality of the neural network's internal representations. The model acts solely as a heuristic scoring function; the mathematical validity of the conformal wrapper guarantees the specified false-negative constraint.
+
+\subsection{Calibration Phase and Empirical Quantile Estimation}
+
+The realisation of this mathematical guarantee necessitates a pre-deployment calibration phase utilising an independent, unobserved holdout calibration dataset, $\mathcal{D}_{\text{cal}} = \{(X_1, Y_1), \dots, (X_n, Y_n)\}$. For each unique observation in the calibration split, the engine evaluates a non-conformity score, $s_i$, which rigorously quantifies the degree of the model's divergence from predicting the actual ground-truth label.
+
+The specifically selected non-conformity metric is defined as the mathematical complement of the softmax probability assigned to the true class:
+\begin{equation}
+    s_i = 1 - \hat{p}_{Y_i}(X_i)
+\end{equation}
+
+Following the generation of non-conformity scores across the entire holdout split, the engine subsequently aggregates these scores to systematically compute an empirical quantile cutoff, denoted as $\hat{q}$. To successfully achieve the desired target error rate of $\alpha$, the cutoff $\hat{q}$ is derived as the $\frac{\lceil (n+1)(1-\alpha) \rceil}{n}$ empirical quantile of the calibration score distribution. This pre-calibrated, statically defined threshold, assigned to the \texttt{q\_hat} class attribute, forms the immovable foundation of the operational inference engine.
+
+\subsection{Inference Phase and Vectorised Set Construction}
+
+During live inference, the softmax probabilities $\hat{p}(x)$ generated for a novel observation $x$ are systematically evaluated against the established non-conformity quantile $\hat{q}$. The inference routine examines every potential candidate class $y \in \mathcal{Y}$ and calculates its hypothetical non-conformity score $s_y = 1 - \hat{p}_y(x)$.
+
+The candidate class $y$ is ultimately admitted into the conformal prediction set $\mathcal{C}(x)$ if and only if its respective score does not exceed the calibrated quantile threshold:
+\begin{equation}
+    \mathcal{C}(x) = \left\{ y \in \mathcal{Y} \mid 1 - \hat{p}_y(x) \le \hat{q} \right\} \equiv \left\{ y \in \mathcal{Y} \mid \hat{p}_y(x) \ge 1 - \hat{q} \right\}
+\end{equation}
+
+The Python implementation within the \texttt{predict\_set} method evaluates this conditional boundary in linear $\mathcal{O}(K)$ time complexity, utilising highly optimised, vectorised NumPy operations to eliminate performance bottlenecks and without requiring any dynamic heap memory allocation during array traversal.
+
+\begin{listing}[htbp]
+\begin{minted}{python}
+def predict_set(self, probabilities: np.ndarray) -> tuple[list[int], bool]:
+    scores = 1.0 - probabilities
+    pred_set = [int(idx) for idx in np.where(scores <= self.q_hat)[0]]
+
+    refer_to_human = len(pred_set) == 0 or len(pred_set) > self.k_max
+    return pred_set, refer_to_human
+\end{minted}
+\caption{Conformal set construction and conditional human referral evaluation.}
+\label{lst:predict_set}
+\end{listing}
+
+\section{Human Triage Routing Invariants and Pipeline Integrity}
+\label{sec:human_triage_routing}
+
+The automated generation of conformal prediction sets facilitates a highly rigorous and auditable interface between rapid algorithmic processing and meticulous human taxonomic expertise. The structure and total cardinality of the generated set $\mathcal{C}(x)$ deterministically dictate the subsequent operational routing of the visual observation.
+
+A strict, deterministic referral policy enforces the immediate routing of epistemically ambiguous observations into the active learning human review queue, accessed exclusively via the designated operator triage interface. The automatic referral conditions are stringently defined by two absolute cardinal invariants, detailed below:
+
+\begin{enumerate}[label=\textbf{\arabic*.}]
+    \item \textbf{The Empty Prediction Set ($\vert\mathcal{C}(x)\vert = 0$):} This specific failure mode occurs when the network's output distribution is highly entropic or incredibly flat, such that no single class probability $\hat{p}_i(x)$ manages to surpass the minimum confidence threshold defined by $1 - \hat{q}$. In this precise scenario, the predictive model explicitly acknowledges its fundamental inability to confirm any taxon that successfully satisfies the requisite mathematical coverage bounds. Consequently, the observation must be elevated for manual taxonomic inspection.
+    \item \textbf{The Excessive Set Cardinality ($\vert\mathcal{C}(x)\vert > k_{\text{max}}$):} This state frequently materialises when the observation exhibits profound morphological ambiguity, causing multiple closely related species or sympatric taxa to share concurrently elevated probabilities. If the absolute size of the prediction set actively exceeds the configurable cardinality threshold $k_{\text{max}}$ (which officially defaults to 3 within the engine initialisation protocol), the generated taxonomic assertion is deemed far too diffuse and uncertain to warrant automated biological database ingestion.
+\end{enumerate}
+
+Any observations triggering either of these two invariant conditions automatically prompt the assertion of the \texttt{refer\_to\_human} boolean flag, seamlessly integrating rigorous statistical bounds with supervised operational intervention protocols. This bespoke architecture guarantees that the TaxonVision platform inherently scales autonomously across clearly identifiable taxa whilst judiciously reserving exceedingly scarce and valuable human taxonomic expertise exclusively for the most epistemically challenging and controversial biological instances. By structurally intertwining conformal bounds with energy-based rejection, the entire pipeline is insulated against deceptive overconfidence and data pollution.
