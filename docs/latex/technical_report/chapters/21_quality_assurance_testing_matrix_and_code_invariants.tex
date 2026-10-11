@@ -6,6 +6,13 @@ In distributed MLOps architectures, silent degradation poses a substantially gre
 \section{The Dual-Target Testing Matrix}
 \label{sec:dual_target_matrix}
 
+\begin{figure}[htbp]
+\centering
+\input{figures/fig_23_quality_assurance_and_invariants.tikz}
+\caption{Multi-tier quality assurance matrix, dual runtime targets, and mathematical invariant verification.}
+\label{fig:quality_assurance_and_invariants}
+\end{figure}
+
 Executing a comprehensive testing suite directly on local hardware often necessitates configuring monolithic environments that intertwine inference backends, web service gateways, and metric telemetry. Such monolithic configurations are incompatible with the rapid feedback cycles required in continuous integration contexts. To resolve this tension, the testing toolchain separates validation into two explicitly segregated environmental targets, managed declaratively via \texttt{pixi.toml}.
 
 \subsection{Environmental Segregation: CPU versus GPU}

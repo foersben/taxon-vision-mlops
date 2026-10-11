@@ -7,6 +7,13 @@ The deployment of the TaxonVision-MLOps pipeline into a production environment r
 \section{Production Serving Container Architecture}
 \label{sec:production_container_architecture}
 
+\begin{figure}[htbp]
+\centering
+\input{figures/fig_18_multistage_container_build.tikz}
+\caption{Multi-stage container build pipeline, non-root user isolation, and runtime execution.}
+\label{fig:multistage_container_build}
+\end{figure}
+
 The \texttt{Dockerfile} governing the API service is engineered to construct a minimal, highly secure, and computationally efficient serving environment. The architecture deliberately eschews traditional Debian or Ubuntu base images, which are frequently encumbered by vast numbers of unused system libraries that inflate the image footprint and expand the vulnerability surface.
 
 \subsection{Base Image Selection}

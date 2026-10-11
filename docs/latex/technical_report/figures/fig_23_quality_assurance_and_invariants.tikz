@@ -1,0 +1,121 @@
+\definecolor{QaRed}{HTML}{C62828}
+\definecolor{QaBlue}{HTML}{1565C0}
+\definecolor{QaGreen}{HTML}{2E7D32}
+\definecolor{QaSlate}{HTML}{37474F}
+\definecolor{QaBg}{HTML}{FFEBEE}
+
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    node distance=1.1cm and 1.6cm,
+    font=\footnotesize,
+    >=stealth,
+    gatebox/.style={
+        rectangle,
+        rounded corners=4pt,
+        draw=QaRed,
+        fill=QaRed!8,
+        thick,
+        inner sep=7pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=5.2cm
+    },
+    testbox/.style={
+        rectangle,
+        rounded corners=4pt,
+        draw=QaBlue,
+        fill=QaBlue!8,
+        thick,
+        inner sep=7pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=5.2cm
+    },
+    invbox/.style={
+        rectangle,
+        rounded corners=4pt,
+        draw=QaGreen,
+        fill=QaGreen!8,
+        thick,
+        inner sep=7pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=5.4cm
+    },
+    groupbox/.style={
+        rectangle,
+        rounded corners=6pt,
+        draw=QaSlate!50,
+        fill=QaSlate!5,
+        dashed,
+        inner sep=10pt
+    },
+    arrow/.style={
+        ->,
+        thick,
+        draw=QaSlate
+    }
+]
+
+% Column 1: Static Analysis Gates
+\node[gatebox] (static) {
+    \textbf{Static Analysis \& Quality Gates}\\
+    \scriptsize $\bullet$ \textbf{Ruff}: Formatting \& fast linting rules\\
+    \scriptsize $\bullet$ \textbf{Mypy Strict}: Zero untyped variables\\
+    \scriptsize $\bullet$ \textbf{Complexipy}: Cognitive complexity $\le 20$\\
+    \scriptsize $\bullet$ \textbf{Coverage Gate}: \texttt{--cov-fail-under=78}\\
+    \scriptsize $\bullet$ \textbf{Secret Scanner}: Gitleaks entropy audit
+};
+
+\node[gatebox, below=0.7cm of static] (hook) {
+    \textbf{Pre-Commit Interception Engine}\\
+    \scriptsize $\bullet$ 20 discrete Git interception hooks\\
+    \scriptsize $\bullet$ Cryptographic GPG/SSH commit signature\\
+    \scriptsize $\bullet$ Pure Pixi: rejection of \texttt{.venv/} \& \texttt{uv.lock}\\
+    \scriptsize $\bullet$ Markdown Rule 04 formatting invariants
+};
+
+% Column 2: Dual-Target Test Matrix
+\node[testbox, right=1.6cm of static] (suites) {
+    \textbf{Categorised Testing Suites}\\
+    \scriptsize $\bullet$ \textbf{Unit Tests} (\texttt{tests/unit/}):\\
+    \scriptsize \phantom{$\bullet$ } Isolated, execution time $<10$\,ms\\
+    \scriptsize $\bullet$ \textbf{Integration Tests} (\texttt{tests/integration/}):\\
+    \scriptsize \phantom{$\bullet$ } FastAPI TestClient, Arrow streaming\\
+    \scriptsize $\bullet$ \textbf{Dual Environments}:\\
+    \scriptsize \phantom{$\bullet$ } \texttt{ci-dev} (CPU fast) vs \texttt{dev} (GPU full)
+};
+
+\node[invbox, below=0.7cm of suites] (hypothesis) {
+    \textbf{Generative Property Testing}\\
+    \scriptsize \textbf{Hypothesis Framework}\\
+    \scriptsize $\bullet$ Randomised Dirichlet probability simplexes\\
+    \scriptsize $\bullet$ Beta scaling factor stress testing\\
+    \scriptsize $\bullet$ Underflow protection in Class-Balanced Loss\\
+    \scriptsize $\bullet$ Arbitrary image resolutions \& coordinate bounds
+};
+
+% Column 3: Mathematical Invariant Audits
+\node[invbox, right=1.6cm of suites] (mathinv) {
+    \textbf{Mathematical \& Legal Invariants}\\
+    \scriptsize $\bullet$ \textbf{Conformal Coverage}: Empirical $\ge 1 - \alpha$\\
+    \scriptsize $\bullet$ \textbf{License Audit}: 100\% CC0 / CC-BY / CC-BY-NC\\
+    \scriptsize $\bullet$ \textbf{Zero-Allocation}: Hot inference path check\\
+    \scriptsize $\bullet$ \textbf{OKF Conformance}: 52/52 fresh concept docs
+};
+
+% Groupings
+\begin{scope}[on background layer]
+    \node[groupbox, fit=(static)(hook), label={[font=\bfseries, text=QaRed]above:Static Analysis Gates}] (g1) {};
+    \node[groupbox, fit=(suites)(hypothesis), label={[font=\bfseries, text=QaBlue]above:Test Matrix \& Hypothesis}] (g2) {};
+    \node[groupbox, fit=(mathinv), label={[font=\bfseries, text=QaGreen]above:Mathematical Invariants}] (g3) {};
+\end{scope}
+
+% Arrows
+\draw[arrow] (static) -- (suites);
+\draw[arrow] (hook) -- (hypothesis);
+\draw[arrow] (suites) -- (mathinv);
+\draw[arrow] (hypothesis) -- (mathinv);
+
+\end{tikzpicture}%
+}

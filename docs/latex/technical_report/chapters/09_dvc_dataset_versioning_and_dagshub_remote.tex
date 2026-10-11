@@ -7,6 +7,13 @@ The physical topography and bounded execution strategies delineated in Chapter~\
 \section{Data Version Control (DVC) Core Architecture}
 \label{sec:dvc_core_architecture}
 
+\begin{figure}[htbp]
+\centering
+\input{figures/fig_20_dvc_dataset_versioning.tikz}
+\caption{Data Version Control (DVC) content-addressed storage and DagsHub remote synchronization.}
+\label{fig:dvc_dataset_versioning}
+\end{figure}
+
 At its core, DVC functions by decoupling the versioning of logical pointers (which remain in Git) from the storage of physical binary assets (which are relegated to a dedicated, high-bandwidth backend). This fundamental decoupling ensures that the Git repository remains strictly text-based, compact, and blazingly fast. Meanwhile, vast datasets, ONNX runtime graphs, and Apache Parquet metadata manifests are securely managed via a robust Content-Addressed Storage (CAS) mechanism. This division of responsibility fundamentally mitigates the scaling limitations that typically paralyse monolithic source control paradigms during data-intensive biological modelling.
 
 \subsection{Content-Addressed Storage (CAS) Mechanics}

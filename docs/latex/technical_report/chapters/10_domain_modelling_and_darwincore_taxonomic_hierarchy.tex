@@ -7,6 +7,13 @@ The architectural integrity of the TaxonVision-MLOps pipeline is predicated upon
 \section{Domain-Driven Design for Biodiversity Informatics}
 \label{sec:ddd_biodiversity}
 
+\begin{figure}[htbp]
+\centering
+\input{figures/fig_21_darwincore_taxonomic_hierarchy.tikz}
+\caption{DarwinCore domain entity relationships and hierarchical lowest common ancestor mapping.}
+\label{fig:darwincore_taxonomic_hierarchy}
+\end{figure}
+
 In the context of computational biodiversity and machine learning, the domain layer serves as the single source of truth for the systemic representation of biological reality. Traditional implementations often tightly couple data models to Object-Relational Mapping (ORM) frameworks or specific deep learning tensor structures, leading to an erosion of architectural boundaries and a proliferation of implicit assumptions regarding data integrity. Conversely, the TaxonVision-MLOps architecture isolates the domain entities within the \texttt{src/taxon\_vision/domain/} namespace, entirely independent of storage paradigms or execution frameworks.
 
 The implementation relies on Pydantic v2 schemas for the definition of all domain entities. The utilisation of Pydantic introduces several critical advantages: rigorous type enforcement, high-performance validation implemented via Rust-based core logic, and predictable serialisation semantics. Every entity boundary is explicitly defined, ensuring that malformed or semantically invalid data is intercepted at the perimeter of the application, long before such data can propagate into the training pipelines or the model inference endpoints.

@@ -5,6 +5,13 @@
 \section{The Human-in-the-Loop Active Learning Paradigm}
 \label{sec:al_paradigm}
 
+\begin{figure}[htbp]
+\centering
+\input{figures/fig_22_active_learning_triage_queue.tikz}
+\caption{Human-in-the-loop active learning feedback loop, uncertainty acquisition triggers, and priority triage queue.}
+\label{fig:active_learning_triage_queue}
+\end{figure}
+
 The operational deployment of deep neural networks in ecological workflows introduces significant economic and statistical constraints. In biodiversity monitoring, the underlying data distribution is inherently long-tailed. Random sampling strategies inadvertently over-index on canonical, commonly occurring species, such as domestic cats or common dandelions. This naive approach starves rare or morphologically ambiguous sister taxa of the necessary training signal required to refine decision boundaries. Compounding this statistical challenge is the economic reality of data annotation: labelling ambiguous biological specimens necessitates the expertise of domain taxonomists, rendering manual review a strictly finite and expensive resource.
 
 To mitigate these constraints, the TaxonVision architecture implements a robust human-in-the-loop active learning paradigm. By systematically querying the model for uncertainty estimates, the system identifies and isolates observations that will provide the maximal marginal information gain per unit of labelling effort. Rather than unconditionally storing and reviewing all inbound telemetry, the system dynamically routes unlabelled samples into a prioritised triage queue, allowing human operators to focus exclusively on highly contested or anomalous records.

@@ -7,6 +7,13 @@ The deployment of deterministic machine learning workloads necessitates a rigoro
 \section{API Deployment Specification}
 \label{sec:api_deployment_specification}
 
+\begin{figure}[htbp]
+\centering
+\input{figures/fig_19_k3s_workloads_and_storage.tikz}
+\caption{Kubernetes workload topology, pod security context, and NodePort zero-trust ingress.}
+\label{fig:k3s_workloads_and_storage}
+\end{figure}
+
 The foundational architecture of the TaxonVision inference service is encapsulated within a Kubernetes Deployment primitive, explicitly namespaced within the \texttt{taxon-vision} logical boundary. This topological isolation ensures that the MLOps pipeline remains entirely decoupled from cluster-level administration systems such as internal ingress controllers, log forwarders, and dynamic storage provisioners. The application operates as a self-contained entity, minimising interference from ancillary system components.
 
 The service defines a declarative replica configuration mandating exactly two concurrent pod instances ($N = 2$). This baseline multiplicity guarantees fundamental high availability at the application layer, facilitating request load balancing whilst establishing a requisite fault tolerance threshold. In the event of a catastrophic node hardware failure, anomalous memory consumption, or an unexpected kernel panic, the Kubernetes control plane is empowered to immediately reschedule the terminating pod. During this recovery phase, the surviving replica continues to multiplex the incoming inferential requests, ensuring that the continuous integration testing pipeline and external operator interfaces suffer no observable interruption. The mathematical probability of simultaneous failure for both isolated replicas is deemed statistically insignificant under standard operating conditions.

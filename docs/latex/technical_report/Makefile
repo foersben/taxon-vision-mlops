@@ -10,11 +10,14 @@ all: $(PROJECT).pdf
 
 pdf: $(PROJECT).pdf
 
-export TEXMF_OUTPUT_DIRECTORY ?= .
+export TEXMF_OUTPUT_DIRECTORY := $(shell pwd)
 
-# Rule to build the PDF with automated dependency tracking and BibTeX resolution via latexmk
+# Rule to build the PDF with automated dependency tracking and BibTeX resolution
 $(PROJECT).pdf: $(PROJECT).tex references.bib $(wildcard chapters/*.tex) $(wildcard figures/*.tikz)
-	latexmk -pdf -outdir=. -shell-escape -interaction=nonstopmode -halt-on-error $(PROJECT).tex
+	pdflatex -shell-escape -interaction=nonstopmode $(PROJECT).tex
+	bibtex $(PROJECT) || true
+	pdflatex -shell-escape -interaction=nonstopmode $(PROJECT).tex
+	pdflatex -shell-escape -interaction=nonstopmode $(PROJECT).tex
 
 # Clean rule to remove temporary, auxiliary, and target PDF files
 clean:

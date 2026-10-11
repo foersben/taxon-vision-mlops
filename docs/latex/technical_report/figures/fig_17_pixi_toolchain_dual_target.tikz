@@ -1,0 +1,152 @@
+\definecolor{PixiPrimary}{HTML}{0D47A1}
+\definecolor{PixiSecondary}{HTML}{1B5E20}
+\definecolor{PixiAccent}{HTML}{BF360C}
+\definecolor{PixiSlate}{HTML}{37474F}
+\definecolor{PixiBg}{HTML}{ECEFF1}
+
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    node distance=1.2cm and 1.8cm,
+    font=\footnotesize,
+    >=stealth,
+    hostbox/.style={
+        rectangle,
+        rounded corners=5pt,
+        draw=PixiSlate,
+        fill=PixiSlate!8,
+        thick,
+        inner sep=8pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=4.8cm
+    },
+    satbox/.style={
+        rectangle,
+        rounded corners=5pt,
+        draw=PixiPrimary,
+        fill=PixiPrimary!8,
+        thick,
+        inner sep=8pt,
+        align=center,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=4.8cm
+    },
+    envbox_dev/.style={
+        rectangle,
+        rounded corners=5pt,
+        draw=PixiAccent,
+        fill=PixiAccent!8,
+        thick,
+        inner sep=8pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=5.2cm
+    },
+    envbox_ci/.style={
+        rectangle,
+        rounded corners=5pt,
+        draw=PixiSecondary,
+        fill=PixiSecondary!8,
+        thick,
+        inner sep=8pt,
+        align=left,
+        drop shadow={opacity=0.15, shadow xshift=2pt, shadow yshift=-2pt},
+        minimum width=5.2cm
+    },
+    justbox/.style={
+        rectangle,
+        rounded corners=5pt,
+        draw=PixiPrimary!80,
+        fill=PixiPrimary!12,
+        thick,
+        inner sep=7pt,
+        align=left,
+        minimum width=4.8cm
+    },
+    groupbox/.style={
+        rectangle,
+        rounded corners=6pt,
+        draw=PixiSlate!50,
+        fill=PixiBg!50,
+        dashed,
+        inner sep=10pt
+    },
+    arrow/.style={
+        ->,
+        thick,
+        draw=PixiSlate
+    }
+]
+
+% Column 1: Physical Host & Specification
+\node[hostbox] (host) {
+    \textbf{\texttt{hive-mind} Compute Node}\\
+    \scriptsize $\bullet$ OS: Ubuntu 26.04.1 LTS (\texttt{resolute})\\
+    \scriptsize $\bullet$ CPU: AMD Ryzen 9 9950X (16C/32T)\\
+    \scriptsize $\bullet$ RAM: 64\,GB DDR5-6000 ECC\\
+    \scriptsize $\bullet$ GPU: RTX 5070 Ti 16\,GB GDDR7\\
+    \scriptsize $\bullet$ Microarch: Blackwell SM 120 (CC 12.0)\\
+    \scriptsize $\bullet$ Driver: 615.71.09 / CUDA UMD 13.4
+};
+
+\node[satbox, below=1.0cm of host] (rattler) {
+    \textbf{Rattler SAT Solver Engine}\\
+    \scriptsize Resolves \texttt{pyproject.toml} via SAT\\
+    \scriptsize Locks SHA-256 Hashes $\rightarrow$ \texttt{pixi.lock}\\
+    \scriptsize Channels: \texttt{conda-forge}, \texttt{pytorch}, \texttt{nvidia}
+};
+
+% Column 2: Dual-Target Environments
+\node[envbox_dev, right=1.6cm of host] (env_dev) {
+    \textbf{Environment: \texttt{dev} (GPU-Accelerated)}\\
+    \scriptsize $\bullet$ Target: Physical Node \& GPU Training\\
+    \scriptsize $\bullet$ PyTorch 2.7.0 \texttt{+cu128} (CUDA 12.8)\\
+    \scriptsize $\bullet$ Torchvision 0.22.0, Torchaudio 2.7.0\\
+    \scriptsize $\bullet$ TensorRT \& ONNX Runtime GPU\\
+    \scriptsize $\bullet$ Timm Vision Models \& Optuna Tuning
+};
+
+\node[envbox_ci, below=0.8cm of env_dev] (env_ci) {
+    \textbf{Environment: \texttt{ci-dev} (CPU Lightweight)}\\
+    \scriptsize $\bullet$ Target: Ephemeral CI \& Pre-commit\\
+    \scriptsize $\bullet$ PyTorch 2.5.1 CPU-only\\
+    \scriptsize $\bullet$ ONNX Runtime CPU (Zero CUDA footprint)\\
+    \scriptsize $\bullet$ Instant Bootstrap in K8s Agents\\
+    \scriptsize $\bullet$ Strict Mypy, Ruff, Hypothesis Suites
+};
+
+% Column 3: Justfile & Invariants
+\node[justbox, right=1.6cm of env_dev] (just) {
+    \textbf{Justfile Automation Recipes}\\
+    \scriptsize $\bullet$ \texttt{just check}: Pre-commit Gauntlet\\
+    \scriptsize $\bullet$ \texttt{just test}: Pytest \& Invariants\\
+    \scriptsize $\bullet$ \texttt{just train}: Class-Balanced Classifier\\
+    \scriptsize $\bullet$ \texttt{just serve}: FastAPI \& HTMX Dashboard\\
+    \scriptsize $\bullet$ \texttt{just complexity}: Complexipy $\le 20$\\
+    \scriptsize $\bullet$ \texttt{just validate-okf}: OKF v0.2 Audit
+};
+
+\node[hostbox, below=0.8cm of just] (invariants) {
+    \textbf{Toolchain Security Invariants}\\
+    \scriptsize $\bullet$ Pure Pixi: \textbf{Zero} \texttt{.venv/} created\\
+    \scriptsize $\bullet$ Strict Ban: Bare \texttt{python}, \texttt{pip}, \texttt{uv}\\
+    \scriptsize $\bullet$ Immutable execution: \texttt{pixi run --frozen}\\
+    \scriptsize $\bullet$ Cryptographic GPG/SSH commit signing
+};
+
+% Groupings
+\begin{scope}[on background layer]
+    \node[groupbox, fit=(host)(rattler), label={[font=\bfseries, text=PixiSlate]above:Physical Node \& Solver}] (g1) {};
+    \node[groupbox, fit=(env_dev)(env_ci), label={[font=\bfseries, text=PixiPrimary]above:Bifurcated Environments}] (g2) {};
+    \node[groupbox, fit=(just)(invariants), label={[font=\bfseries, text=PixiSecondary]above:Orchestration \& Invariants}] (g3) {};
+\end{scope}
+
+% Arrows
+\draw[arrow] (host) -- (rattler);
+\draw[arrow] (rattler.east) -- ++(0.6,0) |- (env_dev.west) node[near end, above, font=\tiny] {\texttt{-e dev}};
+\draw[arrow] (rattler.east) -- ++(0.6,0) |- (env_ci.west) node[near end, below, font=\tiny] {\texttt{-e ci-dev}};
+\draw[arrow] (env_dev.east) -- (just.west);
+\draw[arrow] (env_ci.east) -- (invariants.west);
+
+\end{tikzpicture}%
+}
