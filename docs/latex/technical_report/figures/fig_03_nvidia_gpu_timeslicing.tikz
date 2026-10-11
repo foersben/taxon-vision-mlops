@@ -1,0 +1,80 @@
+\definecolor{TaxonPrimary}{HTML}{1976D2}
+\definecolor{TaxonSecondary}{HTML}{2E7D32}
+\definecolor{TaxonAccent}{HTML}{E65100}
+\definecolor{TaxonDark}{HTML}{616161}
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    font=\sffamily,
+    box/.style={draw=TaxonDark, thick, rounded corners=2pt, align=center, minimum height=1.2cm},
+    hw/.style={box, fill=TaxonDark!10, minimum width=14cm, minimum height=2cm},
+    cp/.style={box, fill=TaxonSecondary!10, draw=TaxonSecondary, minimum width=12cm, minimum height=1.5cm},
+    slot/.style={box, fill=TaxonPrimary!10, draw=TaxonPrimary, minimum width=3.2cm, minimum height=2.5cm, text width=3cm},
+    arrow/.style={-{Stealth[scale=1.2]}, thick, TaxonDark},
+    dashed_arrow/.style={-{Stealth[scale=1.2]}, dashed, thick, TaxonAccent}
+]
+
+    % Physical Hardware Layer
+    \node[hw] (gpu) {
+        \textbf{Physical GPU: NVIDIA GeForce RTX 5070 Ti}\\
+        \small 16 GB GDDR7 VRAM \textbar{} Compute Capability 12.0
+    };
+
+    % Control Plane Layer
+    \node[cp, above=1cm of gpu] (plugin) {
+        \textbf{Control Plane: NVIDIA Device Plugin DaemonSet}\\
+        \small \texttt{kube-system} \textbar{} Reading \texttt{nvidia-time-slicing-config.yaml} (\texttt{replicas: 4})
+    };
+
+    % Logical Slots Layer
+    \node[slot, above=1.5cm of plugin.north west, anchor=south west, xshift=0.1cm] (slot1) {
+        \textbf{Slot 1}\\
+        FastAPI / ONNX Serving Pod\\
+        \vspace{0.2cm}
+        \small Quota: 3.5 GB
+    };
+
+    \node[slot, right=0.2cm of slot1] (slot2) {
+        \textbf{Slot 2}\\
+        Jenkins Ephemeral CI Agent\\
+        \vspace{0.2cm}
+        \small Quota: 3.5 GB
+    };
+
+    \node[slot, right=0.2cm of slot2] (slot3) {
+        \textbf{Slot 3}\\
+        Optuna Bayesian Training Head\\
+        \vspace{0.2cm}
+        \small Quota: 5.0 GB
+    };
+
+    \node[slot, right=0.2cm of slot3] (slot4) {
+        \textbf{Slot 4}\\
+        Dynamic Headroom / Active Learning Ingest\\
+        \vspace{0.2cm}
+        \small Quota: 4.0 GB
+    };
+
+    % Wrapping Box for Logical Slots
+    \begin{scope}[on background layer]
+        \node[fit=(slot1)(slot2)(slot3)(slot4), fill=TaxonPrimary!5, draw=TaxonPrimary, dashed, rounded corners, inner sep=0.4cm] (logical_wrapper) {};
+        \node[above=0.1cm of logical_wrapper.north, font=\bfseries\color{TaxonPrimary}] {Logical Virtual Slices (\texttt{nvidia.com/gpu: 1} per slot)};
+    \end{scope}
+
+    % Connections
+    \draw[arrow] (plugin.south) -- node[right, font=\footnotesize] {Multiplexing \& Context Switching} (gpu.north);
+
+    \draw[dashed_arrow] (slot1.south) -- (plugin.north -| slot1.south);
+    \draw[dashed_arrow] (slot2.south) -- (plugin.north -| slot2.south);
+    \draw[dashed_arrow] (slot3.south) -- (plugin.north -| slot3.south);
+    \draw[dashed_arrow] (slot4.south) -- (plugin.north -| slot4.south);
+
+    \node[anchor=south, font=\footnotesize\color{TaxonAccent}, inner sep=2pt, align=center] at (logical_wrapper.south) {Software Enforcement:\\\texttt{torch.cuda.set\_per\_process\_memory\_fraction} \& Zero-Allocation ONNX INT8 Runtimes};
+
+\end{tikzpicture}
+}
+\caption{Architectural topology of the NVIDIA GPU time-slicing mechanism on a single RTX 5070 Ti, demonstrating the strict virtualisation of the 16 GB VRAM pool into four logical multi-tenant slots.}
+\label{fig:nvidia_gpu_timeslicing}
+\end{figure}
