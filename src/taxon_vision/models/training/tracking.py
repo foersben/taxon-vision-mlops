@@ -198,11 +198,35 @@ def _promote_model_if_better(model: nn.Module, pr_auc: float) -> None:
     mlflow.log_metric("val_promotion_score", pr_auc)
 
     model_name = "taxon_vision_classifier"
+    input_dim = 1280
+    for module in model.modules():
+        if isinstance(module, nn.Linear):
+            input_dim = module.in_features
+            break
+
+    import torch
+
+    dummy_input = torch.randn(1, input_dim).numpy()
+
     try:
-        model_info = mlflow.pytorch.log_model(model, "model", registered_model_name=model_name)
-    except Exception as err:
-        logger.warning("Failed to log model to registry: %s", err)
-        return
+        model_info = mlflow.pytorch.log_model(
+            model,
+            name="model",
+            registered_model_name=model_name,
+            input_example=dummy_input,
+        )
+    except Exception:
+        try:
+            model_info = mlflow.pytorch.log_model(
+                model,
+                name="model",
+                registered_model_name=model_name,
+                input_example=dummy_input,
+                serialization_format="pickle",
+            )
+        except Exception as err:
+            logger.warning("Failed to log model to registry: %s", err)
+            return
 
     client = MlflowClient()
     try:

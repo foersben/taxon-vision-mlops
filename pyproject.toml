@@ -137,6 +137,7 @@ requests = ">=2.32.0"
 scikit-learn = ">=1.6.0"
 optuna = ">=4.1.0"
 mlflow = ">=3.16.0,<4"
+onnx = ">=1.23.2,<2"
 
 [tool.pixi.feature.gpu.dependencies]
 cuda-version = "12.*"

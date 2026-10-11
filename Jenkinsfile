@@ -167,10 +167,11 @@ spec:
               --cuda-memory-fraction 0.7
 
             # Re-export fresh ONNX computational graph
-            pixi run --frozen -e dev python -m taxon_vision.inference.onnx_exporter || true
+            pixi run --frozen -e dev python -m taxon_vision.inference.onnx_exporter --extractor dinov3
 
-            # Push freshly trained weights and ONNX artifacts to DagsHub DVC remote
-            pixi run --frozen -e dev dvc push models/checkpoints/head.pt models/checkpoints/model.onnx || true
+            # Record trained model artifacts in DVC cache and push to DagsHub remote
+            pixi run --frozen -e dev dvc commit -f models/checkpoints/head.pt models/checkpoints/model.onnx
+            pixi run --frozen -e dev dvc push models/checkpoints/head.pt models/checkpoints/model.onnx
           '''
         }
       }

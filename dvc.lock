@@ -39,8 +39,8 @@ stages:
       nfiles: 1
     - path: src/taxon_vision/models/
       hash: md5
-      md5: 6a2ef4f6175d585137a01862f7641a96.dir
-      size: 178708
+      md5: e31797a4f470fae574f0d89bb6bde411.dir
+      size: 198939
       nfiles: 31
     params:
       config/params.yaml:
@@ -49,5 +49,21 @@ stages:
     outs:
     - path: models/checkpoints/head.pt
       hash: md5
-      md5: 4ad8dd53fd46a1db2e4dbab78b038e90
-      size: 16838
+      md5: df3cd9c31a7b7ced889df2b078daea6f
+      size: 17229
+  export_onnx:
+    cmd: pixi run --frozen -e dev python -m taxon_vision.inference.onnx_exporter
+    deps:
+    - path: models/checkpoints/head.pt
+      hash: md5
+      md5: df3cd9c31a7b7ced889df2b078daea6f
+      size: 17229
+    - path: src/taxon_vision/inference/onnx_exporter.py
+      hash: md5
+      md5: c164c94e0ad7d53a36e4dfd9fffd6c3d
+      size: 7450
+    outs:
+    - path: models/checkpoints/model.onnx
+      hash: md5
+      md5: ed951135700c0f5966b9d8caa1c983d0
+      size: 9966524
