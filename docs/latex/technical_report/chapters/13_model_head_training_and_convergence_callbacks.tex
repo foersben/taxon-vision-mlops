@@ -1,35 +1,145 @@
-% !TeX root = ../technical_report.tex
-\chapter{Classification Head Architecture, Optimization Loops, and Callbacks}
-\label{ch:classification_head_training}
+\chapter{Model Head Training and Convergence Callbacks}
+\label{chap:model_head_training}
 
-% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
-% -------------------------------------------------------------
-% Focus: Classifier head geometry, training loops over cached vectors, and convergence callbacks.
-% Repository Files:
-%   - src/taxon_vision/models/head.py
-%   - src/taxon_vision/models/training/types.py (EmbeddingSplit, HeadTrainingConfig)
-%   - src/taxon_vision/models/training/embeddings.py
-%   - src/taxon_vision/models/training/loops.py
-% Technical & Implementation Details:
-%   - Head Architecture: TaxonClassifier (Dropout(p) followed by Linear(dim, num_classes)).
-%   - Data Containers: EmbeddingSplit (shape validation, feature_dim property, get_samples_per_class).
-%   - Decomposed Optimization Routines:
-%       * _train_cached_epoch: mini-batch permutations, noise_std representation jitter injection, AdamW step.
-%       * _evaluate_cached_split: tensorized forward pass under no_grad, Macro F1 and Macro PR-AUC calculation.
-%       * _track_checkpoint: dynamic best score tracking and deepcopy state-dict retention.
-%       * _should_stop_early: early stopping and ASHA pruning threshold evaluation.
-%   - Active Callbacks:
-%       * Restore best weights (restore_best_weights: True)
-%       * ReduceLROnPlateau (factor=0.5, patience=reduce_lr_patience)
-%       * Early stopping (patience=early_stopping_patience)
-%   - Cognitive Complexity Invariants: keeping cyclomatic and cognitive complexity <= 15 (complexipy check).
-% -------------------------------------------------------------
+\section{Introduction to Decoupled Linear Probing}
 
-\section{Classification Head Geometry and Transfer Learning}
-\label{sec:classification_head_geometry}
+The computational cost of fine-tuning large-scale vision foundation models across thousands of granular biological classes renders traditional end-to-end backpropagation intractable for rapid experimentation. TaxonVision-MLOps addresses this limitation by adopting a decoupled linear probing philosophy. This approach strictly separates the extraction of high-dimensional visual priors, which are computed via pre-trained, frozen vision transformer or convolutional neural network (CNN) backbones, from the taxonomic categorisation task. By restricting trainable parameters strictly to a terminal, lightweight linear projection head, the platform accelerates optimisation cycles from hours to mere seconds. This architecture fundamentally eliminates the risk of catastrophic forgetting of generalized visual representations whilst simultaneously mitigating gradient instability and curbing excessive GPU memory consumption.
 
-\section{Cached Embedding Training Loop and Mini-Batch Dynamics}
-\label{sec:cached_embedding_training_loop}
+\section{TaxonClassifier Architecture}
+\label{sec:taxonclassifier_architecture}
 
-\section{Convergence Callbacks and Best-Weight Restoration}
+The core of this decoupled methodology is crystallised within the \texttt{TaxonClassifier} module, located at \texttt{src/taxon\_vision/models/head.py}. This class encapsulates the dual-stage evaluation pathway and enforces rigorous regularisation.
+
+\subsection{Frozen Vision Backbones}
+
+Upon instantiation, the \texttt{TaxonClassifier} accepts a pre-trained feature extractor backbone. To guarantee parameter immutability and prevent the propagation of noisy gradients from heavily imbalanced target domains into the robustly pre-trained feature space, the model traverses all backbone parameters and forcefully disables gradient tracking:
+
+\begin{minted}{python}
+for param in self.backbone.parameters():
+    param.requires_grad = False
+\end{minted}
+
+This explicitly shields the backbone. The computational complexity of the forward pass remains constant with respect to the number of training iterations, represented as $\mathcal{O}(T \times B \times C_{\text{feat}})$, where $T$ denotes the total number of training steps, $B$ is the batch size, and $C_{\text{feat}}$ signifies the fixed computational cost of a backbone forward pass.
+
+\subsection{Linear Projection and Regularisation}
+
+Categorisation is performed by a sequentially structured trainable projection head. To combat over-fitting and prevent the co-adaptation of neurons on high-dimensional embeddings, a stochastic regularisation layer is injected prior to the linear projection mapping. Specifically, a Dropout layer with a default probability $p=0.2$ is employed:
+
+\begin{minted}{python}
+self.head = nn.Sequential(
+    nn.Dropout(p=dropout),
+    nn.Linear(feature_dim, num_classes),
+)
+\end{minted}
+
+This forces the linear weights to rely upon a diverse constellation of visual features rather than overly depending upon any single idiosyncratic activation vector.
+
+\subsection{Dual Execution Pathways}
+
+The architecture facilitates both end-to-end inference and accelerated training via dual forward methodologies:
+
+\begin{enumerate}
+    \item \textbf{End-to-End Execution (\texttt{forward}):} This standard pathway ingests 4D raw image tensors of shape $(B, C, H, W)$. It delegates feature extraction to the \texttt{forward\_features} method, which securely wraps the backbone computation within a \texttt{torch.no\_grad()} context manager to ensure spatial and temporal memory efficiency. The resulting embeddings are subsequently channelled through the head to produce unnormalised class logits.
+    \item \textbf{Rapid Optimisation Pathway (\texttt{forward\_head}):} During hyperparameter tuning or iterative head training, computing the backbone outputs repeatedly is entirely redundant. The \texttt{forward\_head} method directly ingests pre-computed 2D embedding tensors of shape $(B, D)$ and projects them to class logits. This circumvention enables near-instantaneous stochastic gradient descent updates.
+\end{enumerate}
+
+\section{Training and Validation Loop Mechanics}
+\label{sec:training_validation_loops}
+
+The operational execution of the training epochs is orchestrated by the subroutines defined within \texttt{src/taxon\_vision/models/training/loops.py}. These functions codify the forward, backward, and optimisation steps alongside rigorous metric computation tailored for heavily imbalanced taxonomic distributions.
+
+\subsection{Gradient Optimisation and PyTorch Steps}
+
+The \texttt{train\_head\_epoch} function governs a single iteration over the dataset. To ensure state consistency, it explicitly places the encompassing model in \texttt{train()} mode, whilst overriding the backbone state to \texttt{eval()}, thereby locking internal statistics such as batch normalisation running means and variances.
+
+Within the iterative loop processing minibatches of inputs and labels, the optimisation sequence adheres to standard PyTorch semantics:
+
+\begin{enumerate}
+    \item \texttt{optimizer.zero\_grad()}: Flushes the accumulated gradient buffers to prevent residual contamination from antecedent steps.
+    \item \texttt{outputs = model(inputs)}: Executes the forward pass to produce unnormalised logits.
+    \item \texttt{loss = criterion(outputs, labels)}: Computes the differentiable loss landscape via objective functions such as the Class-Balanced Loss.
+    \item \texttt{loss.backward()}: Computes the gradient of the loss with respect to the trainable head parameters using the chain rule. Notably, owing to the \texttt{requires\_grad = False} attribute, this backpropagation halts precisely at the boundary of the linear head, achieving significant computational savings.
+    \item \texttt{optimizer.step()}: Updates the parameter weights via algorithms such as AdamW or Stochastic Gradient Descent (SGD).
+\end{enumerate}
+
+To ensure numerical stability during gradient accumulation and mixed-precision operations, developers may leverage \texttt{torch.cuda.amp.autocast} wrappers around the forward pass and loss computation, protecting against underflow or overflow in half-precision (FP16) arithmetic.
+
+\subsection{Metric Computation for Imbalanced Distributions}
+
+Taxonomic datasets universally exhibit extreme long-tail Pareto distributions, rendering raw accuracy a highly misleading indicator of generalisation performance. Consequently, the \texttt{evaluate\_head} function calculates multiple axes of performance:
+
+\begin{itemize}
+    \item \textbf{Top-1 Categorical Accuracy:} The fundamental ratio of correctly classified samples to the total sample volume. Whilst mathematically robust, it is easily dominated by the majority classes.
+    \item \textbf{Balanced Accuracy:} An unweighted arithmetic mean of recall statistics calculated independently for each taxonomic class. This enforces an equal penalty for misclassifying a rare species as a common species, thus yielding a more realistic proxy for true generalisation.
+    \item \textbf{Macro-Averaged $F_1$ Score:} The harmonic mean of precision and recall computed uniformly across all classes. It strongly penalises models that neglect the tail of the distribution, serving as the primary metric for convergence monitoring and early stopping criteria.
+\end{itemize}
+
+\section{Convergence Callbacks and Early Stopping}
 \label{sec:convergence_callbacks}
+
+The continuous orchestration of training epochs is governed by \texttt{src/taxon\_vision/models/training/runner.py}, which leverages sophisticated heuristics to regulate learning rates, monitor validation plateaus, and perform vital memory management. These configurations are formalised via data classes within \texttt{src/taxon\_vision/models/training/types.py}.
+
+\subsection{Dynamic Early Stopping}
+
+Extended training on finite cached embeddings carries an inherent risk of over-fitting to the training manifold at the expense of generalisation. To combat this, the \texttt{HeadTrainingConfig} structure implements dynamic early stopping based upon validation plateau detection.
+
+The mechanism monitors the validation macro $F_1$ score (or validation loss) iteratively. An \texttt{early\_stopping\_patience} integer dictates the maximum number of consecutive epochs permissible without observing an improvement in the monitored metric. If this threshold is breached, training is immediately terminated. This ensures the retention of the most generalisable weight configuration and significantly reduces total compute expenditure.
+
+\subsection{Learning Rate Schedulers}
+
+To traverse the loss landscape efficiently, the learning rate must adapt dynamically. Two primary scheduler philosophies are integrated:
+
+\begin{itemize}
+    \item \textbf{ReduceLROnPlateau:} Configured via the \texttt{reduce\_lr\_patience} attribute. Upon detecting a stagnation in validation loss beyond the defined epoch threshold, this scheduler multiplicatively attenuates the learning rate, enabling the optimiser to descend into narrower, more refined local minima that were previously skipped due to high-velocity updates.
+    \item \textbf{Cosine Annealing with Linear Warmup:} This strategy linearly increases the learning rate during initial iterations to avoid rapid divergence caused by massive gradient updates in unstable regions. Subsequently, it decays the rate following a cosine curve, allowing smooth convergence toward the end of the predefined epoch limit.
+\end{itemize}
+
+\subsection{Memory Management and Hardware Optimisation}
+
+Given the constraints of GPU VRAM (e.g., the 8 GB limit of the NVIDIA RTX 5070 Ti) and the aggressive time-slicing required for concurrent workloads, deterministic memory management is strictly enforced. The runner script explicitly invokes Python garbage collection \texttt{gc.collect()} and explicitly clears the CUDA cache via \texttt{torch.cuda.empty\_cache()} between epoch transitions. This mitigates latent memory fragmentation and ensures maximal VRAM availability for successive matrix multiplications.
+
+\section{Checkpoint Management and Atomic Serialisation}
+\label{sec:checkpoint_management}
+
+The persistence layer, detailed within \texttt{src/taxon\_vision/models/training/checkpoint.py}, guarantees the seamless translation of trained weights into highly available inference artifacts without risking deployment corruption.
+
+\subsection{Checkpoint Anatomy}
+
+A comprehensive checkpoint dictionary encapsulates far more than raw parameter weights. It is explicitly serialised to encompass:
+
+\begin{itemize}
+    \item \texttt{model\_state\_dict}: The precise floating-point weights and biases of the linear projection head.
+    \item \texttt{optimizer\_state\_dict}: The internal momentum and variance buffers of the AdamW optimiser, ensuring training can be resumed seamlessly without experiencing massive gradient spikes.
+    \item \textbf{Epoch and Metric Metadata:} The specific epoch number and corresponding peak validation metrics (e.g., maximum macro $F_1$) achieved.
+    \item \textbf{Taxonomic Label Mappings:} An explicit dictionary mapping raw integer class indices to human-readable Darwin Core taxonomic nomenclature.
+    \item \textbf{Backbone Metadata:} An explicit string identifier (e.g., \texttt{dinov3}, \texttt{bioclip-2}) denoting the exact feature extractor required to produce valid embeddings for the saved linear head.
+\end{itemize}
+
+\subsection{Atomic File Saving Strategy}
+
+In cloud-native, Kubernetes-orchestrated environments (\texttt{k3s}), containers face a constant threat of arbitrary preemption and rescheduling. A naive file write operation (\texttt{torch.save}) to the primary checkpoint file is inherently vulnerable; if the process is terminated mid-write, the resultant file will be irrecoverably corrupted, subsequently crashing the dependent inference daemon during cold starts.
+
+To guarantee transactional integrity, the \texttt{\_save\_checkpoint} method employs an atomic rename strategy. The serialisation process first writes the entire state dictionary to a temporary, hidden file upon the disk (e.g., \texttt{.tmp}). Only upon the successful, complete materialisation of this file does the operating system execute an atomic rename operation (\texttt{os.replace}) to overwrite the active checkpoint file. This guarantees that any consuming process only ever reads a fully intact, complete checkpoint.
+
+Finally, upon successfully persisting the updated model weights, the function invokes \texttt{get\_classifier.cache\_clear()}. This forcibly invalidates the \texttt{lru\_cache} of the active FastAPI inference service, ensuring that all subsequent classification requests immediately load and evaluate the newly optimised linear head without necessitating a manual pod restart.
+
+\begin{table}[h]
+\centering
+\caption{Key configuration parameters governing linear head training.}
+\label{tab:head_training_config}
+\begin{tabularx}{\textwidth}{l l X}
+\toprule
+\textbf{Parameter} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\texttt{epochs} & 10 & Absolute maximum number of training iterations. \\
+\texttt{batch\_size} & 64 & Number of samples processed concurrently prior to a gradient update step. \\
+\texttt{early\_stopping\_patience} & 4 & Number of stagnant epochs permitted before termination. \\
+\texttt{reduce\_lr\_patience} & 2 & Epoch threshold before learning rate decay is triggered. \\
+\texttt{noise\_std} & 0.0 & Standard deviation of Gaussian noise injected into embeddings for manifold regularisation. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Summary}
+
+The structural design surrounding the \texttt{TaxonClassifier} enables agile, memory-efficient adaptation of state-of-the-art vision foundations into highly specialised biological taxonomic classifiers. The rigorous atomic serialisation protocol, coupled with aggressive early stopping upon metrics specifically tuned for long-tail distributions, forms a highly resilient mechanism capable of operating cleanly within distributed, preemption-heavy Kubernetes clusters.
