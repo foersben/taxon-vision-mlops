@@ -42,6 +42,8 @@ data:
 \label{lst:nvidia_time_slicing}
 \end{listing}
 
+\input{figures/fig_03_nvidia_gpu_timeslicing.tikz}
+
 Through this configuration, the device plugin advertises exactly four \texttt{nvidia.com/gpu} resources to the \texttt{kube-scheduler}. This resource scheduling dynamic allows the scheduler to successfully bin-pack up to four discrete pods onto the same physical node, effectively deceiving the Kubernetes control plane into treating the node as if it possessed four independent GPUs.
 
 The underlying mechanism of time-slicing relies heavily upon temporal hardware context switching. The NVIDIA driver multiplexes compute cycles by rapidly swapping the execution context of the Streaming Multiprocessors between the active processes. Whilst time-slicing effectively multiplexes the compute capabilities, it is crucial to understand that it provides absolutely no isolation of memory. All virtual slices fundamentally share the same 16 GB of contiguous GDDR7 VRAM. Therefore, isolation must be stringently enforced at the software layer to prevent Out-Of-Memory (OOM) cascading failures.
