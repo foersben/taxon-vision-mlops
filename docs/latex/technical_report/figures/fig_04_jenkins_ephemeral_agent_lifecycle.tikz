@@ -1,0 +1,64 @@
+\definecolor{TaxonPrimary}{HTML}{1976D2}
+\definecolor{TaxonSecondary}{HTML}{388E3C}
+\definecolor{TaxonDark}{HTML}{263238}
+\definecolor{TaxonAccent}{HTML}{F57C00}
+
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    node distance=1.2cm and 1cm,
+    font=\sffamily\footnotesize,
+    box/.style={
+        rectangle, rounded corners, draw=#1, fill=#1!10, thick,
+        minimum width=4cm, minimum height=0.8cm, align=center,
+        drop shadow={opacity=0.2, shadow xshift=1mm, shadow yshift=-1mm}
+    },
+    specbox/.style={
+        rectangle, draw=#1, fill=#1!5, thick,
+        minimum width=4cm, align=left, inner sep=6pt,
+        drop shadow={opacity=0.2, shadow xshift=1mm, shadow yshift=-1mm}
+    },
+    arrow/.style={
+        ->, >={Stealth[length=2.5mm]}, thick, TaxonDark
+    },
+    group/.style={
+        rectangle, rounded corners, draw=TaxonDark!50, dashed, inner sep=10pt, fill=TaxonDark!2, yshift=-5pt
+    }
+]
+
+% Nodes
+\node[box=TaxonDark] (trigger) {\textbf{Jenkins Controller} \\ Triggered upon Git push};
+
+\node[box=TaxonPrimary, below=of trigger] (prov) {\textbf{Agent Provisioning} \\ k3s API via \texttt{jenkins-agent} SA \\ Namespace: \texttt{jenkins-ci}};
+\draw[arrow] (trigger) -- (prov);
+
+\node[specbox=TaxonAccent, right=1.5cm of prov] (spec) {
+    \textbf{Pod Specification:}\\
+    $\bullet$ Base: \texttt{ml-runner} (\texttt{ghcr.io/prefix-dev/pixi:latest})\\
+    $\bullet$ Limits: 8Gi RAM, 4 CPUs, \texttt{nvidia.com/gpu: 1}\\
+    $\bullet$ Requests: 512Mi, 200m CPU, \texttt{nvidia.com/gpu: 1}\\
+    $\bullet$ Cache: \texttt{emptyDir: \{\}} at \texttt{/root/.cache/rattler/cache}
+};
+\draw[arrow, dashed] (prov) -- (spec);
+
+% Pipeline Steps Group
+\node[box=TaxonSecondary, below=of prov] (step1) {\textbf{1. Prepare Toolchain} \\ \texttt{pixi install --frozen -e ci-dev} \\ \texttt{dvc pull}};
+\node[box=TaxonSecondary, below=of step1] (step2) {\textbf{2. Parallel Static Checks} \\ Ruff, Mypy, License, OKF};
+\node[box=TaxonSecondary, below=of step2] (step3) {\textbf{3. Unit Tests \& Invariants} \\ Pytest \& Conformal constraints};
+\node[box=TaxonSecondary, below=of step3] (step4) {\textbf{4. GPU Training \& Export} \\ Model Head \& ONNX (main/feature)};
+\node[box=TaxonSecondary, below=of step4] (step5) {\textbf{5. Rolling ZDT Deployment} \\ to \texttt{taxon-vision-api}};
+
+\begin{scope}[on background layer]
+    \node[group, fit=(step1) (step2) (step3) (step4) (step5), label={[font=\sffamily\bfseries, text=TaxonDark]above:Execution Pipeline Flow}] (pipeline) {};
+\end{scope}
+
+\draw[arrow] (prov) -- (step1);
+\draw[arrow] (step1) -- (step2);
+\draw[arrow] (step2) -- (step3);
+\draw[arrow] (step3) -- (step4);
+\draw[arrow] (step4) -- (step5);
+
+\node[box=TaxonDark, below=of pipeline] (deprov) {\textbf{Pod De-provisioning} \\ \texttt{cleanWs()}, Kubernetes pod deletion \\ Zero disk residue on \texttt{hive-mind}};
+\draw[arrow] (pipeline) -- (deprov);
+
+\end{tikzpicture}%
+}

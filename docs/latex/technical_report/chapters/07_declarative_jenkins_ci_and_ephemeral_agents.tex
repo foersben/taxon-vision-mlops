@@ -4,6 +4,13 @@
 
 The continuous integration and continuous deployment (CI/CD) methodology constitutes the fundamental circulatory system of the machine learning operations lifecycle. In the context of the TaxonVision-MLOps platform, manual execution of quality assurance testing, dependency resolution, hyperparameter optimisation, and deployment manifest application is explicitly forbidden. Instead, the platform relies upon a strictly declarative Jenkins pipeline architecture, which dynamically provisions ephemeral, isolated compute environments within a managed Kubernetes cluster. This chapter details the comprehensive technical implementation of this architecture, strictly mapping every theoretical concept to its concrete manifestation within the repository's \texttt{Jenkinsfile} and the associated Kubernetes Role-Based Access Control (RBAC) definitions located in \texttt{deploy/k8s/jenkins-agent-rbac.yaml}. The ensuing exposition delineates the dynamic lifecycle of ephemeral pod agents, the rigorous cryptographic isolation of cloud storage credentials, the sequential pipeline execution matrix, and the ultimate cleanup resilience mechanics. The rigorous standardisation achieved through this declarative paradigm ensures a high degree of automation and repeatability across all stages of the software development lifecycle, thus minimising the probability of human error during complex integration manoeuvres.
 
+\begin{figure}[htbp]
+    \centering
+    \input{figures/fig_04_jenkins_ephemeral_agent_lifecycle.tikz}
+    \caption{End-to-end lifecycle of the ephemeral Kubernetes runner pod orchestrating the CI/CD pipeline.}
+    \label{fig:jenkins_ephemeral_agent_lifecycle}
+\end{figure}
+
 \section{Dynamic Ephemeral Pod Lifecycle in Kubernetes}
 \label{sec:dynamic_ephemeral_pod}
 
