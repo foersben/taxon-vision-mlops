@@ -98,7 +98,7 @@ To traverse the loss landscape efficiently, the learning rate must adapt dynamic
 
 \subsection{Memory Management and Hardware Optimisation}
 
-Given the constraints of GPU VRAM (e.g., the 8 GB limit of the NVIDIA RTX 5070 Ti) and the aggressive time-slicing required for concurrent workloads, deterministic memory management is strictly enforced. The runner script explicitly invokes Python garbage collection \texttt{gc.collect()} and explicitly clears the CUDA cache via \texttt{torch.cuda.empty\_cache()} between epoch transitions. This mitigates latent memory fragmentation and ensures maximal VRAM availability for successive matrix multiplications.
+Given the constraints of GPU VRAM (e.g., the 16 GB GDDR7 capacity of the NVIDIA RTX 5070 Ti) and the aggressive time-slicing required for concurrent workloads, deterministic memory management is strictly enforced. The runner script explicitly invokes Python garbage collection \texttt{gc.collect()} and explicitly clears the CUDA cache via \texttt{torch.cuda.empty\_cache()} between epoch transitions. This mitigates latent memory fragmentation and ensures maximal VRAM availability for successive matrix multiplications.
 
 \section{Checkpoint Management and Atomic Serialisation}
 \label{sec:checkpoint_management}

@@ -130,6 +130,33 @@ kubectl describe pods -n jenkins-ci -l jenkins/label=ml-runner
 
 \textbf{Resolution:} Verify that the \texttt{jenkins-deployer-role} bindings are intact, and if necessary, cordon and drain the node to evict deadlocked workloads before uncordoning.
 
+\section{Implementation Status Matrix}
+\label{sec:implementation_status_matrix}
+
+This section outlines the implementation status, mapping what is currently operational in the Phase 1 codebase versus what is scheduled for Phase 2/3.
+
+\begin{table}[htbp]
+\centering
+\caption{Implementation Status Matrix (Phase 1 vs Phase 2/3)}
+\label{tab:implementation_status}
+\begin{tabularx}{\textwidth}{@{}X X@{}}
+\toprule
+\textbf{Fully Implemented \& Verified in Phase 1} & \textbf{Planned / Phase 2 \& 3 Roadmap} \\ \midrule
+Pixi dual-target toolchain (\texttt{dev}, \texttt{ci-dev}, \texttt{ci}, \texttt{default}) with cryptographic \texttt{pixi.lock}. & Real biological backbone feature pre-computation replacing synthetic training fixtures. \\ \addlinespace
+Single-node k3s on bare-metal \texttt{hive-mind} with NVIDIA time-slicing (4 slots). & Live automated webhook retraining trigger from Prometheus/Evidently drift thresholds. \\ \addlinespace
+Cloudflare Zero-Trust Tunnel with outbound-only routing. & Full bidirectional Label Studio annotation synchronization loop via DagsHub. \\ \addlinespace
+Jenkins ephemeral agent pipeline with PyTorch 2.7.0 \texttt{cu128} on Blackwell SM 120. & Vision RAG multimodal knowledge graph and HNSW rank fusion. \\ \addlinespace
+DVC dataset versioning with DagsHub S3 remote and KeePassXC secret resolution. & \\ \addlinespace
+DarwinCore taxonomic hierarchy models and strict CC0 / CC-BY / CC-BY-NC license validation. & \\ \addlinespace
+Pre-cached feature training loop with Class-Balanced Loss, Optuna ASHA pruning, and MLflow logging. & \\ \addlinespace
+Split Conformal Prediction engine with mathematical coverage guarantee ($1 - \alpha$). & \\ \addlinespace
+Energy-based out-of-distribution (OOD) detection score. & \\ \addlinespace
+Wasserstein-1 embedding drift detector ($W_1$ norm distance) and two-tier drift strategy. & \\ \addlinespace
+BADGE active learning diversity query strategy. & \\ \addlinespace
+Unified FastAPI service with server-rendered Jinja2/HTMX operator dashboard and INT8 ONNX runtime fallback. & \\ \bottomrule
+\end{tabularx}
+\end{table}
+
 \section{Maintenance Runbooks and Dependency Lifecycle}
 \label{sec:maintenance_runbooks}
 

@@ -17,9 +17,11 @@ Executing a comprehensive testing suite directly on local hardware often necessi
 
 \subsection{Environmental Segregation: CPU versus GPU}
 
-The \texttt{ci-dev} environment target constructs a strictly minimal, CPU-bound execution space. This target deliberately strips away the heavy CUDA telemetry packages, multi-gigabyte PyTorch GPU binaries, and TensorRT compilation toolchains. Its objective is to enable near-instantaneous continuous integration feedback and developer pre-commit hook execution. It allows the core logic -- FastAPI request routing, metadata filtering, and pipeline orchestration -- to be tested with minimal computational overhead. 
+The \texttt{ci-dev} environment target constructs a CPU continuous integration runner (\texttt{features = ["dev", "cpu"]}) with CPU-only PyTorch 2.5.1 for rapid test loops (\texttt{pytest}, \texttt{ruff}, \texttt{mypy}, pre-commit gates). This target deliberately strips away the heavy CUDA telemetry packages, multi-gigabyte PyTorch GPU binaries, and TensorRT compilation toolchains. Its objective is to enable near-instantaneous continuous integration feedback and developer pre-commit hook execution.
 
-Conversely, the \texttt{dev} environment targets full-stack development, requiring GPU acceleration and the complete PyTorch module suite. This environment facilitates the execution of rigorous hardware profiling tests, conformal calibration passes, and full-scale end-to-end training runs, ensuring that model deployment operates correctly under realistic hardware topologies.
+Conversely, the \texttt{dev} environment targets full developer workstation environment (\texttt{features = ["dev", "gpu"]}) with PyTorch 2.7.0 \texttt{cu128}, CUDA 12.8, Blackwell SM 120 support, Optuna, and MLflow. This environment facilitates the execution of rigorous hardware profiling tests, conformal calibration passes, and full-scale end-to-end training runs.
+
+Additionally, the project explicitly documents the distinction between runtime and testing targets: \texttt{-e ci} (\texttt{features = ["cpu"]}) acts as the minimal CPU container serving environment for lightweight Docker deployments, whereas \texttt{-e ci-dev} serves as the CI test execution environment. The \texttt{default} environment (\texttt{features = ["gpu"]}) provides a minimal GPU runtime.
 
 \subsection{Categorisation of Testing Suites}
 
