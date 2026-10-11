@@ -25,11 +25,9 @@ spec:
       limits:
         memory: "8Gi"
         cpu: "4"
-        nvidia.com/gpu: "1"
       requests:
         memory: "512Mi"
         cpu: "200m"
-        nvidia.com/gpu: "1"
   volumes:
   - name: rattler-cache
     emptyDir: {}
@@ -50,6 +48,11 @@ spec:
     AWS_SECRET_ACCESS_KEY = "${DAGSHUB_TOKEN}"
     MLFLOW_TRACKING_USERNAME = 'foersben'
     MLFLOW_TRACKING_PASSWORD = "${DAGSHUB_TOKEN}"
+    OMP_NUM_THREADS = '4'
+    MKL_NUM_THREADS = '4'
+    OPENBLAS_NUM_THREADS = '4'
+    NUMEXPR_NUM_THREADS = '4'
+    VECLIB_MAXIMUM_THREADS = '4'
   }
 
   stages {
@@ -105,14 +108,13 @@ spec:
       }
     }
 
-    stage('Unit Tests & Coverage') {
+    stage('Unit Tests') {
       steps {
         container('ml-runner') {
           sh '''
-            pixi run --frozen -e ci-dev pytest tests/ \
+            pixi run --frozen -e ci-dev pytest tests/unit/ \
               --cov=src/taxon_vision \
-              --cov-report=xml:coverage.xml \
-              --cov-fail-under=78 \
+              --cov-report= \
               -o "addopts="
           '''
         }
@@ -123,7 +125,12 @@ spec:
       steps {
         container('ml-runner') {
           sh '''
-            pixi run --frozen -e ci-dev pytest tests/integration/ tests/invariants/ -x -q -o "addopts="
+            pixi run --frozen -e ci-dev pytest tests/integration/ tests/invariants/ \
+              --cov=src/taxon_vision \
+              --cov-append \
+              --cov-report=xml:coverage.xml \
+              --cov-fail-under=78 \
+              -x -q -o "addopts="
           '''
         }
       }
@@ -147,10 +154,50 @@ spec:
           branch 'feature/phase1-foundations'
         }
       }
+      agent {
+        kubernetes {
+          cloud 'k3s'
+          defaultContainer 'ml-runner'
+          yaml '''
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: jenkins-ci
+  labels:
+    app.kubernetes.io/name: taxon-vision-jenkins-gpu-agent
+spec:
+  serviceAccountName: jenkins-agent
+  containers:
+  - name: ml-runner
+    image: ghcr.io/prefix-dev/pixi:latest
+    command: ["sleep"]
+    args: ["99d"]
+    tty: true
+    volumeMounts:
+    - name: rattler-cache
+      mountPath: /root/.cache/rattler/cache
+    resources:
+      limits:
+        memory: "16Gi"
+        cpu: "8"
+        nvidia.com/gpu: "1"
+      requests:
+        memory: "2Gi"
+        cpu: "1000m"
+        nvidia.com/gpu: "1"
+  volumes:
+  - name: rattler-cache
+    emptyDir: {}
+'''
+        }
+      }
       steps {
         container('ml-runner') {
           sh '''
             export PATH="/root/.pixi/bin:$PATH"
+            which git >/dev/null 2>&1 || pixi global install git
+            which kubectl >/dev/null 2>&1 || pixi global install kubernetes-client
+            git config --global --add safe.directory "*"
             echo ">>> Executing automated model training with Optuna Bayesian optimization..."
             # Install GPU-enabled dev environment
             pixi install --frozen -e dev
@@ -209,7 +256,11 @@ spec:
 
   post {
     always {
-      cleanWs()
+      script {
+        catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+          cleanWs()
+        }
+      }
     }
   }
 }
