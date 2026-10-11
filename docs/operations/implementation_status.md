@@ -7,7 +7,7 @@ version: 1.0
 description: Tracking the progress and remaining effort for the MLOps Project Phases 1-3.
 tags: [roadmap, status, project-management, mlops]
 generated: {by: process:okf-updater, at: "2026-10-06T19:50:00Z"}
-verified: {by: process:okf-updater, at: "2026-10-11T00:05:00Z"}
+verified: {by: process:okf-updater, at: "2026-10-11T00:30:00Z"}
 ---
 
 # Implementation Status: MLOps Roadmap
@@ -96,5 +96,5 @@ To maintain absolute scientific and engineering integrity, the following impleme
 * **Blackwell Toolchain Upgrade:** Resolved. Environment manifests (`pyproject.toml`, `pixi.lock`) are upgraded to PyTorch 2.7.0 targeting CUDA 12.8 (`cu128`), natively supporting SM 120 kernels on the host's NVIDIA Driver 615.71.09 / CUDA 13.4 UMD.
 * **Error Masking in CI Pipeline:** Several commands in `Jenkinsfile` are suffixed with `|| true`, which masks runtime failures in test or training steps.
 * **Coverage Gate Inconsistency:** Line coverage threshold is set to 78% in `Jenkinsfile`, whereas `.github/workflows/ci.yml` enforces an 80% threshold.
-* **Optuna Evaluation Objective:** In `taxon_vision.models.training.tuning`, the objective function returns `history["val_pr_auc"][-1]` (last epoch score) rather than the best checkpoint score achieved during the trial.
+* **Optuna Evaluation Objective & Search Space:** Resolved. In `taxon_vision.models.training.tuning`, the objective function returns $\max(\text{val\_pr\_auc})$ matching peak restored checkpoint weights, and Optuna samples categorical batch sizes (`[32, 64, 128]`) and embedding noise jitter regularisation (`noise_std`).
 * **Unscheduled Drift and Active Learning Modules:** MMD feature drift (`monitoring/drift.py`) and BADGE acquisition (`active_learning/query.py`) exist as standalone modules, but lack recurring cron jobs, webhook triggers, or automated retraining invocations.

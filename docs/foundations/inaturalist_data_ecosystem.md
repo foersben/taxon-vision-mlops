@@ -39,7 +39,7 @@ Biological taxa naturally exist in heavily skewed distributions, rendering conve
     * To restore gradient equilibrium, the architecture implements Class-Balanced Loss utilizing the effective number of samples metric.
     * The effective number of samples $E_n$ is computed as:
 
-$$E_n = \frac{1 - \beta^n}{1 - \beta}$$
+        $$E_n = \frac{1 - \beta^n}{1 - \beta}$$
 
     * Here, $n$ is the raw number of samples for the class, and $\beta \in [0, 1)$ is a tunable hyperparameter defining the rate of volume expansion in the embedding space. This formulation dynamically re-weights the loss contribution to preserve tail-class representation without overfitting.
 

@@ -30,15 +30,16 @@ Reproducible environment (Pixi, Just) & implemented & Lock-file driven environme
 Dataset versioning (DVC on DagsHub) & implemented & S3-compatible DagsHub remote; the dataset hash from \texttt{dvc.lock} is logged to MLflow. \\
 Experiment tracking and registry & implemented & MLflow on DagsHub; model \texttt{taxon\_vision\_classifier} with the aliases \texttt{Production}, \texttt{Challenger} and \texttt{Archived}. \\
 Head training with callbacks & implemented & Best-weight restoration, early stopping (patience~4) and learning-rate decay on plateau (patience~2). \\
-Hyperparameter search & implemented & Optuna TPE with ASHA pruning and nested MLflow runs (Section~\ref{sec:search_space}). \\
+Hyperparameter search & implemented & Optuna TPE with ASHA pruning, dynamic batch-size and feature-jitter sampling, peak PR-AUC objective, and nested MLflow runs (Section~\ref{sec:search_space}). \\
 Inference service and dashboard & implemented & FastAPI with a server-rendered HTMX operator view. \\
 Split conformal prediction and energy-based OOD & implemented & Conformal sets in the serving path; energy score in the uncertainty module. \\
 Prometheus instrumentation & implemented & Metrics endpoint of the serving application. \\
 Jenkins controller and k3s agents & implemented & Outbound-only Cloudflare Tunnel, ephemeral agent pods, rolling deployment, four-slot time-slicing configuration. \\
 GPU access of the agent pod & implemented & Agent pod in \texttt{Jenkinsfile} configured with an \texttt{nvidia.com/gpu: 1} resource limit and request binding directly to k3s time-slicing slots. \\
 GPU-capable PyTorch build & implemented & Pinned toolchain upgraded to PyTorch 2.7.0 with CUDA~12.8 (\texttt{cu128}), natively supporting Blackwell SM~120 under the host's CUDA~13.4 driver (Section~\ref{sec:host_baseline}). \\
+Git commit tagging of runs & implemented & The Git commit hash and branch identifier are extracted and tagged to MLflow parent and trial runs. \\
 \midrule
-Main-branch training stage & partial & Stage declared for the main branch, but it currently operates on a seeded synthetic embedding split; wiring the cached features of the real dataset is outstanding. \\
+Main-branch training stage & partial & GPU stage in \texttt{Jenkinsfile} enabled with Optuna tuning, but it currently operates on a seeded synthetic embedding split; wiring the cached features of the real dataset is outstanding. \\
 Conformal invariant on the candidate model & partial & The coverage invariant gates the source code, but is not yet applied to the freshly trained candidate before promotion. \\
 Drift detection and active learning & partial & MMD and BADGE query modules exist; neither is connected to a schedule, an alert or a webhook. \\
 Container composition for grading & partial & The compose file covers object storage, Prometheus and Grafana only. \\
@@ -47,7 +48,6 @@ Filtered HNSW retrieval and rank fusion & planned & Chapter~\ref{ch:vision_rag}.
 Zero-shot cropping and VLM triage & planned & Chapter~\ref{ch:vision_rag}. \\
 Label Studio synchronisation & planned & Annotation round trip through DagsHub. \\
 Evidently reports and Alertmanager trigger & planned & Section~\ref{sec:k8s_orchestration} and the retraining trigger of Chapter~\ref{ch:observability}. \\
-Git commit tagging of runs & planned & Binding of the commit identifier to the MLflow run. \\
 Optional Streamlit demonstration & planned & HTMX dashboard serves as the baseline demonstration. \\
 \bottomrule
 \end{tabularx}

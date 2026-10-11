@@ -65,7 +65,7 @@ class HyperparameterObjective:
         self.samples_per_class = data.get_samples_per_class(num_classes)
         self.feature_dim = data.feature_dim
 
-    def _sample_hyperparameters(self, trial: optuna.Trial) -> dict[str, float]:
+    def _sample_hyperparameters(self, trial: optuna.Trial) -> dict[str, Any]:
         """Sample hyperparameters for the current Optuna trial.
 
         Args:
@@ -79,9 +79,11 @@ class HyperparameterObjective:
             "weight_decay": trial.suggest_float("weight_decay", 1e-6, 1e-2, log=True),
             "dropout": trial.suggest_float("dropout", 0.0, 0.5),
             "beta": trial.suggest_float("beta", 0.99, 0.9999),
+            "batch_size": trial.suggest_categorical("batch_size", [32, 64, 128]),
+            "noise_std": trial.suggest_float("noise_std", 0.0, 0.05),
         }
 
-    def _construct_components(self, params: dict[str, float]) -> tuple[nn.Module, ClassBalancedLoss, optim.Optimizer]:
+    def _construct_components(self, params: dict[str, Any]) -> tuple[nn.Module, ClassBalancedLoss, optim.Optimizer]:
         """Construct the classification head, loss criterion, and optimizer.
 
         Args:
@@ -98,7 +100,7 @@ class HyperparameterObjective:
         optimizer = optim.AdamW(head.parameters(), lr=params["lr"], weight_decay=params["weight_decay"])
         return head, criterion, optimizer
 
-    def _start_mlflow_trial(self, trial: optuna.Trial, params: dict[str, float]) -> Any:
+    def _start_mlflow_trial(self, trial: optuna.Trial, params: dict[str, Any]) -> Any:
         """Initialize an MLflow nested run and log trial parameters.
 
         Args:
@@ -109,7 +111,9 @@ class HyperparameterObjective:
             return None
         try:
             run = mlflow.start_run(run_name=f"trial_{trial.number}", nested=True)
-            mlflow.log_params({**params, "batch_size": self.config.batch_size})
+            mlflow.log_params(params)
+            mlflow.set_tag("optuna.trial_number", trial.number)
+            mlflow.set_tag("pipeline.stage", "HyperparameterSearch")
             return run
         except Exception as err:
             logger.debug("Failed to start MLflow run: %s", err)
@@ -174,7 +178,8 @@ class HyperparameterObjective:
         active_run = self._start_mlflow_trial(trial, params)
         head_config = HeadTrainingConfig(
             epochs=self.config.epochs_per_trial,
-            batch_size=self.config.batch_size,
+            batch_size=int(params["batch_size"]),
+            noise_std=float(params["noise_std"]),
             pruner_callback=pruner_callback,
         )
 
@@ -192,7 +197,13 @@ class HyperparameterObjective:
             if trial.should_prune():
                 raise optuna.TrialPruned()
 
-            return float(history["val_pr_auc"][-1]) if history["val_pr_auc"] else 0.0
+            best_val = float(max(history["val_pr_auc"])) if history.get("val_pr_auc") else 0.0
+            if active_run:
+                try:
+                    mlflow.log_metric("peak_val_pr_auc", best_val)
+                except Exception:
+                    pass
+            return best_val
 
         finally:
             if active_run is not None:
@@ -238,11 +249,27 @@ def _log_best_run(best_params: dict[str, Any], best_value: float, active: bool) 
     if not active:
         return
     try:
+        from taxon_vision.models.training.tracking import _get_dvc_dataset_hash
+
         with mlflow.start_run(run_name="optuna_best_model"):
             mlflow.log_params(best_params)
             mlflow.log_metric("best_val_pr_auc", best_value)
             mlflow.set_tag("optuna.optimization_algorithm", "TPE+ASHA")
             mlflow.set_tag("pipeline.stage", "Phase1_Step3_Tuning")
+
+            dvc_hash = _get_dvc_dataset_hash()
+            if dvc_hash:
+                mlflow.log_param("dvc_dataset_hash", dvc_hash)
+
+            try:
+                import subprocess
+
+                git_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+                git_branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
+                mlflow.set_tag("git.commit_sha", git_sha)
+                mlflow.set_tag("git.branch", git_branch)
+            except Exception:
+                pass
     except Exception as err:
         logger.debug("Failed to log best run to MLflow: %s", err)
 

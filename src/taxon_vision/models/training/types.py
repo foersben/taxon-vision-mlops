@@ -105,6 +105,8 @@ class HeadTrainingConfig:
             reducing the optimizer learning rate. None disables LR scheduler.
         restore_best_weights: Whether to restore the head weights that achieved peak
             validation PR-AUC upon training completion.
+        noise_std: Standard deviation of Gaussian noise injected into input embeddings
+            during training for manifold regularization. 0.0 disables noise.
     """
 
     epochs: int = 10
@@ -113,6 +115,7 @@ class HeadTrainingConfig:
     early_stopping_patience: int | None = 4
     reduce_lr_patience: int | None = 2
     restore_best_weights: bool = True
+    noise_std: float = 0.0
 
 
 @dataclass(frozen=True)

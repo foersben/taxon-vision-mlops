@@ -125,6 +125,16 @@ def mlflow_run_scope(
         dataset_hash = _get_dvc_dataset_hash()
         if dataset_hash:
             mlflow.log_param("dvc_dataset_hash", dataset_hash)
+
+        try:
+            import subprocess
+
+            git_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+            git_branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
+            mlflow.set_tag("git.commit_sha", git_sha)
+            mlflow.set_tag("git.branch", git_branch)
+        except Exception as git_err:
+            logger.debug("Could not resolve git lineage tags: %s", git_err)
     except Exception as err:
         logger.debug("MLflow tracking setup skipped or unavailable: %s", err)
         active_run = None

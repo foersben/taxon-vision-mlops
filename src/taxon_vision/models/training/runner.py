@@ -196,21 +196,28 @@ def run_training_pipeline(
         beta = float(best_params.get("beta", 0.99))
         learning_rate = float(best_params.get("lr", learning_rate))
         weight_decay = float(best_params.get("weight_decay", 1e-4))
+        batch_size = int(best_params.get("batch_size", batch_size))
+        noise_std = float(best_params.get("noise_std", 0.0))
         head = nn.Sequential(nn.Dropout(p=dropout_p), nn.Linear(dim, num_classes))
         criterion = ClassBalancedLoss(samples_per_class=samples, beta=beta)
         optimizer = optim.AdamW(head.parameters(), lr=learning_rate, weight_decay=weight_decay)
     else:
+        noise_std = 0.0
         head = nn.Sequential(nn.Dropout(p=0.2), nn.Linear(dim, num_classes))
         criterion = ClassBalancedLoss(samples_per_class=samples, beta=0.99)
         optimizer = optim.AdamW(head.parameters(), lr=learning_rate)
 
-    config = HeadTrainingConfig(epochs=epochs, batch_size=batch_size)
+    config = HeadTrainingConfig(epochs=epochs, batch_size=batch_size, noise_std=noise_std)
 
     params = {
         "extractor": extractor,
         "epochs": epochs,
         "batch_size": batch_size,
         "learning_rate": learning_rate,
+        "weight_decay": weight_decay if tune else 0.0,
+        "dropout": dropout_p if tune else 0.2,
+        "beta": beta if tune else 0.99,
+        "noise_std": noise_std,
         "num_classes": num_classes,
         "feature_dim": dim,
         "loss": "ClassBalancedLoss",

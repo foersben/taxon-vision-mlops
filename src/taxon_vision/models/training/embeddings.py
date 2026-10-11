@@ -128,6 +128,8 @@ def train_head_on_cached_embeddings(
         for i in range(0, num_samples, cfg.batch_size):
             indices = permutation[i : i + cfg.batch_size]
             batch_x, batch_y = train_emb[indices], train_lbl[indices]
+            if cfg.noise_std > 0.0:
+                batch_x = batch_x + torch.randn_like(batch_x) * cfg.noise_std
 
             optimizer.zero_grad()
             logits = head(batch_x)

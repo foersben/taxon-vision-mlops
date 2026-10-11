@@ -142,24 +142,28 @@ spec:
 
     stage('Model Training & Checkpoint (GPU)') {
       when {
-        branch 'main'
+        anyOf {
+          branch 'main'
+          branch 'feature/phase1-foundations'
+        }
       }
       steps {
         container('ml-runner') {
           sh '''
             export PATH="/root/.pixi/bin:$PATH"
-            echo ">>> Executing automated model training on main branch..."
+            echo ">>> Executing automated model training with Optuna Bayesian optimization..."
             # Install GPU-enabled dev environment
             pixi install --frozen -e dev
 
             # Pull latest DVC manifests and datasets from DagsHub
             pixi run --frozen -e dev dvc pull || true
 
-            # Execute classification head training with DINOv3 backbone and VRAM limit
+            # Execute classification head training with DINOv3 backbone, Optuna tuning, and VRAM limit
             pixi run --frozen -e dev python -m taxon_vision.models.trainer \
               --extractor dinov3 \
               --epochs 15 \
-              --batch-size 64 \
+              --tune \
+              --n-trials 10 \
               --cuda-memory-fraction 0.7
 
             # Re-export fresh ONNX computational graph
