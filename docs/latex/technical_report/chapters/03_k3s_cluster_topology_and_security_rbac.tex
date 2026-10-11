@@ -1,29 +1,123 @@
 % !TeX root = ../technical_report.tex
-\chapter{Lightweight Kubernetes (k3s) Cluster Topology and Security RBAC}
+\chapter{K3s Cluster Topology and Security RBAC}
 \label{ch:k3s_cluster_topology}
 
-% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
-% -------------------------------------------------------------
-% Focus: Kubernetes runtime, ingress edge, namespace partitioning, and security policies.
-% Repository Files:
-%   - deploy/k8s/jenkins-agent-rbac.yaml
-% Infrastructure Context:
-%   - System daemon: k3s (single-node lightweight Kubernetes cluster) on hive-mind
-%   - Network Edge: Cloudflare Zero Trust Tunnel (outbound-only tunnel, eliminating open public ports)
-%   - Namespace Partitioning:
-%       * 'jenkins-ci': Dedicated namespace for CI/CD ephemeral agent pods
-%       * 'taxon-vision': Production namespace hosting API services and model serving
-%   - RBAC Specifications:
-%       * ServiceAccount: jenkins-agent
-%       * Role: jenkins-agent-role (pod management, exec, logs, port-forward in jenkins-ci namespace)
-%       * ClusterRole / RoleBinding granting rolling update permissions on taxon-vision deployments
-% -------------------------------------------------------------
+The deterministic execution of the TaxonVision-MLOps pipeline necessitates a robust, secure, and low-latency orchestration layer. To avoid the virtualisation overhead inherent in public cloud providers, the platform employs a bare-metal Kubernetes architecture. This chapter strictly documents the topology of the lightweight Kubernetes (k3s) cluster, the explicit namespace boundaries, the Role-Based Access Control (RBAC) schemas, and the Pod Security Standards that enforce strict isolation between the continuous integration (CI) controllers, the machine learning experimentation tracking servers, and the operator-facing inference workloads.
 
-\section{Cluster Architecture and Network Edge}
-\label{sec:cluster_architecture}
+\section{Lightweight Kubernetes Architecture on Bare-Metal}
+\label{sec:k3s_architecture}
 
-\section{Namespace Partitioning and Multi-Tenant Segregation}
-\label{sec:namespace_partitioning}
+In order to harmonise the computational intensity of Vision Foundation Model (VFM) training with the high-availability requirements of model serving, the deployment relies upon a single-node control plane and worker topology running natively on the bare-metal \texttt{hive-mind} host. The system employs \textit{k3s}, a highly conformant and aggressively streamlined Kubernetes distribution developed by Rancher. K3s achieves a dramatically reduced memory footprint by stripping out legacy, out-of-tree cloud provider binaries and consolidating the core Kubernetes control plane components---namely the API server, the controller manager, and the scheduler---into a single, statically compiled binary process.
+
+\subsection{Embedded Datastore and Networking Subsystems}
+A conventional Kubernetes cluster relies upon a distributed \textit{etcd} key-value store to maintain cluster state. Given the single-node physical architecture of \texttt{hive-mind}, deploying a quorum-based raft consensus algorithm introduces unnecessary network round-trip latencies and disk I/O overhead. Consequently, k3s is configured to utilise its embedded SQLite datastore. The integration of SQLite provides ACID-compliant transactional guarantees whilst operating entirely through local Unix sockets, thereby circumventing the TCP/IP stack and drastically accelerating control plane responsiveness during high-frequency ephemeral pod churn.
+
+Network routing across the containerized workloads is mediated by the Flannel Container Network Interface (CNI). Flannel is configured to operate in Virtual eXtensible Local Area Network (VXLAN) mode. This establishes a layer-2 overlay network that encapsulates inter-pod traffic within UDP packets, facilitating seamless communication between the independent namespaces without exposing internal IP ranges to the bare-metal host's physical network interface. Furthermore, internal service discovery is resolved via the embedded CoreDNS controller, which dynamically provisions A and SRV records for the headless services associated with the MLflow tracking server and the TaxonVision API.
+
+\subsection{Ingress Topology and Zero-Trust Tunnels}
+The k3s installation is explicitly provisioned with the default Traefik ingress controller disabled. By bypassing standard Kubernetes Ingress objects, the architecture strictly eliminates the requirement for host port forwarding or external NodePort exposures that would otherwise compromise the bare-metal firewall boundary.
+
+Instead, external routing is governed entirely by Cloudflare Zero-Trust Tunnels. A lightweight \textit{cloudflared} daemon operates within the \texttt{kube-system} namespace, establishing persistent, outbound-only multiplexed connections to the Cloudflare global edge network. This design ensures that the \texttt{hive-mind} host exposes zero inbound listening ports to the public internet. Access to the TaxonVision-MLOps inference service is consequently masked behind an identity-aware Web Application Firewall (WAF), whilst internal CI/CD webhook deliveries are cryptographically validated at the Cloudflare edge prior to ingress.
+
+\section{Namespace Topology and Boundary Isolation}
+\label{sec:namespace_topology}
+
+The principle of least privilege dictates that heterogeneous workloads must never share a flat execution environment. The k3s cluster is therefore partitioned into strictly segregated logical boundaries known as namespaces. This topology prevents the stochastic failures or resource exhaustion of one application from cascading into adjacent systems.
+
+The cluster enforces the following explicit namespace segmentation:
+\begin{itemize}[leftmargin=*, label=\textbullet]
+    \item \textbf{\texttt{default}:} Retained as an empty baseline. Active deployment into the default namespace is prohibited by administrative policy. All TaxonVision serving workloads must operate outside this generic boundary.
+    \item \textbf{\texttt{jenkins-ci}:} Dedicated to the continuous integration lifecycle, this boundary isolates the declarative Jenkins controller and its ephemeral agent pods. The namespace handles high-churn workflows including Optuna Bayesian hyperparameter optimisation, type checking, and PyTorch model training.
+    \item \textbf{\texttt{mlflow}:} Dedicated to the MLflow tracking server and its backing PostgreSQL database. This namespace persists the metadata lineage of experimental trials, hyperparameter registries, and the Data Version Control (DVC) artefact references.
+    \item \textbf{\texttt{taxon-vision}:} This namespace encapsulates the mission-critical, operator-facing inference workloads. It hosts the FastAPI deployment that serves the quantified ONNX computational graphs. Resource quotas are strictly allocated to guarantee low-latency HTTP responses, explicitly isolating the serving pipeline from computationally greedy background tasks.
+    \item \textbf{\texttt{kube-system}:} Reserved exclusively for k3s core infrastructure controllers, including the NVIDIA time-slicing device plugin, CoreDNS, and the \textit{cloudflared} tunnel daemon. Application workloads are cryptographically prohibited from scheduling within this domain.
+\end{itemize}
+
+Network Policies are provisioned to enforce cross-namespace constraints. For instance, the ephemeral \texttt{jenkins-ci} agents are permitted outbound access to the internet to retrieve dataset manifests from the DagsHub remote, yet they are strictly barred from initiating inbound TCP connections to the \texttt{taxon-vision} serving workload, mitigating the risk of lateral movement during a CI pipeline compromise.
 
 \section{Role-Based Access Control (RBAC) Specification}
 \label{sec:rbac_specification}
+
+The security posture of the CI/CD pipeline is codified within the \texttt{deploy/k8s/jenkins-agent-rbac.yaml} manifest. Because the Jenkins controller requires the capacity to dynamically provision and terminate ephemeral machine learning runner pods, it necessitates elevated API permissions. However, granting cluster-admin privileges to the CI controller represents a catastrophic security vulnerability. Therefore, the architecture employs a rigorous Role-Based Access Control (RBAC) schema that strictly bounds the operational scope of the \texttt{jenkins-agent}.
+
+\subsection{ServiceAccount Scoping}
+The baseline identity is established via a dedicated Kubernetes ServiceAccount. The manifest provisions the \texttt{jenkins-agent} identity exclusively within the \texttt{jenkins-ci} namespace, ensuring that any API token derived from this account possesses no inherent global authority.
+
+\begin{listing}[H]
+\begin{minted}{yaml}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jenkins-agent
+  namespace: jenkins-ci
+\end{minted}
+\caption{ServiceAccount definition for the Jenkins ephemeral agents.}
+\label{lst:serviceaccount}
+\end{listing}
+
+\subsection{Role Rules and Least-Privilege Execution}
+The operative permissions are defined within the \texttt{jenkins-agent-role}. This Role restricts the CI agent strictly to the manipulation of pod lifecycles and logging streams. Crucially, the \texttt{apiGroups} parameter is restricted to the core group (\texttt{""}), preventing the agent from modifying Deployments, DaemonSets, or StatefulSets.
+
+The \texttt{resources} array is explicitly constrained to \texttt{pods}, \texttt{pods/exec}, and \texttt{pods/log}. The verbs granted---comprising \texttt{get}, \texttt{list}, \texttt{watch}, \texttt{create}, \texttt{delete}, \texttt{patch}, and \texttt{update}---are the absolute minimum required by the Jenkins Kubernetes plugin to provision the \texttt{ml-runner} containers, stream the standard output of the PyTorch training loops, and cleanly terminate the pod upon pipeline completion. The manifest furthermore explicitly authorises read-only access (\texttt{get}, \texttt{list}, \texttt{watch}) to \texttt{events}, enabling pipeline diagnostics to monitor scheduling latency and container image pull failures without exposing administrative cluster states. The role further dictates minimum privileges, enabling the ephemeral workers to manage their execution footprint via \texttt{pods}, \texttt{pods/exec}, and \texttt{pods/log} (facilitated by get, list, watch, create, delete, and deletecollection commands) whilst strictly isolating persistent data layers by merely granting read permissions on \texttt{persistentvolumeclaims} (get, list, watch).
+
+\begin{listing}[H]
+\begin{minted}{yaml}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: jenkins-agent-role
+  namespace: jenkins-ci
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/exec", "pods/log"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+\end{minted}
+\caption{Role specification bounding API permissions to the minimum necessary pod operations.}
+\label{lst:role}
+\end{listing}
+
+\subsection{RoleBinding Guardrails}
+To operationalise the permissions, a \texttt{RoleBinding} securely associates the \texttt{jenkins-agent} ServiceAccount with the \texttt{jenkins-agent-role}. Because this is a \texttt{RoleBinding} and not a \texttt{ClusterRoleBinding}, the permissions are strictly confined to the \texttt{jenkins-ci} namespace. This serves as a critical containment mechanism: even in the event of a severe container escape vulnerability within the \texttt{ml-runner} environment, the compromised agent token cannot be leveraged to inspect secrets, modify workloads, or execute lateral movement into the \texttt{kube-system} or \texttt{taxon-vision} namespaces.
+
+\begin{listing}[H]
+\begin{minted}{yaml}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jenkins-agent-binding
+  namespace: jenkins-ci
+subjects:
+  - kind: ServiceAccount
+    name: jenkins-agent
+    namespace: jenkins-ci
+roleRef:
+  kind: Role
+  name: jenkins-agent-role
+  apiGroup: rbac.authorization.k8s.io
+\end{minted}
+\caption{RoleBinding binding the identity to the constrained permissions within the namespace.}
+\label{lst:rolebinding}
+\end{listing}
+
+The architecture further supplements the CI pipeline with a distinct \texttt{jenkins-deployer-role} within the \texttt{taxon-vision} namespace, permitting the continuous delivery phase to roll out updates to the API deployment. However, this cross-namespace capability is equally restricted, permitting modifications exclusively to the \texttt{deployments} and \texttt{services} objects required for the zero-downtime rolling update strategy.
+
+\section{Pod Security Standards and Admission Controls}
+\label{sec:pod_security_standards}
+
+Beyond the API boundary enforced by RBAC, the execution environment of the containers themselves is hardened using native Kubernetes Pod Security Contexts. By default, Linux containers execute with root privileges (\texttt{UID 0}), which exposes the underlying host kernel to severe risks in the event of a container breakout. The TaxonVision-MLOps workloads explicitly reject this paradigm.
+
+\subsection{Non-Root Execution and File System Immutability}
+The \texttt{taxon-vision-api} deployment enforces non-root execution via strict security contexts. The manifest explicitly sets \texttt{runAsNonRoot: true} and forces the process to execute under a heavily restricted user identity (\texttt{runAsUser: 10001}). This ensures that even if an attacker successfully exploits a vulnerability within the FastAPI Python runtime or the ONNX C++ bindings, the resulting shell is entirely unprivileged and unable to manipulate the container's root file system or interact with privileged host device nodes. Similarly, the ephemeral Jenkins agents execute under the constrained user identity \texttt{runAsUser: 1000}.
+
+To further compound the difficulty of exploitation, workloads are intended to operate with a read-only root filesystem. By remounting the container's root directory as immutable, the architecture neutralises entire classes of post-exploitation persistence mechanisms, as malware or unauthorised binary drops cannot be written to typical execution paths such as \texttt{/bin} or \texttt{/usr/lib}.
+
+\subsection{Linux Capability Dropping}
+Linux capabilities partition the monolithic privileges of the root user into discrete, granular units. Standard Docker and Kubernetes container runtimes grant a default set of capabilities (such as \texttt{CAP\_CHOWN} or \texttt{CAP\_NET\_BIND\_SERVICE}) which are frequently superfluous for machine learning workloads. The deployment manifests aggressively drop all capabilities (\texttt{drop: ["ALL"]}), retaining only the absolute minimum required syscalls to operate the web server and the PyTorch computation graph. This drastically reduces the attack surface of the Linux kernel exposed to the containerized application.
+
+\subsection{Storage Volumes and Persistence Boundaries}
+Data persistence and caching are handled with equal rigor. The architecture minimises the usage of \texttt{hostPath} mounts, which inherently bridge the namespace isolation by directly mapping bare-metal file system directories into the container. When \texttt{hostPath} mounts are absolutely necessary---such as the exposure of the NVIDIA device nodes for time-slicing GPU virtualisation---they are strictly audited and mounted read-only where mathematically feasible.
+
+Standard persistence is delegated to PersistentVolumeClaims (PVCs) establishing strict security boundaries. The architecture ensures that data access is rigorously constrained. By isolating the stateful volumes from the ephemeral compute logic, the k3s cluster topology achieves high physical determinism whilst preserving an aggressive, mathematically rigorous security posture. This isolation effectively restricts the potential blast radius of any individual workload, mitigating the risk of unauthorised data manipulation across administrative domains.
