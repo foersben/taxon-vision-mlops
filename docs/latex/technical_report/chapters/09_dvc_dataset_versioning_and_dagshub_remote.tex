@@ -1,31 +1,98 @@
 % !TeX root = ../technical_report.tex
-\chapter{Data Version Control (DVC) and Remote Storage Topology}
-\label{ch:dvc_storage_topology}
+\chapter{DVC Dataset Versioning and DagsHub Remote Storage}
+\label{ch:dvc_dagshub_storage}
 
-% CHAPTER BRIEF FOR JULES / TECHNICAL WRITER:
-% -------------------------------------------------------------
-% Focus: Cryptographic data versioning, pipeline DAGs, and DagsHub S3 remote architecture.
-% Repository Files:
-%   - dvc.yaml
-%   - dvc.lock
-%   - .dvcignore
-%   - .dvc/config
-% Detailed Technical Concepts:
-%   - DVC Pipeline DAG (dvc.yaml):
-%       * Stage dependencies (deps) and tracked outputs (outs).
-%       * Ingestion stage emitting immutable Parquet manifests to data/manifests.
-%   - Cryptographic Integrity: dvc.lock MD5 hashes, ensuring end-to-end dataset immutability.
-%   - Remote Storage Topology:
-%       * S3-compatible object store hosted on DagsHub (https://dagshub.com/foersben/taxon-vision-mlops.s3).
-%       * Authentication via AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY bound from DAGSHUB_TOKEN.
-%   - Developer & CI Workflow: dvc pull in CI to restore caches, dvc push to sync trained checkpoints (head.pt, model.onnx).
-% -------------------------------------------------------------
+The physical topography and bounded execution strategies delineated in Chapter~\ref{ch:infrastructure_topology} rigorously address the computational constraints of bare-metal vision architectures. However, ensuring strict provenance and absolute mathematical reproducibility requires an equivalent operational discipline in data management. Modern Machine Learning Operations (MLOps) platforms inevitably confront the impedance mismatch between the versioning mechanics of source code and the storage requirements of large binary assets. Specifically, traditional Git repositories fundamentally degrade when subjected to the multi-gigabyte churn associated with continuous image corpus ingestion and iterative tensor checkpointing. Attempting to force terabytes of heterogeneous biological imagery through the standard Git tree objects leads to catastrophic repository bloat, unacceptable clone times, and severe I/O bottlenecks. This chapter meticulously formalises the integration of Data Version Control (DVC) and DagsHub S3-compatible remote storage as the cryptographic and physical backbone of the TaxonVision-MLOps data topology, ensuring that empirical workflows remain strictly deterministic.
 
-\section{DVC Pipeline Graph and Cryptographic Manifests}
-\label{sec:dvc_pipeline_graph}
+\section{Data Version Control (DVC) Core Architecture}
+\label{sec:dvc_core_architecture}
 
-\section{DagsHub S3-Compatible Remote Storage Architecture}
-\label{sec:dagshub_remote_architecture}
+At its core, DVC functions by decoupling the versioning of logical pointers (which remain in Git) from the storage of physical binary assets (which are relegated to a dedicated, high-bandwidth backend). This fundamental decoupling ensures that the Git repository remains strictly text-based, compact, and blazingly fast. Meanwhile, vast datasets, ONNX runtime graphs, and Apache Parquet metadata manifests are securely managed via a robust Content-Addressed Storage (CAS) mechanism. This division of responsibility fundamentally mitigates the scaling limitations that typically paralyse monolithic source control paradigms during data-intensive biological modelling.
 
-\section{Synchronization Lifecycles in CI/CD and Local Workstations}
-\label{sec:dvc_sync_lifecycles}
+\subsection{Content-Addressed Storage (CAS) Mechanics}
+The absolute cornerstone of DVC is its CAS implementation. Instead of identifying a file by its hierarchical path (which is inherently mutable and context-dependent), CAS identifies every binary artefact strictly by a cryptographic hash of its immutable byte sequence. Upon executing a tracking command (e.g., \texttt{dvc add}), DVC computes the exact MD5 checksum of the target file or directory. The physical data is subsequently ingested into the local cache directory, \texttt{.dvc/cache/}, thereby guaranteeing that mathematically identical data always maps to the same deterministic storage location regardless of its logical nomenclature.
+
+To prevent catastrophic filesystem slowdowns caused by massive directory listings (a known limitation of standard inode structures like \texttt{ext4}), DVC implements a deterministic, two-character subdirectory sharding protocol. For example, if an artefact yields an MD5 hash beginning with \texttt{f5}, its physical cache path becomes \texttt{.dvc/cache/f5/}. The remaining 30 characters of the hash form the filename within that specific shard. This structure explicitly avoids unbounded flat directories and enables instantaneous hash-based retrieval during CI/CD hydration. In the case of directory tracking, the hash corresponds to a structured JSON manifest enumerating the individual file hashes within that directory, suffixed with \texttt{.dir} to logically denote its structural nature.
+
+\subsection{Structural Anatomy of DVC Pointer Files}
+The physical decoupling process generates a lightweight, YAML-formatted pointer file (typically bearing the \texttt{.dvc} extension), which is subsequently committed to Git alongside the source code. A forensic examination of the existing \texttt{data/sample.dvc} pointer in the active repository provides an explicit illustration of this architecture, revealing the exact mathematical linkages established by the system:
+
+\begin{listing}[H]
+\begin{minted}{yaml}
+outs:
+- md5: f546997db8b542e87e4f006326d04aac.dir
+  size: 37744
+  nfiles: 1
+  hash: md5
+  path: sample
+\end{minted}
+\caption{Cryptographic tracking structure within \texttt{data/sample.dvc}.}
+\label{lst:sample_dvc}
+\end{listing}
+
+As thoroughly detailed in Listing~\ref{lst:sample_dvc}, the pointer intrinsically binds the logical path (\texttt{path: sample}) to its exact cryptographic identity. The \texttt{outs} block defines the generated output specification. The \texttt{md5} key specifies the exact content hash (in this instance, a directory hash ending in \texttt{.dir}, explicitly confirming the structural directory tracking mode). The \texttt{size} field meticulously records the aggregate byte volume (\texttt{37744} bytes), providing an immediate pre-download integrity check, and \texttt{nfiles} enumerates the total constituent files. This structure enables Git to strictly track the exact state of the dataset through time without ever persisting the binary payload itself. The cache shard for this specific dataset logically resides at \texttt{.dvc/cache/f5/46997db8b542e87e4f006326d04aac.dir}, effectively linking the declarative YAML syntax to precise physical disc sectors.
+
+\section{DagsHub S3 Remote Integration}
+\label{sec:dagshub_s3_remote}
+
+While the local CAS operates effectively for individual developer workstations and localized prototyping, distributed team collaboration and ephemeral Continuous Integration (CI) pipelines require a centralized, high-availability remote storage layer. To fulfil this absolute requirement comprehensively, the repository natively integrates with DagsHub, establishing a robust, enterprise-grade S3-compatible backend tailored specifically for automated machine learning workloads.
+
+\subsection{Configuration and Protocol Negotiation}
+The connection topology is rigidly defined within the hidden \texttt{.dvc/config} file. The configuration instructs the local DVC client to utilise the DagsHub remote as its primary upstream origin, ensuring a unified data fetching strategy across all distributed agents and CI runners.
+
+\begin{listing}[H]
+\begin{minted}{ini}
+[core]
+    remote = origin
+['remote "origin"']
+    url = s3://dvc
+    endpointurl = https://dagshub.com/foersben/taxon-vision-mlops.s3
+\end{minted}
+\caption{S3 Remote configuration defined in \texttt{.dvc/config}.}
+\label{lst:dvc_config}
+\end{listing}
+
+As demonstrated in Listing~\ref{lst:dvc_config}, the default remote is explicitly named \texttt{origin}, intentionally mirroring Git semantics for cognitive continuity among developers. The underlying protocol is strictly defined as an S3 bucket (\texttt{s3://dvc}), yet the network traffic is deterministically routed to the custom DagsHub endpoint URL. This approach elegantly circumvents the requirement for expensive, standalone AWS S3 infrastructure while maintaining strict compatibility with established S3 client libraries (such as \texttt{boto3} in Python). This architectural choice drastically reduces operational complexity and financial expenditure for the open-source platform.
+
+\subsection{Authentication and Data Synchronisation Semantics}
+Authentication to the S3-compatible endpoint is dynamically negotiated without exposing static AWS-style credentials in plain text. Instead, the pipeline leverages Hash-based Message Authentication Code (HMAC) credentials derived dynamically from a unified access token. In the Jenkins CI environment, the \texttt{DAGSHUB\_TOKEN} credential is simultaneously mapped to both \texttt{AWS\_ACCESS\_KEY\_ID} and \texttt{AWS\_SECRET\_ACCESS\_KEY}. This ingenious duality allows standard S3 libraries to transparently authenticate against the DagsHub proxy, facilitating seamless read and write operations across the entire network cluster.
+
+Data synchronisation is rigorously managed via specific declarative commands, ensuring strict state alignment between local caches and remote storage:
+\begin{itemize}
+    \item \texttt{dvc push}: Evaluates the delta between the local \texttt{.dvc/cache/} and the remote DagsHub endpoint. Only novel, un-cached binary blobs (identified by missing MD5 hashes on the remote) are transmitted over the network. This intrinsically minimises egress bandwidth and vastly accelerates the iterative model tuning loop.
+    \item \texttt{dvc pull}: Executes the reverse operation. It parses the \texttt{.dvc} pointers currently checked out in the Git working tree, queries the remote for the corresponding MD5 hashes, and downloads any missing blobs into the local cache. The blobs are then physically linked (via hardlinks or symlinks, depending on filesystem capabilities) into the working directory, materialising the dataset required for the training process.
+    \item \texttt{dvc status}: Provides a real-time differential analysis, instantly reporting discrepancies between the Git-tracked pointers and the physically present local cache or remote storage. This serves as the primary auditing tool for confirming operational integrity before executing pipeline commands.
+\end{itemize}
+
+\section{Reproducibility Invariants and Pipeline Provenance}
+\label{sec:reproducibility_invariants}
+
+The paramount architectural directive governing this platform is MLOps Reproducibility Rule 01: ensuring exact data-model lineage. Every emitted model checkpoint, particularly the high-value ONNX computational graphs, must be mathematically and cryptographically linkable to a precise, immutable snapshot of the underlying training data. Without this mathematical invariant, debugging catastrophic failure modes, interpreting hyperparameter search spaces, or rectifying epistemic drift in biological classification becomes effectively impossible.
+
+The explicit and automated interplay between DVC and Git inherently enforces this strict invariant. When an automated training pipeline concludes, the resulting weights (e.g., \texttt{models/checkpoints/head.pt}) and intermediate states are immediately registered via \texttt{dvc add}, generating a new `.dvc` pointer. This pointer, alongside any updated dataset pointers and training configurations, is committed to Git in a single, atomic transaction. Consequently, checking out a specific Git commit hash instantly and deterministically reconstructs the exact combination of source code, Bayesian hyperparameters, and the precise dataset state utilised for that specific model iteration.
+
+Managing the physical footprint of this provenance requires robust cache pruning protocols. Incremental additions, particularly the partitioning of large Parquet datasets, generate substantial cache churn over time. Because DVC never modifies a file in the CAS (it strictly creates new hashes), obsolete datasets accumulate indefinitely unless actively garbage collected. Routine execution of \texttt{dvc gc --workspace} ensures that only the binary blobs referenced by the currently active Git branch (or explicitly preserved tags) are retained locally. This procedure is absolutely crucial for maintaining the operational efficiency of the BTRFS subvolume detailed in Section~\ref{sec:gpu_partitioning}, preventing the 2 TB NVMe drive from reaching its absolute capacity limits.
+
+\section{CI/CD Integration and Ephemeral Agent Hydration}
+\label{sec:ci_cd_integration}
+
+The practical execution of this architecture is prominently demonstrated within the Jenkins CI/CD pipeline. The ephemeral Kubernetes pods (specifically the \texttt{ml-runner} container) initialise in a completely stateless and pristine condition. In order to execute integration tests, compute Class-Balanced Loss metrics (Chapter~\ref{ch:class_balanced_loss}), or rigorously validate the zero-downtime inference deployment, the pod must rapidly hydrate its working directory with the required binary assets before actual execution can commence.
+
+\subsection{Hydration Mechanics in the Jenkinsfile}
+The initialisation sequence occurs immediately within the \texttt{stage('Prepare Toolchain')} block of the \texttt{Jenkinsfile}. After the Pixi multi-environment toolchain perfectly constructs the required Python dependency graph, the agent invokes DVC to fetch the necessary datasets and model checkpoints from DagsHub.
+
+\begin{listing}[H]
+\begin{minted}{bash}
+echo ">>> Pulling DVC tracked datasets and model checkpoints from DagsHub..."
+pixi run --frozen -e ci-dev dvc pull || echo "WARNING: DVC pull skipped or failed; continuing with workspace cache."
+\end{minted}
+\caption{Ephemeral agent hydration logic derived from the \texttt{Jenkinsfile}.}
+\label{lst:jenkins_hydration}
+\end{listing}
+
+As explicitly illustrated in Listing~\ref{lst:jenkins_hydration}, the invocation utilises the isolated \texttt{ci-dev} environment managed by Pixi. The command interrogates the checked-out \texttt{.dvc} files and efficiently streams only the required MD5 blobs from the S3 remote, thus flawlessly reconstructing the necessary environment for model testing. Furthermore, within the subsequent \texttt{stage('Model Training \& Checkpoint (GPU)')}, trained outputs are synchronised back to remote storage via \texttt{pixi run --frozen -e dev dvc push models/checkpoints/head.pt models/checkpoints/model.onnx || true}.
+
+\subsection{Fail-Soft Caching Mechanisms}
+A critical requirement for enterprise-grade MLOps is unyielding resilience against external infrastructure degradation. If the DagsHub S3 endpoint experiences sudden latency spikes, degraded throughput, or absolute downtime, the pipeline must not catastrophically stall if the necessary assets are already present on the local cluster. The explicit shell logical OR operator (\texttt{||}) implements a strict fail-soft mechanism. If the network request fails, the pipeline automatically emits a non-fatal warning and continues execution by safely utilising whatever files are currently available in the cached storage layer. This resilient strategy heavily relies on the persistence of the underlying Kubernetes PersistentVolumeClaim (mounted specifically at \texttt{/root/.cache/rattler/cache} and the workspace), allowing successive, ephemeral pod executions to leverage previously downloaded, immutable chunks from prior CI runs. This methodology fundamentally preserves CI/CD throughput even during severe remote storage outages, guaranteeing high availability and unhindered workflow continuation.
+
+\end{document}
