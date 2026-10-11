@@ -46,6 +46,13 @@ The Apache Arrow columnar in-memory representation allows the execution of highl
 
 The integration of Apache Arrow enables zero-copy slicing of the record batches directly into PyTorch tensors during the downstream training loops. When a subset of the dataset is required for a particular active learning cycle or a validation split, the columnar arrays are sliced via memory pointers rather than through the duplication of the underlying byte buffers. This zero-copy strategy dramatically reduces the resident set size (RSS) of the training daemon and prevents memory fragmentation. Furthermore, the explicit alignment of the memory buffers in the Arrow format accelerates the transfer of the metadata across the PCIe bus to the NVIDIA RTX 5070 Ti, thus eliminating the CPU context switching that would otherwise occur during standard data serialisation pipelines.
 
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{\input{figures/fig_05_data_arrow_dvc_pipeline.tikz}}
+\caption{Data ingestion engine, zero-copy Arrow streaming, license gating, and DVC content-addressed versioning topology.}
+\label{fig:data_arrow_dvc_pipeline}
+\end{figure}
+
 \section{Open License Verification Engine}
 \label{sec:license_verification_engine}
 
