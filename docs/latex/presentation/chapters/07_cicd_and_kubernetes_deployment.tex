@@ -109,21 +109,21 @@
     \resizebox{!}{0.58\textheight}{
     \begin{tikzpicture}[
         auto,
-        block/.style={rectangle, draw=TaxonDark, thick, fill=white, text width=6em, text centered, rounded corners, minimum height=3em, font=\scriptsize},
-        cloud/.style={rectangle, draw=TaxonSecondary, thick, fill=TaxonSecondary!10, text width=6em, text centered, rounded corners, minimum height=3em, font=\scriptsize},
-        metal/.style={rectangle, draw=TaxonPrimary, thick, fill=TaxonPrimary!10, text width=6em, text centered, rounded corners, minimum height=3em, font=\scriptsize},
+        block/.style={rectangle, draw=TaxonDark, thick, fill=white, text width=5.5em, text centered, rounded corners, minimum height=3em, font=\scriptsize},
+        cloud/.style={rectangle, draw=TaxonSecondary, thick, fill=TaxonSecondary!10, text width=5.5em, text centered, rounded corners, minimum height=3em, font=\scriptsize},
+        metal/.style={rectangle, draw=TaxonPrimary, thick, fill=TaxonPrimary!10, text width=5.5em, text centered, rounded corners, minimum height=3em, font=\scriptsize},
         line/.style={draw, thick, -latex, shorten >=2pt},
         label/.style={font=\tiny, text=TaxonDark, align=center}
     ]
         % Nodes
         \node [block] (pr) {PR Created};
-        \node [cloud, right=1.5cm of pr] (gh) {GitHub Actions\\(Cloud Runners)};
-        \node [block, right=1.5cm of gh] (merge) {PR Merge};
-        \node [metal, below=1.5cm of merge] (webhook) {Webhook to\\ \texttt{hive-mind}};
-        \node [metal, left=1.5cm of webhook] (jenkins) {k3s Jenkins\\Ephemeral Pod};
-        \node [metal, left=1.5cm of jenkins] (build) {Build OCI\\Image};
-        \node [cloud, below=1.5cm of build] (ghcr) {Push to\\GHCR};
-        \node [metal, right=1.5cm of ghcr] (deploy) {k3s Rolling\\Update};
+        \node [cloud, right=1.2cm of pr] (gh) {GitHub Actions\\(Cloud Runners)};
+        \node [block, right=1.2cm of gh] (merge) {PR Merge};
+        \node [metal, below=1.2cm of merge] (webhook) {Webhook to\\ \texttt{hive-mind}};
+        \node [metal, left=1.2cm of webhook] (jenkins) {k3s Jenkins\\Ephemeral Pod};
+        \node [metal, left=1.2cm of jenkins] (build) {Build OCI\\Image};
+        \node [cloud, below=1.2cm of build] (ghcr) {Push to\\GHCR};
+        \node [metal, right=1.2cm of ghcr] (deploy) {k3s Rolling\\Update};
 
         % Connections
         \path [line] (pr) -- (gh);
@@ -171,7 +171,7 @@
         \node [podnew, right=2cm of traefik, yshift=-3cm] (pod4) {Pod v2\\(Ready)};
 
         % Traffic Routes
-        \draw [->, thick, dashed, draw=gray] (traefik) -- node[above, sloped, font=\tiny] {Traffic Drained} (pod1);
+        \draw [->, thick, dashed, draw=gray] (traefik) -- node[above, font=\tiny] {\textcolor{herbired}{\textbf{[Traffic Drained]}}} (pod1);
         \draw [->, thick, draw=TaxonSecondary] (traefik) -- node[above, font=\tiny] {Live Traffic} (pod2);
         \draw [->, thick, dashed, draw=gray] (traefik) -- node[above, sloped, font=\tiny] {Probe Pending} (pod3);
         \draw [->, thick, draw=TaxonPrimary] (traefik) -- node[above, sloped, font=\tiny] {Live Traffic} (pod4);

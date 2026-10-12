@@ -80,12 +80,11 @@
                         domain=1:10000,
                         samples=100,
                         grid=both,
-                        legend pos=north east,
                         title={Class-Balanced Loss Weights},
                         title style={font=\footnotesize\bfseries},
                         label style={font=\footnotesize},
                         tick label style={font=\scriptsize},
-                        legend style={font=\scriptsize}
+                        legend style={font=\scriptsize, at={(0.95, 0.85)}, anchor=north east, fill=white, fill opacity=0.8, text opacity=1}
                     ]
                     \addplot[thick, color=deepblue] {(1 - 0.99)/(1 - 0.99^x)};
                     \addlegendentry{$\beta = 0.99$}
