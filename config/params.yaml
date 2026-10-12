@@ -1,8 +1,15 @@
 ingestion:
   taxa_to_fetch:
-    - 47120  # Apis mellifera (Honey bees)
-    - 47119  # Bombus (Bumble bees)
-    - 47114  # Vespidae (Yellowjackets & Hornets)
+    - 48662  # Danaus plexippus (Monarch Butterfly)
+    - 47219  # Apis mellifera (Western Honey Bee)
+    - 12727  # Turdus migratorius (American Robin)
+    - 8229   # Cyanocitta cristata (Blue Jay)
+    - 47602  # Taraxacum officinale (Common Dandelion)
+    - 57983  # Helianthus annuus (Common Sunflower)
+    - 47144  # Canis lupus (Gray Wolf)
+    - 42069  # Vulpes vulpes (Red Fox)
+    - 48715  # Amanita muscaria (Fly Agaric)
+    - 48701  # Boletus edulis (King Bolete)
   per_page: 200 # Request 200 images per taxon at once.
 
 training:

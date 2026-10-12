@@ -5,48 +5,70 @@ taxa:
     common_name: "Monarch Butterfly"
     kingdom: "Animalia"
     class: "Insecta"
+    inat_taxon_id: 48662
   - id: 2
     scientific_name: "Apis mellifera"
     common_name: "Western Honey Bee"
     kingdom: "Animalia"
     class: "Insecta"
+    inat_taxon_id: 47219
+    inat_aliases:
+      - 47120  # Apis (Honey bees - genus)
+      - 47119  # Bombus (Bumble bees)
+      - 47114  # Vespidae (Yellowjackets & Hornets)
   - id: 3
     scientific_name: "Turdus migratorius"
     common_name: "American Robin"
     kingdom: "Animalia"
     class: "Aves"
+    inat_taxon_id: 12727
+    inat_aliases:
+      - 14704  # Turdus (genus)
   - id: 4
     scientific_name: "Cyanocitta cristata"
     common_name: "Blue Jay"
     kingdom: "Animalia"
     class: "Aves"
+    inat_taxon_id: 8229
   - id: 5
     scientific_name: "Taraxacum officinale"
     common_name: "Common Dandelion"
     kingdom: "Plantae"
     class: "Magnoliopsida"
+    inat_taxon_id: 47602
   - id: 6
     scientific_name: "Helianthus annuus"
     common_name: "Common Sunflower"
     kingdom: "Plantae"
     class: "Magnoliopsida"
+    inat_taxon_id: 57983
+    inat_aliases:
+      - 58737  # Helianthus (variant/subspecies)
   - id: 7
     scientific_name: "Canis lupus"
     common_name: "Gray Wolf"
     kingdom: "Animalia"
     class: "Mammalia"
+    inat_taxon_id: 47144
+    inat_aliases:
+      - 42048  # Canis (genus)
   - id: 8
     scientific_name: "Vulpes vulpes"
     common_name: "Red Fox"
     kingdom: "Animalia"
     class: "Mammalia"
+    inat_taxon_id: 42069
+    inat_aliases:
+      - 42054  # Vulpes (genus)
   - id: 9
     scientific_name: "Amanita muscaria"
     common_name: "Fly Agaric"
     kingdom: "Fungi"
     class: "Agaricomycetes"
+    inat_taxon_id: 48715
   - id: 10
     scientific_name: "Boletus edulis"
     common_name: "King Bolete"
     kingdom: "Fungi"
     class: "Agaricomycetes"
+    inat_taxon_id: 48701

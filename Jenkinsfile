@@ -151,7 +151,7 @@ spec:
       when {
         anyOf {
           branch 'main'
-          branch 'feature/phase1-foundations'
+          branch 'develop'
         }
       }
       agent {
@@ -237,7 +237,7 @@ spec:
       when {
         anyOf {
           branch 'main'
-          branch 'feature/phase1-foundations'
+          branch 'develop'
         }
       }
       steps {
