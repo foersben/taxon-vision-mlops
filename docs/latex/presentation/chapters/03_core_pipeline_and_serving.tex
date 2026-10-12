@@ -69,6 +69,24 @@
     \qa{What is the purpose of INT8 quantization here?}{It reduces memory bandwidth pressure and allows classification heads to fit entirely within L2/L3 CPU caches or fast GPU registers, eliminating cache thrashing.}
 \end{frame}
 
+\begin{frame}{Inference Engineering}{ONNX Runtime: Static vs. Dynamic Execution Invariants}
+    \begin{block}{Execution \& Optimization Strategies}
+        \begin{itemize}\footnotesize
+            \item \textbf{Compilation \& Optimization Lifecycle:} Tracing with \texttt{torch.onnx.export(..., opset\_version=17)} $\to$ Graph Optimization (constant folding, redundant node fusions) $\to$ Compiled \texttt{InferenceSession}.
+            \item \textbf{Dynamic Axes Mechanics:} Batch dimension \texttt{\{0: "batch\_size"\}} is declared dynamic. Handles single real-time HTTP requests ($B=1$, sub-15ms) and offline batch feature extraction ($B=64$) in the same model graph without recompilation or graph rebuilding.
+            \item \textbf{Static Spatial Dimensions Mechanics:} Input spatial dimensions ($3 \times 224 \times 224$) are strictly static. Enables ahead-of-time memory planning and zero-allocation execution via pre-allocated \texttt{IOBinding} buffers on the hot path, preventing dynamic heap allocations.
+            \item \textbf{Quantization Strategy (PTQ INT8):} Post-Training Quantization (PTQ INT8) inserts Quantize/Dequantize (QDQ) operators. Compresses linear probe weights from 340 MB down to 86 MB ($4\times$ reduction) while retaining $\ge 99\%$ accuracy and sub-15ms p95 latency.
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.15cm}
+    \statusdone
+
+    \script{We export PyTorch models using Opset 17 for advanced graph fusions. Batch size is dynamic, allowing the same artifact to serve single API requests or bulk offline embeddings. However, we strictly freeze spatial dimensions ($3 \times 224 \times 224$). This enables ONNX Runtime to perform ahead-of-time memory planning. Combined with pre-allocated \texttt{IOBinding} buffers, we bypass dynamic heap allocations on the hot path. Finally, INT8 Post-Training Quantization inserts QDQ operators to shrink weights from 340 MB to 86 MB, fitting in cache while maintaining accuracy and sub-15ms latency.}
+    \qa{Why are spatial dimensions kept static?}{Dynamic dimensions force the runtime to compute offsets and allocate heap buffers per request. Static dimensions allow ahead-of-time memory planning and safe reuse of \texttt{IOBinding} buffers, eliminating overhead.}
+    \qa{How do \texttt{IOBinding} buffers work?}{They are fixed memory regions bound to the \texttt{InferenceSession}. We write incoming bytes directly into them, bypassing the Python object allocator.}
+\end{frame}
+
 \begin{frame}{Architectural Topology}{Offline Training to Online Serving Boundary}
     \begin{center}
     \vspace{-0.2cm}
