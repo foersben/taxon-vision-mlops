@@ -192,6 +192,54 @@
     \qa{What happens if an observation is deleted or filtered out?}{The entire split is re-indexed deterministically during feature extraction, guaranteeing that Parquet rows and memmap indices never fall out of synchronization.}
 \end{frame}
 
+\begin{frame}{Feature Engineering}{Persistent Feature Caching: Mechanics \& Speedup}
+    \begin{block}{Visual Data Flow}
+        \centering\vspace{0.2cm}
+        Raw S3 Image $\to$ Frozen Backbone Forward Pass $\to$ \texttt{embeddings.npy} (\texttt{np.memmap}) $\leftrightarrow$ \texttt{observations.parquet}
+        \vspace{0.2cm}
+    \end{block}
+
+    \begin{block}{Why it Works (FLOPs \& IOPS)}
+        \begin{itemize}\small
+            \item \textbf{Egress \& Decompression:} Continuous S3 network egress and JPEG decompression overhead are eliminated after epoch 0.
+            \item \textbf{Computational Reduction:} Linear probe epoch FLOPs drop from $\mathcal{O}(N \cdot P_{\text{backbone}})$ (e.g. 86M params) down to convex linear projection $\mathcal{O}(N \cdot D \cdot K)$ ($D \le 1280$, $K=10$).
+            \item \textbf{Runtime Impact:} Reduces training runtime from \textbf{4 hours} to \textbf{10 seconds}.
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.1cm}
+    \statusdone
+
+    \script{By caching features persistently, we eliminate the need to repeatedly download and decompress JPEGs from S3 after the first epoch. More importantly, our computational complexity plummets. Instead of passing images through an 86-million parameter backbone every epoch, we perform a simple convex linear projection. This optimization reduces our training runtime from 4 hours down to just 10 seconds.}
+    \qa{Why not cache images locally instead of feature embeddings?}{Caching images avoids S3 egress but still incurs JPEG decompression and the massive $\mathcal{O}(N \cdot P_{\text{backbone}})$ forward pass cost per epoch. Caching embeddings eliminates both.}
+    \qa{Does this approach work for fine-tuning the backbone?}{No. Persistent feature caching is specifically designed for linear probing or training lightweight heads on top of a frozen backbone. Full fine-tuning requires backpropagating through the backbone every epoch.}
+\end{frame}
+
+\begin{frame}{Cache Invalidation}{Multi-Cache Invalidation Matrix: Criteria \& Scenarios}
+    \begin{block}{Cache Key Cryptographic Invariant}
+        \vspace{-0.2cm}
+        \[
+        \resizebox{0.95\linewidth}{!}{$\text{Cache Key} = \text{SHA256}(\text{Backbone ID} \,\Vert{}\, \text{Resolution} \,\Vert{}\, \text{Transform Params} \,\Vert{}\, \text{DVC Split Hash} \,\Vert{}\, \text{Chunking Mode})$}
+        \]
+    \end{block}
+
+    \begin{block}{When Multiple Caches are Required (The Matrix)}
+        \begin{enumerate}\footnotesize
+            \item \textbf{Backbone Architecture:} ViT (DINOv3, 384-d) vs. Domain ViT (BioCLIP-2, 512-d) vs. Modern CNN (MobileNetV4, 960-d).
+            \item \textbf{Input Resolution:} Standard $224 \times 224$ vs. High-resolution fine-grained crop ($384 \times 384$).
+            \item \textbf{Preprocessing Modes:} Macro parent scene ($I_{\text{parent}}$) vs. Zero-shot detected child crop ($I_{\text{child}}$).
+            \item \textbf{Dataset Partitions:} Independent immutable caches for \texttt{train}, \texttt{val}, and \texttt{test} splits.
+        \end{enumerate}
+    \end{block}
+
+    \vspace{0.1cm}
+    \statusdone
+
+    \script{Because we cache features, any change to the extraction pipeline necessitates a new cache. We formalise this using a SHA-256 cryptographic invariant that hashes the backbone identity, resolution, transforms, DVC split hash, and chunking mode. This multi-cache invalidation matrix dictates exactly when independent caches must be built---such as when switching from DINOv3 to BioCLIP-2, changing input resolution, or updating dataset partitions.}
+    \qa{Why include the DVC Split Hash in the cache key?}{The DVC hash ensures that if the underlying dataset rows or their partition assignments change, the cache is automatically invalidated, preventing data leaks or stale features.}
+    \qa{How do we manage the disk space for multiple caches?}{Because the caches are dense NumPy memmap arrays without image overhead, they remain lightweight. We use a Least Recently Used (LRU) policy to evict old caches from the local NVMe drive when approaching the storage limit.}
+\end{frame}
+
 \begin{frame}{Version Control}{DVC Master Tracking \& Git Pointer Decoupling (.dvc)}
     \begin{block}{DVC Pointer Decoupling Principle}
         \begin{itemize}\small
