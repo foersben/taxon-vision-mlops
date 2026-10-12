@@ -53,52 +53,58 @@
 \end{frame}
 
 \begin{frame}{Memory Optimization}{1:1 Row Alignment with Feature Embeddings (np.memmap)}
-    \begin{block}{Zero-RAM Bloat Feature Loading}
-        \begin{itemize}\small
-            \item \textbf{Exact 1:1 Invariant:} Row $i$ in \texttt{observations.parquet} maps deterministically to vector $i$ in disk-backed \texttt{embeddings.npy}.
-            \item \textbf{Memory-Mapped Slicing:} PyTorch dataloaders slice multi-gigabyte embedding arrays on-demand via \texttt{np.memmap} without RAM saturation.
-        \end{itemize}
-    \end{block}
+    \begin{columns}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Zero-RAM Bloat Feature Loading}
+                \begin{itemize}\small
+                    \item \textbf{Exact 1:1 Invariant:} Row $i$ in \texttt{observations.parquet} maps deterministically to vector $i$ in disk-backed \texttt{embeddings.npy}.
+                    \item \textbf{Memory-Mapped Slicing:} PyTorch dataloaders slice multi-gigabyte embedding arrays on-demand via \texttt{np.memmap} without RAM saturation.
+                \end{itemize}
+            \end{block}
+        \end{column}
 
-    \vspace{-0.1cm}
-    \begin{center}
-    \resizebox{0.85\linewidth}{!}{
-    \begin{tikzpicture}[
-        node distance=0.5cm and 1cm,
-        table_node/.style={draw=TaxonPrimary, fill=TaxonPrimary!10, rounded corners, rectangle, align=center, thick, minimum width=4.5cm, minimum height=1.2cm},
-        array_node/.style={draw=TaxonSecondary, fill=TaxonSecondary!10, rounded corners, rectangle, align=center, thick, minimum width=3.5cm, minimum height=1.2cm},
-        arrow/.style={->, thick, draw=TaxonDark, shorten >=2pt, shorten <=2pt},
-        label_text/.style={font=\small\sffamily\bfseries, color=TaxonDark}
-    ]
+        \begin{column}{0.48\textwidth}
+            \vspace{-0.1cm}
+            \begin{center}
+            \resizebox{0.85\linewidth}{!}{
+            \begin{tikzpicture}[
+                node distance=0.5cm and 1cm,
+                table_node/.style={draw=TaxonPrimary, fill=TaxonPrimary!10, rounded corners, rectangle, align=center, thick, minimum width=4.5cm, minimum height=1.2cm},
+                array_node/.style={draw=TaxonSecondary, fill=TaxonSecondary!10, rounded corners, rectangle, align=center, thick, minimum width=3.5cm, minimum height=1.2cm},
+                arrow/.style={->, thick, draw=TaxonDark, shorten >=2pt, shorten <=2pt},
+                label_text/.style={font=\small\sffamily\bfseries, color=TaxonDark}
+            ]
 
-        % Left Node: observations.parquet
-        \node[table_node] (parquet) {
-            \textbf{observations.parquet}\\
-            \scriptsize \texttt{row\_id, hash, taxon\_id, url}
-        };
+                % Left Node: observations.parquet
+                \node[table_node] (parquet) {
+                    \textbf{observations.parquet}\\
+                    \scriptsize \texttt{row\_id, hash, taxon\_id, url}
+                };
 
-        % Right Node: embeddings.npy
-        \node[array_node, right=3cm of parquet] (memmap) {
-            \textbf{embeddings.npy}\\
-            \scriptsize $z \in \mathbb{R}^{768}$ (np.memmap)
-        };
+                % Right Node: embeddings.npy
+                \node[array_node, right=3cm of parquet] (memmap) {
+                    \textbf{embeddings.npy}\\
+                    \scriptsize $z \in \mathbb{R}^{768}$ (np.memmap)
+                };
 
-        % Draw rows
-        \foreach \i/\y in {0/0.4, 1/0, 2/-0.4} {
-            \draw[TaxonPrimary, thick] ([yshift=\y cm, xshift=-2.2cm]parquet.center) -- ([yshift=\y cm, xshift=2.2cm]parquet.center);
-            \draw[TaxonSecondary, thick] ([yshift=\y cm, xshift=-1.7cm]memmap.center) -- ([yshift=\y cm, xshift=1.7cm]memmap.center);
-        }
+                % Draw rows
+                \foreach \i/\y in {0/0.4, 1/0, 2/-0.4} {
+                    \draw[TaxonPrimary, thick] ([yshift=\y cm, xshift=-2.2cm]parquet.center) -- ([yshift=\y cm, xshift=2.2cm]parquet.center);
+                    \draw[TaxonSecondary, thick] ([yshift=\y cm, xshift=-1.7cm]memmap.center) -- ([yshift=\y cm, xshift=1.7cm]memmap.center);
+                }
 
-        % Draw arrows indicating 1:1 mapping
-        \draw[arrow, color=TaxonAccent] ([yshift=0.2cm]parquet.east) -- node[above, label_text, color=TaxonAccent] {Exact 1:1 Row Alignment} ([yshift=0.2cm]memmap.west);
-        \draw[arrow, color=TaxonAccent] ([yshift=-0.2cm]parquet.east) -- ([yshift=-0.2cm]memmap.west);
+                % Draw arrows indicating 1:1 mapping
+                \draw[arrow, color=TaxonAccent] ([yshift=0.2cm]parquet.east) -- node[above, label_text, color=TaxonAccent] {Exact 1:1 Row Alignment} ([yshift=0.2cm]memmap.west);
+                \draw[arrow, color=TaxonAccent] ([yshift=-0.2cm]parquet.east) -- ([yshift=-0.2cm]memmap.west);
 
-        \node[below=0.6cm of parquet, text width=5cm, align=center] {\scriptsize Columnar metadata loaded rapidly into Pandas/Polars RAM};
-        \node[below=0.6cm of memmap, text width=4cm, align=center] {\scriptsize Disk-backed NVMe array sliced directly via PyTorch};
+                \node[below=0.6cm of parquet, text width=5cm, align=center] {\scriptsize Columnar metadata loaded rapidly into Pandas/Polars RAM};
+                \node[below=0.6cm of memmap, text width=4cm, align=center] {\scriptsize Disk-backed NVMe array sliced directly via PyTorch};
 
-    \end{tikzpicture}
-    }
-    \end{center}
+            \end{tikzpicture}
+            }
+            \end{center}
+        \end{column}
+    \end{columns}
 
     \statusdone
 
@@ -132,8 +138,7 @@
         };
 
         \node[pointer, right=2cm of parquet] (dvc_ptr) {
-            \textbf{sample.dvc}\\
-            \scriptsize \texttt{md5: f546...aac.dir}
+            \textbf{sample.dvc}
         };
 
         \node[remote, above=1.2cm of dvc_ptr] (git_repo) {
@@ -147,7 +152,7 @@
         };
 
         % Arrows
-        \draw[arrow, color=TaxonAccent] (parquet) -- node[above, label_text, color=TaxonAccent] {DVC MD5 Hash} (dvc_ptr);
+        \draw[arrow, color=TaxonAccent] (parquet) -- node[above=0.1cm, label_text, color=TaxonAccent] {DVC MD5 Hash} node[above=0.6cm, font=\scriptsize\sffamily, color=TaxonDark] {md5: f546...aac.dir} (dvc_ptr);
         \draw[arrow] (dvc_ptr) -- node[right, label_text] {Commits pointer} (git_repo);
         \draw[arrow, color=TaxonPrimary] (parquet) -- node[left, label_text, color=TaxonPrimary] {DVC push} (s3_remote);
 

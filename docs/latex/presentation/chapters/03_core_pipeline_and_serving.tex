@@ -78,8 +78,8 @@
     \providecolor{TaxonAccent}{RGB}{180, 30, 30} % herbired
     \resizebox{0.9\textwidth}{!}{
     \begin{tikzpicture}[
-        node distance=1.5cm and 2.0cm,
-        box/.style={rectangle, draw=TaxonDark, fill=TaxonDark!10, thick, rounded corners, minimum width=2.5cm, minimum height=1cm, align=center, font=\sffamily\small},
+        node distance=0.4cm and 1.6cm,
+        box/.style={rectangle, draw=TaxonDark, fill=TaxonDark!10, thick, rounded corners, minimum width=2.1cm, minimum height=1cm, align=center, font=\sffamily\small},
         fastapi/.style={rectangle, draw=TaxonPrimary, fill=TaxonPrimary!15, thick, rounded corners, minimum width=4cm, minimum height=1.2cm, align=center, font=\sffamily\bfseries},
         arrow/.style={->, >=stealth, thick, draw=TaxonDark!70},
         dashedarrow/.style={->, >=stealth, thick, dashed, draw=TaxonSecondary}
@@ -135,7 +135,7 @@
     \providecolor{TaxonDark}{RGB}{0, 51, 102}
     \resizebox{0.95\linewidth}{!}{
     \begin{tikzpicture}[
-        node distance=0.8cm and 1.2cm,
+        node distance=1.6cm,
         start/.style={draw=TaxonDark, fill=TaxonDark!20, ellipse, minimum width=2.2cm, minimum height=0.9cm, align=center, font=\sffamily\bfseries\scriptsize},
         process/.style={draw=TaxonDark, fill=TaxonDark!10, rectangle, rounded corners, minimum width=2.6cm, minimum height=0.9cm, align=center, font=\sffamily\scriptsize},
         decision/.style={draw=TaxonSecondary, fill=TaxonSecondary!15, diamond, aspect=1.8, minimum width=2.5cm, minimum height=1.1cm, align=center, font=\sffamily\scriptsize},
@@ -152,7 +152,7 @@
 
     % Branch Outcomes
     \node[endpoint, above right=0.3cm and 1.2cm of size] (fast) {\textbf{Fast-Path Return}\\($|C|=1$, $<15$ ms)};
-    \node[process, right=1.2cm of size] (ambig) {Ambiguity Triage Queue\\(Defer Deep Retrieval)};
+    \node[process, right=1.6cm of size] (ambig) {Ambiguity Triage Queue\\(Defer Deep Retrieval)};
     \node[endpoint, right=0.8cm of ambig] (enriched) {\textbf{Triage Output}\\(Multi-Taxa Review)};
     \node[oodpoint, below right=0.3cm and 1.2cm of size] (ood) {\textbf{Human Triage}\\($|C|=0$, Epistemic OOD)};
 
