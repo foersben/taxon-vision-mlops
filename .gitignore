@@ -88,6 +88,8 @@ uv.lock
 *.snm
 *.toc
 *.synctex.gz
+*.vrb
+*_notes.tex
 _minted*/
 
 # Personal Scripts

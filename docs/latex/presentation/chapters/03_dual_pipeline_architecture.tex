@@ -1,49 +1,176 @@
 % Chapter 3: The Asymmetric Dual-Pipeline Paradigm
 
 \begin{frame}{Core Architecture}{Decoupling Representation from Reasoning}
-    \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide introduces the overarching architectural paradigm of TaxonVision: the asymmetric dual-pipeline decoupled architecture. Junior practitioners often attempt to train an end-to-end convolutional or vision transformer network that directly outputs species logits. When new species are discovered or taxonomic revisions occur, the entire multi-gigabyte backbone must be painfully retrained. TaxonVision cleanly decouples static visual representation (Pipeline 1: frozen foundation backbones) from dynamic taxonomic reasoning (Pipeline 2: multimodal knowledge graph and vector retrieval), enabling agile updates and sub-second classification.
+    \begin{block}{The Asymmetric Decoupling Principle}
+        \begin{itemize}\small
+            \item \textbf{The Monolithic Trap:} Junior practitioners often attempt to train an end-to-end convolutional or vision transformer network that directly outputs species logits.
+            \item \textbf{The Retraining Bottleneck:} When new species are discovered or taxonomic revisions occur, an entire multi-gigabyte backbone must be painfully retrained.
+            \item \textbf{The Decoupled Solution:} TaxonVision cleanly decouples static visual representation (Pipeline 1) from dynamic taxonomic reasoning (Pipeline 2).
+            \item \textbf{Agile Outcomes:} This separation enables agile, localized updates and sub-second classification without full retraining loops.
+        \end{itemize}
     \end{block}
 
-    \vspace{0.4cm}
+    \vspace{0.15cm}
     \statusdone
 
-    \script{This slide represents the core architectural breakthrough of our system: the Asymmetric Dual-Pipeline. In naïve computer vision, you take an image, pass it through ResNet, and output 1,000 class probabilities. But in biology, taxonomy changes every month: species are split, renamed, or reclassified. If you use a monolithic model, every single rename forces a full 10-hour retraining run. By decoupling representation from reasoning, our foundation model stays frozen while our taxonomic knowledge graph updates in real time.}
-    \qa{What is a foundation model in this context?}{A massive vision transformer (such as BioCLIP or DINOv2) pre-trained on hundreds of millions of biological images. It produces rich semantic feature vectors that capture fine-grained morphology without requiring task-specific retraining.}
+    \script{This slide represents the core architectural breakthrough of our system: the Asymmetric Dual-Pipeline. In naïve computer vision, you take an image, pass it through ResNet, and output 1,000 class probabilities. But in biology, taxonomy changes every month: species are split, renamed, or reclassified. If you use a monolithic model, every single rename forces a full 10-hour retraining run on expensive GPUs. By decoupling representation from reasoning, our foundation model stays entirely frozen while our taxonomic knowledge graph updates in real time with zero mathematical friction.}
+    \qa{What is a foundation model?}{A vision transformer (BioCLIP, DINOv2) pre-trained on biological imagery using self-supervised learning, yielding rich morphological representations without task-specific retraining.}
+    \qa{Why "Asymmetric"?}{Pipelines operate at different timescales: Pipeline 1 uses dense matrix ops on GPUs, while Pipeline 2 uses graph traversals and vector lookups on CPUs.}
 \end{frame}
 
 \begin{frame}{Pipeline 1}{Offline Representation \& Linear Probe Training}
-    \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide details Pipeline 1: the offline representation and classification workflow. High-resolution raw images stored in remote S3 are processed in batch streams by frozen backbones (DINOv2, BioCLIP) to generate dense feature embeddings (768 or 1024 dimensions). These embeddings are serialized into content-addressable storage. Downstream, lightweight linear probing classifiers are trained with Class-Balanced Loss and Bayesian hyperparameter sweeps in seconds rather than hours, producing ONNX-quantized models ready for high-throughput serving.
+    \begin{block}{Pipeline 1: Offline Representation \& Linear Probing}
+        \begin{itemize}\small
+            \item \textbf{S3 Batch Streaming:} High-resolution raw images stored in remote S3 are processed in batch streams.
+            \item \textbf{Frozen Backbone Inference:} Images pass through frozen backbones (DINOv2, BioCLIP) to generate dense feature embeddings (768 or 1024 dimensions).
+            \item \textbf{Serialization:} These embeddings are serialized into content-addressable storage (Parquet/DVC).
+            \item \textbf{Linear Probing:} Downstream, lightweight linear classifiers are trained using Class-Balanced Loss and Bayesian hyperparameter sweeps (Optuna).
+            \item \textbf{ONNX Export:} The final heads are compiled into ONNX-quantized models ready for high-throughput serving.
+        \end{itemize}
     \end{block}
 
-    \vspace{0.4cm}
+    \vspace{0.15cm}
     \statusdone
 
-    \script{Pipeline 1 is our offline training engine. Instead of feeding raw images directly into training loops every epoch, we pass them through our frozen backbone once and store the resulting numerical embeddings. Once those embeddings are saved, training a classification head takes literally ten seconds. We can run 50 hyperparameter optimization trials with Optuna in five minutes on a single GPU, something that would take days with full end-to-end fine-tuning.}
-    \qa{Does training only a linear head hurt classification accuracy compared to full fine-tuning?}{Empirical benchmarks show that modern self-supervised backbones like DINOv2 and BioCLIP produce representations so rich that linear probes achieve within 1 to 2 percent of full fine-tuning accuracy at a fraction of the compute cost and zero catastrophic forgetting.}
+    \script{Pipeline 1 is our offline training engine. Instead of feeding raw images directly into training loops every epoch, we pass them through our frozen backbone once and store the resulting numerical embeddings on disk. Once those embeddings are saved, training a new classification head takes literally ten seconds. We can run 50 hyperparameter optimization trials with Optuna in five minutes on a single GPU—something that would take days with full end-to-end fine-tuning. This is how we achieve extreme ML operational efficiency.}
+    \qa{Does training a linear head hurt accuracy?}{Self-supervised backbones produce features where linear probes achieve within 1--2\% of full fine-tuning, while saving orders of magnitude in compute and preventing catastrophic forgetting.}
+    \qa{What is Class-Balanced Loss?}{A loss weighting technique correcting for long-tail biological distributions, ensuring rare species are not ignored by the model.}
 \end{frame}
 
 \begin{frame}{Pipeline 2}{Taxonomic Multimodal Knowledge Graph (MMKG)}
-    \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide explains Pipeline 2: the continuous taxonomic ingestion and Multimodal Knowledge Graph (MMKG) streaming pipeline. Biological classifications are hierarchical: Kingdom, Phylum, Class, Order, Family, Genus, Species. Pipeline 2 ingests DarwinCore metadata streams, builds a directed acyclic graph (DAG) of biological lineage, and indexes multimodal embeddings into a vector and graph database. When visual ambiguity arises, the system performs Vision-RAG (Retrieval-Augmented Generation) against verified exemplar specimens and anatomical descriptions to resolve close morphological ties.
+    \begin{block}{Pipeline 2: Taxonomic Multimodal Knowledge Graph}
+        \begin{itemize}\small
+            \item \textbf{Hierarchical Taxonomy:} Biological classifications form an 8-level tree (Kingdom to Species).
+            \item \textbf{DarwinCore Ingestion:} Pipeline 2 continuously ingests DarwinCore metadata streams to update taxonomic relations.
+            \item \textbf{Graph Construction:} It builds a directed acyclic graph (DAG) of biological lineage in a graph database.
+            \item \textbf{Vector Indexing:} Multimodal embeddings are indexed via HNSW into a vector database, linked directly to graph nodes.
+            \item \textbf{Vision-RAG Fallback:} When visual ambiguity arises, the system performs Vision-RAG (Retrieval-Augmented Generation) against verified exemplar specimens to resolve close morphological ties.
+        \end{itemize}
     \end{block}
 
-    \vspace{0.4cm}
+    \vspace{0.15cm}
     \statustarget
 
-    \script{While Pipeline 1 provides fast raw classification, Pipeline 2 provides biological wisdom. Taxonomy is not a flat list of labels; it is an 8-level phylogenetic tree. Pipeline 2 stores this tree in a Multimodal Knowledge Graph. If the classifier is uncertain whether a specimen is Species A or Species B, Pipeline 2 queries their taxonomic relations and anatomical descriptions—acting like a digital field botanist cross-referencing herbarium records.}
-    \qa{How does the vector database fit into the knowledge graph?}{Each taxonomic node is linked to reference exemplar embeddings in our vector store. This allows nearest-neighbor visual similarity searches to query specific sub-branches of the taxonomic tree.}
+    \script{While Pipeline 1 provides raw computational classification, Pipeline 2 provides actual biological wisdom. Taxonomy is not a flat list of labels; it is an evolving phylogenetic tree. Pipeline 2 stores this tree in a Multimodal Knowledge Graph. If the classifier is mathematically uncertain whether a specimen is Species A or Species B, Pipeline 2 queries their taxonomic relations, habitat metadata, and anatomical descriptions—acting exactly like a human field botanist cross-referencing herbarium records in real-time.}
+    \qa{How does the vector database fit into the knowledge graph?}{Each taxonomic node is linked to reference exemplar embeddings in our vector store. This allows us to perform nearest-neighbor visual similarity searches constrained entirely within specific sub-branches of the taxonomic tree, vastly reducing search space.}
+    \qa{What does DarwinCore ingestion provide?}{DarwinCore is the global standard for biodiversity data. It provides the standardized metadata—such as geographic coordinates, collector information, and accepted scientific names—required to construct the taxonomic graph accurately.}
 \end{frame}
 
 \begin{frame}{Inference Serving}{Serving Boundary Convergence \& Fast-Path Routing}
-    \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide examines the runtime convergence point where Pipeline 1 and Pipeline 2 meet to serve live inference requests under strict latency budgets (p95 $< 50$ ms). When an image upload hits the FastAPI endpoint, it enters the Fast-Path: ONNX Runtime evaluates the quantized linear probe and computes conformal uncertainty sets in $< 15$ ms. If conformal coverage produces a high-confidence singleton set, the result returns immediately. Only ambiguous predictions or out-of-distribution observations trigger asynchronous enrichment from Pipeline 2's knowledge graph.
+    \begin{block}{Serving Convergence: Fast-Path vs Deep Retrieval}
+        \begin{itemize}\small
+            \item \textbf{FastAPI Ingress:} An image upload hits the FastAPI endpoint and immediately enters the Fast-Path.
+            \item \textbf{Sub-15ms Execution:} ONNX Runtime evaluates the quantized linear probe and computes conformal uncertainty sets in $< 15$ ms.
+            \item \textbf{Singleton Fast-Return:} If conformal coverage produces a high-confidence singleton set, the result returns immediately.
+            \item \textbf{Asynchronous Enrichment:} Only ambiguous predictions (multi-class sets) or out-of-distribution observations trigger deep enrichment from Pipeline 2's knowledge graph.
+        \end{itemize}
     \end{block}
 
-    \vspace{0.4cm}
+    \vspace{0.15cm}
     \statusdone
 
-    \script{In production APIs, speed is everything. We cannot query a complex knowledge graph on every single simple request. We implement a Fast-Path serving boundary: the incoming image runs through our ultra-fast ONNX model. If the prediction is unambiguous, the API responds in under 15 milliseconds. Only when the model detects mathematical ambiguity does it trigger the deep taxonomic enrichment pipeline.}
-    \qa{What is ONNX Runtime and why do we use it instead of native PyTorch?}{ONNX Runtime optimizes the computation graph, fuser operations, and performs memory reuse. It eliminates Python interpreter overhead, resulting in 2x to 4x lower latency and zero memory allocations on the hot inference path.}
+    \script{In production APIs, speed is everything. We simply cannot afford to query a complex graph database on every single simple request. We implement a Fast-Path serving boundary: the incoming image runs through our ultra-fast ONNX model. If the prediction is unambiguous—meaning the conformal predictor returns exactly one class—the API responds in under 15 milliseconds. Only when the model mathematically detects ambiguity does it trigger the deep, slightly slower, taxonomic enrichment pipeline.}
+    \qa{What is ONNX Runtime and why do we use it instead of native PyTorch?}{ONNX Runtime optimizes the computation graph, fuses operations, and performs strict memory reuse. It eliminates Python interpreter overhead, resulting in 2x to 4x lower latency and rigorously enforces zero memory allocations on the hot inference path.}
+    \qa{What is conformal uncertainty?}{It is a mathematically rigorous framework that outputs a set of possible classes rather than a single point prediction, guaranteeing with a user-specified probability (e.g., 95\%) that the true class is contained within that set.}
+\end{frame}
+
+\begin{frame}{Architectural Topology}{Convergence of Pipeline 1 and Pipeline 2}
+    \begin{center}
+    \vspace{-0.2cm}
+    \providecolor{TaxonPrimary}{RGB}{34, 139, 34} % plantgreen
+    \providecolor{TaxonSecondary}{RGB}{220, 120, 0} % signalorange
+    \providecolor{TaxonDark}{RGB}{0, 51, 102} % deepblue
+    \providecolor{TaxonAccent}{RGB}{180, 30, 30} % herbired
+    \resizebox{0.9\textwidth}{!}{
+    \begin{tikzpicture}[
+        node distance=1.5cm and 2.0cm,
+        box/.style={rectangle, draw=TaxonDark, fill=TaxonDark!10, thick, rounded corners, minimum width=2.5cm, minimum height=1cm, align=center, font=\sffamily\small},
+        fastapi/.style={rectangle, draw=TaxonPrimary, fill=TaxonPrimary!15, thick, rounded corners, minimum width=4cm, minimum height=1.2cm, align=center, font=\sffamily\bfseries},
+        arrow/.style={->, >=stealth, thick, draw=TaxonDark!70},
+        dashedarrow/.style={->, >=stealth, thick, dashed, draw=TaxonSecondary}
+    ]
+
+    % Pipeline 1 Nodes (Top Row)
+    \node[box] (s3) {S3 Images\\(Batch)};
+    \node[box, right=of s3] (vit) {Frozen ViT\\(DINOv2)};
+    \node[box, right=of vit] (embed) {Embeddings\\(Parquet)};
+    \node[box, right=of embed] (linear) {Linear Head\\(ONNX)};
+
+    % Pipeline 2 Nodes (Bottom Row)
+    \node[box, below=1.8cm of s3] (darwin) {DarwinCore\\Stream};
+    \node[box, right=of darwin] (hnsw) {HNSW Index\\(Vector DB)};
+    \node[box, right=of hnsw] (kg) {Taxonomic\\Graph (DAG)};
+    \node[box, right=of kg] (rag) {Vision-RAG\\Fallback};
+
+    % FastAPI Convergence
+    \node[fastapi, right=2.0cm of linear, yshift=-1.4cm] (api) {FastAPI Boundary\\p95 $< 50$ms};
+
+    % Pipeline 1 Arrows
+    \draw[arrow] (s3) -- (vit);
+    \draw[arrow] (vit) -- (embed);
+    \draw[arrow] (embed) -- (linear);
+    \draw[arrow] (linear) -| (api);
+
+    % Pipeline 2 Arrows
+    \draw[arrow] (darwin) -- (hnsw);
+    \draw[arrow] (hnsw) -- (kg);
+    \draw[arrow] (kg) -- (rag);
+    \draw[dashedarrow] (rag) -| (api);
+
+    % Grouping boxes
+    \begin{scope}[on background layer]
+        \node[draw=TaxonDark!30, fill=TaxonDark!5, dashed, rounded corners, fit=(s3)(linear), inner sep=0.3cm, label={[font=\sffamily\bfseries, text=TaxonDark]above:Pipeline 1 (Offline Batch)}] {};
+        \node[draw=TaxonSecondary!50, fill=TaxonSecondary!5, dashed, rounded corners, fit=(darwin)(rag), inner sep=0.3cm, label={[font=\sffamily\bfseries, text=TaxonSecondary]below:Pipeline 2 (Continuous Stream)}] {};
+    \end{scope}
+
+    \end{tikzpicture}
+    }
+    \end{center}
+    \script{This diagram visualizes our asymmetric dual-pipeline. The top row is Pipeline 1: heavy, offline batch processing where raw images become dense embeddings, then fast ONNX models. The bottom row is Pipeline 2: lightweight, continuous DarwinCore ingestion that builds our multimodal knowledge graph. Notice how they only meet at the FastAPI serving boundary on the right. This topological isolation is what prevents cascading retraining failures.}
+    \qa{Why does the arrow from Vision-RAG to FastAPI use a dashed line?}{Because Vision-RAG is our fallback mechanism. It is not triggered on every request. It only executes asynchronously when the Fast-Path linear head detects conformal uncertainty.}
+\end{frame}
+
+\begin{frame}{Decision Flowchart}{Fast-Path vs. Deep Enrichment Routing}
+    \begin{center}
+    \vspace{-0.2cm}
+    \providecolor{TaxonPrimary}{RGB}{34, 139, 34}
+    \providecolor{TaxonSecondary}{RGB}{220, 120, 0}
+    \providecolor{TaxonDark}{RGB}{0, 51, 102}
+    \resizebox{0.95\linewidth}{!}{
+    \begin{tikzpicture}[
+        node distance=0.8cm and 1.2cm,
+        start/.style={draw=TaxonDark, fill=TaxonDark!20, ellipse, minimum width=2.2cm, minimum height=0.9cm, align=center, font=\sffamily\bfseries\scriptsize},
+        process/.style={draw=TaxonDark, fill=TaxonDark!10, rectangle, rounded corners, minimum width=2.6cm, minimum height=0.9cm, align=center, font=\sffamily\scriptsize},
+        decision/.style={draw=TaxonSecondary, fill=TaxonSecondary!15, diamond, aspect=1.8, minimum width=2.5cm, minimum height=1.1cm, align=center, font=\sffamily\scriptsize},
+        endpoint/.style={draw=TaxonPrimary, fill=TaxonPrimary!20, rectangle, rounded corners, thick, minimum width=2.4cm, minimum height=0.9cm, align=center, font=\sffamily\bfseries\scriptsize},
+        oodpoint/.style={draw=herbired, fill=herbired!15, rectangle, rounded corners, thick, minimum width=2.4cm, minimum height=0.9cm, align=center, font=\sffamily\bfseries\scriptsize},
+        arrow/.style={->, >=stealth, thick, draw=TaxonDark!80}
+    ]
+
+    % Horizontal Pipeline
+    \node[start] (req) {Inference\\Request};
+    \node[process, right=of req] (onnx) {ONNX Runtime\\(Linear Head)};
+    \node[process, right=of onnx] (conformal) {Split Conformal\\Prediction Set};
+    \node[decision, right=of conformal] (size) {Set Size\\$|C(x)|$?};
+
+    % Branch Outcomes
+    \node[endpoint, above right=0.3cm and 1.2cm of size] (fast) {\textbf{Fast-Path Return}\\($|C|=1$, $<15$ ms)};
+    \node[process, right=1.2cm of size] (rag) {Query MMKG\\(Taxonomic Graph)};
+    \node[endpoint, right=0.8cm of rag] (enriched) {\textbf{Enriched Return}\\(Vision-RAG, $\sim 45$ ms)};
+    \node[oodpoint, below right=0.3cm and 1.2cm of size] (ood) {\textbf{Human Triage}\\($|C|=0$, OOD / Outlier)};
+
+    \draw[arrow] (req) -- (onnx);
+    \draw[arrow] (onnx) -- (conformal);
+    \draw[arrow] (conformal) -- (size);
+
+    \draw[arrow] (size) |- node[above, font=\sffamily\tiny, pos=0.7] {$|C|=1$ (Singleton)} (fast);
+    \draw[arrow] (size) -- node[above, font=\sffamily\tiny] {$|C|>1$ (Ambiguous)} (rag);
+    \draw[arrow] (rag) -- (enriched);
+    \draw[arrow] (size) |- node[below, font=\sffamily\tiny, pos=0.7] {$|C|=0$ (Epistemic OOD)} (ood);
+
+    \end{tikzpicture}
+    }
+    \end{center}
+    \script{Here we zoom into the FastAPI convergence boundary. Every request runs through ONNX and the conformal predictor. If the conformal set size is exactly one, it means the model is mathematically confident, and we immediately return via the Fast-Path in under 15 milliseconds. If the set size is greater than one, it means the prediction is ambiguous, and we route the request to the deeper Taxonomic Graph for Vision-RAG enrichment. If the set is empty, it routes to human triage.}
+    \qa{What happens if the conformal set is empty (Size = 0)?}{An empty set implies the image is an epistemic or out-of-distribution outlier. In this case, the system safely routes the observation to the active learning human review queue and returns an unclassified referral flag.}
 \end{frame}

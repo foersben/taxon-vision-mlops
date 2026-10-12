@@ -1,20 +1,61 @@
 % Chapter 1: The Production Problem & Operational Maturity
 
 \begin{frame}{The Real-World Problem}{Extreme Fine-Grained Taxonomic Classification}
-    \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide introduces the fundamental real-world problem: automated species identification across thousands of biological classes. In standard university coursework or Kaggle competitions, machine learning models are typically trained on balanced, clean datasets like CIFAR-10 or ImageNet with distinct visual boundaries. In biological field monitoring, observations follow an extreme long-tail distribution where common species have thousands of images while endangered taxa have fewer than five. Furthermore, inter-class variance can be microscopic (e.g., subtle wing venation in insects or spore color in fungi), while intra-class variance is vast due to lighting, life stages, sexual dimorphism, and occluding foliage.
-    \end{block}
-
-    \vspace{0.4cm}
-    \statusdone
+    \begin{columns}[T]
+        \begin{column}{0.55\textwidth}
+            \begin{block}{Biological Domain Challenges}
+                \begin{itemize}
+                    \item \textbf{Long-Tail Distributions:} Unlike Kaggle datasets (e.g., CIFAR-10), biodiversity data is severely imbalanced. Common species have 10,000+ images, while rare ones have $<5$.
+                    \item \textbf{Fine-Grained Taxonomy:} Inter-class variance can be microscopic (e.g., insect wing venation, fungal spore color).
+                    \item \textbf{High Intra-Class Variance:} Extreme visual changes due to life stages, sexual dimorphism, lighting, and foliage occlusion.
+                \end{itemize}
+            \end{block}
+            \vspace{0.05cm}
+            \statusdone
+        \end{column}
+        \begin{column}{0.4\textwidth}
+            \begin{figure}
+                \centering
+                \resizebox{\linewidth}{!}{
+                    \begin{tikzpicture}
+                        \begin{axis}[
+                            width=6cm, height=3.5cm,
+                            ymin=1, ymax=100000,
+                            xmin=1, xmax=1000,
+                            xlabel={Species Rank},
+                            ylabel={Observations},
+                            ymode=log,
+                            log basis y=10,
+                            grid=major,
+                            title={Long-Tail Distribution},
+                            title style={font=\bfseries}
+                        ]
+                        \addplot[domain=1:1000, samples=100, signalorange, thick] {100000/(x^1.3) + 1};
+                        \node[anchor=south west, fill=white, inner sep=1pt, text=plantgreen, font=\footnotesize] at (axis cs: 2, 20000) {Common ($10k+$)};
+                        \node[anchor=south east, fill=white, inner sep=1pt, text=red, font=\footnotesize] at (axis cs: 980, 5) {Rare ($<5$)};
+                        \end{axis}
+                    \end{tikzpicture}
+                }
+            \end{figure}
+        \end{column}
+    \end{columns}
 
     \script{When most students build computer vision models, they work with clean datasets like Dogs vs Cats or ImageNet. In real biodiversity monitoring, we deal with extreme long-tail distributions: a few common birds have 50,000 photos, while thousands of rare insects have two photos. Worse, two distinct species may differ only by microscopic vein patterns, while two photos of the exact same plant look completely different across seasons. We need a system that handles extreme fine-grained taxonomy without hallucinating confidence.}
     \qa{Why can't we simply collect more images for the rare species?}{Biological rarity is governed by nature, not data collection budgets. An endangered lichen or beetle may only be sighted once every few years. The long-tail distribution is an immutable domain reality that our learning algorithms must solve mathematically.}
 \end{frame}
 
 \begin{frame}{Data Bottlenecks}{The 50 TB Trap and Storage Reality}
-    \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide addresses the primary architectural failure mode for junior data scientists: attempting to download massive datasets directly to local development drives. Biological repositories such as GBIF (Global Biodiversity Information Facility) and iNaturalist host tens of millions of high-resolution images totaling over 50 terabytes. Downloading, uncompressing, and caching this volume of raw media locally saturates workstation NVMe storage, introduces hours of IO latency, and invalidates reproducibility across team members. Production MLOps mandates zero-copy streaming, content-addressable storage, and decoupling feature extraction from model experimentation.
+    \begin{block}{The "50 TB Trap": Architectural Failure Modes}
+        \begin{itemize}
+            \item \textbf{Naive Approach:} Attempting to download massive biological datasets (e.g., GBIF, iNaturalist) directly to local NVMe drives.
+            \item \textbf{Consequences:} Saturates workstation storage instantly, introduces massive IO latency (uncompressing millions of JPEGs), and breaks reproducibility.
+            \item \textbf{Production Solution (Zero-Copy Streaming):}
+            \begin{itemize}
+                \item Stream data directly from S3-compatible object storage.
+                \item Never download raw high-res images locally for training.
+                \item Decouple feature extraction (vision backbones) from model experimentation. Cache high-dimensional embeddings instead of raw pixels.
+            \end{itemize}
+        \end{itemize}
     \end{block}
 
     \vspace{0.4cm}
@@ -25,8 +66,18 @@
 \end{frame}
 
 \begin{frame}{Data Governance}{Legal Compliance \& License Auditing}
-    \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide covers data governance, licensing constraints, and ethical compliance in machine learning pipelines. Training models on publicly scraped web images without license verification creates severe intellectual property liability and prevents commercial or academic distribution. TaxonVision enforces automated pre-commit gates that inspect observation metadata against the DarwinCore standard, strictly admitting only CC0 (Public Domain), CC-BY (Attribution), and CC-BY-NC (Non-Commercial) licensed media, while automatically generating attribution manifests and rejecting unverified static assets.
+    \begin{block}{Open Science \& Legal Constraints}
+        \begin{itemize}
+            \item \textbf{The IP Liability Problem:} Training on randomly scraped web images creates severe legal toxicity, risking model deletion orders.
+            \item \textbf{DarwinCore Audit Gates:} TaxonVision implements strict, automated CI gates inspecting DarwinCore metadata before ingestion.
+            \item \textbf{Allowed Licenses:}
+            \begin{itemize}
+                \item \textbf{CC0:} Public Domain (Unrestricted)
+                \item \textbf{CC-BY:} Attribution Required (Manifests generated automatically)
+                \item \textbf{CC-BY-NC:} Non-Commercial (Permitted for this academic scope)
+            \end{itemize}
+            \item \textbf{Zero-Trust Policy:} Unlicensed data is rejected by default.
+        \end{itemize}
     \end{block}
 
     \vspace{0.4cm}
@@ -37,12 +88,38 @@
 \end{frame}
 
 \begin{frame}{Operational Maturity}{The Google MLOps Maturity Spectrum}
-    \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide establishes the theoretical framework of MLOps maturity according to Google Cloud and industry standards, contrasting Level 0 with Level 4. Level 0 represents manual, script-driven machine learning characterized by Jupyter notebooks, untracked artifacts, manual training runs, and disconnected deployment steps. Level 4 represents automated, continuous learning pipelines featuring automated CI/CD gates, reproducible feature stores, drift-triggered retraining, automated mathematical validation, and blue/green production deployment. TaxonVision achieves Level 3/4 operational maturity on bare-metal hardware.
-    \end{block}
-
-    \vspace{0.4cm}
-    \statusdone
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Theoretical Framework}
+                \begin{itemize}\small
+                    \item \textbf{Level 0: Manual Scripting.} Jupyter notebooks, untracked artifacts, manual deployment. High risk of failure.
+                    \item \textbf{Level 4: Continuous Learning.} Fully automated CI/CD gates, reproducible data versioning (DVC), drift-triggered retraining, zero-downtime Kubernetes rollouts.
+                    \item \textbf{TaxonVision Scope:} Achieves Level 3/4 on bare-metal hardware, strictly isolating environments.
+                \end{itemize}
+            \end{block}
+            \vspace{0.05cm}
+            \statusdone
+        \end{column}
+        \begin{column}{0.5\textwidth}
+            \begin{center}
+                \resizebox{\linewidth}{!}{
+                    \smartdiagramset{
+                        back arrow disabled=true,
+                        module minimum width=2.5cm,
+                        module minimum height=0.85cm,
+                        text width=2.2cm,
+                        font=\footnotesize
+                    }
+                    \smartdiagram[flow diagram:horizontal]{
+                        Level 0\\Manual Scripting,
+                        Level 1\\Automated ML,
+                        Level 2\\CI/CD Pipes,
+                        Level 4\\Autonomous MLOps
+                    }
+                }
+            \end{center}
+        \end{column}
+    \end{columns}
 
     \script{To understand where TaxonVision sits, we look at the MLOps Maturity Model. Level 0 is what is taught in introductory courses: you run a Jupyter notebook, manually download a CSV, fit a model, and save a pickle file. If your data changes, you rerun the notebook by hand. Level 4 is an autonomous system: data ingestion triggers automated feature extraction, Bayesian optimization finds optimal weights, mathematical gates verify conformal coverage, and Kubernetes rolls out the updated container without downtime.}
     \qa{What is the biggest operational hurdle when moving from Level 0 to Level 4?}{Automated validation gates. At Level 0, a human looks at an accuracy metric and decides to deploy. At Level 4, algorithms must autonomously decide if a candidate model is statistically safe and performant enough to replace the current production version.}

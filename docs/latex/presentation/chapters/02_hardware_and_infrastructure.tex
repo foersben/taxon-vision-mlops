@@ -1,9 +1,21 @@
 % Chapter 2: Hardware Architecture & Infrastructure Topography
 
+\providecolor{TaxonPrimary}{RGB}{0, 81, 162}
+\providecolor{TaxonSecondary}{RGB}{102, 178, 255}
+\providecolor{TaxonDark}{RGB}{0, 34, 68}
+\providecolor{TaxonAccent}{RGB}{255, 128, 0}
+\providecolor{TaxonLight}{RGB}{240, 248, 255}
+
 \begin{frame}{Physical Topography}{Dual-Node Architecture: flagship vs hive-mind}
-    \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide outlines the physical hardware topology of the project, explaining the separation between the developer workstation (\texttt{flagship}) and the dedicated 24/7 bare-metal server (\texttt{hive-mind}). Rather than relying on expensive, rented public cloud instances that incur continuous hourly costs and bandwidth egress fees, TaxonVision deploys on high-performance on-premise hardware. Developers write code, test micro-pipelines, and run unit tests on \texttt{flagship}, while continuous integration, container registries, Kubernetes orchestration, and heavy background training execute autonomously on \texttt{hive-mind}.
+    \begin{block}{Architectural Philosophy}
+        Instead of relying on expensive public cloud instances, TaxonVision uses an on-premise dual-node topology to ensure continuous availability, high performance, and zero bandwidth egress fees.
     \end{block}
+
+    \begin{itemize}
+        \item \textbf{\texttt{flagship} (Developer Workstation):} Dedicated to fast iteration loops, writing code, testing micro-pipelines, and running local unit tests.
+        \item \textbf{\texttt{hive-mind} (Bare-Metal Server):} Operates 24/7 hosting the core infrastructure.
+        \item \textbf{Decoupled Environments:} Prevents developer experiments from starving production inference of GPU memory or crashing background training jobs.
+    \end{itemize}
 
     \vspace{0.4cm}
     \statusdone
@@ -12,12 +24,56 @@
     \qa{Why not run everything on a single powerful machine?}{Decoupling development from production prevents developer experiments from starving production inference of GPU memory or crashing background pipeline jobs.}
 \end{frame}
 
+\begin{frame}[fragile]{Infrastructure Topology}{Dual-Node Diagram}
+    \begin{center}
+    \resizebox{0.9\textwidth}{!}{
+    \begin{tikzpicture}[
+        node distance=1.5cm and 2cm,
+        box/.style={draw, rounded corners, minimum width=3cm, minimum height=1cm, align=center, font=\sffamily},
+        flagship/.style={box, fill=TaxonSecondary!20, draw=TaxonPrimary, thick},
+        hivemind/.style={box, fill=TaxonPrimary!10, draw=TaxonDark, thick},
+        component/.style={box, fill=white, draw=TaxonPrimary, text width=2.5cm, minimum height=0.8cm, font=\scriptsize\sffamily},
+        arrow/.style={->, thick, TaxonDark, >=stealth}
+    ]
+        % Flagship
+        \node[flagship, minimum height=3.5cm, minimum width=4cm] (flagship) {};
+        \node[above=0.2cm of flagship.south, font=\bfseries\sffamily, text=TaxonPrimary, align=center] (flagshiptitle) {\texttt{flagship}\\Local Dev Workstation};
+        \node[component, above=0.2cm of flagshiptitle] (ide) {IDE / Unit Tests};
+        \node[component, above=0.2cm of ide] (git) {Git Feature Branches};
+
+        % Hive-mind
+        \node[hivemind, right=3cm of flagship, minimum height=5cm, minimum width=6cm] (hivemind) {};
+        \node[above=0.2cm of hivemind.south, font=\bfseries\sffamily, text=TaxonDark, align=center] (hivemindtitle) {\texttt{hive-mind}\\Bare-Metal Server (24/7)};
+
+        \node[component, above=0.2cm of hivemindtitle, xshift=-1.4cm] (k3s) {k3s Kubernetes};
+        \node[component, above=0.2cm of hivemindtitle, xshift=1.4cm] (jenkins) {Jenkins CI/CD};
+        \node[component, above=0.2cm of k3s] (nvidia) {NVIDIA Runtime};
+        \node[component, above=0.2cm of jenkins] (traefik) {Traefik Ingress};
+        \node[component, above=0.2cm of nvidia, xshift=1.4cm] (cf) {Cloudflare Tunnel};
+
+        % Connections
+        \draw[arrow, dashed] (git.east) -- node[above, font=\scriptsize, align=center] {Push / PR} (jenkins.west |- git.east);
+        \draw[arrow, <->] (flagship.east |- ide.east) -- node[below, font=\scriptsize, align=center] {HTTPS / SSH} (cf.west |- ide.east);
+
+    \end{tikzpicture}
+    }
+    \end{center}
+    \script{This diagram visualizes our physical separation. The flagship node is strictly for local dev. Once code is pushed, Jenkins running inside the hive-mind k3s cluster takes over. The Cloudflare Tunnel securely routes external requests to our Traefik ingress without exposing any ports.}
+    \qa{Is the network traffic between these nodes encrypted?}{Yes, internal traffic can be routed over local LAN, while external web hooks and operator access run through the Cloudflare Zero Trust encrypted tunnel.}
+\end{frame}
+
 \begin{frame}{Host Architecture}{Heterogeneous CPU Topology \& Core Pinning}
-    \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide explains the challenges of modern heterogeneous processor architecture, specifically the Intel Core i7-14700K equipped with 8 Performance-Cores (16 threads) and 12 Efficient-Cores (12 threads). In multi-threaded Python pipelines, unmanaged OS thread scheduling can place heavy matrix operations or image decompression tasks onto low-clocked E-cores, causing massive thread synchronization stalls and thermal throttling. We explain the necessity of explicit thread pinning, asynchronous event loops, and CPU affinity isolation for high-throughput data pipelines.
+    \begin{block}{The Heterogeneous Scheduling Problem}
+        Modern CPUs like the Intel Core i7-14700K feature a split architecture: 8 Performance-Cores (P-cores) and 12 Efficient-Cores (E-cores). Default OS thread scheduling can misallocate critical operations.
     \end{block}
 
-    \vspace{0.4cm}
+    \begin{itemize}
+        \item \textbf{Synchronization Stalls:} Unmanaged scheduling of heavy matrix ops or image decompression onto E-cores causes massive multi-threaded synchronization delays.
+        \item \textbf{Explicit Thread Pinning:} We strictly enforce CPU affinity and use core-conscious worker pools.
+        \item \textbf{Workload Isolation:} Compute-heavy tasks (e.g., PyTorch DataLoader) are pinned to P-cores, while background telemetry, logging, and OS tasks run on E-cores.
+    \end{itemize}
+
+    \vspace{0.2cm}
     \statusdone
 
     \script{Modern CPUs are no longer uniform; the i7-14700K combines high-frequency P-cores with low-power E-cores. If the Linux OS scheduler accidentally schedules an image decompression worker on an E-core while PyTorch is waiting on a P-core, your entire batch pipeline crawls to a halt. We use CPU affinity and core-conscious worker pools to ensure that compute-heavy tasks stay on P-cores while telemetry and background logging run on E-cores.}
@@ -25,11 +81,17 @@
 \end{frame}
 
 \begin{frame}{GPU Accelerators}{NVIDIA RTX 5070 Ti Blackwell \& SM 120 Architecture}
-    \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide examines the modern GPU accelerator powering the system: the NVIDIA GeForce RTX 5070 Ti based on the Blackwell architecture (SM 120) with 16 GB of high-speed GDDR7 VRAM. We explain the balance between memory bandwidth, FP16/BF16/INT8 Tensor Cores, and thermal constraints. In contrast to data center H100 cards with 80 GB of HBM3 memory, consumer/workstation accelerators have strict 16 GB physical limits, making disciplined memory budgeting, frozen backbones, and zero dynamic memory allocation mandatory.
+    \begin{block}{Compute Hardware Constraints}
+        Our inference engine is powered by the NVIDIA GeForce RTX 5070 Ti, built on the SM 120 Blackwell architecture, equipped with 16 GB of GDDR7 VRAM.
     \end{block}
 
-    \vspace{0.4cm}
+    \begin{itemize}
+        \item \textbf{Compute Throughput:} Leverages 4th-generation Tensor Cores optimized for INT8, FP16, and BF16 matrix multiplication.
+        \item \textbf{Strict Memory Boundaries:} Unlike data center H100s (80 GB HBM3), the 16 GB hard limit demands aggressive memory budgeting and zero dynamic allocation.
+        \item \textbf{Frozen Backbones:} Requires pre-compiled backbones and robust ONNX optimizations to prevent CUDA Out of Memory (OOM) errors.
+    \end{itemize}
+
+    \vspace{0.2cm}
     \statusdone
 
     \script{Our bare-metal compute engine is powered by an NVIDIA RTX 5070 Ti based on the cutting-edge Blackwell SM 120 architecture. While it delivers extraordinary compute throughput with 4th-generation Tensor Cores and GDDR7 bandwidth, it has exactly 16 gigabytes of VRAM. If your model allocates 16.1 gigabytes, your job crashes instantly with a CUDA Out of Memory error. This physical constraint dictates our entire architectural design.}
@@ -37,23 +99,75 @@
 \end{frame}
 
 \begin{frame}{GPU Orchestration}{Multi-Tenant Time-Slicing \& The 70\% VRAM Ceiling}
-    \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide details our Kubernetes GPU resource management strategy: 4-slot GPU time-slicing coupled with an invariant 70\% VRAM allocation ceiling (11.2 GB per container). Under standard Kubernetes scheduling, a single pod requests the entire physical GPU, locking out all other workloads. By configuring the NVIDIA Container Toolkit for time-slicing, up to four distinct workloads (e.g., active learning inference, feature extraction, background testing, and web API) share the GPU safely. Enforcing a strict 11.2 GB cap prevents CUDA allocation fragmentation and eliminates catastrophic out-of-memory kernel panics.
+    \begin{block}{Resource Virtualization Strategy}
+        Allocating an entire GPU to a single API pod is highly inefficient. We use Kubernetes GPU time-slicing to share the RTX 5070 Ti across multiple workloads.
     \end{block}
 
-    \vspace{0.4cm}
+    \begin{itemize}
+        \item \textbf{4-Slot Time-Slicing:} The physical GPU is virtualized into 4 slots via the NVIDIA Container Toolkit.
+        \item \textbf{The 70\% Invariant:} A strict 11.2 GB (70\% of 16 GB) VRAM ceiling is enforced per container to prevent memory fragmentation and cascading kernel panics.
+        \item \textbf{Concurrency:} Enables active learning inference, feature extraction, background testing, and the web API to run safely on the same hardware.
+    \end{itemize}
+
+    \vspace{0.2cm}
     \statusdone
 
     \script{In enterprise Kubernetes, allocating an entire physical GPU to a single API pod is massively wasteful because inference only uses the GPU intermittently. We implemented 4-slot GPU time-slicing, allowing our cluster to share the RTX 5070 Ti across multiple microservices. To ensure that one runaway job doesn't crash the entire GPU, we enforce an ironclad 70 percent VRAM cap—11.2 gigabytes—giving us a safety margin against memory fragmentation.}
     \qa{Does GPU time-slicing isolate memory between containers?}{Time-slicing shares compute cycles in temporal slices, but does not provide hardware-enforced memory partitioning like MIG (Multi-Instance GPU). That is exactly why our 70\% software cap and zero-allocation inference invariants are critical to prevent crashes.}
 \end{frame}
 
+\begin{frame}[fragile]{GPU Memory Allocation}{Time-Sliced VRAM Partitioning Diagram}
+    \begin{center}
+    \resizebox{0.85\textwidth}{!}{
+    \begin{tikzpicture}[
+        font=\sffamily,
+        bar/.style={draw=TaxonDark, thick, minimum height=1.2cm},
+        label/.style={font=\scriptsize\bfseries, text=white}
+    ]
+        % Total Capacity Bar Background
+        \node[bar, minimum width=16cm, fill=gray!20, label=center:\textcolor{black!60}{16.0 GB Total Physical VRAM (RTX 5070 Ti GDDR7)}] (total) {};
+
+        % Time-Sliced Slots overlay
+        % Slot 1: FastAPI (3.5 GB) -> 3.5cm
+        \node[bar, fill=TaxonPrimary, minimum width=3.5cm, anchor=west] at (total.west) (s1) {};
+        \node[label] at (s1.center) {Slot 1: FastAPI (3.5G)};
+
+        % Slot 2: Jenkins CI (3.5 GB) -> 3.5cm
+        \node[bar, fill=TaxonSecondary, minimum width=3.5cm, anchor=west] at (s1.east) (s2) {};
+        \node[label, text=TaxonDark] at (s2.center) {Slot 2: Jenkins (3.5G)};
+
+        % Slot 3: Optuna/PyTorch (5.0 GB) -> 5.0cm
+        \node[bar, fill=TaxonAccent, minimum width=5.0cm, anchor=west] at (s2.east) (s3) {};
+        \node[label] at (s3.center) {Slot 3: PyTorch/Optuna (5.0G)};
+
+        % The 70% Limit Line at 11.2 GB
+        \draw[thick, dashed, red] ([xshift=11.2cm]total.south west) -- ([xshift=11.2cm]total.north west) node[above, text=red, font=\small\bfseries, align=center] {11.2 GB (70\%) Hard Ceiling per Container};
+
+        % Slot 4: Headroom (4.0 GB) -> 4.0cm
+        \node[bar, fill=gray!50, minimum width=4.0cm, anchor=west] at (s3.east) (s4) {};
+        \node[font=\scriptsize\bfseries, text=TaxonDark] at (s4.center) {Slot 4: Elastic Headroom};
+
+        \draw[decorate,decoration={brace,amplitude=5pt,mirror},thick] ([xshift=0.1cm]s1.south west) -- ([xshift=-0.1cm]s4.south east) node[midway,below=0.2cm, font=\small\bfseries] {Kubernetes 4-Slot GPU Time-Slicing Configuration};
+
+    \end{tikzpicture}
+    }
+    \end{center}
+    \script{This diagram shows the 16 GB VRAM physical capacity broken down into our 4 time-sliced slots. Slot 1 runs our FastAPI serving at up to 3.5 GB. Slot 2 is our Jenkins CI agent. Slot 3 is gated for PyTorch training at 5 GB. We deliberately leave Slot 4 as elastic headroom. The red dashed line illustrates our 70\% container software ceiling, ensuring no single pod can monopolize the card and cause OOM cascading failures.}
+    \qa{How is the 5.0 GB limit for PyTorch enforced?}{We use \texttt{torch.cuda.set\_per\_process\_memory\_fraction(0.3125)} to explicitly restrict PyTorch to exactly 5.0 GB of the 16.0 GB total, guaranteeing it respects its designated slot bounds.}
+\end{frame}
+
 \begin{frame}{Network Security}{Cloudflare Zero Trust Tunnel \& Ingress Decoupling}
-    \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide addresses secure external access to bare-metal infrastructure without public IPv4 exposure or vulnerable port forwarding. In typical home lab or on-premise environments, opening router ports to the internet invites automated credential brute-forcing and DDoS attacks. TaxonVision uses a persistent Cloudflare Zero Trust Tunnel (\texttt{cloudflared}) daemon running inside the Kubernetes cluster. Outbound encrypted tunnels connect directly to Cloudflare edge nodes, routing verified operator traffic into our Traefik ingress controller with TLS termination and zero exposed host ports.
+    \begin{block}{Secure Ingress Topology}
+        Exposing bare-metal clusters to the public internet via router port-forwarding invites brute-force and DDoS attacks. We leverage zero-open-ports network security.
     \end{block}
 
-    \vspace{0.4cm}
+    \begin{itemize}
+        \item \textbf{Outbound Encrypted Tunnels:} A persistent \texttt{cloudflared} daemon inside the cluster creates outbound connections to Cloudflare's edge network.
+        \item \textbf{Zero Exposed Host Ports:} The router blocks all inbound traffic. Traffic routing and TLS termination happen internally via Traefik.
+        \item \textbf{Identity Verification:} Operator traffic is authenticated at the Cloudflare edge before ever reaching the on-premise infrastructure.
+    \end{itemize}
+
+    \vspace{0.2cm}
     \statusdone
 
     \script{How do we safely access our on-premise cluster from anywhere in the world without exposing it to internet hackers? We do not open any ports on our router. Instead, a lightweight daemon called cloudflared establishes an outbound encrypted tunnel to Cloudflare's global edge network. When an operator connects, Cloudflare authenticates their identity and proxies the traffic securely into our internal Kubernetes ingress controller.}

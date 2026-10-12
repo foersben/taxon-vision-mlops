@@ -1,11 +1,20 @@
 % Chapter 4: Data Engineering & Content-Addressable Storage
+\providecolor{TaxonPrimary}{HTML}{1976D2}
+\providecolor{TaxonSecondary}{HTML}{388E3C}
+\providecolor{TaxonAccent}{HTML}{F57C00}
+\providecolor{TaxonDark}{HTML}{212121}
 
 \begin{frame}{Storage Engineering}{The 50 TB Trap \& Parquet Columnar Manifests}
-    \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide introduces how TaxonVision solves the ``50 TB storage trap''—the impossibility of storing multi-terabyte raw citizen-science image corpora locally on development workstations. Instead of downloading raw JPEGs, the architecture relies on zero-copy streaming from AWS Open Data / iNaturalist S3 mirrors indexed by lightweight Apache Parquet columnar manifests (\texttt{observations.parquet}). We explain the separation between immutable remote pixel assets and local structured metadata, enabling complete dataset versioning and rapid querying without exhausting workstation NVMe storage.
+    \begin{block}{Overcoming The 50 TB Storage Trap}
+        \begin{itemize}\small
+            \item \textbf{The Storage Bottleneck:} Storing multi-terabyte citizen-science imagery locally quickly exhausts developer workstation NVMe storage.
+            \item \textbf{Zero-Copy S3 Streaming:} Direct chunked streaming from AWS Open Data / iNaturalist S3 mirrors.
+            \item \textbf{Columnar Parquet Manifests:} Lightweight \texttt{observations.parquet} indexes millions of records with sub-millisecond predicate filtering.
+            \item \textbf{Architectural Decoupling:} Complete separation between immutable remote pixel assets and local structured metadata.
+        \end{itemize}
     \end{block}
 
-    \vspace{0.4cm}
+    \vspace{0.2cm}
     \statusdone
 
     \script{In large-scale biological vision, downloading 50 terabytes of raw images is impossible for individual developers. Instead of downloading JPEGs, TaxonVision uses lightweight Apache Parquet index manifests. The images remain on remote AWS Open Data S3 buckets, while our local system works with columnar metadata that can be filtered and sliced in milliseconds.}
@@ -13,11 +22,16 @@
 \end{frame}
 
 \begin{frame}{Data Integrity}{Cryptographic Image Hashes in Parquet Manifests}
-    \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide examines the schema of \texttt{observations.parquet} and the cryptographic validation mechanism. Inside each row of the manifest, the schema stores observation keys and URLs (\texttt{observation\_uuid}, \texttt{taxon\_id}, \texttt{image\_url}), DarwinCore taxonomic ranks, GPS coordinates, observation month, open license codes, and crucially a SHA-256 or MD5 content validation hash. When the \texttt{S3Streamer} module streams an image buffer into RAM via zero-copy Apache Arrow record batches, it verifies this cryptographic hash on the fly before passing the tensor to the feature extraction backbone, preventing corrupted or altered images from entering pipelines.
+    \begin{block}{Cryptographic Manifest Schema \& On-The-Fly Verification}
+        \begin{itemize}\small
+            \item \textbf{Parquet Manifest Schema:} Stores observation UUID, taxon ID, S3 image URL, DarwinCore ranks, coordinates, and open license tags.
+            \item \textbf{Cryptographic Validation Hash:} Every observation carries a SHA-256 / MD5 content hash directly in the columnar row.
+            \item \textbf{On-The-Fly Integrity Gate:} \texttt{S3Streamer} verifies byte hashes as Apache Arrow batches stream into memory before decoding tensors.
+            \item \textbf{Zero-Poisoning Guarantee:} Prevents corrupted, incomplete, or maliciously modified images from entering the training pipeline.
+        \end{itemize}
     \end{block}
 
-    \vspace{0.4cm}
+    \vspace{0.2cm}
     \statusdone
 
     \script{How do we ensure that an image on S3 hasn't been corrupted or altered over time? Inside our Parquet manifest, every single observation has a cryptographic SHA-256 validation hash stored alongside its S3 URL. When our S3Streamer module streams the image into memory, it checks the SHA-256 hash immediately before decoding. If a single byte is corrupted, the observation is caught and logged instantly.}
@@ -25,11 +39,53 @@
 \end{frame}
 
 \begin{frame}{Memory Optimization}{1:1 Row Alignment with Feature Embeddings (np.memmap)}
-    \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide details our zero-memory-bloat feature loading mechanism: 1:1 row alignment between \texttt{observations.parquet} and memory-mapped NumPy embedding arrays (\texttt{embeddings.npy}). When foundation backbones (BioCLIP, DINOv2) extract dense 768-dimensional feature vectors ($z \in \mathbb{R}^{768}$), vectors are serialized into disk-backed \texttt{np.memmap} arrays. Each row index in the Parquet manifest aligns exactly 1:1 with the corresponding row in \texttt{embeddings.npy}, allowing PyTorch dataloaders to query metadata by hash or taxon in Parquet and immediately slice matching feature embeddings from disk without loading the entire multi-gigabyte array into RAM.
+    \begin{block}{Zero-RAM Bloat Feature Loading}
+        \begin{itemize}\small
+            \item \textbf{Exact 1:1 Invariant:} Row $i$ in \texttt{observations.parquet} maps deterministically to vector $i$ in disk-backed \texttt{embeddings.npy}.
+            \item \textbf{Memory-Mapped Slicing:} PyTorch dataloaders slice multi-gigabyte embedding arrays on-demand via \texttt{np.memmap} without RAM saturation.
+        \end{itemize}
     \end{block}
 
-    \vspace{0.4cm}
+    \vspace{-0.1cm}
+    \begin{center}
+    \resizebox{0.85\linewidth}{!}{
+    \begin{tikzpicture}[
+        node distance=0.5cm and 1cm,
+        table_node/.style={draw=TaxonPrimary, fill=TaxonPrimary!10, rounded corners, rectangle, align=center, thick, minimum width=4.5cm, minimum height=1.2cm},
+        array_node/.style={draw=TaxonSecondary, fill=TaxonSecondary!10, rounded corners, rectangle, align=center, thick, minimum width=3.5cm, minimum height=1.2cm},
+        arrow/.style={->, thick, draw=TaxonDark, shorten >=2pt, shorten <=2pt},
+        label_text/.style={font=\small\sffamily\bfseries, color=TaxonDark}
+    ]
+
+        % Left Node: observations.parquet
+        \node[table_node] (parquet) {
+            \textbf{observations.parquet}\\
+            \scriptsize \texttt{row\_id, hash, taxon\_id, url}
+        };
+
+        % Right Node: embeddings.npy
+        \node[array_node, right=3cm of parquet] (memmap) {
+            \textbf{embeddings.npy}\\
+            \scriptsize $z \in \mathbb{R}^{768}$ (np.memmap)
+        };
+
+        % Draw rows
+        \foreach \i/\y in {0/0.4, 1/0, 2/-0.4} {
+            \draw[TaxonPrimary, thick] ([yshift=\y cm, xshift=-2.2cm]parquet.center) -- ([yshift=\y cm, xshift=2.2cm]parquet.center);
+            \draw[TaxonSecondary, thick] ([yshift=\y cm, xshift=-1.7cm]memmap.center) -- ([yshift=\y cm, xshift=1.7cm]memmap.center);
+        }
+
+        % Draw arrows indicating 1:1 mapping
+        \draw[arrow, color=TaxonAccent] ([yshift=0.2cm]parquet.east) -- node[above, label_text, color=TaxonAccent] {Exact 1:1 Row Alignment} ([yshift=0.2cm]memmap.west);
+        \draw[arrow, color=TaxonAccent] ([yshift=-0.2cm]parquet.east) -- ([yshift=-0.2cm]memmap.west);
+
+        \node[below=0.6cm of parquet, text width=5cm, align=center] {\scriptsize Columnar metadata loaded rapidly into Pandas/Polars RAM};
+        \node[below=0.6cm of memmap, text width=4cm, align=center] {\scriptsize Disk-backed NVMe array sliced directly via PyTorch};
+
+    \end{tikzpicture}
+    }
+    \end{center}
+
     \statusdone
 
     \script{Once features are extracted, how do we load them without eating 30 gigabytes of RAM? We enforce an exact 1:1 row alignment between our Parquet manifest and a disk-backed NumPy memmap file. Row 500 in Parquet corresponds precisely to vector 500 in embeddings.npy. PyTorch dataloaders can slice any batch directly from NVMe storage with zero RAM allocation overhead.}
@@ -37,11 +93,61 @@
 \end{frame}
 
 \begin{frame}{Version Control}{DVC Master Tracking \& Git Pointer Decoupling (.dvc)}
-    \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide explores how Data Version Control (DVC) tracks dataset state at the repository level. DVC computes a master MD5 checksum over the Parquet manifest file itself (yielding e.g., \texttt{f546997db8b542e87e4f006326d04aac.dir}). DVC writes this hash into a lightweight pointer file (\texttt{data/sample.dvc}). Git tracks and commits only this text pointer, while DVC pushes the actual heavy Parquet file to our DagsHub S3 remote storage. This guarantees complete experiment reproducibility and exact dataset-to-model lineage without bloating Git history.
+    \begin{block}{DVC Pointer Decoupling Principle}
+        \begin{itemize}\small
+            \item \textbf{Text Pointers in Git:} Git tracks only lightweight pointer files (\texttt{.dvc}) containing MD5 content hashes.
+            \item \textbf{Remote Storage Offload:} DVC pushes and pulls heavy Parquet manifests directly to/from DagsHub S3 storage.
+        \end{itemize}
     \end{block}
+    \vspace{-0.1cm}
+    \begin{center}
+    \resizebox{!}{0.38\textheight}{
+    \begin{tikzpicture}[
+        node distance=0.5cm and 1cm,
+        artifact/.style={draw=TaxonPrimary, fill=TaxonPrimary!10, rounded corners, rectangle, align=center, thick, minimum width=3.5cm, minimum height=1cm},
+        pointer/.style={draw=TaxonAccent, fill=TaxonAccent!10, rounded corners, rectangle, align=center, thick, minimum width=3cm, minimum height=1cm, dashed},
+        remote/.style={draw=TaxonSecondary, fill=TaxonSecondary!10, cylinder, shape border rotate=90, aspect=0.25, align=center, thick, minimum width=3cm, minimum height=1.5cm},
+        arrow/.style={->, thick, draw=TaxonDark, shorten >=2pt, shorten <=2pt},
+        label_text/.style={font=\scriptsize\sffamily, color=TaxonDark}
+    ]
 
-    \vspace{0.4cm}
+        % Nodes
+        \node[artifact] (parquet) {
+            \textbf{observations.parquet}\\
+            \scriptsize Heavy Data Manifest
+        };
+
+        \node[pointer, right=2cm of parquet] (dvc_ptr) {
+            \textbf{sample.dvc}\\
+            \scriptsize \texttt{md5: f546...aac.dir}
+        };
+
+        \node[remote, above=1.2cm of dvc_ptr] (git_repo) {
+            \textbf{Git Repo}\\
+            \scriptsize Code \& Pointers
+        };
+
+        \node[remote, fill=TaxonPrimary!20, draw=TaxonPrimary, above=1.2cm of parquet] (s3_remote) {
+            \textbf{DagsHub S3}\\
+            \scriptsize Remote Data Storage
+        };
+
+        % Arrows
+        \draw[arrow, color=TaxonAccent] (parquet) -- node[above, label_text, color=TaxonAccent] {DVC MD5 Hash} (dvc_ptr);
+        \draw[arrow] (dvc_ptr) -- node[right, label_text] {Commits pointer} (git_repo);
+        \draw[arrow, color=TaxonPrimary] (parquet) -- node[left, label_text, color=TaxonPrimary] {DVC push} (s3_remote);
+
+        % MLflow Lineage
+        \node[draw=TaxonDark, fill=white, rounded corners, rectangle, align=center, thick, right=1.5cm of git_repo] (mlflow) {
+            \textbf{MLflow Tracking}\\
+            \scriptsize Immutable Lineage
+        };
+        \draw[arrow, dashed, color=TaxonDark] (git_repo) -- node[above, label_text] {Logs Commit/Hash} (mlflow);
+
+    \end{tikzpicture}
+    }
+    \end{center}
+
     \statusdone
 
     \script{At the version control level, we never put Parquet files or embeddings into Git. DVC computes a master MD5 hash of the entire Parquet manifest and saves it in a tiny text file like data/sample.dvc. Git commits the text file, and DVC syncs the heavy Parquet file to our DagsHub S3 remote. When a developer switches Git branches, DVC automatically pulls the exact matching manifest.}
@@ -49,11 +155,16 @@
 \end{frame}
 
 \begin{frame}{Feature Extraction}{Production Batch Feature Extraction (extract\_features.py)}
-    \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide examines the production implementation of batch feature extraction (\texttt{extract\_features.py}). We discuss how the pipeline streams images from remote S3 storage, passes batches through the frozen visual transformer backbone, extracts L2-normalized dense embeddings, and writes structured Parquet/LMDB files partitioned by dataset split (train, val, test). We also highlight the \texttt{build\_taxon\_index\_map} function that guarantees deterministic integer label mapping across all splits, preventing subtle class mismatch bugs during downstream training.
+    \begin{block}{Batch Representation Caching Pipeline}
+        \begin{itemize}
+            \item \textbf{Zero-Copy S3 Streaming:} Streams raw images directly from remote storage without local disk exhaustion.
+            \item \textbf{Frozen Backbone Inference:} Passes image batches through pre-trained backbones (DINOv3/BioCLIP-2).
+            \item \textbf{L2 Normalization:} Extracts unit-norm representations for cosine-distance linear classification.
+            \item \textbf{Deterministic Taxon Mapping:} \texttt{build\_taxon\_index\_map} guarantees invariant integer class indexing.
+        \end{itemize}
     \end{block}
 
-    \vspace{0.4cm}
+    \vspace{0.2cm}
     \statusdone
 
     \script{In \texttt{extract\_features.py}, we execute our batch feature extraction. It connects to S3, loads batches of images through our frozen vision backbone, normalizes the embeddings, and writes them out into compact columnar Parquet files. Crucially, it builds a global taxon index map that deterministically assigns each species an integer index across all train, validation, and test splits. This guarantees that class 42 is always identical across all experiments.}
