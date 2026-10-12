@@ -1,0 +1,125 @@
+\documentclass[aspectratio=169]{beamer}
+
+\usetheme{Madrid}
+\usecolortheme{default}
+
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows,positioning,fit,calc,decorations.pathreplacing,backgrounds}
+\usepackage{smartdiagram}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{xcolor}
+
+% --- Notes Setup ---
+% SLIDES only (default): \setbeameroption{hide notes}
+% SCRIPT only:           \setbeameroption{show only notes}
+% Both on-screen:        \setbeameroption{show notes on second screen=right}
+\usepackage{pgfpages}
+\setbeameroption{hide notes}
+
+% Shortcut macros for notes (Matching Seville Conference format)
+\newcommand{\script}[1]{\note[item]{\textbf{Script:} #1}}
+\newcommand{\qa}[2]{\note[item]{\textbf{Q:} \textit{#1} \\ \textbf{A:} #2}}
+
+% --- Custom Colors ---
+\definecolor{plantgreen}{RGB}{34, 139, 34}
+\definecolor{herbired}{RGB}{180, 30, 30}
+\definecolor{signalorange}{RGB}{220, 120, 0}
+\definecolor{toxinpurple}{RGB}{100, 0, 150}
+\definecolor{soilbrown}{RGB}{101, 67, 33}
+\definecolor{deepblue}{RGB}{0, 51, 102}
+
+% --- Status Badges ---
+\newcommand{\statusdone}{\textbf{Status:} \textcolor{plantgreen}{\textbf{[Implemented \& Verified]}}}
+\newcommand{\statuspartial}{\textbf{Status:} \textcolor{signalorange}{\textbf{[Partially Implemented / In Progress]}}}
+\newcommand{\statustarget}{\textbf{Status:} \textcolor{deepblue}{\textbf{[Target Architecture / Roadmap]}}}
+
+% --- Title Info ---
+\title[TaxonVision-MLOps Strategy Report]{\textbf{TaxonVision-MLOps: Enterprise Strategy \& Architecture}}
+\subtitle{High-Throughput Biodiversity Computer Vision, Mathematical Uncertainty Guarantees \& Bare-Metal MLOps}
+\author[B. Förster]{Benjamin Förster}
+\institute[Liora Data Science \& MLOps Curriculum]{
+    Liora Advanced Data Science \& MLOps \\
+    Production Systems Architecture \& Deep Learning Engineering
+}
+\date{Production Architecture Presentation}
+
+\begin{document}
+
+% =====================================================================
+% Title Slide
+% =====================================================================
+\begin{frame}
+    \titlepage
+    \script{Welcome everyone. Today we are walking through the TaxonVision-MLOps Strategy Report. This presentation is designed specifically for data scientists and engineers transitioning from introductory machine learning to production-grade MLOps. We will explore how real-world biodiversity classification forces us to rethink everything from storage and GPU time-slicing to mathematical safety bounds and continuous deployment.}
+    \qa{What is the primary objective of this presentation?}{To provide a comprehensive, end-to-end breakdown of the TaxonVision MLOps architecture, explaining why toy machine learning workflows fail at scale and how enterprise-grade systems guarantee reproducibility, latency, and epistemic safety.}
+\end{frame}
+
+% =====================================================================
+% Curriculum Overview / TOC
+% =====================================================================
+\begin{frame}{Curriculum Overview}{Structure of the Presentation}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{itemize}\small
+                \item \textbf{Ch 1:} Problem \& Operational Maturity
+                \item \textbf{Ch 2:} Hardware Architecture \& Topography
+                \item \textbf{Ch 3:} Pipeline Architecture \& Fast-Path Serving
+                \item \textbf{Ch 4:} Data Engineering \& Storage (Parquet/DVC)
+                \item \textbf{Ch 5:} Model Engineering \& Bayesian Tuning
+            \end{itemize}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{itemize}\small
+                \item \textbf{Ch 6:} Epistemic Safety \& Conformal Bounds
+                \item \textbf{Ch 7:} CI/CD, Containers \& Kubernetes (k3s)
+                \item \textbf{Ch 8:} Observability, Drift \& Active Learning
+                \item \textbf{Ch 9:} Delivery Roadmap \& Core Principles
+                \item \textbf{Ch 10:} Multimodal Knowledge Graph \& Vision-RAG
+            \end{itemize}
+        \end{column}
+    \end{columns}
+    \script{Here is our roadmap for the presentation. We progress systematically from real-world biodiversity problems and bare-metal hardware through data engineering, model optimization, mathematical uncertainty guarantees, CI/CD, and active learning, culminating in our cutting-edge Multimodal Knowledge Graph and Vision-RAG architecture.}
+    \qa{How is this curriculum organized?}{It is structured into 10 modular chapters, moving from bare-metal foundations and reproducible training through mathematical calibration and deployment, concluding with deep multimodal reasoning and Vision-RAG.}
+\end{frame}
+
+% =====================================================================
+% Chapter Inclusions
+% =====================================================================
+\section{Problem \& Operational Maturity}
+\input{chapters/01_problem_and_operational_maturity}
+
+\section{Hardware Architecture \& Infrastructure}
+\input{chapters/02_hardware_and_infrastructure}
+
+\section{Pipeline Architecture \& Serving}
+\input{chapters/03_core_pipeline_and_serving}
+
+\section{Data Engineering \& Storage}
+\input{chapters/04_data_engineering_and_storage}
+
+\section{Model Engineering \& Optimization}
+\input{chapters/05_model_engineering_and_optimization}
+
+\section{Epistemic Safety \& Uncertainty}
+\input{chapters/06_epistemic_safety_and_uncertainty}
+
+\section{CI/CD \& Kubernetes Deployment}
+\input{chapters/07_cicd_and_kubernetes_deployment}
+
+\section{Observability \& Active Learning}
+\input{chapters/08_observability_and_active_learning}
+
+\section{Roadmap \& Engineering Lessons}
+\input{chapters/09_roadmap_and_engineering_lessons}
+
+\section{Multimodal Knowledge Graph \& Vision-RAG}
+\input{chapters/10_multimodal_knowledge_graph_and_vision_rag}
+
+\end{document}

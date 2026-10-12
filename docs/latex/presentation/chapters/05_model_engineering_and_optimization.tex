@@ -1,0 +1,201 @@
+% Chapter 5: Model Engineering & Bayesian Optimization
+
+\begin{frame}[plain]
+    \vfill
+    \centering
+    {\footnotesize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
+    {\large \textbf{\textcolor{signalorange}{CHAPTER 05}}} \\[0.25cm]
+    {\huge \textbf{Model Engineering \& Optimization}} \\[0.35cm]
+    {\normalsize \textcolor{black!70}{Self-Supervised Vision Backbones, Class-Balanced Loss \& Optuna Sweeps}} \\[0.5cm]
+    \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
+    \statusdone
+    \vfill
+    \script{In Chapter 5, we cover model engineering: why linear probing beats full fine-tuning on frozen self-supervised backbones, how Class-Balanced Loss overcomes extreme long tails, and how Optuna automates hyperparameter search.}
+    \qa{Why use linear probing instead of fine-tuning the full vision transformer?}{Linear probing achieves within 1-2\% of full fine-tuning accuracy while taking seconds instead of hours, avoiding catastrophic forgetting and preserving generalized feature geometry.}
+\end{frame}
+
+\begin{frame}{Model Engineering}{Linear Probing vs Full Fine-Tuning Tradeoff}
+    \begin{columns}[T]
+        \begin{column}{0.5\textwidth}
+            \begin{block}{Full Fine-Tuning}
+                \footnotesize
+                \begin{itemize}
+                    \item \textbf{Compute:} Requires 4-hour GPU jobs to update $\sim$86M parameters.
+                    \item \textbf{Hardware:} Consumes up to 16 GB VRAM.
+                    \item \textbf{Risk:} Catastrophic forgetting of generalized representations.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.5\textwidth}
+            \begin{block}{Linear Probing}
+                \footnotesize
+                \begin{itemize}
+                    \item \textbf{Compute:} Trains in $\sim$10-second runs on pre-cached embeddings.
+                    \item \textbf{Hardware:} Requires $<$1 GB VRAM (freezes backbone).
+                    \item \textbf{Optimization:} High-throughput hyperparameter search.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \vspace{0.4cm}
+    \begin{block}{Engineering Rationale}
+        \footnotesize
+        Pre-cached embeddings combined with a convex classification head drastically reduce operational latency, unlocking Bayesian hyperparameter sweeps that are impossible under full fine-tuning constraints.
+    \end{block}
+
+    \script{Let's compare the economics of linear probing versus full fine-tuning. Full fine-tuning requires backpropagating through 86 million transformer parameters, consuming 14 gigabytes of VRAM and 4 hours of GPU time per run. Linear probing trains a single linear projection matrix on pre-extracted embeddings. It uses 500 megabytes of VRAM and finishes in 8 seconds. This 1,000x speedup allows us to explore hyperparameter spaces thoroughly rather than settling for un-tuned defaults.}
+    \qa{Can linear probing adapt if the test domain has different lighting or camera sensors?}{Because the foundation model was pre-trained on diverse web-scale imagery, its internal representations already generalize well across lighting and sensor variations without needing backbone parameter updates.}
+\end{frame}
+
+\begin{frame}{Loss Formulation}{Class-Balanced Loss \& Effective Number of Samples}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Mathematical Formulation}
+                \footnotesize
+                \begin{itemize}
+                    \item Standard cross-entropy collapses under long-tail imbalance.
+                    \item Naïve inverse frequency fails due to redundancy in head classes.
+                    \item \textbf{Effective Samples:} $E_n = \frac{1 - \beta^n}{1 - \beta}$
+                    \item \textbf{Loss Weight:} $W_n \propto \frac{1}{E_n} = \frac{1 - \beta}{1 - \beta^n}$
+                \end{itemize}
+            \end{block}
+            \vspace{-0.2cm}
+            \begin{block}{Engineering Rationale}
+                \footnotesize
+                This prevents gradient starvation for rare classes while bounding the penalty for hyper-abundant head classes.
+            \end{block}
+        \end{column}
+        \begin{column}{0.5\textwidth}
+            \vspace{-0.2cm}
+            \begin{figure}
+                \centering
+                \begin{tikzpicture}
+                    \begin{axis}[
+                        width=\textwidth,
+                        height=5.0cm,
+                        xmode=log,
+                        xlabel={Class Frequency $n$ (Log)},
+                        ylabel={Weight $W_n$},
+                        domain=1:10000,
+                        samples=100,
+                        grid=both,
+                        legend pos=north east,
+                        title={Class-Balanced Loss Weights},
+                        title style={font=\footnotesize\bfseries},
+                        label style={font=\footnotesize},
+                        tick label style={font=\scriptsize},
+                        legend style={font=\scriptsize}
+                    ]
+                    \addplot[thick, color=deepblue] {(1 - 0.99)/(1 - 0.99^x)};
+                    \addlegendentry{$\beta = 0.99$}
+                    \addplot[thick, color=signalorange] {(1 - 0.999)/(1 - 0.999^x)};
+                    \addlegendentry{$\beta = 0.999$}
+                    \end{axis}
+                \end{tikzpicture}
+            \end{figure}
+        \end{column}
+    \end{columns}
+
+    \script{Standard cross-entropy loss fails on long-tail data because the gradients from 10,000 common robins overwhelm the gradients from 3 rare warblers. But if you simply weight by inverse frequency, you over-weight outliers and make training unstable. We use Class-Balanced Loss, which calculates the 'effective number of samples' using a hyperparameter beta. It mathematically accounts for information redundancy in large classes, providing stable, well-balanced gradients.}
+    \qa{What is the typical value of $\beta$ in our pipelines?}{We tune $\beta$ via Bayesian optimization in the range $[0.99, 0.9999]$. When $\beta = 0$, it degrades to unweighted loss; as $\beta \to 1$, it approaches inverse frequency.}
+\end{frame}
+
+\begin{frame}{Optimization}{Optimization Dynamics \& Best-Weight Restoration}
+    \begin{block}{Optimization Strategy}
+        \footnotesize
+        \begin{itemize}
+            \item \textbf{AdamW Optimizer:} Incorporates decoupled weight decay for robust regularization.
+            \item \textbf{Learning Rate Schedule:} Linear warmup prevents early gradient divergence; cosine annealing refines convergence in later epochs.
+            \item \textbf{Early Stopping:} Continuously monitors validation loss over a patience window to prevent overfitting.
+        \end{itemize}
+    \end{block}
+
+    \begin{block}{Deterministic Best-Weight Restoration}
+        \footnotesize
+        \begin{itemize}
+            \item \textbf{Mechanism:} The runner automatically caches intermediate checkpoints and restores the exact weights corresponding to the minimum validation loss.
+            \item \textbf{Engineering Rationale:} The final epoch is rarely the optimal one. Best-weight restoration strictly guarantees that the deployed checkpoint maximizes generalization on holdout data.
+        \end{itemize}
+    \end{block}
+
+    \script{Even with pre-cached embeddings, optimization dynamics matter. If you use a high learning rate on epoch 1, you can destabilize the classifier head weights. Our runner implements linear warmup to gently ramp up learning rates, followed by cosine annealing. When validation loss plateaus, our early stopping mechanism triggers and automatically restores the best-performing historical weights, guaranteeing that our deployed checkpoint is optimal.}
+    \qa{Why not simply save weights at the very end of training?}{The final epoch is frequently overfitted to the training data. Best-weight restoration guarantees that we retain the checkpoint with the highest generalization performance on holdout data.}
+\end{frame}
+
+\begin{frame}{AutoML \& Tuning}{Bayesian Optimization: Optuna TPE with ASHA Pruning}
+    \begin{block}{Bayesian Hyperparameter Search}
+        \footnotesize
+        \begin{itemize}
+            \item \textbf{TPE Algorithm:} Optuna uses the Tree-structured Parzen Estimator (TPE) to model probability distributions of promising regions (learning rate, $\beta$, dropout, weight decay).
+            \item \textbf{Efficiency:} Vastly outperforms brute-force grid search (exponential complexity) or unguided random search.
+        \end{itemize}
+    \end{block}
+
+    \begin{block}{ASHA Pruning Mechanism}
+        \footnotesize
+        \begin{itemize}
+            \item \textbf{Operation:} The Asynchronous Successive Halving Algorithm (ASHA) actively monitors intermediate epoch performance.
+            \item \textbf{Engineering Rationale:} Aggressively terminates underperforming trials early, reallocating GPU cycles to promising candidates and maximizing search efficiency.
+        \end{itemize}
+    \end{block}
+
+    \script{Junior practitioners often tune learning rates by hand, guessing numbers in a script. That is unscientific and wastes compute. We integrate Optuna with Bayesian Tree-structured Parzen Estimators. Optuna builds a probabilistic model of which hyperparameters produce the highest validation scores. Even better, our ASHA pruner monitors intermediate epochs: if a trial is performing poorly by epoch 3, it kills it immediately and starts the next candidate, multiplying our search efficiency.}
+    \qa{How many trials do we typically execute during an optimization run?}{Because our linear probe trains in seconds, we can run 50 to 100 trials in under 10 minutes, thoroughly exploring the hyperparameter surface.}
+\end{frame}
+
+\begin{frame}{Evaluation Metrics}{Macro PR-AUC vs Single-Threshold F1 Score}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Metric Limitations}
+                \footnotesize
+                \begin{itemize}
+                    \item \textbf{F1 Score:} Brittle because it relies on a static threshold (e.g., 0.5), severely penalizing rare classes whose optimal threshold is much lower.
+                    \item \textbf{ROC-AUC:} Misleading in extreme imbalance; true negatives overwhelm the metric, producing falsely optimistic scores.
+                \end{itemize}
+            \end{block}
+            \vspace{-0.2cm}
+            \begin{block}{Macro PR-AUC Advantage}
+                \footnotesize
+                \begin{itemize}
+                    \item Evaluates the area under the Precision-Recall curve across \emph{all} recall thresholds independently.
+                    \item \textbf{Engineering Rationale:} Provides a robust, threshold-invariant promotion gate reflecting positive performance.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.5\textwidth}
+            \vspace{-0.2cm}
+            \begin{figure}
+                \centering
+                \begin{tikzpicture}
+                    \begin{axis}[
+                        width=\textwidth,
+                        height=5.0cm,
+                        xlabel={Recall},
+                        ylabel={Precision},
+                        xmin=0, xmax=1.05,
+                        ymin=0, ymax=1.05,
+                        grid=both,
+                        legend pos=south west,
+                        title={PR Curve (Imbalanced Class)},
+                        title style={font=\footnotesize\bfseries},
+                        label style={font=\footnotesize},
+                        tick label style={font=\scriptsize},
+                        legend style={font=\scriptsize}
+                    ]
+                    % Realistic PR curve for an imbalanced model
+                    \addplot[thick, color=deepblue, domain=0:1, samples=100] {1 - x^3};
+                    \addlegendentry{Macro PR-AUC}
+
+                    % F1 static point (e.g., threshold 0.5)
+                    \addplot[only marks, mark=*, mark size=2pt, color=herbired] coordinates {(0.4, 0.936)};
+                    \addlegendentry{Static F1 ($t=0.5$)}
+                    \end{axis}
+                \end{tikzpicture}
+            \end{figure}
+        \end{column}
+    \end{columns}
+
+    \script{A crucial question for any data scientist: how do you decide whether Model B is better than Model A? Many people look at accuracy or F1-score. But F1 requires choosing an arbitrary threshold, like 0.5. For a rare species with only three images, the optimal decision threshold might be 0.12! If you evaluate with a 0.5 threshold, F1 drops to zero. Macro PR-AUC measures the entire precision-recall curve across all possible thresholds for every single class, giving us a true, un-biased measure of classification power.}
+    \qa{Why not use ROC-AUC instead of PR-AUC?}{In extreme imbalance with 10,000 classes, each class has a massive pool of true negatives. ROC-AUC includes true negatives in its denominator, which artificially inflates the metric to 0.99 even when precision on positive samples is terrible. PR-AUC focuses strictly on positive class performance.}
+\end{frame}

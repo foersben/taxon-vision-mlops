@@ -83,9 +83,13 @@ uv.lock
 *.fdb_latexmk
 *.fls
 *.log
+*.nav
 *.out
+*.snm
 *.toc
 *.synctex.gz
+*.vrb
+*_notes.tex
 _minted*/
 
 # Personal Scripts

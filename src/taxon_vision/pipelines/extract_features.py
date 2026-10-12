@@ -22,21 +22,43 @@ from taxon_vision.service.inference import load_taxa_catalog
 
 logger = logging.getLogger(__name__)
 
-# Canonical mapping from authoritative iNaturalist / GBIF taxon IDs to catalog indices
-DEFAULT_INAT_TAXON_MAP: dict[int, int] = {
-    48662: 0,  # Danaus plexippus (Monarch Butterfly)
-    47120: 1,  # Apis mellifera (Western Honey Bee)
-    14704: 2,  # Turdus migratorius (American Robin)
-    8229: 3,  # Cyanocitta cristata (Blue Jay)
-    47602: 4,  # Taraxacum officinale (Common Dandelion)
-    58737: 5,  # Helianthus annuus (Common Sunflower)
-    42048: 6,  # Canis lupus (Gray Wolf)
-    42054: 7,  # Vulpes vulpes (Red Fox)
-    48715: 8,  # Amanita muscaria (Fly Agaric)
-    48701: 9,  # Boletus edulis (King Bolete)
-    47119: 1,  # Bombus (mapped to Hymenoptera/Bees cluster if present)
-    47114: 1,  # Vespidae (mapped to Hymenoptera cluster if present)
-}
+
+def get_catalog_inat_taxon_map(catalog: list[dict[str, Any]] | None = None) -> dict[int, int]:
+    r"""Dynamically construct authoritative taxon ID to dense class index mapping from the catalog.
+
+    Why:
+        Hardcoding taxon IDs and integer maps inside pipeline scripts is an antipattern that causes
+        configuration drift. Deriving mappings directly from `config/taxa_catalog.yaml` guarantees
+        a Single Source of Truth (SSOT).
+
+    How:
+        Iterates over catalog entries, extracting primary `inat_taxon_id`, `id`, and any defined
+        `inat_aliases`, mapping each to the dense ordinal class index in $[0, K-1]$.
+
+    Args:
+        catalog: Optional list of catalog dictionaries. If None, loads from `config/taxa_catalog.yaml`.
+
+    Returns:
+        Dictionary mapping external taxon IDs to dense class indices in $[0, K-1]$.
+    """
+    try:
+        records: list[dict[str, Any]] = catalog if catalog is not None else load_taxa_catalog()
+    except Exception:
+        records = []
+
+    mapping: dict[int, int] = {}
+    for idx, item in enumerate(records):
+        for key in ("inat_taxon_id", "inaturalist_taxon_id", "taxon_id", "id"):
+            raw_val = item.get(key)
+            if raw_val is not None:
+                mapping[int(raw_val)] = idx
+        for alias in item.get("inat_aliases", []):
+            mapping[int(alias)] = idx
+    return mapping
+
+
+# Canonical mapping dynamically built from authoritative config/taxa_catalog.yaml (SSOT)
+DEFAULT_INAT_TAXON_MAP: dict[int, int] = get_catalog_inat_taxon_map()
 
 
 @dataclass(frozen=True)
@@ -135,10 +157,12 @@ def _populate_taxon_indices(mapping: dict[int, int], idx: int, item: dict[str, A
         idx: Ordinal class index.
         item: Taxon metadata record.
     """
-    for key in ("inaturalist_taxon_id", "taxon_id", "id"):
+    for key in ("inat_taxon_id", "inaturalist_taxon_id", "taxon_id", "id"):
         raw_val = item.get(key)
         if raw_val is not None:
             mapping[int(raw_val)] = idx
+    for alias in item.get("inat_aliases", []):
+        mapping[int(alias)] = idx
 
 
 def build_taxon_index_map(

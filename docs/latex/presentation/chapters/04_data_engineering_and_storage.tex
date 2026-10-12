@@ -1,0 +1,186 @@
+% Chapter 4: Data Engineering & Content-Addressable Storage
+\providecolor{TaxonPrimary}{HTML}{1976D2}
+\providecolor{TaxonSecondary}{HTML}{388E3C}
+\providecolor{TaxonAccent}{HTML}{F57C00}
+\providecolor{TaxonDark}{HTML}{212121}
+
+\begin{frame}[plain]
+    \vfill
+    \centering
+    {\footnotesize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
+    {\large \textbf{\textcolor{signalorange}{CHAPTER 04}}} \\[0.25cm]
+    {\huge \textbf{Data Engineering \& Storage}} \\[0.35cm]
+    {\normalsize \textcolor{black!70}{Zero-Copy S3 Streaming, Parquet Manifests \& DVC Immutability}} \\[0.5cm]
+    \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
+    \statusdone
+    \vfill
+    \script{In Chapter 4, we examine our data tier: escaping the 50 Terabyte Storage Trap through zero-copy S3 streaming, Parquet columnar indexing, and DVC content-addressable storage.}
+    \qa{How does TaxonVision avoid exhausting local disk space with terabytes of images?}{By storing lightweight Parquet metadata manifests with remote S3 image URLs and memory-mapped NumPy embedding vectors, streaming raw pixels only when necessary.}
+\end{frame}
+
+\begin{frame}{Storage Engineering}{The 50 TB Trap \& Parquet Columnar Manifests}
+    \begin{block}{Overcoming The 50 TB Storage Trap}
+        \begin{itemize}\small
+            \item \textbf{The Storage Bottleneck:} Storing multi-terabyte citizen-science imagery locally quickly exhausts developer workstation NVMe storage.
+            \item \textbf{Zero-Copy S3 Streaming:} Direct chunked streaming from AWS Open Data / iNaturalist S3 mirrors.
+            \item \textbf{Columnar Parquet Manifests:} Lightweight \texttt{observations.parquet} indexes millions of records with sub-millisecond predicate filtering.
+            \item \textbf{Architectural Decoupling:} Complete separation between immutable remote pixel assets and local structured metadata.
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.2cm}
+    \statusdone
+
+    \script{In large-scale biological vision, downloading 50 terabytes of raw images is impossible for individual developers. Instead of downloading JPEGs, TaxonVision uses lightweight Apache Parquet index manifests. The images remain on remote AWS Open Data S3 buckets, while our local system works with columnar metadata that can be filtered and sliced in milliseconds.}
+    \qa{Why use Apache Parquet instead of an SQLite or PostgreSQL database?}{Parquet provides columnar compression, partitioned scanning, and native zero-copy integration with Apache Arrow, PyTorch, and Polars, making it ideal for distributed MLOps pipelines without database server overhead.}
+\end{frame}
+
+\begin{frame}{Data Integrity}{Cryptographic Image Hashes in Parquet Manifests}
+    \begin{block}{Cryptographic Manifest Schema \& On-The-Fly Verification}
+        \begin{itemize}\small
+            \item \textbf{Parquet Manifest Schema:} Stores observation UUID, taxon ID, S3 image URL, DarwinCore ranks, coordinates, and open license tags.
+            \item \textbf{Cryptographic Validation Hash:} Every observation carries a SHA-256 / MD5 content hash directly in the columnar row.
+            \item \textbf{On-The-Fly Integrity Gate:} \texttt{S3Streamer} verifies byte hashes as Apache Arrow batches stream into memory before decoding tensors.
+            \item \textbf{Zero-Poisoning Guarantee:} Prevents corrupted, incomplete, or maliciously modified images from entering the training pipeline.
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.2cm}
+    \statusdone
+
+    \script{How do we ensure that an image on S3 hasn't been corrupted or altered over time? Inside our Parquet manifest, every single observation has a cryptographic SHA-256 validation hash stored alongside its S3 URL. When our S3Streamer module streams the image into memory, it checks the SHA-256 hash immediately before decoding. If a single byte is corrupted, the observation is caught and logged instantly.}
+    \qa{Does on-the-fly hash verification introduce CPU bottlenecks?}{SHA-256 hashing in hardware-accelerated CPU instructions takes microseconds per image buffer, which is entirely hidden behind network transfer and image decoding latency.}
+\end{frame}
+
+\begin{frame}{Memory Optimization}{1:1 Row Alignment with Feature Embeddings (np.memmap)}
+    \begin{block}{Zero-RAM Bloat Feature Loading}
+        \begin{itemize}\small
+            \item \textbf{Exact 1:1 Invariant:} Row $i$ in \texttt{observations.parquet} maps deterministically to vector $i$ in disk-backed \texttt{embeddings.npy}.
+            \item \textbf{Memory-Mapped Slicing:} PyTorch dataloaders slice multi-gigabyte embedding arrays on-demand via \texttt{np.memmap} without RAM saturation.
+        \end{itemize}
+    \end{block}
+
+    \vspace{-0.1cm}
+    \begin{center}
+    \resizebox{0.85\linewidth}{!}{
+    \begin{tikzpicture}[
+        node distance=0.5cm and 1cm,
+        table_node/.style={draw=TaxonPrimary, fill=TaxonPrimary!10, rounded corners, rectangle, align=center, thick, minimum width=4.5cm, minimum height=1.2cm},
+        array_node/.style={draw=TaxonSecondary, fill=TaxonSecondary!10, rounded corners, rectangle, align=center, thick, minimum width=3.5cm, minimum height=1.2cm},
+        arrow/.style={->, thick, draw=TaxonDark, shorten >=2pt, shorten <=2pt},
+        label_text/.style={font=\small\sffamily\bfseries, color=TaxonDark}
+    ]
+
+        % Left Node: observations.parquet
+        \node[table_node] (parquet) {
+            \textbf{observations.parquet}\\
+            \scriptsize \texttt{row\_id, hash, taxon\_id, url}
+        };
+
+        % Right Node: embeddings.npy
+        \node[array_node, right=3cm of parquet] (memmap) {
+            \textbf{embeddings.npy}\\
+            \scriptsize $z \in \mathbb{R}^{768}$ (np.memmap)
+        };
+
+        % Draw rows
+        \foreach \i/\y in {0/0.4, 1/0, 2/-0.4} {
+            \draw[TaxonPrimary, thick] ([yshift=\y cm, xshift=-2.2cm]parquet.center) -- ([yshift=\y cm, xshift=2.2cm]parquet.center);
+            \draw[TaxonSecondary, thick] ([yshift=\y cm, xshift=-1.7cm]memmap.center) -- ([yshift=\y cm, xshift=1.7cm]memmap.center);
+        }
+
+        % Draw arrows indicating 1:1 mapping
+        \draw[arrow, color=TaxonAccent] ([yshift=0.2cm]parquet.east) -- node[above, label_text, color=TaxonAccent] {Exact 1:1 Row Alignment} ([yshift=0.2cm]memmap.west);
+        \draw[arrow, color=TaxonAccent] ([yshift=-0.2cm]parquet.east) -- ([yshift=-0.2cm]memmap.west);
+
+        \node[below=0.6cm of parquet, text width=5cm, align=center] {\scriptsize Columnar metadata loaded rapidly into Pandas/Polars RAM};
+        \node[below=0.6cm of memmap, text width=4cm, align=center] {\scriptsize Disk-backed NVMe array sliced directly via PyTorch};
+
+    \end{tikzpicture}
+    }
+    \end{center}
+
+    \statusdone
+
+    \script{Once features are extracted, how do we load them without eating 30 gigabytes of RAM? We enforce an exact 1:1 row alignment between our Parquet manifest and a disk-backed NumPy memmap file. Row 500 in Parquet corresponds precisely to vector 500 in embeddings.npy. PyTorch dataloaders can slice any batch directly from NVMe storage with zero RAM allocation overhead.}
+    \qa{What happens if an observation is deleted or filtered out?}{The entire split is re-indexed deterministically during feature extraction, guaranteeing that Parquet rows and memmap indices never fall out of synchronization.}
+\end{frame}
+
+\begin{frame}{Version Control}{DVC Master Tracking \& Git Pointer Decoupling (.dvc)}
+    \begin{block}{DVC Pointer Decoupling Principle}
+        \begin{itemize}\small
+            \item \textbf{Text Pointers in Git:} Git tracks only lightweight pointer files (\texttt{.dvc}) containing MD5 content hashes.
+            \item \textbf{Remote Storage Offload:} DVC pushes and pulls heavy Parquet manifests directly to/from DagsHub S3 storage.
+        \end{itemize}
+    \end{block}
+    \vspace{-0.1cm}
+    \begin{center}
+    \resizebox{!}{0.38\textheight}{
+    \begin{tikzpicture}[
+        node distance=0.5cm and 1cm,
+        artifact/.style={draw=TaxonPrimary, fill=TaxonPrimary!10, rounded corners, rectangle, align=center, thick, minimum width=3.5cm, minimum height=1cm},
+        pointer/.style={draw=TaxonAccent, fill=TaxonAccent!10, rounded corners, rectangle, align=center, thick, minimum width=3cm, minimum height=1cm, dashed},
+        remote/.style={draw=TaxonSecondary, fill=TaxonSecondary!10, cylinder, shape border rotate=90, aspect=0.25, align=center, thick, minimum width=3cm, minimum height=1.5cm},
+        arrow/.style={->, thick, draw=TaxonDark, shorten >=2pt, shorten <=2pt},
+        label_text/.style={font=\scriptsize\sffamily, color=TaxonDark}
+    ]
+
+        % Nodes
+        \node[artifact] (parquet) {
+            \textbf{observations.parquet}\\
+            \scriptsize Heavy Data Manifest
+        };
+
+        \node[pointer, right=2cm of parquet] (dvc_ptr) {
+            \textbf{sample.dvc}\\
+            \scriptsize \texttt{md5: f546...aac.dir}
+        };
+
+        \node[remote, above=1.2cm of dvc_ptr] (git_repo) {
+            \textbf{Git Repo}\\
+            \scriptsize Code \& Pointers
+        };
+
+        \node[remote, fill=TaxonPrimary!20, draw=TaxonPrimary, above=1.2cm of parquet] (s3_remote) {
+            \textbf{DagsHub S3}\\
+            \scriptsize Remote Data Storage
+        };
+
+        % Arrows
+        \draw[arrow, color=TaxonAccent] (parquet) -- node[above, label_text, color=TaxonAccent] {DVC MD5 Hash} (dvc_ptr);
+        \draw[arrow] (dvc_ptr) -- node[right, label_text] {Commits pointer} (git_repo);
+        \draw[arrow, color=TaxonPrimary] (parquet) -- node[left, label_text, color=TaxonPrimary] {DVC push} (s3_remote);
+
+        % MLflow Lineage
+        \node[draw=TaxonDark, fill=white, rounded corners, rectangle, align=center, thick, right=1.5cm of git_repo] (mlflow) {
+            \textbf{MLflow Tracking}\\
+            \scriptsize Immutable Lineage
+        };
+        \draw[arrow, dashed, color=TaxonDark] (git_repo) -- node[above, label_text] {Logs Commit/Hash} (mlflow);
+
+    \end{tikzpicture}
+    }
+    \end{center}
+
+    \statusdone
+
+    \script{At the version control level, we never put Parquet files or embeddings into Git. DVC computes a master MD5 hash of the entire Parquet manifest and saves it in a tiny text file like data/sample.dvc. Git commits the text file, and DVC syncs the heavy Parquet file to our DagsHub S3 remote. When a developer switches Git branches, DVC automatically pulls the exact matching manifest.}
+    \qa{Can MLflow link training runs to the DVC commit hash?}{Yes. Our training runner logs the active Git commit hash and DVC data hash directly into MLflow run metadata, providing an unbreakable audit trail from model weights back to exact dataset rows.}
+\end{frame}
+
+\begin{frame}{Feature Extraction}{Production Batch Feature Extraction (extract\_features.py)}
+    \begin{block}{Batch Representation Caching Pipeline}
+        \begin{itemize}
+            \item \textbf{Zero-Copy S3 Streaming:} Streams raw images directly from remote storage without local disk exhaustion.
+            \item \textbf{Frozen Backbone Inference:} Passes image batches through pre-trained backbones (DINOv3/BioCLIP-2).
+            \item \textbf{L2 Normalization:} Extracts unit-norm representations for cosine-distance linear classification.
+            \item \textbf{Deterministic Taxon Mapping:} \texttt{build\_taxon\_index\_map} guarantees invariant integer class indexing.
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.2cm}
+    \statusdone
+
+    \script{In \texttt{extract\_features.py}, we execute our batch feature extraction. It connects to S3, loads batches of images through our frozen vision backbone, normalizes the embeddings, and writes them out into compact columnar Parquet files. Crucially, it builds a global taxon index map that deterministically assigns each species an integer index across all train, validation, and test splits. This guarantees that class 42 is always identical across all experiments.}
+    \qa{Why use Parquet format for storing numerical feature embeddings?}{Parquet is a compressed columnar format with zero-copy deserialization in Python. Loading a 1 GB Parquet file into memory takes milliseconds compared to slow JSON or CSV parsing.}
+\end{frame}

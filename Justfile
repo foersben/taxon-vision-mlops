@@ -155,6 +155,11 @@ train epochs="5" extractor="mobilenetv4_conv_small":
 predict image="data/sample/406185885_taxon_47120.jpg":
 	pixi run --frozen -e dev python -m taxon_vision.inference.cli {{image}}
 
+# Download verified open-license sample images for all 10 catalog taxa from iNaturalist
+[group("mlops")]
+download-samples per_taxon="1":
+	pixi run --frozen -e dev python scripts/download_samples.py --per-taxon {{per_taxon}}
+
 
 
 # Export trained PyTorch model to ONNX computational graph

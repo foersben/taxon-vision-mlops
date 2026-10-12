@@ -116,7 +116,7 @@ Operates within the Jenkins CI/CD pipeline and model evaluation stages executing
 \[
 \text{MMD}^2(P, Q) = \frac{1}{M^2}\sum_{i=1}^M\sum_{j=1}^M k(z_i, z_j) - \frac{2}{MN}\sum_{i=1}^M\sum_{j=1}^N k(z_i, z_j') + \frac{1}{N^2}\sum_{i=1}^N\sum_{j=1}^N k(z_i', z_j')
 \]
-This offline gate ensures that complex visual domain shifts—such as subtle seasonal plumage mutations or geographical covariate shifts that scalar projections might compress—are rigorously audited before a candidate model receives the \texttt{Production} registry alias in MLflow.
+This offline gate ensures that complex visual domain shifts -- such as subtle seasonal plumage mutations or geographical covariate shifts that scalar projections might compress -- are rigorously audited before a candidate model receives the \texttt{Production} registry alias in MLflow.
 
 \subsection{Automated Alerting and Continuous Retraining Triggers}
 Prometheus Alertmanager evaluates streaming metrics directly against hard operational invariants. Two primary conditions trigger automated intervention:
