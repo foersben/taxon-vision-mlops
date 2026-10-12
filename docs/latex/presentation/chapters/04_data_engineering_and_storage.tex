@@ -28,7 +28,7 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.2cm}
+    \vspace{0.1cm}
     \statusdone
 
     \script{In large-scale biological vision, downloading 50 terabytes of raw images is impossible for individual developers. Instead of downloading JPEGs, TaxonVision uses lightweight Apache Parquet index manifests. The images remain on remote AWS Open Data S3 buckets, while our local system works with columnar metadata that can be filtered and sliced in milliseconds.}
@@ -45,11 +45,91 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.2cm}
+    \vspace{0.1cm}
     \statusdone
 
     \script{How do we ensure that an image on S3 hasn't been corrupted or altered over time? Inside our Parquet manifest, every single observation has a cryptographic SHA-256 validation hash stored alongside its S3 URL. When our S3Streamer module streams the image into memory, it checks the SHA-256 hash immediately before decoding. If a single byte is corrupted, the observation is caught and logged instantly.}
     \qa{Does on-the-fly hash verification introduce CPU bottlenecks?}{SHA-256 hashing in hardware-accelerated CPU instructions takes microseconds per image buffer, which is entirely hidden behind network transfer and image decoding latency.}
+\end{frame}
+
+
+\begin{frame}{Data Formats}{Columnar Storage \& In-Memory Layout: Parquet vs. Arrow}
+    \begin{block}{Storage and Layout Architectures}
+        \begin{itemize}\footnotesize
+            \item \textbf{Visual/Conceptual:} Row-oriented (CSV) vs. Columnar on-disk (Parquet) vs. In-memory columnar (Arrow).
+            \item \textbf{Apache Parquet (On-Disk):}
+            \begin{itemize}
+                \item \textit{Why:} Tabular data row-by-row scans unneeded columns. Parquet uses column-by-column Row Groups.
+                \item \textit{Encodings:} Dictionary, RLE, Snappy/Zstd.
+                \item \textit{Acceleration:} Column projection + Predicate pushdown (skips groups via min/max).
+            \end{itemize}
+            \item \textbf{Apache Arrow (In-Memory):}
+            \begin{itemize}
+                \item \textit{Why:} Eliminates serialization when passing tabular data across language boundaries.
+                \item \textit{Layout:} Values buffer, validity bitmap, offset buffer.
+                \item \textit{Alignment:} Structured for CPU cache lines and SIMD.
+            \end{itemize}
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.1cm}
+    \statusdone
+
+    \script{Let's break down the difference between how data is stored on disk and how it exists in memory. Parquet is an on-disk format: instead of storing data row-by-row like a CSV, it stores data column-by-column, allowing us to read only the columns we need, like taxon ID, while skipping the rest. Arrow, on the other hand, is an in-memory layout. It standardizes how tabular data sits in RAM, eliminating costly serialization when we pass data between Python and C++.}
+    \qa{What is predicate pushdown in Parquet?}{It is an optimization where the query engine checks the min/max statistics in the Parquet metadata. If our filter is outside that range, the engine skips the entire row group without ever reading the actual data blocks.}
+    \qa{Why do we need Arrow if we already have Pandas dataframes?}{Arrow provides a standardized, contiguous memory layout designed for SIMD instructions, whereas traditional Pandas stored strings as scattered Python objects, causing massive cache misses and serialization overhead.}
+\end{frame}
+
+\begin{frame}[fragile]{Query Engine}{DuckDB: Vectorized In-Process Analytics \& Zero-Copy Arrow}
+    \begin{columns}
+        \begin{column}{0.5\textwidth}
+            \begin{block}{Vectorized Execution Pipeline}
+                \begin{itemize}\footnotesize
+                    \item \textbf{What is DuckDB:} Embedded, in-process OLAP database engine ("SQLite for Analytics"). Runs directly inside FastAPI without daemon overhead.
+                    \item \textbf{Arrow in DuckDB:}
+                    \begin{itemize}
+                        \item Consumes/emits Arrow RecordBatches natively via C Data Interface (zero-copy).
+                        \item \textit{Vectorized:} 2048-tuple morsels in L1/L2 caches.
+                        \item \textit{Filtering:} Filters millions of records in ms with 0 RAM bloat.
+                    \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+
+        \begin{column}{0.48\textwidth}
+            \vspace{-0.1cm}
+            \begin{center}
+            \resizebox{0.95\linewidth}{!}{
+            \begin{tikzpicture}[
+                node distance=0.2cm and 0.2cm,
+                block/.style={draw=TaxonPrimary, fill=TaxonPrimary!10, rounded corners, rectangle, align=center, thick, minimum width=3.5cm, minimum height=0.6cm, font=\tiny\sffamily},
+                arrow/.style={->, thick, draw=TaxonDark, shorten >=2pt, shorten <=2pt},
+                label_text/.style={font=\tiny\sffamily\bfseries, color=TaxonAccent}
+            ]
+
+                % Nodes
+                \node[block] (disk) {observations.parquet\\(On Disk)};
+                \node[block, below=of disk] (arrow_c) {Arrow C Data Interface\\(Zero-Copy)};
+                \node[block, draw=TaxonSecondary, fill=TaxonSecondary!10, below=of arrow_c] (duckdb) {DuckDB Vectorized Pipeline\\(In-Process)};
+                \node[block, draw=TaxonAccent, fill=TaxonAccent!10, below=of duckdb] (results) {Sub-millisecond SQL Results};
+
+                % Arrows
+                \draw[arrow] (disk) -- (arrow_c);
+                \draw[arrow] (arrow_c) -- node[right, label_text] {2048-tuple morsels} (duckdb);
+                \draw[arrow] (duckdb) -- (results);
+
+            \end{tikzpicture}
+            }
+            \end{center}
+        \end{column}
+    \end{columns}
+
+    \vspace{0.1cm}
+    \statusdone
+
+    \script{To query this Parquet and Arrow data, we embed DuckDB directly into our Python process. Think of DuckDB as SQLite for analytics. It doesn't run as a separate server, which means there is no network overhead. DuckDB consumes our Arrow buffers natively with zero memory copies. It processes data in morsels of 2048 tuples, keeping everything perfectly sized for the CPU's L1 and L2 caches, resulting in sub-millisecond taxonomic filtering.}
+    \qa{Why not use PostgreSQL for filtering observations?}{PostgreSQL requires a separate daemon process, meaning data must be serialized, sent over a network socket, and deserialized. DuckDB runs in-process and queries Arrow buffers directly via shared memory pointers.}
+    \qa{What does 'vectorized execution' mean here?}{Instead of processing rows one at a time (tuple-at-a-time), vectorized engines process small batches (vectors) of data at once, reducing loop overhead and allowing the CPU to use SIMD instructions.}
 \end{frame}
 
 \begin{frame}{Memory Optimization}{1:1 Row Alignment with Feature Embeddings (np.memmap)}
@@ -183,7 +263,7 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.2cm}
+    \vspace{0.1cm}
     \statusdone
 
     \script{In \texttt{extract\_features.py}, we execute our batch feature extraction. It connects to S3, loads batches of images through our frozen vision backbone, normalizes the embeddings, and writes them out into compact columnar Parquet files. Crucially, it builds a global taxon index map that deterministically assigns each species an integer index across all train, validation, and test splits. This guarantees that class 42 is always identical across all experiments.}
