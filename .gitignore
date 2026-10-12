@@ -83,7 +83,9 @@ uv.lock
 *.fdb_latexmk
 *.fls
 *.log
+*.nav
 *.out
+*.snm
 *.toc
 *.synctex.gz
 _minted*/

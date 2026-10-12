@@ -1,0 +1,77 @@
+% Chapter 6: Multimodal Knowledge Graph & Vision-RAG
+
+\begin{frame}{Knowledge Graph Architecture}{Conformal-Driven Lazy Execution of the MMKG}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide introduces Pipeline 2 (the continuous, data-centric Multimodal Knowledge Graph) and its runtime invocation policy: Conformal-Driven Lazy Execution. Querying a massive graph database on every routine inference call would destroy API throughput and inflate latency. Instead, unambiguous singleton predictions ($|\hat{C}(X)| = 1$) resolve on the Fast Hot-Path using INT8 ONNX models in $\le 22.0$ ms. The MMKG and Vision-RAG pipeline are lazy-loaded exclusively when the Split Conformal Safety Gate detects epistemic uncertainty: severe classification ambiguity ($|\hat{C}(X)| > 3$) where sibling taxa cannot be separated within the $95\%$ confidence bound, or complete novelty/OOD remnants ($|\hat{C}(X)| = 0$).
+    \end{block}
+
+    \vspace{0.4cm}
+    \statustarget
+
+    \script{Our Multimodal Knowledge Graph is powerful, but querying it takes time. In production, we do not query the graph for every single simple observation. If our conformal safety gate outputs a confident singleton set of size 1, we return the INT8 ONNX prediction in under 22 milliseconds. We lazy-load the MMKG only when the conformal gate signals ambiguity—either more than 3 plausible species or an empty prediction set indicating an anomalous specimen.}
+    \qa{Why not query the knowledge graph in parallel on every request?}{Parallel querying would saturate database connection pools and waste CPU/GPU cycles on obvious, clear-cut classifications, degrading overall cluster throughput.}
+\end{frame}
+
+\begin{frame}{Visual Pre-Processing}{Parent-Child Visual Chunking ($I_{\text{child}}$ vs $I_{\text{parent}}$)}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide details our visual entity chunking strategy designed to eliminate background clutter in field photography. Standard visual retrieval across uncropped citizen-science images introduces heavy noise from surrounding soil, rocks, overcast sky, or human hands holding the specimen. TaxonVision employs an upstream zero-shot detector (YOLO-World or OWL-ViT v2) to crop the primary organism ($I_{\text{child}}$), which is resized to $224 \times 224$ and passed to frozen BioCLIP-2 to compute dense morphological embeddings ($z_{\text{child}} \in \mathbb{R}^{768}$). Simultaneously, the uncropped parent scene context ($I_{\text{parent}}$) is retained for macro-habitat and environmental verification.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statustarget
+
+    \script{In nature photography, the actual insect or wildflower often takes up less than 10 percent of the frame. The rest is dirt, grass, or human fingers. If you embed the whole image, your vector captures dirt rather than biology. We use YOLO-World to detect the specimen and crop a clean child image for fine-grained morphological embedding, while preserving the parent scene image to verify environmental habitat.}
+    \qa{What happens if the zero-shot detector finds multiple organisms in one image?}{Each detected child entity generates an independent bounding box and child embedding, allowing multi-organism observations to be analyzed separately.}
+\end{frame}
+
+\begin{frame}{Biogeographical Filtering}{Single-Stage Filtered HNSW with Spatial-Temporal Predicates}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide addresses the critical biological trap of convergent evolution—where completely unrelated species on different continents evolve near-identical morphologies (e.g., European wasps vs. North American cicada killers). Pure visual nearest-neighbor search frequently retrieves geographically impossible candidates. TaxonVision implements single-stage filtered HNSW traversal: spatial constraints (Haversine geodesic radius $R_{\text{max}} \le 500$ km) and temporal constraints ($\Delta_{\text{season}} = 1$ month) are evaluated as boolean predicates natively inside the C++ HNSW graph walk, pruning impossible species before nearest-neighbor calculation completes.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statustarget
+
+    \script{Nature is full of convergent evolution: two insects on opposite sides of the globe may look identical even though they diverged 50 million years ago. If you only look at pixels, you will misclassify a German wasp as an Australian wasp. In our HNSW vector graph, we evaluate GPS coordinates and seasonal observation month directly inside the graph traversal. If an exemplar is outside a 500-kilometer radius or wrong season, it is pruned instantly before similarity scores are computed.}
+    \qa{Why not perform vector search first and filter out GPS locations afterward?}{Post-filtering suffers from candidate starvation: if your top-50 visual neighbors are all from the wrong continent, post-filtering discards all of them and leaves you with zero valid results. Native single-stage filtering guarantees high recall among geographically valid candidates.}
+\end{frame}
+
+\begin{frame}{Ensemble Ranking}{Multi-Modal Re-Ranking via Reciprocal Rank Fusion (RRF)}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide explores how TaxonVision synthesizes visual similarity and biological occurrence priors through Reciprocal Rank Fusion (RRF). After filtered HNSW retrieval yields candidate taxa, the system calculates a unified ranking score combining dense visual cosine similarity ($w_{\text{vis}} = 0.65$) with historical GBIF spatial-temporal occurrence density ($w_{\text{geo}} = 0.35$):
+        \[
+            \text{RRF}(d) = \frac{w_{\text{vis}}}{k + r_{\text{vis}}(d)} + \frac{w_{\text{geo}}}{k + r_{\text{geo}}(d)}
+        \]
+        This non-linear rank combination balances fine-grained visual evidence against ecological likelihood without requiring complex score normalization between divergent probability distributions.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statustarget
+
+    \script{Once we retrieve candidate species, how do we combine visual similarity with ecological reality? We use Reciprocal Rank Fusion. We assign a 65 percent weight to visual similarity and a 35 percent weight to historical GBIF occurrence density. Even if an exotic species looks slightly closer visually, a high local occurrence density for the native sibling species correctly tilts the ranking towards the true ecological observation.}
+    \qa{What is the parameter $k$ in the RRF formula?}{The constant $k$ (typically set to 60) dampens the impact of extreme outliers at top ranks, preventing a single high rank from disproportionately dominating the final ensemble score.}
+\end{frame}
+
+\begin{frame}{Clinical-Grade Diagnosis}{VLM Context Synthesis \& Differential Diagnosis Cards}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide details our multimodal reasoning interface for human taxonomists. When an ambiguous observation reaches triage, the query crop ($I_{\text{child}}$) and the top-3 re-ranked exemplar specimens are injected into a local Vision-Language Model (e.g., Qwen2-VL-2B). Constrained by formal grammar-based sampling, the VLM generates a structured JSON differential diagnosis card detailing distinguishing morphological traits (e.g., ``dorsal stripe width'', ``antenna segment count''), ecological likelihoods, and CAM activation overlays. These diagnosis cards are rendered directly into Label Studio, transforming triage into rapid, high-precision expert verification.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statustarget
+
+    \script{When a human taxonomist is asked to review an ambiguous specimen, we don't just dump raw images on their screen. We pass the query crop and the top-3 reference exemplars into a local Vision-Language Model. Constrained by grammar-based decoding, the VLM generates a structured differential diagnosis card: it explains exactly which anatomical features differ between the candidates and displays saliency maps, allowing the expert to confirm the species in seconds.}
+    \qa{Why use grammar-based sampling with the Vision-Language Model?}{Unconstrained VLMs hallucinate text and output unpredictable schemas. Grammar-based sampling forces the model to emit strictly valid JSON conforming to our differential diagnosis schema.}
+\end{frame}
+
+\begin{frame}{Taxonomic Agility}{Zero-Retraining Taxonomic Mutations via DuckDB}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide examines how TaxonVision handles dynamic changes in biological taxonomy without expensive GPU model retraining. In biological science, taxonomic committees frequently alter classifications: merging species (taxonomic lumps) or dividing a single species into multiple distinct species (taxonomic splits). Because visual vectors reside in HNSW while taxonomic relationships and observation metadata reside in DuckDB and Parquet, taxonomic lumps execute as $\mathcal{O}(1)$ relational updates with zero GPU re-embedding cost. Splits mark historical nodes as requiring re-annotation, routing them to Label Studio before re-indexing.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statustarget
+
+    \script{In real biology, Linnaean taxonomy is not static. Scientists frequently merge two species into one, or split one species into three. In a standard deep learning model, every split or merge requires retraining the entire neural network from scratch. Because our architecture decouples HNSW vector storage from DuckDB relational metadata, a taxonomic merge is an instant O(1) database update. Our vectors remain untouched with zero GPU compute cost.}
+    \qa{What happens during a taxonomic split when one species becomes two?}{Historical observation nodes for that taxon in DuckDB are flagged with \texttt{requires\_reannotation = true} and purged from active traversal. Their crops are routed to Label Studio for expert re-sorting, after which they are re-registered under their new respective taxon keys.}
+\end{frame}

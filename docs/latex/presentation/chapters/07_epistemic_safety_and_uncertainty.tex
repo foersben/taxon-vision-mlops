@@ -1,0 +1,69 @@
+% Chapter 7: Epistemic Safety & Mathematical Uncertainty Guarantees
+
+\begin{frame}{Epistemic Safety}{The Illusion of Softmax Overconfidence}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide addresses the danger of uncalibrated neural network confidence in safety-critical biological systems. Modern deep neural networks trained with cross-entropy loss are notorious for being overconfident: when presented with ambiguous images, corrupted inputs, or unseen species, the softmax activation exponentiates the largest logit, frequently outputting confidence scores $> 0.95$ on completely erroneous predictions. In ecological monitoring and toxic species identification (e.g., poisonous mushrooms), blind reliance on raw softmax leads to catastrophic misclassifications.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{Here is an uncomfortable truth about deep learning: softmax outputs are not probabilities! Because softmax normalizes logits exponentially, modern neural networks will happily output a 98\% confidence score on an image they have completely misclassified, or even on random noise. If a citizen science app tells a hiker that a deadly Destroying Angel mushroom is an edible field mushroom with 98\% confidence, the result is fatal. We must mathematically prevent uncalibrated overconfidence.}
+    \qa{Can temperature scaling fix softmax overconfidence?}{Temperature scaling adjusts the global calibration across the dataset, but it cannot provide rigorous mathematical guarantees for individual predictions or handle out-of-distribution inputs.}
+\end{frame}
+
+\begin{frame}{Conformal Prediction}{Split Conformal Prediction \& Statistical Coverage}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide introduces Split Conformal Prediction as our core epistemic safety framework. Unlike heuristic thresholding, conformal prediction provides a distribution-free, mathematically rigorous guarantee that the true class label $y$ will be contained within the output prediction set $C(X)$ with user-defined probability $1 - \alpha$ (e.g., $95\%$ coverage for $\alpha = 0.05$):
+        \[
+            P(y \in C(X)) \ge 1 - \alpha
+        \]
+        We explain how a held-out calibration set is used to compute non-conformity scores ($s_i = 1 - \hat{f}(x_i)_{y_i}$) and determine the empirical quantile threshold $\hat{q}$, mathematically bounding classification risk without distributional assumptions.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{To solve the overconfidence crisis, TaxonVision implements Split Conformal Prediction. Conformal prediction is one of the most powerful statistical techniques in modern machine learning. It guarantees—with exact mathematical proof—that if you set alpha to 0.05, the model's output prediction set will contain the true biological species at least 95 percent of the time. It requires no assumptions about the data distribution and works on top of any existing neural network.}
+    \qa{What does the prediction set look like in practice?}{Instead of outputting a single fragile label, the model outputs a set of candidate labels. When the image is crystal clear, the set contains exactly one species. When the image is ambiguous, the set expands to include all statistically plausible candidate species.}
+\end{frame}
+
+\begin{frame}{Decision Making}{Dynamic Set Sizing \& Human-in-the-Loop Triage}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide explores the operational mechanics of dynamic conformal prediction sets and automated triage routing. The cardinality of the prediction set $|C(X)|$ serves as an explicit, interpretable measure of epistemic uncertainty. When an observation produces $|C(X)| = 1$, the model has high certainty, allowing automated autonomous acceptance. When $|C(X)| > 3$ (high ambiguity) or $|C(X)| = \emptyset$ (empty set indicating extreme abnormality), the system automatically routes the observation to human taxonomist review queues, optimizing expert labor and eliminating silent model errors.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{In production, knowing WHEN you do not know is more valuable than making a blind guess. If our conformal prediction set has a size of 1, the model is confident and we automate the record. If the set has 6 species, or if the set is completely empty because the image violates all known feature patterns, our system flags it and routes it to our human review queue. This transforms machine learning from an autonomous liability into a trusted decision-support tool.}
+    \qa{How often does an empty prediction set occur?}{Empty sets occur when the model's non-conformity score for every single known class exceeds the calibrated quantile $\hat{q}$. This typically flags corrupted files, extreme camera blur, or entirely unseen out-of-domain objects.}
+\end{frame}
+
+\begin{frame}{OOD Detection}{Energy-Based Out-of-Distribution Detection}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide details our pre-classification safety gate: Energy-Based Out-of-Distribution (OOD) detection (\texttt{src/taxon\_vision/models/safety/ood.py}). Softmax probabilities are normalized over known classes and cannot reliably detect when an image does not belong to ANY known biological category (e.g., an indoor living room, vehicle, or macro photograph of rock mineral). Energy-based scores compute the negative Helmholtz free energy of the un-normalized logits:
+        \[
+            E(x; f) = -T \cdot \log \sum_{i=1}^K e^{f_i(x) / T}
+        \]
+        Observations with energy exceeding the calibrated threshold are immediately flagged as OOD prior to inference.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{What happens if someone points the biodiversity camera at a parked car or a coffee cup? A standard classifier will force that car into one of its biological classes, perhaps declaring it a 'Black Bear' with high confidence. To prevent this, we run an Energy-Based OOD detector on the raw logits before classification. Low energy indicates biological in-distribution features, while high energy flags non-biological anomalies before they can corrupt downstream records.}
+    \qa{Why is energy score superior to maximum softmax probability for OOD detection?}{Softmax normalization destroys logit magnitude information due to the denominator sum. The energy function maps directly to the Helmholtz free energy and aligns with the true data density, making it far more sensitive to abnormal feature spaces.}
+\end{frame}
+
+\begin{frame}{Model Explainability}{Forward-Hooked Class Activation Mapping ($<2$ ms)}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide presents our production-grade explainability subsystem: forward-hooked Class Activation Mapping (CAM / Eigen-CAM). In ecological validation, taxonomists must verify that the model is identifying genuine diagnostic morphological features (such as petal shape or antennae structure) rather than relying on spurious background correlations (such as garden fences or photo watermarks). Standard Grad-CAM requires a backward pass that doubles latency. By utilizing forward hooks on penultimate feature activations, our implementation generates visual saliency heatmaps in under 2 milliseconds without backward gradient overhead.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{Machine learning models are notorious for learning the wrong shortcuts. In one famous case, a husky classifier actually learned to detect snow in the background rather than the dog. To prove to taxonomists that our model looks at biological traits, we generate Class Activation Maps. By using PyTorch forward hooks on our feature extractor, we compute saliency heatmaps in less than 2 milliseconds on the GPU, completely bypassing the heavy backward pass required by older Grad-CAM algorithms.}
+    \qa{Can forward-hooked CAM be served in real-time to mobile users?}{Yes. Because it takes under 2 milliseconds, the visual heatmap overlay is returned in the exact same HTTP response as the classification set without impacting user experience.}
+\end{frame}

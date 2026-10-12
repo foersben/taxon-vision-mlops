@@ -1,0 +1,49 @@
+% Chapter 3: The Asymmetric Dual-Pipeline Paradigm
+
+\begin{frame}{Core Architecture}{Decoupling Representation from Reasoning}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide introduces the overarching architectural paradigm of TaxonVision: the asymmetric dual-pipeline decoupled architecture. Junior practitioners often attempt to train an end-to-end convolutional or vision transformer network that directly outputs species logits. When new species are discovered or taxonomic revisions occur, the entire multi-gigabyte backbone must be painfully retrained. TaxonVision cleanly decouples static visual representation (Pipeline 1: frozen foundation backbones) from dynamic taxonomic reasoning (Pipeline 2: multimodal knowledge graph and vector retrieval), enabling agile updates and sub-second classification.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{This slide represents the core architectural breakthrough of our system: the Asymmetric Dual-Pipeline. In naïve computer vision, you take an image, pass it through ResNet, and output 1,000 class probabilities. But in biology, taxonomy changes every month: species are split, renamed, or reclassified. If you use a monolithic model, every single rename forces a full 10-hour retraining run. By decoupling representation from reasoning, our foundation model stays frozen while our taxonomic knowledge graph updates in real time.}
+    \qa{What is a foundation model in this context?}{A massive vision transformer (such as BioCLIP or DINOv2) pre-trained on hundreds of millions of biological images. It produces rich semantic feature vectors that capture fine-grained morphology without requiring task-specific retraining.}
+\end{frame}
+
+\begin{frame}{Pipeline 1}{Offline Representation \& Linear Probe Training}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide details Pipeline 1: the offline representation and classification workflow. High-resolution raw images stored in remote S3 are processed in batch streams by frozen backbones (DINOv2, BioCLIP) to generate dense feature embeddings (768 or 1024 dimensions). These embeddings are serialized into content-addressable storage. Downstream, lightweight linear probing classifiers are trained with Class-Balanced Loss and Bayesian hyperparameter sweeps in seconds rather than hours, producing ONNX-quantized models ready for high-throughput serving.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{Pipeline 1 is our offline training engine. Instead of feeding raw images directly into training loops every epoch, we pass them through our frozen backbone once and store the resulting numerical embeddings. Once those embeddings are saved, training a classification head takes literally ten seconds. We can run 50 hyperparameter optimization trials with Optuna in five minutes on a single GPU, something that would take days with full end-to-end fine-tuning.}
+    \qa{Does training only a linear head hurt classification accuracy compared to full fine-tuning?}{Empirical benchmarks show that modern self-supervised backbones like DINOv2 and BioCLIP produce representations so rich that linear probes achieve within 1 to 2 percent of full fine-tuning accuracy at a fraction of the compute cost and zero catastrophic forgetting.}
+\end{frame}
+
+\begin{frame}{Pipeline 2}{Taxonomic Multimodal Knowledge Graph (MMKG)}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide explains Pipeline 2: the continuous taxonomic ingestion and Multimodal Knowledge Graph (MMKG) streaming pipeline. Biological classifications are hierarchical: Kingdom, Phylum, Class, Order, Family, Genus, Species. Pipeline 2 ingests DarwinCore metadata streams, builds a directed acyclic graph (DAG) of biological lineage, and indexes multimodal embeddings into a vector and graph database. When visual ambiguity arises, the system performs Vision-RAG (Retrieval-Augmented Generation) against verified exemplar specimens and anatomical descriptions to resolve close morphological ties.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statustarget
+
+    \script{While Pipeline 1 provides fast raw classification, Pipeline 2 provides biological wisdom. Taxonomy is not a flat list of labels; it is an 8-level phylogenetic tree. Pipeline 2 stores this tree in a Multimodal Knowledge Graph. If the classifier is uncertain whether a specimen is Species A or Species B, Pipeline 2 queries their taxonomic relations and anatomical descriptions—acting like a digital field botanist cross-referencing herbarium records.}
+    \qa{How does the vector database fit into the knowledge graph?}{Each taxonomic node is linked to reference exemplar embeddings in our vector store. This allows nearest-neighbor visual similarity searches to query specific sub-branches of the taxonomic tree.}
+\end{frame}
+
+\begin{frame}{Inference Serving}{Serving Boundary Convergence \& Fast-Path Routing}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide examines the runtime convergence point where Pipeline 1 and Pipeline 2 meet to serve live inference requests under strict latency budgets (p95 $< 50$ ms). When an image upload hits the FastAPI endpoint, it enters the Fast-Path: ONNX Runtime evaluates the quantized linear probe and computes conformal uncertainty sets in $< 15$ ms. If conformal coverage produces a high-confidence singleton set, the result returns immediately. Only ambiguous predictions or out-of-distribution observations trigger asynchronous enrichment from Pipeline 2's knowledge graph.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{In production APIs, speed is everything. We cannot query a complex knowledge graph on every single simple request. We implement a Fast-Path serving boundary: the incoming image runs through our ultra-fast ONNX model. If the prediction is unambiguous, the API responds in under 15 milliseconds. Only when the model detects mathematical ambiguity does it trigger the deep taxonomic enrichment pipeline.}
+    \qa{What is ONNX Runtime and why do we use it instead of native PyTorch?}{ONNX Runtime optimizes the computation graph, fuser operations, and performs memory reuse. It eliminates Python interpreter overhead, resulting in 2x to 4x lower latency and zero memory allocations on the hot inference path.}
+\end{frame}

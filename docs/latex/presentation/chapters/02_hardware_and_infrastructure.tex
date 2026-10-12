@@ -1,0 +1,61 @@
+% Chapter 2: Hardware Architecture & Infrastructure Topography
+
+\begin{frame}{Physical Topography}{Dual-Node Architecture: flagship vs hive-mind}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide outlines the physical hardware topology of the project, explaining the separation between the developer workstation (\texttt{flagship}) and the dedicated 24/7 bare-metal server (\texttt{hive-mind}). Rather than relying on expensive, rented public cloud instances that incur continuous hourly costs and bandwidth egress fees, TaxonVision deploys on high-performance on-premise hardware. Developers write code, test micro-pipelines, and run unit tests on \texttt{flagship}, while continuous integration, container registries, Kubernetes orchestration, and heavy background training execute autonomously on \texttt{hive-mind}.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{In cloud-centric courses, instructors often assume you have an unlimited AWS budget. In reality, renting multiple A100 GPUs 24/7 costs thousands of dollars every month. We designed an on-premise dual-node topology: 'flagship' is our local development workstation where engineers develop with fast iteration loops, and 'hive-mind' is a 24/7 bare-metal server that hosts our k3s Kubernetes cluster, Jenkins automation, and production workloads.}
+    \qa{Why not run everything on a single powerful machine?}{Decoupling development from production prevents developer experiments from starving production inference of GPU memory or crashing background pipeline jobs.}
+\end{frame}
+
+\begin{frame}{Host Architecture}{Heterogeneous CPU Topology \& Core Pinning}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide explains the challenges of modern heterogeneous processor architecture, specifically the Intel Core i7-14700K equipped with 8 Performance-Cores (16 threads) and 12 Efficient-Cores (12 threads). In multi-threaded Python pipelines, unmanaged OS thread scheduling can place heavy matrix operations or image decompression tasks onto low-clocked E-cores, causing massive thread synchronization stalls and thermal throttling. We explain the necessity of explicit thread pinning, asynchronous event loops, and CPU affinity isolation for high-throughput data pipelines.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{Modern CPUs are no longer uniform; the i7-14700K combines high-frequency P-cores with low-power E-cores. If the Linux OS scheduler accidentally schedules an image decompression worker on an E-core while PyTorch is waiting on a P-core, your entire batch pipeline crawls to a halt. We use CPU affinity and core-conscious worker pools to ensure that compute-heavy tasks stay on P-cores while telemetry and background logging run on E-cores.}
+    \qa{Does standard PyTorch DataLoader handle P-core vs E-core allocation automatically?}{No. The standard OS scheduler treats all logical threads equally unless explicit taskset affinity or cgroup constraints are configured at the container runtime level.}
+\end{frame}
+
+\begin{frame}{GPU Accelerators}{NVIDIA RTX 5070 Ti Blackwell \& SM 120 Architecture}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide examines the modern GPU accelerator powering the system: the NVIDIA GeForce RTX 5070 Ti based on the Blackwell architecture (SM 120) with 16 GB of high-speed GDDR7 VRAM. We explain the balance between memory bandwidth, FP16/BF16/INT8 Tensor Cores, and thermal constraints. In contrast to data center H100 cards with 80 GB of HBM3 memory, consumer/workstation accelerators have strict 16 GB physical limits, making disciplined memory budgeting, frozen backbones, and zero dynamic memory allocation mandatory.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{Our bare-metal compute engine is powered by an NVIDIA RTX 5070 Ti based on the cutting-edge Blackwell SM 120 architecture. While it delivers extraordinary compute throughput with 4th-generation Tensor Cores and GDDR7 bandwidth, it has exactly 16 gigabytes of VRAM. If your model allocates 16.1 gigabytes, your job crashes instantly with a CUDA Out of Memory error. This physical constraint dictates our entire architectural design.}
+    \qa{Why not use distributed multi-GPU training with cloud instances?}{A single modern GPU on bare metal is more than capable of handling enterprise-scale classification if you engineer your pipelines correctly. Bounding ourselves to 16 GB forces disciplined, efficient engineering rather than brute-force cloud spending.}
+\end{frame}
+
+\begin{frame}{GPU Orchestration}{Multi-Tenant Time-Slicing \& The 70\% VRAM Ceiling}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide details our Kubernetes GPU resource management strategy: 4-slot GPU time-slicing coupled with an invariant 70\% VRAM allocation ceiling (11.2 GB per container). Under standard Kubernetes scheduling, a single pod requests the entire physical GPU, locking out all other workloads. By configuring the NVIDIA Container Toolkit for time-slicing, up to four distinct workloads (e.g., active learning inference, feature extraction, background testing, and web API) share the GPU safely. Enforcing a strict 11.2 GB cap prevents CUDA allocation fragmentation and eliminates catastrophic out-of-memory kernel panics.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{In enterprise Kubernetes, allocating an entire physical GPU to a single API pod is massively wasteful because inference only uses the GPU intermittently. We implemented 4-slot GPU time-slicing, allowing our cluster to share the RTX 5070 Ti across multiple microservices. To ensure that one runaway job doesn't crash the entire GPU, we enforce an ironclad 70 percent VRAM cap—11.2 gigabytes—giving us a safety margin against memory fragmentation.}
+    \qa{Does GPU time-slicing isolate memory between containers?}{Time-slicing shares compute cycles in temporal slices, but does not provide hardware-enforced memory partitioning like MIG (Multi-Instance GPU). That is exactly why our 70\% software cap and zero-allocation inference invariants are critical to prevent crashes.}
+\end{frame}
+
+\begin{frame}{Network Security}{Cloudflare Zero Trust Tunnel \& Ingress Decoupling}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide addresses secure external access to bare-metal infrastructure without public IPv4 exposure or vulnerable port forwarding. In typical home lab or on-premise environments, opening router ports to the internet invites automated credential brute-forcing and DDoS attacks. TaxonVision uses a persistent Cloudflare Zero Trust Tunnel (\texttt{cloudflared}) daemon running inside the Kubernetes cluster. Outbound encrypted tunnels connect directly to Cloudflare edge nodes, routing verified operator traffic into our Traefik ingress controller with TLS termination and zero exposed host ports.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{How do we safely access our on-premise cluster from anywhere in the world without exposing it to internet hackers? We do not open any ports on our router. Instead, a lightweight daemon called cloudflared establishes an outbound encrypted tunnel to Cloudflare's global edge network. When an operator connects, Cloudflare authenticates their identity and proxies the traffic securely into our internal Kubernetes ingress controller.}
+    \qa{What happens if the local internet connection resets its dynamic IP address?}{The tunnel daemon maintains persistent outbound connections. If the local public IP changes, the daemon automatically reconnects without any downtime or manual DNS reconfiguration.}
+\end{frame}

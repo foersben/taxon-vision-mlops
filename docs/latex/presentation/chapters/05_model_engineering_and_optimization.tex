@@ -1,0 +1,61 @@
+% Chapter 5: Model Engineering & Bayesian Optimization
+
+\begin{frame}{Model Engineering}{Linear Probing vs Full Fine-Tuning Tradeoff}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide analyzes the mathematical and economic differences between full network fine-tuning and linear probing on pre-cached embeddings. Full fine-tuning computes gradients through all transformer layers, consuming up to 16 GB of VRAM, requiring hours of compute, and risking catastrophic forgetting of foundational representations. Linear probing freezes the backbone and trains only a convex or shallow classification head on cached embeddings. This reduces training time from hours to seconds, drops VRAM requirements below 1 GB, and eliminates gradient backpropagation through the heavy backbone.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{Let's compare the economics of linear probing versus full fine-tuning. Full fine-tuning requires backpropagating through 86 million transformer parameters, consuming 14 gigabytes of VRAM and 4 hours of GPU time per run. Linear probing trains a single linear projection matrix on pre-extracted embeddings. It uses 500 megabytes of VRAM and finishes in 8 seconds. This 1,000x speedup allows us to explore hyperparameter spaces thoroughly rather than settling for un-tuned defaults.}
+    \qa{Can linear probing adapt if the test domain has different lighting or camera sensors?}{Because the foundation model was pre-trained on diverse web-scale imagery, its internal representations already generalize well across lighting and sensor variations without needing backbone parameter updates.}
+\end{frame}
+
+\begin{frame}{Loss Formulation}{Class-Balanced Loss \& Effective Number of Samples}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide delves into the mathematical formulation of Class-Balanced Loss (Cui et al., CVPR 2019) used in our training runner. Under extreme long-tail class distributions, standard cross-entropy loss is dominated by head classes, causing the model to completely ignore rare species. Naïve inverse-frequency weighting fails because redundant images in head classes provide overlapping information. Class-Balanced Loss introduces the concept of the ``effective number of samples'' $E_n = (1 - \beta^n) / (1 - \beta)$, scaling class loss weights proportionally to their marginal information content.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{Standard cross-entropy loss fails on long-tail data because the gradients from 10,000 common robins overwhelm the gradients from 3 rare warblers. But if you simply weight by inverse frequency, you over-weight outliers and make training unstable. We use Class-Balanced Loss, which calculates the 'effective number of samples' using a hyperparameter beta. It mathematically accounts for information redundancy in large classes, providing stable, well-balanced gradients.}
+    \qa{What is the typical value of $\beta$ in our pipelines?}{We tune $\beta$ via Bayesian optimization in the range $[0.99, 0.9999]$. When $\beta = 0$, it degrades to unweighted loss; as $\beta \to 1$, it approaches inverse frequency.}
+\end{frame}
+
+\begin{frame}{Optimization}{Optimization Dynamics \& Best-Weight Restoration}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide examines the optimization dynamics implemented in \texttt{src/taxon\_vision/models/training/runner.py}. We discuss AdamW optimization, cosine learning rate schedules with initial linear warmup to prevent early gradient divergence, and an early stopping mechanism that monitors validation loss over a patience window. Crucially, the runner implements deterministic best-weight restoration: upon training completion, the model restores the exact checkpoint corresponding to the minimum validation loss rather than the potentially overfitted final epoch.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{Even with pre-cached embeddings, optimization dynamics matter. If you use a high learning rate on epoch 1, you can destabilize the classifier head weights. Our runner implements linear warmup to gently ramp up learning rates, followed by cosine annealing. When validation loss plateaus, our early stopping mechanism triggers and automatically restores the best-performing historical weights, guaranteeing that our deployed checkpoint is optimal.}
+    \qa{Why not simply save weights at the very end of training?}{The final epoch is frequently overfitted to the training data. Best-weight restoration guarantees that we retain the checkpoint with the highest generalization performance on holdout data.}
+\end{frame}
+
+\begin{frame}{AutoML \& Tuning}{Bayesian Optimization: Optuna TPE with ASHA Pruning}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide details our automated hyperparameter tuning strategy using Optuna. Rather than relying on brute-force grid search (exponential complexity) or unguided random search, Optuna employs the Tree-structured Parzen Estimator (TPE) algorithm to model the probability distribution of promising hyperparameter regions (learning rate, weight decay, loss $\beta$, dropout). To maximize hardware efficiency, our runner integrates the Asynchronous Successive Halving Algorithm (ASHA) pruner, aggressively terminating unpromising trials in early epochs to reallocate GPU cycles to top candidates.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{Junior practitioners often tune learning rates by hand, guessing numbers in a script. That is unscientific and wastes compute. We integrate Optuna with Bayesian Tree-structured Parzen Estimators. Optuna builds a probabilistic model of which hyperparameters produce the highest validation scores. Even better, our ASHA pruner monitors intermediate epochs: if a trial is performing poorly by epoch 3, it kills it immediately and starts the next candidate, multiplying our search efficiency.}
+    \qa{How many trials do we typically execute during an optimization run?}{Because our linear probe trains in seconds, we can run 50 to 100 trials in under 10 minutes, thoroughly exploring the hyperparameter surface.}
+\end{frame}
+
+\begin{frame}{Evaluation Metrics}{Macro PR-AUC vs Single-Threshold F1 Score}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide explains why TaxonVision uses Macro Precision-Recall AUC (PR-AUC) as its primary model promotion gate instead of the standard F1-score. In extreme class-imbalanced datasets, F1-score is highly sensitive to an arbitrary static decision threshold (typically 0.5), which heavily penalizes rare classes whose optimal threshold is much lower. Furthermore, standard ROC-AUC produces falsely optimistic scores due to the overwhelming number of true negatives in rare classes. Macro PR-AUC evaluates the area under the precision-recall curve across all recall thresholds independently for every class, providing a robust, threshold-invariant quality measure.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{A crucial question for any data scientist: how do you decide whether Model B is better than Model A? Many people look at accuracy or F1-score. But F1 requires choosing an arbitrary threshold, like 0.5. For a rare species with only three images, the optimal decision threshold might be 0.12! If you evaluate with a 0.5 threshold, F1 drops to zero. Macro PR-AUC measures the entire precision-recall curve across all possible thresholds for every single class, giving us a true, un-biased measure of classification power.}
+    \qa{Why not use ROC-AUC instead of PR-AUC?}{In extreme imbalance with 10,000 classes, each class has a massive pool of true negatives. ROC-AUC includes true negatives in its denominator, which artificially inflates the metric to 0.99 even when precision on positive samples is terrible. PR-AUC focuses strictly on positive class performance.}
+\end{frame}

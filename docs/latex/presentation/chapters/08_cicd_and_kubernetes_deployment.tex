@@ -1,0 +1,61 @@
+% Chapter 8: CI/CD, Containerization & Kubernetes Deployment
+
+\begin{frame}{CI/CD Architecture}{Dual Workflow: GitHub Actions Cloud vs Jenkins Bare-Metal}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide examines our production CI/CD architecture, explaining the strategic division between cloud-hosted GitHub Actions and on-premise Jenkins CD. Public pull requests cannot be granted direct network or SSH access to private bare-metal GPU clusters without creating extreme security risks. Instead, GitHub Actions executes cloud-based static analysis gates (Ruff linting, Mypy typing, cyclomatic complexity, license compliance, OKF validation). Once PRs are verified and merged into \texttt{develop} or \texttt{main}, Jenkins on \texttt{hive-mind} triggers bare-metal deployment, container builds, and GPU integration testing within isolated Kubernetes pods.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{Here is an enterprise DevOps pattern every student must learn: how do you connect cloud GitHub to private bare-metal servers securely? You never allow GitHub Actions to SSH directly into your private GPU cluster; that would create a massive security vulnerability. Instead, GitHub Actions runs fast cloud checks—linting, typing, and licensing—on public runners. Once code is approved, Jenkins running inside our private network pulls the signed commit and executes deployment locally.}
+    \qa{Why not use GitHub Self-Hosted Runners directly on hive-mind?}{Self-hosted runners on public or shared repos can execute untrusted code from malicious pull requests directly on your physical host machine. Ephemeral Jenkins agent pods isolate every job inside disposable container sandboxes.}
+\end{frame}
+
+\begin{frame}{Code Quality}{Cognitive Complexity Gates: complexipy $\le 15$ \& Strict Typing}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide explores the software engineering principles enforced across our Python codebase. Machine learning codebases often degrade into unmaintainable ``research spaghetti'' filled with deeply nested loops, global state, and un-typed tensors. TaxonVision enforces strict automated gates: Ruff for formatting and linting, Mypy for static type verification, and \texttt{complexipy} enforcing a strict cognitive complexity limit of $\le 15$ per function. Functions exceeding this threshold are rejected at pre-commit, forcing modular refactoring, helper extraction, and clean architecture.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{Why do so many data science projects fail when moving to production? Code complexity. In Jupyter notebooks, people write 300-line functions with 6 nested loops and zero type annotations. In TaxonVision, our CI gate uses \texttt{complexipy} to measure cognitive complexity. If any function scores higher than 15, the build fails instantly. This forces engineers to write modular, single-responsibility functions that are easy to unit test and maintain.}
+    \qa{What was an example of a refactoring forced by this complexity rule?}{In \texttt{runner.py}, our embedding split preparation and index mapping functions originally scored above 20 due to combined dictionary parsing and tensor slicing. We decomposed them into dedicated helper methods, bringing complexity down to 6.}
+\end{frame}
+
+\begin{frame}{Containerization}{Multi-Stage Docker Architecture \& GHCR OCI Registry}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide covers production containerization using multi-stage Docker builds published to GitHub Container Registry (GHCR). Naïve Docker images package full compiler toolchains, package caches, and test fixtures, bloating images to $> 10$ GB. Our multi-stage build uses an isolated builder stage to resolve Pixi dependencies and compile extensions, copying only the minimal runtime artifacts into the final production image. This reduces final image sizes to $< 1.5$ GB, accelerates Kubernetes pod startup times, and minimizes the security attack surface.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{In production, your deployment artifact is a container image. A novice Dockerfile copies the entire workspace and runs 'pip install', resulting in an 8-gigabyte bloated container full of build tools and temporary files. Our multi-stage Dockerfile builds dependencies in a disposable stage and copies only the compiled runtime binaries into the final image. This cuts our image down to under 1.5 gigabytes and makes Kubernetes pod deployments lightning-fast.}
+    \qa{Why do we push images to GitHub Container Registry (GHCR)?}{GHCR provides authenticated, versioned OCI storage integrated directly with our GitHub repository permissions and release tags, serving as our single source of truth for deployment artifacts.}
+\end{frame}
+
+\begin{frame}{Cluster Orchestration}{Lightweight Kubernetes (k3s) \& Ephemeral Pods}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide details our bare-metal cluster management using k3s, a certified lightweight Kubernetes distribution optimized for edge and single-node enterprise clusters. We discuss how Jenkins dynamically provisions ephemeral agent pods inside the cluster to execute build pipelines, mounting local NVMe Rattler package caches to eliminate redundant network downloads. Once the pipeline job completes, the agent pod is automatically destroyed, ensuring complete environmental cleanliness without lingering processes or zombie CUDA allocations.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{On our bare-metal server, we run k3s—a lightweight, highly efficient Kubernetes distribution. When Jenkins receives a build webhook, it doesn't run the job on the host OS. Instead, it spins up an ephemeral agent container pod inside k3s, executes the build with local NVMe caching, and terminates the pod immediately. This guarantees that every single build starts in a pristine, reproducible environment with zero leftover state.}
+    \qa{Why use k3s instead of standard k8s on a single bare-metal node?}{Standard Kubernetes runs dozens of heavy control-plane components that consume gigabytes of RAM. k3s packages the entire control plane into a single binary consuming under 512 megabytes of RAM, reserving maximum system memory for our models.}
+\end{frame}
+
+\begin{frame}{Deployment Strategy}{Zero-Downtime Rolling Updates \& Health Probes}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide illustrates our zero-downtime deployment strategy in Kubernetes. Updating an inference service must never drop active HTTP connections or return 502 Bad Gateway errors to clients. We configure Kubernetes Deployment manifests with readiness and liveness probes targeting FastAPI \texttt{/health} endpoints. When a new container image is deployed, Kubernetes waits for model weights to load and warm up in memory before switching incoming Traefik ingress traffic, terminating older replica pods only after new pods are fully serving traffic.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{Imagine updating your model in production: if you kill the old container before the new one finishes loading its 500-megabyte neural network into GPU memory, all incoming user requests fail with 500 errors. We configure Kubernetes rolling updates with readiness probes. The ingress keeps sending traffic to the old model until the new model reports that its weights are warmed up and ready. The switch happens seamlessly with zero dropped requests.}
+    \qa{What is the difference between a liveness probe and a readiness probe?}{A liveness probe checks if the process is alive; if it fails, Kubernetes restarts the pod. A readiness probe checks if the pod is ready to accept HTTP traffic; if it fails, traffic is diverted without killing the container.}
+\end{frame}

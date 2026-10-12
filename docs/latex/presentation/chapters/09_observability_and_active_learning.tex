@@ -1,0 +1,37 @@
+% Chapter 9: Observability, Drift Monitoring & Active Learning
+
+\begin{frame}{Observability}{Production Telemetry: Prometheus Metrics \& Grafana}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide covers production observability and real-time telemetry. In MLOps, monitoring goes far beyond standard HTTP 200/500 error counts. Our FastAPI serving service exposes a \texttt{/metrics} endpoint scraped by Prometheus, capturing domain-specific metrics: p50/p95/p99 inference latency, GPU memory utilization, energy-based OOD detection rates, prediction set cardinality distribution, and human triage escalation ratios. Grafana dashboards visualize these metrics in real-time, enabling operators to detect system degradation before users notice.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{Observability in MLOps is fundamentally different from traditional DevOps. In web development, you monitor CPU and HTTP status codes. In MLOps, an API can return HTTP 200 OK all day while predicting complete nonsense! We monitor domain-specific metrics: average conformal prediction set size, percentage of samples routed to human review, and OOD energy distributions. If average set size jumps from 1.2 to 4.5, we know immediately that the data distribution has shifted.}
+    \qa{How does Prometheus scrape metrics from our service?}{FastAPI instruments latency and counters using the \texttt{prometheus\_client} library, exposing a \texttt{/metrics} endpoint that the Prometheus server polls every 15 seconds.}
+\end{frame}
+
+\begin{frame}{Drift Monitoring}{Data \& Concept Drift: Wasserstein-1 Distance vs MMD}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide explores statistical drift detection across high-dimensional feature spaces (\texttt{src/taxon\_vision/observability/drift.py}). As seasons change, flora blooms, or new mobile cameras enter the field, input distributions drift away from training baselines. We contrast 1D marginal statistical tests (such as Kolmogorov-Smirnov or 1D Wasserstein-1 distance across individual feature projections) with full-manifold multivariate metrics like Maximum Mean Discrepancy (MMD) with RBF kernels. When drift exceeds calibrated statistical thresholds, automated alerts trigger the retraining pipeline.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{Machine learning models degrade over time because the real world changes—we call this data drift. If autumn arrives, leaves turn yellow and lighting shifts, but our training set was collected in summer. We use the Wasserstein-1 Earth Mover's Distance to monitor the distribution of incoming feature embeddings against our baseline training distribution. When the statistical distance crosses our alert threshold, the system flags the drift and prepares an active learning cycle.}
+    \qa{Why not run multivariate MMD on every single incoming inference request?}{Computing full-manifold MMD across high-dimensional embeddings has quadratic complexity $O(N^2)$ in sample size. We perform 1D Wasserstein distance on projected features in real time and reserve full MMD for periodic offline batch audits.}
+\end{frame}
+
+\begin{frame}{Active Learning}{Active Learning: BADGE Sampling \& Human Review Queue}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide presents our active learning subsystem: the BADGE (Batch Active learning by Diverse Gradient Embeddings) query strategy and human triage interface. When thousands of unlabelled field observations stream in, random sampling or pure uncertainty sampling yields redundant, low-diversity annotations. BADGE computes hypothetical gradient embeddings representing both epistemic uncertainty and feature diversity, selecting the most informative batch via $k$-MEANS++. These priority samples are pushed to Label Studio for expert verification, closing the feedback loop.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statuspartial
+
+    \script{Annotation by expert taxonomists is expensive and slow. If you send them 10,000 photos of the same common dandelion, you waste their time. BADGE solves this by analyzing the gradients that each unlabelled image would induce in the model. It uses k-MEANS++ clustering in gradient space to pick a batch of images that are both highly uncertain AND visually diverse. This maximizes the model's accuracy improvement per dollar spent on human labeling.}
+    \qa{What is the current status of the active learning pipeline?}{The BADGE mathematical sampling algorithm and Label Studio export formats are fully implemented in \texttt{src/taxon\_vision/active\_learning/badge.py}. The automated webhook that triggers unattended model retraining upon annotation completion is our Phase 3 target milestone.}
+\end{frame}

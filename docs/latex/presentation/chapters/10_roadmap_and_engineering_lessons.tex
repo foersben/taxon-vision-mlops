@@ -1,0 +1,37 @@
+% Chapter 10: Roadmap, Delivery Phases & Pedagogical Takeaways
+
+\begin{frame}{Project Roadmap}{Implementation Status vs Architectural Roadmap}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide provides an honest, transparent breakdown of the current implementation status versus future architectural milestones. Phase 1 (Foundation: Pixi toolchain, DVC/S3 streaming, pre-commit gates, license compliance) and Phase 2 (Model Training \& Infrastructure: frozen feature extraction, Class-Balanced Loss, Optuna tuning, conformal uncertainty sets, ONNX quantization, GHCR container builds, k3s manifests) are fully implemented and verified. Phase 3 (Continuous Intelligence: full Milvus Multimodal Knowledge Graph reasoning and end-to-end automated retraining webhooks) represents the target roadmap.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{Let's review our progress transparently. Phase 1 and Phase 2 are complete and battle-tested in our repository today: our reproducible Pixi environment, S3 zero-copy streaming, Class-Balanced Loss runner, conformal safety bounds, Jenkins container builds, and Kubernetes manifests are live. Phase 3—connecting the Milvus vector database into our active learning webhook loop—is our ongoing target architecture roadmap.}
+    \qa{How do we ensure that new feature development does not regress existing Phase 1 and 2 capabilities?}{Every commit is protected by our pre-commit gates, automated test fixtures in \texttt{tests/}, and CI pipeline validation including license and complexity audits.}
+\end{frame}
+
+\begin{frame}{Pedagogical Takeaways}{Classic MLOps Anti-Patterns \& Engineering Fixes}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This slide summarizes the core pedagogical lessons for students transitioning into MLOps, contrasting common junior anti-patterns with enterprise architectural solutions. We contrast: (1) monolithic Jupyter notebook sprawl vs modular, typed Python packages with complexity limits; (2) hoarding local datasets vs zero-copy S3 streaming with DVC pointers; (3) uncalibrated softmax confidence vs mathematically guaranteed Split Conformal Prediction sets; and (4) unbudgeted cloud GPU spending vs disciplined bare-metal GPU time-slicing with strict memory ceilings.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{For all of you in this course, if you take away four key lessons from this project, make it these four: First, stop writing monolithic notebooks—use modular packages with strict complexity limits. Second, don't download multi-terabyte datasets locally—stream them and cache embeddings. Third, never trust raw softmax probabilities—use conformal prediction sets for safety. And fourth, don't waste thousands of dollars on unmanaged cloud GPUs—budget your VRAM and use time-slicing.}
+    \qa{What is the fastest way for a junior data scientist to adopt these best practices?}{Start by enforcing automated pre-commit hooks with Ruff and Mypy, tracking datasets with DVC, and writing unit tests for your data transformation functions before touching model code.}
+\end{frame}
+
+\begin{frame}{Conclusion}{Core Architectural Principles \& System Vision}
+    \begin{block}{Slide Topic \& Explanatory Focus}
+        This final slide synthesizes the core philosophy of TaxonVision: building machine learning systems that are reproducible by default, mathematically safe under uncertainty, and economically sustainable on physical hardware. We emphasize that MLOps is not merely stringing together tools, but a rigorous systems engineering discipline that balances algorithmic precision, physical hardware constraints, operational telemetry, and human expert collaboration to solve critical real-world challenges like global biodiversity preservation.
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{To conclude: MLOps is not just about using trendy tools like Kubernetes or Docker. It is a systems engineering mindset. It means building models that are reproducible down to the exact commit, mathematically honest about what they don't know, and engineered to run reliably on physical hardware within budget. TaxonVision proves that with the right architecture, we can tackle the most complex biodiversity challenges on Earth with mathematical confidence and operational excellence. Thank you!}
+    \qa{Where can students inspect the source code and documentation?}{The entire repository, including Zensical documentation, LaTeX strategy reports, and CI/CD pipelines, is maintained under strict version control in the taxon-vision-mlops repository.}
+\end{frame}
