@@ -2,7 +2,12 @@
 
 \begin{frame}{CI/CD Architecture}{Dual Workflow: GitHub Actions Cloud vs Jenkins Bare-Metal}
     \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide examines our production CI/CD architecture, explaining the strategic division between cloud-hosted GitHub Actions and on-premise Jenkins CD. Public pull requests cannot be granted direct network or SSH access to private bare-metal GPU clusters without creating extreme security risks. Instead, GitHub Actions executes cloud-based static analysis gates (Ruff linting, Mypy typing, cyclomatic complexity, license compliance, OKF validation). Once PRs are verified and merged into \texttt{develop} or \texttt{main}, Jenkins on \texttt{hive-mind} triggers bare-metal deployment, container builds, and GPU integration testing within isolated Kubernetes pods.
+        \begin{itemize}
+            \item \textbf{Strategic Division:} Explains the necessity of separating cloud-based public PR checks from private bare-metal deployments.
+            \item \textbf{Cloud Phase:} GitHub Actions handles non-sensitive, fast static analysis (Ruff, Mypy, complexipy, license checks, OKF validation).
+            \item \textbf{Bare-Metal Phase:} Jenkins on \texttt{hive-mind} securely triggers container builds and GPU integration testing within isolated Kubernetes pods only after PR merges.
+            \item \textbf{Security Rationale:} Prevents direct network or SSH access to private GPU clusters from untrusted public pull requests.
+        \end{itemize}
     \end{block}
 
     \vspace{0.4cm}
@@ -14,7 +19,12 @@
 
 \begin{frame}{Code Quality}{Cognitive Complexity Gates: complexipy $\le 15$ \& Strict Typing}
     \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide explores the software engineering principles enforced across our Python codebase. Machine learning codebases often degrade into unmaintainable ``research spaghetti'' filled with deeply nested loops, global state, and un-typed tensors. TaxonVision enforces strict automated gates: Ruff for formatting and linting, Mypy for static type verification, and \texttt{complexipy} enforcing a strict cognitive complexity limit of $\le 15$ per function. Functions exceeding this threshold are rejected at pre-commit, forcing modular refactoring, helper extraction, and clean architecture.
+        \begin{itemize}
+            \item \textbf{The ``Research Spaghetti'' Problem:} ML codebases often decay into deeply nested loops, global states, and untyped tensors.
+            \item \textbf{Strict Automated Gates:} TaxonVision enforces code quality through Ruff (formatting/linting) and Mypy (static typing).
+            \item \textbf{Cognitive Complexity Limit:} \texttt{complexipy} restricts functions to a cognitive complexity of $\le 15$.
+            \item \textbf{Refactoring Mandate:} Exceeding the complexity limit fails the pre-commit gate, forcing modular architecture and clean abstraction.
+        \end{itemize}
     \end{block}
 
     \vspace{0.4cm}
@@ -26,7 +36,12 @@
 
 \begin{frame}{Containerization}{Multi-Stage Docker Architecture \& GHCR OCI Registry}
     \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide covers production containerization using multi-stage Docker builds published to GitHub Container Registry (GHCR). Naïve Docker images package full compiler toolchains, package caches, and test fixtures, bloating images to $> 10$ GB. Our multi-stage build uses an isolated builder stage to resolve Pixi dependencies and compile extensions, copying only the minimal runtime artifacts into the final production image. This reduces final image sizes to $< 1.5$ GB, accelerates Kubernetes pod startup times, and minimizes the security attack surface.
+        \begin{itemize}
+            \item \textbf{The Bloat Problem:} Naïve Docker images package full compiler toolchains and package caches, resulting in sizes $> 10$ GB.
+            \item \textbf{Multi-Stage Strategy:} An isolated builder stage resolves Pixi dependencies and compiles extensions.
+            \item \textbf{Minimal Runtime Artifacts:} Only compiled binaries and minimal runtime dependencies are copied into the final production image.
+            \item \textbf{Optimization Results:} Reduces final image size to $< 1.5$ GB, accelerating Kubernetes pod startup times and shrinking the security attack surface.
+        \end{itemize}
     \end{block}
 
     \vspace{0.4cm}
@@ -38,7 +53,12 @@
 
 \begin{frame}{Cluster Orchestration}{Lightweight Kubernetes (k3s) \& Ephemeral Pods}
     \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide details our bare-metal cluster management using k3s, a certified lightweight Kubernetes distribution optimized for edge and single-node enterprise clusters. We discuss how Jenkins dynamically provisions ephemeral agent pods inside the cluster to execute build pipelines, mounting local NVMe Rattler package caches to eliminate redundant network downloads. Once the pipeline job completes, the agent pod is automatically destroyed, ensuring complete environmental cleanliness without lingering processes or zombie CUDA allocations.
+        \begin{itemize}
+            \item \textbf{k3s Edge Deployment:} We utilize k3s, a certified lightweight Kubernetes distribution tailored for single-node enterprise clusters.
+            \item \textbf{Ephemeral Agent Pods:} Jenkins dynamically provisions ephemeral agent pods to execute builds inside the cluster.
+            \item \textbf{Local Cache Mounts:} NVMe Rattler package caches are mounted to the pods, eliminating redundant network downloads.
+            \item \textbf{Clean Environment Guarantee:} Pods are automatically destroyed post-build, ensuring zero lingering state or zombie CUDA allocations.
+        \end{itemize}
     \end{block}
 
     \vspace{0.4cm}
@@ -50,7 +70,12 @@
 
 \begin{frame}{Deployment Strategy}{Zero-Downtime Rolling Updates \& Health Probes}
     \begin{block}{Slide Topic \& Explanatory Focus}
-        This slide illustrates our zero-downtime deployment strategy in Kubernetes. Updating an inference service must never drop active HTTP connections or return 502 Bad Gateway errors to clients. We configure Kubernetes Deployment manifests with readiness and liveness probes targeting FastAPI \texttt{/health} endpoints. When a new container image is deployed, Kubernetes waits for model weights to load and warm up in memory before switching incoming Traefik ingress traffic, terminating older replica pods only after new pods are fully serving traffic.
+        \begin{itemize}
+            \item \textbf{The Downtime Challenge:} Updating an inference service must avoid dropping HTTP connections or returning 502 Bad Gateway errors.
+            \item \textbf{Health Probes Configuration:} Kubernetes Deployment manifests define readiness and liveness probes targeting the FastAPI \texttt{/health} endpoint.
+            \item \textbf{Model Warmup Sequence:} Kubernetes waits for model weights to load into GPU memory and warm up before declaring readiness.
+            \item \textbf{Seamless Cutover:} Ingress traffic is diverted to new pods only when fully ready, and older replica pods are safely terminated.
+        \end{itemize}
     \end{block}
 
     \vspace{0.4cm}
@@ -58,4 +83,95 @@
 
     \script{Imagine updating your model in production: if you kill the old container before the new one finishes loading its 500-megabyte neural network into GPU memory, all incoming user requests fail with 500 errors. We configure Kubernetes rolling updates with readiness probes. The ingress keeps sending traffic to the old model until the new model reports that its weights are warmed up and ready. The switch happens seamlessly with zero dropped requests.}
     \qa{What is the difference between a liveness probe and a readiness probe?}{A liveness probe checks if the process is alive; if it fails, Kubernetes restarts the pod. A readiness probe checks if the pod is ready to accept HTTP traffic; if it fails, traffic is diverted without killing the container.}
+\end{frame}
+
+\begin{frame}[fragile]{Pipeline Architecture Visualized}{Dual CI/CD Lifecycle Diagram}
+    \centering
+    \providecolor{TaxonPrimary}{RGB}{34, 139, 34}
+    \providecolor{TaxonSecondary}{RGB}{0, 51, 102}
+    \providecolor{TaxonDark}{RGB}{40, 40, 40}
+    \providecolor{TaxonAccent}{RGB}{220, 120, 0}
+
+    \resizebox{\textwidth}{!}{
+    \begin{tikzpicture}[
+        auto,
+        block/.style={rectangle, draw=TaxonDark, thick, fill=white, text width=6em, text centered, rounded corners, minimum height=3em, font=\scriptsize},
+        cloud/.style={rectangle, draw=TaxonSecondary, thick, fill=TaxonSecondary!10, text width=6em, text centered, rounded corners, minimum height=3em, font=\scriptsize},
+        metal/.style={rectangle, draw=TaxonPrimary, thick, fill=TaxonPrimary!10, text width=6em, text centered, rounded corners, minimum height=3em, font=\scriptsize},
+        line/.style={draw, thick, -latex, shorten >=2pt},
+        label/.style={font=\tiny, text=TaxonDark, align=center}
+    ]
+        % Nodes
+        \node [block] (pr) {PR Created};
+        \node [cloud, right=1.5cm of pr] (gh) {GitHub Actions\\(Cloud Runners)};
+        \node [block, right=1.5cm of gh] (merge) {PR Merge};
+        \node [metal, below=1.5cm of merge] (webhook) {Webhook to\\ \texttt{hive-mind}};
+        \node [metal, left=1.5cm of webhook] (jenkins) {k3s Jenkins\\Ephemeral Pod};
+        \node [metal, left=1.5cm of jenkins] (build) {Build OCI\\Image};
+        \node [cloud, below=1.5cm of build] (ghcr) {Push to\\GHCR};
+        \node [metal, right=1.5cm of ghcr] (deploy) {k3s Rolling\\Update};
+
+        % Connections
+        \path [line] (pr) -- (gh);
+        \path [line] (gh) -- node [label, above] {Ruff, Mypy,\\complexipy,\\audit} (merge);
+        \path [line] (merge) -- (webhook);
+        \path [line] (webhook) -- (jenkins);
+        \path [line] (jenkins) -- (build);
+        \path [line] (build) -- (ghcr);
+        \path [line] (ghcr) -- node [label, above] {Pull Image} (deploy);
+    \end{tikzpicture}
+    }
+
+    \script{This diagram visualizes our asymmetric pipeline. Notice the top half is the public cloud—GitHub Actions running lightweight static analysis. The bottom half is our secure bare-metal enclave. The only bridge between them is the webhook triggered on PR merge, ensuring that unvetted code never executes on our primary GPU hardware. Jenkins then builds the container, pushes it back to the cloud registry, and manages the local Kubernetes deployment.}
+    \qa{Why does Jenkins build the image instead of GitHub Actions?}{Building a production ML container often requires compiling custom CUDA kernels or resolving large dependencies. Doing this on GitHub's free runners is slow and resource-constrained. Our bare-metal machine leverages local NVMe caches and powerful CPUs for rapid builds.}
+\end{frame}
+
+\begin{frame}[fragile]{Rolling Update Visualized}{Zero-Downtime Traefik Ingress Traffic Switching}
+    \centering
+    \providecolor{TaxonPrimary}{RGB}{34, 139, 34}
+    \providecolor{TaxonSecondary}{RGB}{0, 51, 102}
+    \providecolor{TaxonDark}{RGB}{40, 40, 40}
+    \providecolor{TaxonAccent}{RGB}{220, 120, 0}
+    \providecolor{PodGreen}{RGB}{200, 240, 200}
+    \providecolor{PodRed}{RGB}{255, 200, 200}
+
+    \resizebox{0.9\textwidth}{!}{
+    \begin{tikzpicture}[
+        >=stealth,
+        auto,
+        node distance=2.5cm,
+        ingress/.style={diamond, draw=TaxonSecondary, thick, fill=TaxonSecondary!20, text width=4em, text centered, minimum height=3em, font=\scriptsize\bfseries},
+        podold/.style={rectangle, draw=TaxonDark, thick, fill=PodRed, text width=6em, text centered, rounded corners, minimum height=3em, font=\scriptsize},
+        podnew/.style={rectangle, draw=TaxonPrimary, thick, fill=PodGreen, text width=6em, text centered, rounded corners, minimum height=3em, font=\scriptsize},
+        textnode/.style={font=\scriptsize, align=center}
+    ]
+        % Ingress Node
+        \node [ingress] (traefik) {Traefik\\Ingress};
+
+        % V1 Pods (Old)
+        \node [podold, right=2cm of traefik, yshift=1.5cm] (pod1) {Pod v1\\(Terminating)};
+        \node [podold, right=2cm of traefik, yshift=0cm] (pod2) {Pod v1\\(Active)};
+
+        % V2 Pods (New)
+        \node [podnew, right=2cm of traefik, yshift=-1.5cm] (pod3) {Pod v2\\(Warming Up)};
+        \node [podnew, right=2cm of traefik, yshift=-3cm] (pod4) {Pod v2\\(Ready)};
+
+        % Traffic Routes
+        \draw [->, thick, dashed, draw=gray] (traefik) -- node[above, sloped, font=\tiny] {Traffic Drained} (pod1);
+        \draw [->, thick, draw=TaxonSecondary] (traefik) -- node[above, font=\tiny] {Live Traffic} (pod2);
+        \draw [->, thick, dashed, draw=gray] (traefik) -- node[above, sloped, font=\tiny] {Probe Pending} (pod3);
+        \draw [->, thick, draw=TaxonPrimary] (traefik) -- node[above, sloped, font=\tiny] {Live Traffic} (pod4);
+
+        % Health Checks
+        \node [textnode, right=1cm of pod3] (hc1) {Readiness Check:\\ \texttt{/health} $\rightarrow$ 503};
+        \draw [->, dotted, thick] (pod3) -- (hc1);
+
+        \node [textnode, right=1cm of pod4] (hc2) {Readiness Check:\\ \texttt{/health} $\rightarrow$ 200};
+        \draw [->, dotted, thick] (pod4) -- (hc2);
+
+    \end{tikzpicture}
+    }
+
+    \script{This diagram shows the transition state during a deployment. Traefik is the ingress controller mapping external requests. When we deploy Version 2, the new pod initially fails its readiness probe while the model weights load into the GPU. Traefik does not send any traffic to it. Meanwhile, Version 1 continues serving users. Only when Version 2 returns a 200 OK on its health endpoint does Traefik route traffic to it, and subsequently, Kubernetes begins draining and terminating the Version 1 pods.}
+    \qa{What happens if the new model has a bug and never passes the readiness probe?}{The deployment halts. Version 2 remains in a pending state, and Traefik continues routing 100\% of traffic to Version 1 indefinitely. Users experience no disruption, and the engineering team is alerted to the failed deployment.}
 \end{frame}
