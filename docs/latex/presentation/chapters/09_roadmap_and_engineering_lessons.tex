@@ -104,6 +104,28 @@
     \qa{What is the fastest way for a junior data scientist to adopt these best practices?}{Start by enforcing automated pre-commit hooks with Ruff and Mypy, tracking datasets with DVC, and writing unit tests for your data transformation functions before touching model code.}
 \end{frame}
 
+\begin{frame}{Model Governance}{Model Registry Governance \& Deployment Gates}
+    \begin{block}{Promotion Lifecycle}
+        \scriptsize
+        Study Run $\to$ Candidate Model $\to$ Automated Conformal Gate $\to$ Staging Tag $\to$ Production Promotion
+    \end{block}
+
+    \begin{block}{Audit Integrity}
+        \scriptsize
+        \begin{itemize}
+            \item \textbf{Cryptographic Binding:} Strict cryptographic binding connecting production model version to immutable DVC commit and signed Git release tag.
+            \item \textbf{Safety Guarantee:} Prevents deployment of uncalibrated or drifting models.
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.5cm}
+    \statusdone
+
+    \script{A model registry is not merely a storage bucket; it is a governance boundary. Our promotion lifecycle moves candidates from study runs to staging only after they pass an automated conformal gate. This ensures mathematical safety before human review. For audit integrity, the final production model is cryptographically tied to an immutable DVC commit and a signed Git release tag. This prevents the nightmare scenario of deploying uncalibrated models that have silently drifted from their original training distributions.}
+    \qa{How does the automated conformal gate prevent bad deployments?}{The gate strictly tests the model on a holdout calibration set. If the empirical coverage falls below $1-\alpha$ or the set size exceeds a usability threshold, the promotion script halts and rejects the candidate automatically.}
+    \qa{Why do we require a signed Git release tag for the final promotion?}{The signed tag acts as an immutable, non-repudiable ledger of the human approval step. It guarantees that the deployment authorization was explicitly granted by a recognized principal, fulfilling our audit and compliance requirements.}
+\end{frame}
+
 \begin{frame}{Operational Maturity}{The MLOps Level 4 Engineering Checklist}
     \begin{block}{Enterprise Level 4 Verification Matrix}
         \begin{itemize}\small
