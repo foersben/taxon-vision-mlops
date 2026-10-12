@@ -86,19 +86,21 @@ async def test_inat_api_client(monkeypatch: pytest.MonkeyPatch) -> None:
         async def __aexit__(self, *args: Any) -> None:
             pass
 
-        async def get(self, url: str, **kwargs: Any) -> MockAsyncResponse:
-            return MockAsyncResponse({
-                "results": [
-                    {
-                        "id": "obs_1",
-                        "photos": [{"license_code": "cc-by", "url": "square_url1", "attribution": "attr1"}]
-                    },
-                    {
-                        "id": "obs_2",
-                        "photos": [{"license_code": "cc-by", "url": "square_url2", "attribution": "attr2"}]
-                    }
-                ]
-            })
+        async def get(self, _url: str, **_kwargs: Any) -> MockAsyncResponse:
+            return MockAsyncResponse(
+                {
+                    "results": [
+                        {
+                            "id": "obs_1",
+                            "photos": [{"license_code": "cc-by", "url": "square_url1", "attribution": "attr1"}],
+                        },
+                        {
+                            "id": "obs_2",
+                            "photos": [{"license_code": "cc-by", "url": "square_url2", "attribution": "attr2"}],
+                        },
+                    ]
+                }
+            )
 
     monkeypatch.setattr("httpx.AsyncClient", MockAsyncClient)
 
