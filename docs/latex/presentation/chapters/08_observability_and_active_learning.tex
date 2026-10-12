@@ -1,4 +1,18 @@
-% Chapter 9: Observability, Drift Monitoring & Active Learning
+% Chapter 8: Observability, Drift Monitoring & Active Learning
+
+\begin{frame}[plain]
+    \vfill
+    \centering
+    {\footnotesize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
+    {\large \textbf{\textcolor{signalorange}{CHAPTER 08}}} \\[0.25cm]
+    {\huge \textbf{Observability \& Active Learning}} \\[0.35cm]
+    {\normalsize \textcolor{black!70}{Prometheus Telemetry, Concept Drift Detection \& Continuous Human-in-the-Loop Triage}} \\[0.5cm]
+    \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
+    \statusdone
+    \vfill
+    \script{In Chapter 8, we present production observability: tracking domain-specific epistemic metrics, detecting embedding drift via Wasserstein distance, and closing the active learning feedback loop.}
+    \qa{How does MLOps observability differ from traditional software monitoring?}{An ML API can return HTTP 200 OK while failing silently; we monitor average conformal prediction set sizes and drift distances to detect data shifts in real time.}
+\end{frame}
 
 \begin{frame}{Observability}{Production Telemetry: Prometheus Metrics \& Grafana}
     \begin{block}{Domain-Specific Telemetry Beyond HTTP 200}

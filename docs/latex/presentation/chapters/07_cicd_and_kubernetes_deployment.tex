@@ -1,4 +1,18 @@
-% Chapter 8: CI/CD, Containerization & Kubernetes Deployment
+% Chapter 7: CI/CD, Containerization & Kubernetes Deployment
+
+\begin{frame}[plain]
+    \vfill
+    \centering
+    {\footnotesize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
+    {\large \textbf{\textcolor{signalorange}{CHAPTER 07}}} \\[0.25cm]
+    {\huge \textbf{CI/CD \& Kubernetes Deployment}} \\[0.35cm]
+    {\normalsize \textcolor{black!70}{Declarative Jenkins Pipelines, GHCR Containers \& Bare-Metal k3s Orchestration}} \\[0.5cm]
+    \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
+    \statusdone
+    \vfill
+    \script{In Chapter 7, we walk through our continuous delivery pipeline: bridging GitHub Actions with on-premise Jenkins, building versioned OCI containers, and orchestrating zero-downtime rollouts in k3s.}
+    \qa{Why use a dual CI/CD system with GitHub Actions and Jenkins?}{GitHub Actions handles lightweight PR verification in the cloud, while private on-premise Jenkins builds heavy GPU images and deploys to our local bare-metal k3s cluster safely.}
+\end{frame}
 
 \begin{frame}{CI/CD Architecture}{Dual Workflow: GitHub Actions Cloud vs Jenkins Bare-Metal}
     \begin{block}{Dual CI/CD Boundary Strategy}

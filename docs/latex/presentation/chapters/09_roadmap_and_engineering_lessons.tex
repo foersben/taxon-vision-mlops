@@ -1,4 +1,18 @@
-% Chapter 10: Roadmap, Delivery Phases & Pedagogical Takeaways
+% Chapter 9: Roadmap, Delivery Phases & Pedagogical Takeaways
+
+\begin{frame}[plain]
+    \vfill
+    \centering
+    {\footnotesize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
+    {\large \textbf{\textcolor{signalorange}{CHAPTER 09}}} \\[0.25cm]
+    {\huge \textbf{Delivery Roadmap \& Core Principles}} \\[0.35cm]
+    {\normalsize \textcolor{black!70}{Implementation Milestones, Anti-Pattern Rectification \& Production Systems Engineering}} \\[0.5cm]
+    \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
+    \statusdone
+    \vfill
+    \script{In Chapter 9, we review our delivery roadmap, contrast common junior anti-patterns with enterprise solutions, and summarize the core engineering discipline required for Level 4 MLOps.}
+    \qa{What is the core pedagogical takeaway from this chapter?}{Moving beyond stateful exploratory scripts to immutable datasets, mathematical calibration, and hardware-conscious production systems.}
+\end{frame}
 
 \begin{frame}{Project Roadmap}{Implementation Status vs Architectural Roadmap}
     \begin{block}{TaxonVision Delivery Phases}
@@ -90,19 +104,19 @@
     \qa{What is the fastest way for a junior data scientist to adopt these best practices?}{Start by enforcing automated pre-commit hooks with Ruff and Mypy, tracking datasets with DVC, and writing unit tests for your data transformation functions before touching model code.}
 \end{frame}
 
-\begin{frame}{Conclusion}{Core Architectural Principles \& System Vision}
-    \begin{block}{The Pillars of Production Systems Engineering}
-        TaxonVision is built on three uncompromising principles that define enterprise MLOps.
-        \begin{itemize}
-            \item \textbf{Reproducibility by Default:} Using Pixi environments, DVC data lineage, and declarative k3s manifests ensures every run is perfectly replicable.
-            \item \textbf{Mathematical Safety under Uncertainty:} Split Conformal Prediction guarantees error bounds, refusing confident misclassification.
-            \item \textbf{Hardware-Conscious Sustainability:} Bare-metal GPU time-slicing, INT8 ONNX quantization, and zero-allocation inference maximize throughput per watt.
+\begin{frame}{Operational Maturity}{The MLOps Level 4 Engineering Checklist}
+    \begin{block}{Enterprise Level 4 Verification Matrix}
+        \begin{itemize}\small
+            \item \textbf{Data Lineage:} 100\% deterministic Parquet metadata with DVC SHA256 immutability.
+            \item \textbf{Hermetic Toolchains:} Zero reliance on unpinned pip/conda environments; strict lockfiles via Pixi.
+            \item \textbf{Mathematical Safety:} Automated test gates asserting conformal coverage $1-\alpha$ on holdout splits.
+            \item \textbf{Continuous Deployment:} Jenkins OCI image builds, automated Trivy scanning, and k3s declarative rollouts.
         \end{itemize}
     \end{block}
 
-    \vspace{0.4cm}
+    \vspace{0.25cm}
     \statusdone
 
-    \script{To conclude: MLOps is not just about using trendy tools like Kubernetes or Docker. It is a systems engineering mindset. It means building models that are reproducible down to the exact commit, mathematically honest about what they don't know, and engineered to run reliably on physical hardware within budget. TaxonVision proves that with the right architecture, we can tackle the most complex biodiversity challenges on Earth with mathematical confidence and operational excellence. Thank you!}
-    \qa{Where can students inspect the source code and documentation?}{The entire repository, including Zensical documentation, LaTeX strategy reports, and CI/CD pipelines, is maintained under strict version control in the taxon-vision-mlops repository.}
+    \script{This checklist provides our concrete evaluation criteria for Level 4 MLOps maturity. Every single commit in this repository passes through strict hermetic gates before entering our deployment pipeline.}
+    \qa{What is the single most critical gate before deployment?}{The combination of hermetic package lockfiles and mathematical conformal coverage verification on holdout data.}
 \end{frame}

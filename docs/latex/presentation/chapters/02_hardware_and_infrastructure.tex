@@ -6,6 +6,20 @@
 \providecolor{TaxonAccent}{RGB}{255, 128, 0}
 \providecolor{TaxonLight}{RGB}{240, 248, 255}
 
+\begin{frame}[plain]
+    \vfill
+    \centering
+    {\footnotesize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
+    {\large \textbf{\textcolor{signalorange}{CHAPTER 02}}} \\[0.25cm]
+    {\huge \textbf{Hardware Architecture \& Infrastructure}} \\[0.35cm]
+    {\normalsize \textcolor{black!70}{Physical Topography, RTX 5070 Ti Time-Slicing \& Thermal Budgets}} \\[0.5cm]
+    \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
+    \statusdone
+    \vfill
+    \script{In Chapter 2, we dive into the physical bare-metal foundation: our dual-node cluster topology, RTX 5070 Ti GPU time-slicing invariants, and zero-trust WireGuard networking.}
+    \qa{Why does bare-metal infrastructure matter in MLOps?}{Real-world deployment requires strict resource boundaries, predictable VRAM allocation, and thermal stability that cannot be taken for granted in production environments.}
+\end{frame}
+
 \begin{frame}{Physical Topography}{Dual-Node Architecture: flagship vs hive-mind}
     \begin{block}{Architectural Philosophy}
         Instead of relying on expensive public cloud instances, TaxonVision uses an on-premise dual-node topology to ensure continuous availability, high performance, and zero bandwidth egress fees.

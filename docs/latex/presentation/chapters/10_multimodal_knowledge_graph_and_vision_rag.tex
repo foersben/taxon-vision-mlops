@@ -1,4 +1,18 @@
-% Chapter 6: Multimodal Knowledge Graph & Vision-RAG
+% Chapter 10: Multimodal Knowledge Graph & Vision-RAG
+
+\begin{frame}[plain]
+    \vfill
+    \centering
+    {\footnotesize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
+    {\large \textbf{\textcolor{signalorange}{CHAPTER 10}}} \\[0.25cm]
+    {\huge \textbf{Multimodal Knowledge Graph \& Vision-RAG}} \\[0.35cm]
+    {\normalsize \textcolor{black!70}{Epistemic Ambiguity Resolution, Filtered Vector Retrieval \& Clinical-Grade Diagnosis Cards}} \\[0.5cm]
+    \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
+    \statustarget
+    \vfill
+    \script{Welcome to Chapter 10: our capstone architecture on Multimodal Knowledge Graphs and Vision-RAG. Here, we resolve difficult morphological ambiguities through visual chunking, geo-temporal filtered HNSW retrieval, and local VLM differential diagnosis cards.}
+    \qa{When is the Vision-RAG pipeline triggered?}{It executes lazily only when the upstream conformal predictor detects epistemic ambiguity ($|C|>1$) or out-of-distribution outliers ($|C|=0$), preserving fast-path latency for simple classifications.}
+\end{frame}
 
 \begin{frame}{Knowledge Graph Architecture}{Conformal-Driven Lazy Execution of the MMKG}
     \begin{block}{Conformal-Driven Lazy Invocation Policy}
@@ -186,4 +200,21 @@
 
     \script{In real biology, taxonomy is not static. Scientists frequently merge two species into one, or split one species into three. In a standard deep learning model, every split or merge requires retraining the entire neural network from scratch. Because our architecture decouples HNSW vector storage from DuckDB relational metadata, a taxonomic merge is an instant O(1) database update. Our vectors remain untouched with zero GPU compute cost.}
     \qa{What happens during a taxonomic split when one species becomes two?}{Historical observation nodes for that taxon in DuckDB are flagged with \texttt{requires\_reannotation = true} and purged from active traversal. Their crops are routed to Label Studio for expert re-sorting, after which they are re-registered under their new respective taxon keys.}
+\end{frame}
+
+\begin{frame}{Conclusion}{Core Architectural Principles \& System Vision}
+    \begin{block}{The Pillars of Production Systems Engineering}
+        TaxonVision is built on three uncompromising principles that define enterprise MLOps.
+        \begin{itemize}
+            \item \textbf{Reproducibility by Default:} Using Pixi environments, DVC data lineage, and declarative k3s manifests ensures every run is perfectly replicable.
+            \item \textbf{Mathematical Safety under Uncertainty:} Split Conformal Prediction guarantees error bounds, refusing confident misclassification.
+            \item \textbf{Hardware-Conscious Sustainability:} Bare-metal GPU time-slicing, INT8 ONNX quantization, and zero-allocation inference maximize throughput per watt.
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.4cm}
+    \statusdone
+
+    \script{To conclude our complete presentation: MLOps is not just about using trendy tools like Kubernetes or Docker. It is a systems engineering mindset. It means building models that are reproducible down to the exact commit, mathematically honest about what they don't know, and engineered to run reliably on physical hardware within budget. TaxonVision proves that with the right architecture, we can tackle the most complex biodiversity challenges on Earth with mathematical confidence and operational excellence. Thank you!}
+    \qa{Where can students inspect the source code and documentation?}{The entire repository, including Zensical documentation, LaTeX strategy reports, and CI/CD pipelines, is maintained under strict version control in the taxon-vision-mlops repository.}
 \end{frame}
