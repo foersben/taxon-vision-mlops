@@ -15,6 +15,8 @@ sources:
   - resource: "src/taxon_vision/models/training/embeddings.py"
   - resource: "src/taxon_vision/models/training/tuning.py"
   - resource: "src/taxon_vision/models/training/types.py"
+  - resource: "src/taxon_vision/pipelines/extract_features.py"
+  - resource: "src/taxon_vision/pipelines/train.py"
 ---
 
 # Classification Head Training Pipeline
@@ -59,6 +61,9 @@ tracks all experiments with MLflow, and automatically promotes the best model us
 | `tracking.py` | `_get_dvc_dataset_hash()` | Parses `dvc.lock` for reproducible dataset provenance |
 | `tracking.py` | `mlflow_run_scope()` | RAII context manager that opens parent MLflow run and logs training parameters |
 | `tracking.py` | `_promote_model_if_better()` | Compares PR-AUC and assigns Production / Challenger alias |
+| `extract_features.py` | `FeatureExtractionConfig` | S3 image streaming, ViT embedding extraction, and index mapping |
+| `extract_features.py` | `extract_features_cli()` | CLI extracting representations to `cached_features.pt` |
+| `train.py` | `main()` | Production training pipeline CLI supporting `--cache-path` |
 
 ## Pipeline Lifecycle & MLflow RAII Strategy
 
@@ -132,7 +137,7 @@ The inner loop incorporates three convergence callbacks and one tuning hook:
 
 ## Optimal Training Dynamics & Hyperparameters
 
-The following defaults are design guidelines for linear probing on frozen foundation embeddings. They have not yet been validated on real extracted embeddings, because the training runner still uses a deterministic synthetic placeholder split (see [Implementation Status](../operations/implementation_status.md)):
+The following defaults are design guidelines for linear probing on frozen foundation embeddings. The training pipeline operates on pre-extracted feature representations cached at `data/embeddings/cached_features.pt` by `taxon_vision.pipelines.extract_features`. When no cached embeddings file exists and `--cache-path` is omitted, the runner falls back gracefully to a deterministic synthetic Gaussian split (seed 42) for offline integration testing:
 
 * **Epoch Budget (10-15 Epochs):** Linear probes on frozen embeddings typically converge within 10-15 epochs. Early stopping (patience 4) bounds the effective budget and limits memorisation of long-tail noise.
 * **Batch Size Budgeting:**
@@ -265,7 +270,7 @@ The continuous integration and delivery pipeline defined in `Jenkinsfile` automa
 3. Pytest Suite       -> Unit tests enforcing >= 78% line coverage
 4. Conformal Invariants -> Split conformal coverage empirical validation (1 - alpha >= 0.95)
 5. Strict Docs Build  -> Knowledge graph generation & strict Zensical build
-6. GPU Model Training -> Bare-metal GPU runner executes PyTorch training on hive-mind (main only)
+6. GPU Model Training -> Bare-metal GPU runner streams S3 observations via extract_features.py, trains head, and exports ONNX (main only)
 7. Rolling Deployment -> Zero-downtime rollout restart of deployment/taxon-vision-api
 ```
 
@@ -273,7 +278,7 @@ The continuous integration and delivery pipeline defined in `Jenkinsfile` automa
 
 During Stage 6, the runner interacts directly with the cluster's GPU topology:
 
-* **Time-Slicing Slot (target):** The physical NVIDIA RTX 5070 Ti is partitioned into 4 virtual GPU slots via the NVIDIA Kubernetes Device Plugin. The training job is intended to consume 1 virtual slot (`nvidia.com/gpu: 1`). The agent pod specification in the `Jenkinsfile` does not yet request this resource, so the stage currently has no guaranteed GPU allocation.
+* **Time-Slicing Slot Allocation:** The physical NVIDIA RTX 5070 Ti is partitioned into 4 virtual GPU slots via the NVIDIA Kubernetes Device Plugin. The GPU training agent pod (`taxon-vision-jenkins-gpu-agent`) requests `nvidia.com/gpu: 1` in both resource limits and requests in `Jenkinsfile`, securing a guaranteed virtual slot on `hive-mind`.
 * **VRAM Memory Fraction Cap:** The training process enforces `TAXON_CUDA_MEMORY_FRACTION=0.7`. This reserves 30% of VRAM (4.8 GB) for live ONNX Runtime inference serving and display buffers.
 * **DVC State Synchronization:** DVC pulls the latest dataset state from DagsHub S3 (`s3://dvc`) and verifies MD5 checksums before training.
 * **Artefact Export:** After the training loop (with early stopping and best weight restoration), the head checkpoint is written to `models/checkpoints/head.pt`, the ONNX graph is re-exported via `taxon_vision.inference.onnx_exporter`, and both artefacts are pushed to the DagsHub DVC remote.
@@ -285,3 +290,5 @@ During Stage 6, the runner interacts directly with the cluster's GPU topology:
 ::: taxon_vision.models.training.embeddings
 ::: taxon_vision.models.training.runner
 ::: taxon_vision.models.training.tuning
+::: taxon_vision.pipelines.extract_features
+::: taxon_vision.pipelines.train

@@ -24,12 +24,13 @@ This document tracks the current implementation status of the project against th
 
 ### Phase 2 (Microservices, Tracking & Versioning): 100% Done
 
+* ✅ S3 streaming feature extraction pipeline (`extract_features.py`) and cached representation training.
 * ✅ DVC pipeline foundation (`dvc.yaml` & `dvc.lock`) with DagsHub S3 remote (`s3://dvc`).
 * ✅ Ephemeral in-memory secret retrieval via KeePassXC and Linux Secret Service (`just dvc-push`).
 * ✅ MLflow integration on DagsHub (logging run metrics, compound PR-AUC scores, and registry promotion).
-* ✅ Containerization: Multi-stage non-root `Dockerfile` and local developer stack (`docker-compose.local.yaml`).
-* ✅ Kubernetes Deployment: `k3s` manifests with 4-replica NVIDIA GPU time-slicing and NodePort `30080`.
-* ✅ Automated Continuous Delivery: Jenkins pipeline on `hive-mind` with ephemeral k3s agent pods, NVMe Rattler caching, and rolling rollout.
+* ✅ Containerization & Publishing: Multi-stage non-root `Dockerfile` with automated GHCR publication (`ghcr.io/foersben/taxon-vision-mlops:latest`).
+* ✅ Kubernetes Deployment: `k3s` manifests with 4-replica NVIDIA GPU time-slicing and live ingress at `https://taxon.benjamin-foerster.eu/`.
+* ✅ Automated Continuous Delivery: Jenkins pipeline on `hive-mind` with ephemeral k3s agent pods, GPU time-slicing slot, NVMe Rattler caching, and rolling rollout.
 
 ### Phase 3 (Monitoring & Maintenance): ~60% Done
 
@@ -91,8 +92,10 @@ When a new classification head finishes training, it is automatically logged to 
 
 To maintain absolute scientific and engineering integrity, the following implementation discrepancies between target architecture and active repository state are documented:
 
-* **Synthetic Placeholder Training Split:** In `taxon_vision.models.training.runner`, `_prepare_embedding_split` constructs synthetic random embeddings ($N=150$) to validate pipeline mechanics. Real foundation feature extraction is implemented in `taxon_vision.models.backbones.factory.extract_and_cache_features` but is not yet wired to the training CLI runner.
-* **Jenkins Agent Pod GPU Allocation:** Resolved. In `Jenkinsfile`, the `ml-runner` pod template specifies `nvidia.com/gpu: 1` limits and requests, binding dynamically to the 4-replica time-slicing configuration on `hive-mind`.
+* **Synthetic Placeholder Training Split:** Resolved. Real foundation vision feature extraction is implemented in `taxon_vision.pipelines.extract_features` (`build_taxon_index_map`, `stream_and_extract_representations`, `create_stratified_embedding_split`), streaming observations from AWS S3 and caching to `data/embeddings/cached_features.pt`. The training runner (`taxon_vision.models.training.runner`) supports `--cache-path` and auto-loads `cached_features.pt`, retaining the synthetic Gaussian split strictly as a graceful offline fallback.
+* **Container Registry Publishing:** Resolved. GitHub Actions automatically packages the production container and publishes multi-tagged images (`latest`, `sha-<short_sha>`) to `ghcr.io/foersben/taxon-vision-mlops`, hydrated with promoted checkpoints from DagsHub DVC. The Kubernetes deployment continuously pulls releases via `imagePullPolicy: Always`.
+* **Cognitive Complexity Quality Gate:** Resolved. Integrated `complexipy` into CI and refactored deep functions (`_prepare_embedding_split`, `build_taxon_index_map`) to guarantee cognitive complexity $\le 15$ across all code paths.
+* **Jenkins Agent Pod GPU Allocation:** Resolved. In `Jenkinsfile`, the `Model Training & Checkpoint (GPU)` stage defines a dedicated agent pod requesting `nvidia.com/gpu: 1` in limits and requests, binding dynamically to the 4-replica time-slicing configuration on `hive-mind`.
 * **Blackwell Toolchain Upgrade:** Resolved. Environment manifests (`pyproject.toml`, `pixi.lock`) are upgraded to PyTorch 2.7.0 targeting CUDA 12.8 (`cu128`), natively supporting SM 120 kernels on the host's NVIDIA Driver 615.71.09 / CUDA 13.4 UMD.
 * **Error Masking in CI Pipeline:** Several commands in `Jenkinsfile` are suffixed with `|| true`, which masks runtime failures in test or training steps.
 * **Coverage Gate Inconsistency:** Line coverage threshold is set to 78% in `Jenkinsfile`, whereas `.github/workflows/ci.yml` enforces an 80% threshold.

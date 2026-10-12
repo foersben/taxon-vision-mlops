@@ -12,6 +12,7 @@ sources:
   - resource: "docs/latex/strategy_report/strategy_report.pdf"
   - resource: "src/taxon_vision/data/s3_streamer.py"
   - resource: "src/taxon_vision/data/license_filter.py"
+  - resource: "src/taxon_vision/pipelines/extract_features.py"
   - resource: "dvc.yaml"
 ---
 
@@ -70,6 +71,15 @@ TaxonVision circumvents this trap via **zero-duplication streaming**:
 * **Zero-Copy Arrow Buffers:** [`S3ImageStreamer`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/data/s3_streamer.py#L16) streams image objects directly from the public AWS S3 bucket into memory during training via Ray Data or WebDataset without local disk buffering.
 * **Lightweight Parquet Manifests:** The local repository stores only cryptographically validated Parquet index files containing observation IDs, taxon IDs, source URLs, and attribution headers.
 * **Storage Footprint:** An index representing 10 million biological observations occupies less than 300 MB of disk space.
+
+### Downstream Feature Extraction & Embedding Cache
+
+The lightweight Parquet manifests feed directly into the feature extraction pipeline ([`src/taxon_vision/pipelines/extract_features.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/pipelines/extract_features.py)):
+
+* **Contiguous Taxonomic Mapping:** [`build_taxon_index_map`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/pipelines/extract_features.py#L67) scans the manifest and constructs an integer mapping from sparse biological `taxon_id` keys to contiguous target indices $[0, K-1]$.
+* **Zero-Disk S3 Batch Streaming:** [`S3ImageStreamer`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/data/s3_streamer.py#L16) fetches raw image objects from `s3://inaturalist-open-data/` in batches. Images are transformed into standardized evaluation tensors ($224 \times 224$ bicubic resize, ImageNet normalization) via torchvision transforms without writing intermediate image files to local storage.
+* **Frozen Backbone Inference:** Batched tensors pass through the frozen foundation vision backbone (such as DINOv3 or BioCLIP-2), emitting $D$-dimensional feature vectors.
+* **Stratified Cache Serialization:** [`create_stratified_embedding_split`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/pipelines/extract_features.py#L169) performs stratified train/validation partitioning (defaulting to 80% train and 20% validation) while guaranteeing minimum exemplar representation across long-tail taxa. The split is serialized to `data/embeddings/cached_features.pt`, enabling millisecond-speed classification head training.
 
 ---
 
