@@ -48,7 +48,7 @@
         \node[box, below=of fastapi, fill=green!5, draw=plantgreen] (model) {\textbf{ONNX Runtime} \\ Inference Engine};
 
         % Arrows
-        \draw[arrow] (model) -- node[left] {Latency \& OOD stats} (fastapi);
+        \draw[arrow] (model.west) |- node[near start, left, align=right, xshift=-0.1cm] {Latency \& \\ OOD stats} (fastapi.west);
         \draw[arrow] (prometheus) -- node[above] {HTTP Pull} (fastapi);
         \draw[arrow] (grafana) -- node[above] {PromQL Queries} (prometheus);
     \end{tikzpicture}
