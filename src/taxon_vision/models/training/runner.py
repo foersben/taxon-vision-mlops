@@ -62,22 +62,61 @@ def _resolve_feature_dim(extractor: str) -> int:
         return 1280
 
 
-def _prepare_embedding_split(dim: int, num_classes: int) -> EmbeddingSplit:
-    """Construct deterministic embedding splits for rapid head training.
+def _try_load_cached_split(candidate: Path, dim: int) -> EmbeddingSplit | None:
+    """Attempt to deserialize and validate an embedding split from a candidate filesystem path.
 
     Why:
-        During rapid iteration, CI verification, and local benchmarking, generating or loading pre-computed representations enables instantaneous evaluation without incurring hours of backbone feature extraction. Setting a deterministic PRNG seed ensures reproducible validation trajectories across runs and environments.
+        Encapsulates file existence checks, PyTorch deserialization, and dimension validation
+        into an isolated helper, eliminating nested branching in the split initialization loop.
 
-    How:
-        Seeds PyTorch PRNG (seed=42), samples Gaussian embeddings for train and validation splits, allocates discrete integer taxon labels across classes, and counts class frequencies to populate the effective sample size container required by Class-Balanced Loss.
+    Args:
+        candidate: File path pointing to a potential serialized `.pt` embedding cache.
+        dim: Expected feature projection dimension.
+
+    Returns:
+        Validated EmbeddingSplit instance if compatible, otherwise None.
+    """
+    if not candidate.exists():
+        return None
+
+    try:
+        payload = torch.load(candidate, map_location="cpu", weights_only=False)
+        split = payload.get("split") if isinstance(payload, dict) else payload
+        if isinstance(split, EmbeddingSplit) and split.feature_dim == dim:
+            logger.info(
+                "Loaded pre-computed feature embeddings from '%s' (%d train, %d val samples, dim=%d)",
+                candidate,
+                split.train_embeddings.shape[0],
+                split.val_embeddings.shape[0],
+                split.feature_dim,
+            )
+            return split
+        logger.warning(
+            "Candidate cache '%s' has incompatible feature dimension (expected %d); skipping",
+            candidate,
+            dim,
+        )
+    except Exception as err:
+        logger.warning("Could not deserialize cache '%s' (%s); falling back", candidate, err)
+
+    return None
+
+
+def _generate_synthetic_embedding_split(dim: int, num_classes: int) -> EmbeddingSplit:
+    """Generate deterministic synthetic Gaussian embeddings for rapid offline testing.
+
+    Why:
+        Ensures headless CI runners without GPU resources or S3 credentials can verify
+        training loops, metric logging, and checkpointing deterministically with zero latency.
 
     Args:
         dim: Dimensionality of feature vectors.
         num_classes: Total number of classification categories.
 
     Returns:
-        Pre-allocated and validated EmbeddingSplit data container.
+        Deterministic EmbeddingSplit seeded with PRNG seed 42.
     """
+    logger.info("Initializing deterministic synthetic embedding split (seed=42, %d dim)", dim)
     torch.manual_seed(42)
     num_train = 120
     num_val = 30
@@ -94,6 +133,47 @@ def _prepare_embedding_split(dim: int, num_classes: int) -> EmbeddingSplit:
         val_labels=val_y,
         samples_per_class=samples_per_class,
     )
+
+
+def _prepare_embedding_split(
+    dim: int,
+    num_classes: int,
+    cache_path: Path | str | None = None,
+) -> EmbeddingSplit:
+    """Construct or restore deterministic embedding splits for rapid head training.
+
+    Why:
+        During rapid iteration, CI verification, and local benchmarking, loading pre-computed
+        representations avoids incurring hours of redundant forward passes through the frozen
+        vision foundation backbone. Restoring cached representations from disk enables training
+        in seconds. If a pre-computed cache is absent (e.g. in minimal CI environments), gracefully
+        falling back to a deterministic synthetic Gaussian split ensures that ephemeral runners
+        without GPU hardware or S3 access can execute test quality gates deterministically.
+
+    How:
+        1. Checks whether an embedding cache exists at `cache_path` (or standard `data/embeddings/cached_features.pt`).
+        2. If found, deserializes the payload, validates that `split.feature_dim == dim`, and returns the cached split.
+        3. If absent or shape-incompatible, falls back to generating a deterministic synthetic Gaussian split.
+
+    Args:
+        dim: Dimensionality of feature vectors.
+        num_classes: Total number of classification categories.
+        cache_path: Optional custom filesystem path to a serialized `.pt` embedding cache.
+
+    Returns:
+        Pre-allocated and validated EmbeddingSplit data container.
+    """
+    candidates: list[Path] = []
+    if cache_path is not None:
+        candidates.append(Path(cache_path))
+    candidates.append(Path("data/embeddings/cached_features.pt"))
+
+    for candidate in candidates:
+        loaded = _try_load_cached_split(candidate, dim)
+        if loaded is not None:
+            return loaded
+
+    return _generate_synthetic_embedding_split(dim, num_classes)
 
 
 def configure_cuda_memory_budget(fraction: float | None = None) -> float | None:
@@ -143,6 +223,7 @@ def run_training_pipeline(
     cuda_memory_fraction: float | None = None,
     tune: bool = False,
     n_trials: int = 15,
+    cache_path: Path | str | None = None,
 ) -> dict[str, Any]:
     """Execute end-to-end classification head training on cached or synthetic embeddings.
 
@@ -151,7 +232,7 @@ def run_training_pipeline(
 
     How:
         1. Resolves taxa count and feature dimension.
-        2. Prepares deterministic embedding splits and sample-per-class distributions.
+        2. Prepares deterministic embedding splits (from cache or synthetic fallback) and sample-per-class distributions.
         3. If `tune` is True, executes Optuna Bayesian search to find optimal LR, weight decay, dropout, and CB beta.
         4. Configures AdamW optimizer and ClassBalancedLoss with optimal or default hyperparameters.
         5. Enters `mlflow_run_scope` RAII context manager for clean tracking.
@@ -169,6 +250,7 @@ def run_training_pipeline(
         cuda_memory_fraction: Optional CUDA VRAM fraction limit under time-slicing.
         tune: Whether to execute Optuna Bayesian hyperparameter search prior to final training.
         n_trials: Number of Optuna evaluation trials when `tune` is enabled.
+        cache_path: Optional custom filesystem path to serialized `.pt` embedding cache.
 
     Returns:
         Dictionary containing training metrics, checkpoint path, duration, and status.
@@ -180,7 +262,7 @@ def run_training_pipeline(
     catalog = load_taxa_catalog()
     num_classes = len(catalog) if catalog else 10
     dim = _resolve_feature_dim(extractor)
-    data = _prepare_embedding_split(dim, num_classes)
+    data = _prepare_embedding_split(dim, num_classes, cache_path=cache_path)
     samples = data.samples_per_class or [1] * num_classes
 
     if tune:
@@ -383,6 +465,12 @@ def train_cli(argv: list[str] | None = None) -> int:
         default=15,
         help="Number of Optuna evaluation trials (when --tune is enabled)",
     )
+    parser.add_argument(
+        "--cache-path",
+        type=str,
+        default=None,
+        help="Optional path to serialized .pt feature embedding cache file",
+    )
     args = parser.parse_args(argv)
 
     setup_logging(level=logging.INFO, log_file=args.log_file)
@@ -409,6 +497,7 @@ def train_cli(argv: list[str] | None = None) -> int:
         cuda_memory_fraction=args.cuda_memory_fraction,
         tune=args.tune,
         n_trials=args.n_trials,
+        cache_path=args.cache_path,
     )
 
     logger.info("Training Completed Successfully")
