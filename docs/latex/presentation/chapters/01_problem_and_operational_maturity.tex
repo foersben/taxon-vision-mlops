@@ -102,40 +102,46 @@
     \qa{What happens if an ingested image has no license field in its metadata?}{The audit script rejects it by default under a strict zero-trust policy. Unlicensed data is treated as copyrighted until explicit open licensing is proven.}
 \end{frame}
 
-\begin{frame}{Operational Maturity}{The Google MLOps Maturity Spectrum}
+\begin{frame}{Operational Maturity: 5-Tier Framework (Adapted from Google MLOps)}{Extending Standard Google MLOps Levels 0--2 with Epistemic Safety Tiers}
     \begin{columns}[T]
-        \begin{column}{0.48\textwidth}
-            \begin{block}{Theoretical Framework}
-                \begin{itemize}\small
-                    \item \textbf{Level 0: Manual Scripting.} Jupyter notebooks, untracked artifacts, manual deployment. High risk of failure.
-                    \item \textbf{Level 4: Continuous Learning.} Fully automated CI/CD gates, reproducible data versioning (DVC), drift-triggered retraining, zero-downtime Kubernetes rollouts.
-                    \item \textbf{TaxonVision Scope:} Achieves Level 3/4 on bare-metal hardware, strictly isolating environments.
+        \begin{column}{0.54\textwidth}
+            \begin{block}{5-Tier Operational Maturity Spectrum}
+                \begin{itemize}\scriptsize
+                    \setlength{\itemsep}{1.5pt}
+                    \item \textbf{Level 0 (Manual):} Notebooks, unversioned state, manual handoffs \textcolor{black!60}{\textit{(Google Baseline)}}
+                    \item \textbf{Level 1 (Pipeline):} Automated ML DAGs, continuous training baseline \textcolor{black!60}{\textit{(Google Baseline)}}
+                    \item \textbf{Level 2 (CI/CD):} CI/CD pipelines, dynamic ONNX export \textcolor{black!60}{\textit{(Google Baseline Ceiling)}}
+                    \item \textbf{Level 3 (Feedback):} Concept drift telemetry ($W_1$ / MMD) \& BADGE active learning \textcolor{deepblue}{\textit{(TaxonVision)}}
+                    \item \textbf{Level 4 (Epistemic Safety):} Split Conformal ($1 - \alpha \ge 0.95$) \& Energy OOD rejection \textcolor{plantgreen}{\textit{(TaxonVision)}}
                 \end{itemize}
             \end{block}
-            \vspace{0.05cm}
+            \vspace{0.02cm}
             \statusdone
         \end{column}
-        \begin{column}{0.5\textwidth}
-            \begin{center}
-                \resizebox{\linewidth}{!}{
-                    \smartdiagramset{
-                        back arrow disabled=true,
-                        module minimum width=2.5cm,
-                        module minimum height=0.85cm,
-                        text width=2.2cm,
-                        font=\footnotesize
-                    }
-                    \smartdiagram[flow diagram:horizontal]{
-                        Level 0\\Manual Scripting,
-                        Level 1\\Automated ML,
-                        Level 2\\CI/CD Pipes,
-                        Level 4\\Autonomous MLOps
-                    }
-                }
-            \end{center}
+        \begin{column}{0.44\textwidth}
+            \centering
+            \resizebox{0.95\linewidth}{!}{
+            \begin{tikzpicture}[
+                node distance=0.16cm,
+                tier/.style={rectangle, draw=deepblue!80, fill=deepblue!8, thick, rounded corners=2pt, minimum width=4.8cm, minimum height=0.58cm, align=center, font=\scriptsize\sffamily},
+                taxon/.style={rectangle, draw=plantgreen!90, fill=plantgreen!12, thick, rounded corners=2pt, minimum width=4.8cm, minimum height=0.58cm, align=center, font=\scriptsize\sffamily},
+                arr/.style={->, >=stealth, thick, draw=deepblue!70}
+            ]
+                \node[tier] (l0) {\textbf{Level 0: Manual Prototyping}\\ \tiny Google Baseline: Notebooks \& Ad-hoc Scripts};
+                \node[tier, below=of l0] (l1) {\textbf{Level 1: Automated Pipeline}\\ \tiny Google Baseline: Continuous Training DAGs};
+                \node[tier, below=of l1] (l2) {\textbf{Level 2: CI/CD Automation}\\ \tiny Google Baseline Ceiling: Automated Deployment};
+                \node[taxon, below=of l2] (l3) {\textbf{Level 3: Feedback \& Active Learning}\\ \tiny TaxonVision: Drift Telemetry \& BADGE Loop};
+                \node[taxon, below=of l3] (l4) {\textbf{Level 4: Epistemic Safety}\\ \tiny TaxonVision: Conformal Bounds \& Energy OOD};
+
+                \draw[arr] (l0) -- (l1);
+                \draw[arr] (l1) -- (l2);
+                \draw[arr, draw=plantgreen!80] (l2) -- (l3);
+                \draw[arr, draw=plantgreen!80] (l3) -- (l4);
+            \end{tikzpicture}
+            }
         \end{column}
     \end{columns}
 
-    \script{To understand where TaxonVision sits, we look at the MLOps Maturity Model. Level 0 is what is taught in introductory courses: you run a Jupyter notebook, manually download a CSV, fit a model, and save a pickle file. If your data changes, you rerun the notebook by hand. Level 4 is an autonomous system: data ingestion triggers automated feature extraction, Bayesian optimization finds optimal weights, mathematical gates verify conformal coverage, and Kubernetes rolls out the updated container without downtime.}
-    \qa{What is the biggest operational hurdle when moving from Level 0 to Level 4?}{Automated validation gates. At Level 0, a human looks at an accuracy metric and decides to deploy. At Level 4, algorithms must autonomously decide if a candidate model is statistically safe and performant enough to replace the current production version.}
+    \script{To evaluate where TaxonVision sits, we adapt Google's MLOps Maturity Model. Google's standard whitepaper defines Levels 0 through 2---moving from manual Jupyter notebooks up to automated CI/CD pipelines. However, biological computer vision introduces severe risks of silent overconfidence. We explicitly extend Google's model to Level 3 (Active Learning feedback loops and drift telemetry) and Level 4 (Epistemic Safety via Split Conformal bounds and Energy-Based OOD rejection). TaxonVision operates at Level 3/4 maturity on bare-metal hardware.}
+    \qa{Why is Level 3/4 necessary beyond Google's Level 2 baseline?}{Google's Level 2 guarantees code and model deployment automation, but not statistical output safety. Levels 3 and 4 add distribution-free coverage guarantees and active learning triage to prevent uncalibrated predictions in production.}
 \end{frame}
