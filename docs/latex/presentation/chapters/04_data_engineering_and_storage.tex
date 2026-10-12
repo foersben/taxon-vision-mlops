@@ -240,6 +240,26 @@
     \qa{How do we manage the disk space for multiple caches?}{Because the caches are dense NumPy memmap arrays without image overhead, they remain lightweight. We use a Least Recently Used (LRU) policy to evict old caches from the local NVMe drive when approaching the storage limit.}
 \end{frame}
 
+\begin{frame}{Storage Engineering}{Object Storage Topology: MinIO vs. DagsHub vs. AWS S3}
+    \begin{block}{Three-Tier Object Storage Breakdown}
+        \begin{itemize}\small
+            \item \textbf{Tier 1: MinIO Local Offline Mock (\texttt{docker-compose.local.yaml}):}
+            Runs S3-compatible service locally on developer workstation (\texttt{http://localhost:9000}). Used strictly to unit-test S3 streaming connectors and verify DVC operations offline with zero cloud latency and zero AWS egress fees.
+            \item \textbf{Tier 2: DagsHub S3 Endpoint (\texttt{s3://dvc}):}
+            Remote Content-Addressed Storage (CAS) for tracked dataset manifests and model checkpoints, authenticated via unified HMAC tokens.
+            \item \textbf{Tier 3: AWS Open Data Registry (\texttt{s3://inaturalist-open-data}):}
+            Public immutable repository hosting raw citizen-science image archives (terabytes of biodiversity imagery), streamed via zero-copy HTTP range requests without downloading archives.
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.15cm}
+    \statusdone
+
+    \script{\footnotesize Our object storage architecture spans three distinct tiers to balance cost, speed, and immutability. Tier 1 is our local MinIO mock, which lets developers test S3 streaming and DVC sync operations offline without hitting real AWS egress fees. Tier 2 is the DagsHub S3 endpoint, acting as our content-addressed storage for heavy Parquet manifests and model checkpoints. Finally, Tier 3 is the public AWS Open Data Registry, which hosts the massive citizen-science image archives we stream directly during feature extraction.}
+    \qa{Why not use AWS S3 for Tier 1 and Tier 2?}{\footnotesize Tier 1 uses MinIO to ensure offline developer autonomy and zero latency during rapid unit-testing. Tier 2 uses DagsHub because it automatically syncs with our MLflow tracking server and provides generous free-tier storage for ML artifacts compared to standard AWS S3 buckets.}
+    \qa{How do we handle credentials for all these buckets?}{\footnotesize Tier 1 uses local mock credentials. Tier 3 is publicly readable, requiring no authentication. Tier 2 utilizes short-lived HMAC tokens injected by our CI agent or local environment variables.}
+\end{frame}
+
 \begin{frame}{Version Control}{DVC Master Tracking \& Git Pointer Decoupling (.dvc)}
     \begin{block}{DVC Pointer Decoupling Principle}
         \begin{itemize}\small

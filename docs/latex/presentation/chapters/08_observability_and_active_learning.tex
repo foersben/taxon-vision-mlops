@@ -148,6 +148,28 @@
     \qa{What is the current status of the active learning pipeline?}{The BADGE mathematical sampling algorithm and Label Studio export formats are fully implemented in \texttt{src/taxon\_vision/active\_learning/badge.py}. The automated webhook that triggers unattended model retraining upon annotation completion is our Phase 3 target milestone.}
 \end{frame}
 
+\begin{frame}{Active Learning}{Active Learning Loop: Label Studio \& DagsHub Integration}
+    \begin{block}{Architectural \& Operational Details}
+        \begin{itemize}\small
+            \item \textbf{Triggering Mechanisms:}
+            \begin{itemize}\footnotesize
+                \item \textbf{Conformal Ambiguity Filter:} Samples where prediction set size $|\hat{C}(x)| > 1$ or empty sets $|\hat{C}(x)| = 0$.
+                \item \textbf{BADGE Diversity Sampling:} Clustering hallucinated gradient embeddings to capture boundary uncertainty.
+            \end{itemize}
+            \item \textbf{Annotation Loop:} Automated batch export to Label Studio on DagsHub $\to$ Domain expert/taxonomist review $\to$ Versioned DVC dataset commit $\to$ Jenkins retraining webhook.
+            \item \textbf{Cost Efficiency:} Prevents sending redundant high-confidence common taxa to human reviewers, cutting labeling expenses by $> 70\%$.
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.15cm}
+    \statusdone
+
+    \script{\footnotesize Our active learning loop integrates Label Studio and DagsHub to maximize human annotation efficiency. We first use the Conformal Ambiguity filter to capture samples with prediction set sizes greater than one or empty sets. We then apply BADGE diversity sampling to cluster gradient embeddings, capturing boundary uncertainty. This curated batch is exported to Label Studio on DagsHub. After taxonomists review the data, a new versioned DVC dataset commit automatically triggers a Jenkins retraining webhook. By preventing redundant high-confidence samples from reaching reviewers, we cut labeling expenses by more than 70\%.}
+    \qa{Why do we need both Conformal Filtering and BADGE?}{\footnotesize Conformal Prediction provides a fast, statistically rigorous way to filter out certain predictions. BADGE operates on the remaining uncertain subset to ensure the final annotation batch is maximally diverse across the feature space, preventing us from labeling the same ambiguous class 50 times.}
+    \qa{How does the Jenkins retraining webhook maintain reproducibility?}{\footnotesize The webhook is triggered exclusively by a Git commit containing the new DVC hash. Jenkins pulls the exact versioned dataset from the DagsHub S3 endpoint, guaranteeing that the resulting model weights correspond precisely to the updated human annotations.}
+\end{frame}
+
+
 \begin{frame}{Active Learning Flow}{Closing the Loop: Stream $\rightarrow$ BADGE $\rightarrow$ Label Studio}
     \begin{center}
     \resizebox{0.95\textwidth}{!}{
