@@ -3,7 +3,7 @@
 \begin{frame}[plain]
     \vfill
     \centering
-    {\scriptsize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
+    {\footnotesize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
     {\large \textbf{\textcolor{signalorange}{CHAPTER 05}}} \\[0.25cm]
     {\huge \textbf{Model Engineering \& Optimization}} \\[0.35cm]
     {\normalsize \textcolor{black!70}{Self-Supervised Vision Backbones, Class-Balanced Loss \& Optuna Sweeps}} \\[0.5cm]
@@ -18,7 +18,7 @@
     \begin{columns}[T]
         \begin{column}{0.5\textwidth}
             \begin{block}{Full Fine-Tuning}
-                \scriptsize
+                \footnotesize
                 \begin{itemize}
                     \item \textbf{Compute:} Requires 4-hour GPU jobs to update $\sim$86M parameters.
                     \item \textbf{Hardware:} Consumes up to 16 GB VRAM.
@@ -28,7 +28,7 @@
         \end{column}
         \begin{column}{0.5\textwidth}
             \begin{block}{Linear Probing}
-                \scriptsize
+                \footnotesize
                 \begin{itemize}
                     \item \textbf{Compute:} Trains in $\sim$10-second runs on pre-cached embeddings.
                     \item \textbf{Hardware:} Requires $<$1 GB VRAM (freezes backbone).
@@ -40,7 +40,7 @@
 
     \vspace{0.4cm}
     \begin{block}{Engineering Rationale}
-        \scriptsize
+        \footnotesize
         Pre-cached embeddings combined with a convex classification head drastically reduce operational latency, unlocking Bayesian hyperparameter sweeps that are impossible under full fine-tuning constraints.
     \end{block}
 
@@ -143,7 +143,7 @@
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
             \begin{block}{Mathematical Formulation}
-                \scriptsize
+                \footnotesize
                 \begin{itemize}
                     \item Standard cross-entropy collapses under long-tail imbalance.
                     \item Naïve inverse frequency fails due to redundancy in head classes.
@@ -153,7 +153,7 @@
             \end{block}
             \vspace{-0.2cm}
             \begin{block}{Engineering Rationale}
-                \scriptsize
+                \footnotesize
                 This prevents gradient starvation for rare classes while bounding the penalty for hyper-abundant head classes.
             \end{block}
         \end{column}
@@ -172,8 +172,8 @@
                         samples=100,
                         grid=both,
                         title={Class-Balanced Loss Weights},
-                        title style={font=\scriptsize\bfseries},
-                        label style={font=\scriptsize},
+                        title style={font=\footnotesize\bfseries},
+                        label style={font=\footnotesize},
                         tick label style={font=\scriptsize},
                         legend style={font=\scriptsize, at={(0.95, 0.85)}, anchor=north east, fill=white, fill opacity=0.8, text opacity=1}
                     ]
@@ -193,7 +193,7 @@
 
 \begin{frame}{Optimization}{Optimization Dynamics \& Best-Weight Restoration}
     \begin{block}{Optimization Strategy}
-        \scriptsize
+        \footnotesize
         \begin{itemize}
             \item \textbf{AdamW Optimizer:} Incorporates decoupled weight decay for robust regularization.
             \item \textbf{Learning Rate Schedule:} Linear warmup prevents early gradient divergence; cosine annealing refines convergence in later epochs.
@@ -202,7 +202,7 @@
     \end{block}
 
     \begin{block}{Deterministic Best-Weight Restoration}
-        \scriptsize
+        \footnotesize
         \begin{itemize}
             \item \textbf{Mechanism:} The runner automatically caches intermediate checkpoints and restores the exact weights corresponding to the minimum validation loss.
             \item \textbf{Engineering Rationale:} The final epoch is rarely the optimal one. Best-weight restoration strictly guarantees that the deployed checkpoint maximizes generalization on holdout data.
@@ -215,7 +215,7 @@
 
 \begin{frame}{AutoML \& Tuning}{Bayesian Optimization: Optuna TPE with ASHA Pruning}
     \begin{block}{Bayesian Hyperparameter Search}
-        \scriptsize
+        \footnotesize
         \begin{itemize}
             \item \textbf{TPE Algorithm:} Optuna uses the Tree-structured Parzen Estimator (TPE) to model probability distributions of promising regions (learning rate, $\beta$, dropout, weight decay).
             \item \textbf{Efficiency:} Vastly outperforms brute-force grid search (exponential complexity) or unguided random search.
@@ -223,7 +223,7 @@
     \end{block}
 
     \begin{block}{ASHA Pruning Mechanism}
-        \scriptsize
+        \footnotesize
         \begin{itemize}
             \item \textbf{Operation:} The Asynchronous Successive Halving Algorithm (ASHA) actively monitors intermediate epoch performance.
             \item \textbf{Engineering Rationale:} Aggressively terminates underperforming trials early, reallocating GPU cycles to promising candidates and maximizing search efficiency.
@@ -258,7 +258,6 @@
         \end{itemize}
     \end{block}
 
-
     \statusdone
 
     \script{Currently, our MLflow tracking captures the fundamental metrics and hyperparameters necessary to evaluate basic model performance, such as Class-Balanced Loss and the $\beta$ parameter. However, our target architecture demands rigorous lineage invariants. We need to track conformal prediction metrics like empirical coverage and average set size to mathematically guarantee safety. We also require strict cryptographic binding via DVC hashes and Git SHAs to ensure that the deployed model exactly matches its source code and training data.}
@@ -270,7 +269,7 @@
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
             \begin{block}{Metric Limitations}
-                \scriptsize
+                \footnotesize
                 \begin{itemize}
                     \item \textbf{F1 Score:} Brittle because it relies on a static threshold (e.g., 0.5), severely penalizing rare classes whose optimal threshold is much lower.
                     \item \textbf{ROC-AUC:} Misleading in extreme imbalance; true negatives overwhelm the metric, producing falsely optimistic scores.
@@ -278,7 +277,7 @@
             \end{block}
             \vspace{-0.2cm}
             \begin{block}{Macro PR-AUC Advantage}
-                \scriptsize
+                \footnotesize
                 \begin{itemize}
                     \item Evaluates the area under the Precision-Recall curve across \emph{all} recall thresholds independently.
                     \item \textbf{Engineering Rationale:} Provides a robust, threshold-invariant promotion gate reflecting positive performance.
@@ -300,8 +299,8 @@
                         grid=both,
                         legend pos=south west,
                         title={PR Curve (Imbalanced Class)},
-                        title style={font=\scriptsize\bfseries},
-                        label style={font=\scriptsize},
+                        title style={font=\footnotesize\bfseries},
+                        label style={font=\footnotesize},
                         tick label style={font=\scriptsize},
                         legend style={font=\scriptsize}
                     ]
