@@ -51,7 +51,7 @@
     ]
         % Flagship
         \node[flagship, minimum height=3.5cm, minimum width=4cm] (flagship) {};
-        \node[above=0.2cm of flagship.south, font=\bfseries\sffamily, text=TaxonPrimary, align=center] (flagshiptitle) {\texttt{flagship}\\Local Dev Workstation};
+        \node[above=0.2cm of flagship.south, font=\bfseries\sffamily, text=TaxonPrimary, align=center, yshift=-2mm] (flagshiptitle) {\texttt{flagship}\\Local Dev Workstation};
         \node[component, above=0.2cm of flagshiptitle] (ide) {IDE / Unit Tests};
         \node[component, above=0.2cm of ide] (git) {Git Feature Branches};
 
@@ -144,22 +144,22 @@
         % Time-Sliced Slots overlay
         % Slot 1: FastAPI (3.5 GB) -> 3.5cm
         \node[bar, fill=TaxonPrimary, minimum width=3.5cm, anchor=west] at (total.west) (s1) {};
-        \node[label] at (s1.center) {Slot 1: FastAPI (3.5G)};
+        \node[label, font=\scriptsize\bfseries, yshift=-2mm] at (s1.center) {Slot 1: FastAPI (3.5G)};
 
         % Slot 2: Jenkins CI (3.5 GB) -> 3.5cm
         \node[bar, fill=TaxonSecondary, minimum width=3.5cm, anchor=west] at (s1.east) (s2) {};
-        \node[label, text=TaxonDark] at (s2.center) {Slot 2: Jenkins (3.5G)};
+        \node[label, font=\scriptsize\bfseries, text=TaxonDark, yshift=-2mm] at (s2.center) {Slot 2: Jenkins (3.5G)};
 
         % Slot 3: Optuna/PyTorch (5.0 GB) -> 5.0cm
         \node[bar, fill=TaxonAccent, minimum width=5.0cm, anchor=west] at (s2.east) (s3) {};
-        \node[label] at (s3.center) {Slot 3: PyTorch/Optuna (5.0G)};
+        \node[label, font=\scriptsize\bfseries, yshift=-2mm] at (s3.center) {Slot 3: PyTorch/Optuna (5.0G)};
 
         % The 70% Limit Line at 11.2 GB
-        \draw[thick, dashed, red] ([xshift=11.2cm]total.south west) -- ([xshift=11.2cm]total.north west) node[above, text=red, font=\small\bfseries, align=center] {11.2 GB (70\%) Hard Ceiling per Container};
+        \draw[thick, dashed, red] ([xshift=11.2cm]total.south west) -- ([xshift=11.2cm]total.north west) node[above=0.2cm, text=red, font=\small\bfseries, align=center] {11.2 GB (70\%) Hard Ceiling per Container};
 
         % Slot 4: Headroom (4.0 GB) -> 4.0cm
         \node[bar, fill=gray!50, minimum width=4.0cm, anchor=west] at (s3.east) (s4) {};
-        \node[font=\scriptsize\bfseries, text=TaxonDark] at (s4.center) {Slot 4: Elastic Headroom};
+        \node[font=\scriptsize\bfseries, text=TaxonDark, yshift=-2mm] at (s4.center) {Slot 4: Elastic Headroom};
 
         \draw[decorate,decoration={brace,amplitude=5pt,mirror},thick] ([xshift=0.1cm]s1.south west) -- ([xshift=-0.1cm]s4.south east) node[midway,below=0.2cm, font=\small\bfseries] {Kubernetes 4-Slot GPU Time-Slicing Configuration};
 
