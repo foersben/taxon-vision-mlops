@@ -110,6 +110,37 @@ def get_evaluation_transform(image_size: int = 224, resize_size: int = 256) -> t
     )
 
 
+def _resolve_raw_catalog(catalog: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """Resolve raw taxa catalog entries from provided list or disk configuration.
+
+    Args:
+        catalog: Optional user-supplied catalog entries.
+
+    Returns:
+        List of taxon dictionary records.
+    """
+    if catalog is not None:
+        return catalog
+    try:
+        return load_taxa_catalog()
+    except Exception:
+        return []
+
+
+def _populate_taxon_indices(mapping: dict[int, int], idx: int, item: dict[str, Any]) -> None:
+    """Map taxon identifier candidates from a catalog record to the ordinal index.
+
+    Args:
+        mapping: Target mapping dictionary to mutate.
+        idx: Ordinal class index.
+        item: Taxon metadata record.
+    """
+    for key in ("inaturalist_taxon_id", "taxon_id", "id"):
+        raw_val = item.get(key)
+        if raw_val is not None:
+            mapping[int(raw_val)] = idx
+
+
 def build_taxon_index_map(
     catalog: list[dict[str, Any]] | None = None,
     include_defaults: bool = True,
@@ -125,8 +156,7 @@ def build_taxon_index_map(
 
     How:
         Initializes baseline mappings from `DEFAULT_INAT_TAXON_MAP` when `include_defaults` is True.
-        Inspects catalog metadata entries (checking `inaturalist_taxon_id`, `taxon_id`, and `id` keys),
-        mapping each identified taxonomic integer to its ordinal position in the catalog.
+        Resolves catalog items via `_resolve_raw_catalog` and maps candidate keys via `_populate_taxon_indices`.
 
     Args:
         catalog: Optional pre-loaded list of taxa metadata dictionaries.
@@ -136,21 +166,10 @@ def build_taxon_index_map(
         Dictionary mapping external iNaturalist integer taxon IDs to dense indices in $[0, K-1]$.
     """
     mapping: dict[int, int] = dict(DEFAULT_INAT_TAXON_MAP) if include_defaults else {}
+    records = _resolve_raw_catalog(catalog)
 
-    if catalog is not None:
-        for idx, item in enumerate(catalog):
-            for key in ("inaturalist_taxon_id", "taxon_id", "id"):
-                if key in item and item[key] is not None:
-                    mapping[int(item[key])] = idx
-    else:
-        try:
-            loaded = load_taxa_catalog()
-            for idx, item in enumerate(loaded):
-                for key in ("inaturalist_taxon_id", "taxon_id", "id"):
-                    if key in item and item[key] is not None:
-                        mapping[int(item[key])] = idx
-        except Exception:
-            pass
+    for idx, item in enumerate(records):
+        _populate_taxon_indices(mapping, idx, item)
 
     return mapping
 

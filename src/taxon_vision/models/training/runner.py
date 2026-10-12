@@ -62,6 +62,79 @@ def _resolve_feature_dim(extractor: str) -> int:
         return 1280
 
 
+def _try_load_cached_split(candidate: Path, dim: int) -> EmbeddingSplit | None:
+    """Attempt to deserialize and validate an embedding split from a candidate filesystem path.
+
+    Why:
+        Encapsulates file existence checks, PyTorch deserialization, and dimension validation
+        into an isolated helper, eliminating nested branching in the split initialization loop.
+
+    Args:
+        candidate: File path pointing to a potential serialized `.pt` embedding cache.
+        dim: Expected feature projection dimension.
+
+    Returns:
+        Validated EmbeddingSplit instance if compatible, otherwise None.
+    """
+    if not candidate.exists():
+        return None
+
+    try:
+        payload = torch.load(candidate, map_location="cpu", weights_only=False)
+        split = payload.get("split") if isinstance(payload, dict) else payload
+        if isinstance(split, EmbeddingSplit) and split.feature_dim == dim:
+            logger.info(
+                "Loaded pre-computed feature embeddings from '%s' (%d train, %d val samples, dim=%d)",
+                candidate,
+                split.train_embeddings.shape[0],
+                split.val_embeddings.shape[0],
+                split.feature_dim,
+            )
+            return split
+        logger.warning(
+            "Candidate cache '%s' has incompatible feature dimension (expected %d); skipping",
+            candidate,
+            dim,
+        )
+    except Exception as err:
+        logger.warning("Could not deserialize cache '%s' (%s); falling back", candidate, err)
+
+    return None
+
+
+def _generate_synthetic_embedding_split(dim: int, num_classes: int) -> EmbeddingSplit:
+    """Generate deterministic synthetic Gaussian embeddings for rapid offline testing.
+
+    Why:
+        Ensures headless CI runners without GPU resources or S3 credentials can verify
+        training loops, metric logging, and checkpointing deterministically with zero latency.
+
+    Args:
+        dim: Dimensionality of feature vectors.
+        num_classes: Total number of classification categories.
+
+    Returns:
+        Deterministic EmbeddingSplit seeded with PRNG seed 42.
+    """
+    logger.info("Initializing deterministic synthetic embedding split (seed=42, %d dim)", dim)
+    torch.manual_seed(42)
+    num_train = 120
+    num_val = 30
+    train_z = torch.randn(num_train, dim)
+    train_y = torch.randint(0, num_classes, (num_train,))
+    val_z = torch.randn(num_val, dim)
+    val_y = torch.randint(0, num_classes, (num_val,))
+    samples_per_class = [max(1, int((train_y == c).sum().item())) for c in range(num_classes)]
+
+    return EmbeddingSplit(
+        train_embeddings=train_z,
+        train_labels=train_y,
+        val_embeddings=val_z,
+        val_labels=val_y,
+        samples_per_class=samples_per_class,
+    )
+
+
 def _prepare_embedding_split(
     dim: int,
     num_classes: int,
@@ -80,8 +153,7 @@ def _prepare_embedding_split(
     How:
         1. Checks whether an embedding cache exists at `cache_path` (or standard `data/embeddings/cached_features.pt`).
         2. If found, deserializes the payload, validates that `split.feature_dim == dim`, and returns the cached split.
-        3. If absent or shape-incompatible, falls back to seeding PyTorch PRNG (seed=42), sampling Gaussian embeddings
-           for train and validation splits, allocating discrete labels, and calculating class frequencies.
+        3. If absent or shape-incompatible, falls back to generating a deterministic synthetic Gaussian split.
 
     Args:
         dim: Dimensionality of feature vectors.
@@ -97,45 +169,11 @@ def _prepare_embedding_split(
     candidates.append(Path("data/embeddings/cached_features.pt"))
 
     for candidate in candidates:
-        if candidate.exists():
-            try:
-                payload = torch.load(candidate, map_location="cpu", weights_only=False)
-                split = payload.get("split") if isinstance(payload, dict) else payload
-                if isinstance(split, EmbeddingSplit) and split.feature_dim == dim:
-                    logger.info(
-                        "Loaded pre-computed feature embeddings from '%s' (%d train, %d val samples, dim=%d)",
-                        candidate,
-                        split.train_embeddings.shape[0],
-                        split.val_embeddings.shape[0],
-                        split.feature_dim,
-                    )
-                    return split
-                else:
-                    logger.warning(
-                        "Candidate cache '%s' has incompatible feature dimension (expected %d); skipping",
-                        candidate,
-                        dim,
-                    )
-            except Exception as err:
-                logger.warning("Could not deserialize cache '%s' (%s); falling back", candidate, err)
+        loaded = _try_load_cached_split(candidate, dim)
+        if loaded is not None:
+            return loaded
 
-    logger.info("Initializing deterministic synthetic embedding split (seed=42, %d dim)", dim)
-    torch.manual_seed(42)
-    num_train = 120
-    num_val = 30
-    train_z = torch.randn(num_train, dim)
-    train_y = torch.randint(0, num_classes, (num_train,))
-    val_z = torch.randn(num_val, dim)
-    val_y = torch.randint(0, num_classes, (num_val,))
-    samples_per_class = [max(1, int((train_y == c).sum().item())) for c in range(num_classes)]
-
-    return EmbeddingSplit(
-        train_embeddings=train_z,
-        train_labels=train_y,
-        val_embeddings=val_z,
-        val_labels=val_y,
-        samples_per_class=samples_per_class,
-    )
+    return _generate_synthetic_embedding_split(dim, num_classes)
 
 
 def configure_cuda_memory_budget(fraction: float | None = None) -> float | None:
