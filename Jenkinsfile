@@ -205,6 +205,15 @@ spec:
             # Pull latest DVC manifests and datasets from DagsHub
             pixi run --frozen -e dev dvc pull || true
 
+            # Extract vision foundation features from S3 manifest if not cached
+            if [ ! -f "data/embeddings/cached_features.pt" ]; then
+              echo ">>> Extracting vision foundation features from S3 manifest on GPU..."
+              pixi run --frozen -e dev python -m taxon_vision.pipelines.extract_features \
+                --extractor dinov3 \
+                --manifest data/manifests/dataset_manifest.parquet \
+                --out data/embeddings/cached_features.pt || true
+            fi
+
             # Execute classification head training with DINOv3 backbone, Optuna tuning, and VRAM limit
             pixi run --frozen -e dev python -m taxon_vision.models.trainer \
               --extractor dinov3 \

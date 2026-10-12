@@ -28,7 +28,7 @@ spec:
       containers:
       - name: api-service
         image: ghcr.io/foersben/taxon-vision-mlops:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         ports:
         - name: http
           containerPort: 8000
