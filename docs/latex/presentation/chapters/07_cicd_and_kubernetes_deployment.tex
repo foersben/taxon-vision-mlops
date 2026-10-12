@@ -14,21 +14,41 @@
     \qa{Why use a dual CI/CD system with GitHub Actions and Jenkins?}{GitHub Actions handles lightweight PR verification in the cloud, while private on-premise Jenkins builds heavy GPU images and deploys to our local bare-metal k3s cluster safely.}
 \end{frame}
 
-\begin{frame}{CI/CD Architecture}{Dual Workflow: GitHub Actions Cloud vs Jenkins Bare-Metal}
-    \begin{block}{Dual CI/CD Boundary Strategy}
-        \begin{itemize}\small
-            \item \textbf{Strategic Division:} Explains the necessity of separating cloud-based public PR checks from private bare-metal deployments.
-            \item \textbf{Cloud Phase:} GitHub Actions handles non-sensitive, fast static analysis (Ruff, Mypy, complexipy, license checks, OKF validation).
-            \item \textbf{Bare-Metal Phase:} Jenkins on \texttt{hive-mind} securely triggers container builds and GPU integration testing within isolated Kubernetes pods only after PR merges.
-            \item \textbf{Security Rationale:} Prevents direct network or SSH access to private GPU clusters from untrusted public pull requests.
+\begin{frame}{CI/CD Engineering}{End-to-End Workflow: The Dual-Pipeline CI/CD Bridge}
+    \begin{block}{Security \& Network Boundary Architecture}
+        \begin{itemize}\tiny
+            \item \textbf{Public Cloud Enclave (GitHub Actions):} Pull request validation (Ruff linting, Mypy strict typing, complexipy cognitive complexity $\le 15$, open license audit, OKF validation). Zero access to bare-metal hardware or production secrets.
+            \item \textbf{The Bridge:} PR merge to \texttt{develop} or \texttt{main} $\to$ Signed commit $\to$ Cloudflare Zero Trust outbound-authenticated webhook to private Jenkins controller on \texttt{hive-mind}.
+            \item \textbf{Private On-Premise Enclave (Jenkins \& k3s):} Secret injection via Linux Secret Service / unified HMAC tokens. Dedicated GPU training and k3s deployment with zero inbound firewall ports opened.
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.1cm}
+    \statusdone
+
+    \script{Here is an enterprise DevOps pattern every student must learn: how do you connect cloud GitHub to private bare-metal servers securely? You never allow GitHub Actions to SSH directly into your private GPU cluster. Instead, GitHub Actions runs fast cloud checks on public runners. Once code is approved, a Cloudflare Zero Trust webhook securely bridges the gap. Jenkins running inside our private network pulls the signed commit, injects secrets, and executes the GPU deployment locally with zero inbound ports exposed.}
+    \qa{Why not use GitHub Self-Hosted Runners directly on hive-mind?}{Self-hosted runners can execute untrusted code from malicious PRs directly on your machine. Our pipeline ensures only trusted code reaches bare-metal.}
+    \qa{How does the Cloudflare Zero Trust webhook enhance security?}{It acts as an outbound-authenticated tunnel, meaning our private Jenkins controller does not need a public IP or open inbound firewall ports to receive the merge event.}
+\end{frame}
+
+\begin{frame}{Jenkins Automation}{Jenkinsfile Execution: Step-by-Step Pipeline Trace}
+    \begin{block}{Six Declarative Pipeline Stages}
+        \begin{itemize}\scriptsize
+            \item \textbf{Stage 1 (Checkout \& Secrets):} Ephemeral workspace hydration; fetches credentials from Linux Secret Service / DagsHub token.
+            \item \textbf{Stage 2 (Environment Hydration):} \texttt{pixi install {-}{-}frozen} with NVMe Rattler cache mount (\texttt{/root/.cache/rattler/cache}) avoiding redundant package downloads.
+            \item \textbf{Stage 3 (DVC Pull):} Fast download of Parquet manifests and embeddings via \texttt{s3://dvc} Content-Addressed Storage.
+            \item \textbf{Stage 4 (GPU Training \& Optuna):} Strict 5.0 GB VRAM boundary, 150-minute stage timeout (pipeline 240m), \texttt{PYTHONUNBUFFERED=1} unbuffered live logging to console.
+            \item \textbf{Stage 5 (ONNX Export \& INT8 PTQ):} Static spatial $3 \times 224 \times 224$, dynamic batch \texttt{\{0: "batch\_size"\}}, QDQ operator insertion.
+            \item \textbf{Stage 6 (Artifact Push \& Promotion):} \texttt{dvc push} of final weights and GHCR OCI container tag promotion.
         \end{itemize}
     \end{block}
 
     \vspace{0.2cm}
     \statusdone
 
-    \script{Here is an enterprise DevOps pattern every student must learn: how do you connect cloud GitHub to private bare-metal servers securely? You never allow GitHub Actions to SSH directly into your private GPU cluster; that would create a massive security vulnerability. Instead, GitHub Actions runs fast cloud checks—linting, typing, and licensing—on public runners. Once code is approved, Jenkins running inside our private network pulls the signed commit and executes deployment locally.}
-    \qa{Why not use GitHub Self-Hosted Runners directly on hive-mind?}{Self-hosted runners on public or shared repos can execute untrusted code from malicious pull requests directly on your physical host machine. Ephemeral Jenkins agent pods isolate every job inside disposable container sandboxes.}
+    \script{Once the webhook triggers Jenkins, the declarative Jenkinsfile executes our six-stage pipeline. It starts by hydrating the workspace and injecting credentials. Stage 2 is crucial: by mounting the NVMe Rattler cache, Pixi avoids re-downloading hundreds of megabytes of Conda packages. The pipeline then pulls DVC data, runs Optuna tuning with strict VRAM limits, exports the ONNX models with dynamic batching, and finally pushes the built artifacts to GHCR. Unbuffered logging ensures we see real-time output even during long 150-minute GPU training stages.}
+    \qa{Why do we need a 5.0 GB VRAM boundary in Stage 4?}{Our bare-metal RTX 5070 Ti uses NVIDIA time-slicing to share its 16 GB VRAM across different workloads. Enforcing a strict 5.0 GB ceiling for the Jenkins training pod prevents CI pipelines from crashing the live production FastAPI inference server.}
+    \qa{Why is \texttt{PYTHONUNBUFFERED=1} important for CI logs?}{By default, Python buffers stdout, which means logs might not appear in the Jenkins console for minutes during heavy ML training loops. Unbuffered logging flushes output instantly, allowing developers to monitor progress in real time.}
 \end{frame}
 
 \begin{frame}{Code Quality}{Cognitive Complexity Gates: complexipy $\le 15$ \& Strict Typing}
@@ -48,43 +68,30 @@
     \qa{What was an example of a refactoring forced by this complexity rule?}{In \texttt{runner.py}, our embedding split preparation and index mapping functions originally scored above 20 due to combined dictionary parsing and tensor slicing. We decomposed them into dedicated helper methods, bringing complexity down to 6.}
 \end{frame}
 
-\begin{frame}{Containerization}{Multi-Stage Docker Architecture \& GHCR OCI Registry}
-    \begin{block}{Multi-Stage Container Architecture}
-        \begin{itemize}\small
-            \item \textbf{The Bloat Problem:} Naïve Docker images package full compiler toolchains and package caches, resulting in sizes $> 10$ GB.
-            \item \textbf{Multi-Stage Strategy:} An isolated builder stage resolves Pixi dependencies and compiles extensions.
-            \item \textbf{Minimal Runtime Artifacts:} Only compiled binaries and minimal runtime dependencies are copied into the final production image.
-            \item \textbf{Optimization Results:} Reduces final image size to $< 1.5$ GB, accelerating Kubernetes pod startup times and shrinking the security attack surface.
+\begin{frame}{Container \& Cluster Topology}{Container Architecture: Multi-Stage Dockerfile vs. k3s}
+    \begin{block}{Multi-Stage Container \& Deployment Spectrum}
+        \begin{itemize}\footnotesize
+            \item \textbf{Multi-Stage Dockerfile Optimization:}
+            \begin{itemize}\scriptsize
+                \item \textbf{Stage 1 (\texttt{builder}):} Ubuntu 24.04 with full Pixi toolchain, compilers, and Rattler build cache.
+                \item \textbf{Stage 2 (\texttt{runtime}):} Stripped minimal Ubuntu image copying solely the compiled environment (\texttt{/app/.pixi/envs/default}) and application source. Final image size $< 1.5$ GB (reduced from $> 10$ GB).
+            \end{itemize}
+            \item \textbf{Local Development (\texttt{flagship}):} \texttt{docker-compose.local.yaml} orchestration with local MinIO, mock DagsHub S3, and Prometheus scraper for zero-cloud offline debugging.
+            \item \textbf{Bare-Metal Production (\texttt{hive-mind}):} Declarative Kubernetes (k3s) manifests with Traefik ingress controller, zero-downtime rolling updates, and NVIDIA GPU time-slicing daemonsets.
         \end{itemize}
     \end{block}
 
-    \vspace{0.2cm}
+    \vspace{0.1cm}
     \statusdone
 
-    \script{In production, your deployment artifact is a container image. A novice Dockerfile copies the entire workspace and runs 'pip install', resulting in an 8-gigabyte bloated container full of build tools and temporary files. Our multi-stage Dockerfile builds dependencies in a disposable stage and copies only the compiled runtime binaries into the final image. This cuts our image down to under 1.5 gigabytes and makes Kubernetes pod deployments lightning-fast.}
-    \qa{Why do we push images to GitHub Container Registry (GHCR)?}{GHCR provides authenticated, versioned OCI storage integrated directly with our GitHub repository permissions and release tags, serving as our single source of truth for deployment artifacts.}
-\end{frame}
-
-\begin{frame}{Cluster Orchestration}{Lightweight Kubernetes (k3s) \& Ephemeral Pods}
-    \begin{block}{Bare-Metal Kubernetes (k3s) Orchestration}
-        \begin{itemize}\small
-            \item \textbf{k3s Edge Deployment:} We utilize k3s, a certified lightweight Kubernetes distribution tailored for single-node enterprise clusters.
-            \item \textbf{Ephemeral Agent Pods:} Jenkins dynamically provisions ephemeral agent pods to execute builds inside the cluster.
-            \item \textbf{Local Cache Mounts:} NVMe Rattler package caches are mounted to the pods, eliminating redundant network downloads.
-            \item \textbf{Clean Environment Guarantee:} Pods are automatically destroyed post-build, ensuring zero lingering state or zombie CUDA allocations.
-        \end{itemize}
-    \end{block}
-
-    \vspace{0.2cm}
-    \statusdone
-
-    \script{On our bare-metal server, we run k3s—a lightweight, highly efficient Kubernetes distribution. When Jenkins receives a build webhook, it doesn't run the job on the host OS. Instead, it spins up an ephemeral agent container pod inside k3s, executes the build with local NVMe caching, and terminates the pod immediately. This guarantees that every single build starts in a pristine, reproducible environment with zero leftover state.}
-    \qa{Why use k3s instead of standard k8s on a single bare-metal node?}{Standard Kubernetes runs dozens of heavy control-plane components that consume gigabytes of RAM. k3s packages the entire control plane into a single binary consuming under 512 megabytes of RAM, reserving maximum system memory for our models.}
+    \script{Let us examine how our containers transition from local development to production. We employ a multi-stage Dockerfile that compiles everything in a heavy builder stage, but only copies the minimal compiled environment into the runtime stage, shrinking our image from 10 gigabytes to under 1.5 gigabytes. Locally, developers use Docker Compose to mock cloud services like MinIO and DagsHub for offline debugging. In production on our bare-metal server, we orchestrate these same containers using Kubernetes manifests.}
+    \qa{How does the multi-stage build securely handle credentials during the build process?}{By building in Stage 1 and copying compiled artifacts to Stage 2, any build-time secrets or SSH keys are absent from the final runtime image layer.}
+    \qa{Why use Docker Compose locally but k3s in production?}{Docker Compose offers rapid iteration for local debugging. Production k3s provides robust self-healing, rolling deployments, Traefik ingress, and secure namespace isolation.}
 \end{frame}
 
 \begin{frame}{Deployment Strategy}{Zero-Downtime Rolling Updates \& Health Probes}
     \begin{block}{Zero-Downtime Rolling Update Topology}
-        \begin{itemize}\small
+        \begin{itemize}\tiny
             \item \textbf{The Downtime Challenge:} Updating an inference service must avoid dropping HTTP connections or returning 502 Bad Gateway errors.
             \item \textbf{Health Probes Configuration:} Kubernetes Deployment manifests define readiness and liveness probes targeting the FastAPI \texttt{/health} endpoint.
             \item \textbf{Model Warmup Sequence:} Kubernetes waits for model weights to load into GPU memory and warm up before declaring readiness.
