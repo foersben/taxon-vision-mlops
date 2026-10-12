@@ -59,6 +59,57 @@
     \qa{Why does Prometheus pull rather than the service pushing metrics?}{Pull-based monitoring prevents the application from hanging if the metrics server goes down or becomes slow, ensuring zero impact on the critical inference path.}
 \end{frame}
 
+\begin{frame}{Drift Monitoring}{Drift Metrics: Wasserstein-1 Distance vs. MMD}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Wasserstein-1 Distance (Earth Mover's)}
+                \vspace{-0.2cm}
+                {\footnotesize $$W_1(P, Q) = \int_{-\infty}^{\infty} |F_P(x) - F_Q(x)| \, dx$$}
+                \vspace{-0.2cm}
+                \footnotesize
+                \textbf{Complexity:} $\mathcal{O}(N \log N)$ over 1D projected scalar norms. Runs online inside live Prometheus exporters for real-time alerts.
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Maximum Mean Discrepancy (MMD)}
+                \vspace{-0.2cm}
+                {\scriptsize $$\text{MMD}^2(P, Q) = \mathbb{E}[k(x, x')] - 2\mathbb{E}[k(x, y)] + \mathbb{E}[k(y, y')]$$}
+                \vspace{-0.2cm}
+                \footnotesize
+                \textbf{Complexity:} $\mathcal{O}(N^2 \cdot D)$ using RBF Gaussian kernel in RKHS. Detects non-linear manifold shifts in batch audits.
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \vspace{0.15cm}
+    \statusdone
+
+    \script{We utilize two complementary mathematical strategies for drift detection. On the left, Wasserstein-1, or Earth Mover's Distance, computes the cost to transform our online 1D feature projections to match the baseline training distribution. It is fast enough to run continuously. On the right, MMD evaluates complete structural manifold shifts in high-dimensional space using kernel methods. Because it's computationally expensive, we schedule MMD for offline batch audits.}
+    \qa{Why use 1D projections for Wasserstein instead of full embeddings?}{Computing optimal transport in high dimensions is computationally intractable for real-time alerting; 1D scalar projections give us a fast, conservative proxy for distribution shifts.}
+    \qa{What does the kernel function $k$ represent in MMD?}{The kernel $k$, typically a Gaussian RBF, maps our raw embeddings into a reproducing kernel Hilbert space (RKHS) where non-linear differences between distributions become linear and measurable.}
+\end{frame}
+
+\begin{frame}{Telemetry Architecture}{Production Prometheus \& Grafana Telemetry Inventory}
+    \begin{block}{Production Metric Scrape Architecture}
+        \footnotesize
+        Pull-based collection scraping FastAPI \texttt{/metrics} endpoint every 15 seconds.
+        \begin{enumerate}
+            \item \texttt{taxon\_inference\_latency\_seconds} (p50/p95/p99 histograms across preprocess, ONNX, and conformal gates).
+            \item \texttt{taxon\_predictions\_total} (counter by species and status: singleton, ambiguous, OOD).
+            \item \texttt{taxon\_conformal\_set\_size} (histogram and real-time gauge of $|\hat{C}(x)|$).
+            \item \texttt{taxon\_ood\_energy} (Helmholtz free energy distribution).
+            \item \texttt{taxon\_human\_referrals\_active} (Label Studio triage queue depth).
+        \end{enumerate}
+    \end{block}
+
+    \vspace{0.15cm}
+    \statusdone
+
+    \script{Our telemetry inventory relies on a robust pull-based collection. Prometheus scrapes the FastAPI `/metrics` endpoint every 15 seconds. We track standard latency histograms alongside deep epistemic metrics like the conformal set size, OOD free energy, and the human referral queue depth. This unified pipeline enables Grafana to alert us not just when the service slows down, but when its statistical confidence deteriorates.}
+    \qa{What is the advantage of tracking conformal set size as a histogram rather than a simple average?}{A histogram reveals if the model is perfectly confident on 90\% of inputs but completely uncertain on 10\%, which an average might hide as a mild, acceptable increase.}
+    \qa{Why measure OOD energy instead of standard softmax probabilities?}{Softmax is notoriously overconfident, pushing unknown inputs to high probability classes. Helmholtz free energy provides a more reliable, unnormalized measure of how far an input is from the training manifold.}
+\end{frame}
+
 \begin{frame}{Drift Monitoring}{Data \& Concept Drift: Wasserstein-1 Distance vs MMD}
     \begin{block}{Multi-Scale Distributional Drift Detection}
         \begin{itemize}\small

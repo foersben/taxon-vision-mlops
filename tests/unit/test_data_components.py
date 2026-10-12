@@ -65,7 +65,45 @@ def test_s3_image_streamer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> N
 
 
 @pytest.mark.asyncio
-async def test_inat_api_client() -> None:
+async def test_inat_api_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    class MockAsyncResponse:
+        def __init__(self, json_data: dict[str, Any]) -> None:
+            self._json = json_data
+
+        def raise_for_status(self) -> None:
+            pass
+
+        def json(self) -> dict[str, Any]:
+            return self._json
+
+    class MockAsyncClient:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        async def __aenter__(self) -> MockAsyncClient:
+            return self
+
+        async def __aexit__(self, *args: Any) -> None:
+            pass
+
+        async def get(self, _url: str, **_kwargs: Any) -> MockAsyncResponse:
+            return MockAsyncResponse(
+                {
+                    "results": [
+                        {
+                            "id": "obs_1",
+                            "photos": [{"license_code": "cc-by", "url": "square_url1", "attribution": "attr1"}],
+                        },
+                        {
+                            "id": "obs_2",
+                            "photos": [{"license_code": "cc-by", "url": "square_url2", "attribution": "attr2"}],
+                        },
+                    ]
+                }
+            )
+
+    monkeypatch.setattr("httpx.AsyncClient", MockAsyncClient)
+
     client = INatAPIClient(max_requests_per_minute=600)
     data = await client.fetch_observations(taxon_id=1, per_page=2)
     assert len(data) == 2
