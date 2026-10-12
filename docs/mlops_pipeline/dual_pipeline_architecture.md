@@ -65,19 +65,30 @@ Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely be
 
 ## 2. Automated CI/CD Orchestration and Model Promotion
 
-The lifecycle of Pipeline 1 is strictly governed by Continuous Integration and Continuous Deployment (CI/CD) interlocks:
+The lifecycle of Pipeline 1 is strictly governed by Continuous Integration and Continuous Deployment (CI/CD) interlocks across two decoupled systems:
 
 ```mermaid
-flowchart LR
-    G1["Git Push: Feature Branch"] --> G2["GitHub Actions Cloud Runner<br/>Lint, Type-Check, and Unit Tests"]
-    G2 --> G3["Webhook Trigger"]
-    G3 --> G4["Bare-Metal Runner<br/>RTX 5070 Ti P-Core Pinned"]
-    G4 --> G5["DVC Pull from DagsHub"]
-    G5 --> G6["Training and INT8 ONNX Export"]
-    G6 --> G7{"Conformal Coverage Gate<br/>Empirical Coverage at least 1 - alpha?"}
-    G7 -->|Fail| G8["Throw Fatal Error and Block Merge"]
-    G7 -->|Pass| G9["Programmatic Promotion<br/>MLflow Production Stage"]
+flowchart TD
+    subgraph GHA["GitHub Actions (Cloud CI & Container Registry)"]
+        G1["Git Push: PR or develop"] --> G2["Quality Gate: Ruff, MyPy, Tests, OKF"]
+        G2 --> G3["Complexipy Gate: Cognitive Complexity <= 15"]
+        G3 --> G4["Push to main: Build & Publish Container to GHCR"]
+    end
+
+    subgraph Jenkins["Jenkins on hive-mind (Bare-Metal CD & GPU)"]
+        J1["Webhook Trigger on main"] --> J2["Ephemeral k3s Agent Pod"]
+        J2 --> J3["GPU Feature Extraction: extract_features.py"]
+        J3 --> J4["Optuna Head Training & ONNX Export"]
+        J4 --> J5["Conformal Coverage & PR-AUC Promotion"]
+        J5 --> J6["DVC Commit & Push to DagsHub S3"]
+        J6 --> J7["Zero-Downtime Rollout Restart in k3s"]
+    end
+
+    G4 -.->|Pulls Image| J7
 ```
+
+* **GitHub Actions Plane:** Operates cloud-based quality gates on pull requests and pushes to `develop` and `main`. It enforces static typing, unit testing with 80% coverage minimums, open-license compliance, OKF frontmatter validation, and cognitive complexity analysis via `complexipy`. When code merges to `main`, GitHub Actions automatically builds the production container, pulls latest DVC model checkpoints from DagsHub, and publishes multi-tagged images to GitHub Container Registry (`ghcr.io/foersben/taxon-vision-mlops:latest` and `:sha-...`).
+* **Jenkins Bare-Metal Plane:** Receives authenticated webhooks on `hive-mind`, dispatching ephemeral Kubernetes pods into `k3s`. On `main`, the GPU agent claims 1 of 4 NVIDIA time-slicing slots, extracts ViT embeddings from S3 image observations via `taxon_vision.pipelines.extract_features`, executes Optuna hyperparameter sweeps, evaluates Split Conformal Prediction coverage, commits checkpoints to DagsHub DVC, and issues zero-downtime rolling restarts to the live deployment.
 
 ### Cryptographic Provenance Binding
 

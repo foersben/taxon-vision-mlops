@@ -168,13 +168,28 @@ When commits are pushed to `main` or release tags, the declarative pipeline in [
 * **Step 1 (Toolchain Provisioning):** The container runner installs `kubernetes-client` (from conda-forge, exposing `kubectl`) and standalone `git` into `/root/.pixi/bin`.
 * **Step 2 (Verification Gates):** Executes Ruff linting, MyPy type checks, License compliance audits, OKF validation, unit tests (with 78% line coverage threshold), integration tests, and strict Zensical build.
 * **Step 3 (GPU Model Training & Checkpoint - main branch only):**
-    * Targets 1 of the 4 NVIDIA time-slicing partitions on `hive-mind`; this requires the agent pod to declare `nvidia.com/gpu: 1`, which is still pending in the `Jenkinsfile`.
-    * Pulls the latest versioned dataset from the DagsHub DVC remote (`s3://dvc`).
-    * Caps VRAM at 70% (`--cuda-memory-fraction 0.7`) to prevent starvation of live services.
-    * Executes classification head training: `pixi run -e dev python -m taxon_vision.models.trainer --extractor dinov3 --epochs 15 --batch-size 64 --cuda-memory-fraction 0.7`.
-    * Re-exports the ONNX graph (`taxon_vision.inference.onnx_exporter`) and pushes `models/checkpoints/head.pt` and `models/checkpoints/model.onnx` to the DVC remote.
+    * Targets 1 of the 4 NVIDIA time-slicing partitions on `hive-mind` using the dedicated GPU agent pod requesting `nvidia.com/gpu: 1` in `Jenkinsfile`.
+    * Pulls the latest versioned dataset and manifests from the DagsHub DVC remote (`s3://dvc`).
+    * Extracts ViT feature representations from S3 images: `pixi run -e dev python -m taxon_vision.pipelines.extract_features --extractor dinov3 --manifest data/manifests/dataset_manifest.parquet --out data/embeddings/cached_features.pt`.
+    * Caps VRAM at 70% (`--cuda-memory-fraction 0.7`) to reserve headroom for live services.
+    * Executes classification head training with Optuna tuning: `pixi run -e dev python -m taxon_vision.models.trainer --extractor dinov3 --epochs 15 --tune --n-trials 10 --cuda-memory-fraction 0.7`.
+    * Re-exports the ONNX graph (`taxon_vision.inference.onnx_exporter`) and pushes `models/checkpoints/head.pt` and `models/checkpoints/model.onnx` to the DagsHub DVC remote.
     * Logs metrics and registry aliases to DagsHub MLflow.
 * **Step 4 (Deployment Rollout):**
-    * Applies [deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) using `jenkins-deployer-role` permissions.
+    * Applies [deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) using `jenkins-deployer-role` permissions. `imagePullPolicy: Always` ensures the pod pulls the fresh container published by GitHub Actions.
     * Triggers zero-downtime rolling update: `kubectl rollout restart deployment/taxon-vision-api -n taxon-vision`.
     * Awaits readiness probe verification: `kubectl rollout status deployment/taxon-vision-api -n taxon-vision --timeout=120s`.
+
+## Section 9: Container Packaging & GitHub Container Registry (GHCR)
+
+The production serving image is containerized using a non-root, multi-stage build and published to the GitHub Container Registry.
+
+### Automated CI/CD Publishing Pipeline
+
+When commits merge to `main`, GitHub Actions (`.github/workflows/ci.yml`) executes the `build-and-push-container` workflow:
+
+* **Authentication & Model Hydration:** The workflow authenticates against DagsHub DVC using `DAGSHUB_TOKEN` and pulls the latest promoted checkpoints (`head.pt` and `model.onnx`) directly into `models/checkpoints/`.
+* **Multi-Tag Container Serialization:** Docker Buildx builds the image from `Dockerfile` and publishes it to GitHub Container Registry under two tags:
+    * `ghcr.io/foersben/taxon-vision-mlops:latest` (stable production tracking tag)
+    * `ghcr.io/foersben/taxon-vision-mlops:sha-<short_sha>` (immutable commit-bound tag)
+* **Kubernetes Consumption:** The Kubernetes deployment manifest ([deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml)) specifies `ghcr.io/foersben/taxon-vision-mlops:latest` with `imagePullPolicy: Always`, ensuring that pod rollout restarts immediately pull and activate the newly published release.

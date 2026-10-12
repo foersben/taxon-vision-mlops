@@ -15,13 +15,16 @@ TaxonVision, including the step-by-step instructions for reproducing and maintai
 
 ## Physical Server & Host Configuration
 
-### Host Hardware Profile
+### Host Hardware Profile & Topography
 
-* **Node Identity:** Single-node bare-metal server (`hive-mind`) running Ubuntu 26.04.1 LTS (codename `resolute`).
-* **Processor (CPU):** Intel Core i7-14700K (20 physical cores, 28 threads).
-* **System Memory (RAM):** 128 GB DDR5.
-* **Graphics Hardware (GPU):** NVIDIA GeForce RTX 5070 Ti (16 GB VRAM, Blackwell, compute capability 12.0) with NVIDIA driver 615.71.09 (CUDA 13.4 user-mode driver).
-* **Storage:** NVMe SSD storage with Full Disk Encryption (LUKS).
+The system enforces strict operational separation between two physical machines:
+
+* **Workstation (`flagship`):** Local developer machine used exclusively as an authoring, code review, and orchestration plane. It possesses zero dedicated GPU compute allocations for PyTorch model training or feature extraction.
+* **Bare-Metal Compute Node (`hive-mind`):** Remote production server running Ubuntu 26.04.1 LTS (codename `resolute`):
+    * **Processor (CPU):** Intel Core i7-14700K (20 physical cores, 28 threads).
+    * **System Memory (RAM):** 128 GB DDR5.
+    * **Graphics Hardware (GPU):** NVIDIA GeForce RTX 5070 Ti (16 GB VRAM, Blackwell architecture, compute capability 12.0) with NVIDIA driver 615.71.09 (CUDA 13.4 user-mode driver).
+    * **Storage:** NVMe SSD storage with Full Disk Encryption (LUKS).
 
 ### Remote Boot & Remote LUKS Decryption Setup
 
@@ -131,6 +134,10 @@ kubectl get nodes "-o=custom-columns=NAME:.metadata.name,GPU:.status.allocatable
 ```
 
 The output confirms 4 allocatable `nvidia.com/gpu` virtual units on the `hive-mind` node, permitting concurrent multi-tenant execution across Web API inference, PyTorch batch training, and CI test runners without exclusive locking.
+
+### Live Production Ingress
+
+The live API and server-rendered operator dashboard are publicly accessible at `https://taxon.benjamin-foerster.eu/`. Edge traffic terminates on Cloudflare and routes through an outbound-initiated Cloudflare Tunnel (`cloudflared`) directly to the Kubernetes NodePort service (`30080`) in the `taxon-vision` namespace, maintaining a zero-open-inbound-ports posture on the host network.
 
 ## Actions Runner Controller (ARC) Setup
 
@@ -273,30 +280,29 @@ just dvc-push
 
 * **Package & Environment Management:** Strictly managed via `pixi`. We utilise a dual-environment strategy: `ci-dev` (CPU only) for continuous integration, and `dev` (GPU enabled) for the remote GPU runners; model training is never executed on the developer workstation.
 * **Task Automation:** All pipeline steps, testing, and linting are executed via `just` (as defined in our `Justfile`).
-* **CI/CD Pipelines:** A robust `.github/workflows/ci.yml` triggers exclusively on pushes or pull requests to the `main` and `develop` branches. Deployments are secured via GitHub Environments (`taxon-vision-prod` and `taxon-vision-staging`), requiring manual administrator approval to prevent unauthorised execution on our bare-metal infrastructure.
+* **CI/CD Pipelines:** GitHub Actions (`.github/workflows/ci.yml`) triggers on pushes or pull requests to `main` and `develop`. It runs automated quality gates (Ruff, MyPy, pytest coverage with an 80% threshold, license compliance, OKF frontmatter validation, and cognitive complexity via `complexipy`). Upon merging to `main`, GitHub Actions automatically builds and publishes the production container to GitHub Container Registry (`ghcr.io/foersben/taxon-vision-mlops:latest` and `:sha-...`), pulling model checkpoints from DagsHub DVC. All legacy manual deployment approvals and phantom environments have been removed.
 * **Data Versioning & Tracking:** We rely on DVC for dataset immutability and MLflow (hosted on DagsHub) for experiment tracking.
 
 ## Production CI/CD Architecture: GitHub Actions + Jenkins Hybrid
 
 The system implements a production two-layer CI/CD architecture:
 
-* **Layer 1 - GitHub Actions (lightweight gates):** Lint, type checks, unit tests (CPU), license audit, OKF validation, conformal audit, Docker builds, and DVC push/pull run on ARC runner pods.
-* **Layer 2 - Jenkins (heavy compute & continuous delivery):** A self-hosted Jenkins controller on the bare-metal host (`hive-mind`) receives webhooks through a zero-open-ports Cloudflare Tunnel. Jenkins dispatches ephemeral agent pods inside `k3s` via the `jenkins-agent` ServiceAccount across isolated pipeline stages:
+* **Layer 1 - GitHub Actions (quality gates & container publishing):** Lint, type checks, unit tests (CPU), license audit, OKF validation, conformal audit, cognitive complexity scans (`complexipy`), and automated Docker container builds pushing to GHCR on `main`.
+* **Layer 2 - Jenkins (bare-metal compute & continuous delivery):** A self-hosted Jenkins controller on `hive-mind` receives webhooks through a zero-open-ports Cloudflare Tunnel. Jenkins dispatches ephemeral agent pods inside `k3s` via the `jenkins-agent` ServiceAccount across isolated pipeline stages:
     * `Prepare Toolchain` - Provisions standalone `git` and `kubernetes-client` via Pixi, mounting the host NVMe Rattler cache for sub-second dependency resolution.
     * `Static Quality & Invariants` - Executes Ruff linting, MyPy type checks, license compliance auditing, and OKF graph validation concurrently.
-    * `Unit & Integration Tests` - Runs pytest suites with 78% line coverage threshold and verifies split conformal coverage error bounds.
-    * `Documentation Strict Build` - Validates OKF knowledge graph and verifies doc integrity via `zensical build --strict`.
-    * `Model Training & Checkpoint (GPU)` - Runs on `main` using bare-metal GPU time-slicing on `hive-mind`, pulling DVC datasets, training with early stopping and best weight restoration, exporting ONNX, and logging to DagsHub MLflow.
-    * `Deployment Rollout` - Automatically applies [deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) and monitors zero-downtime rolling update status in the `taxon-vision` namespace.
+    * `Unit Tests` - Runs pytest unit test suite against `src/taxon_vision`.
+    * `Integration & Conformal Invariants` - Verifies integration endpoints and asserts split conformal prediction empirical coverage bounds ($1 - \alpha \ge 0.95$).
+    * `Documentation Strict Build` - Validates OKF knowledge graph and verifies documentation integrity via `zensical build --strict`.
+    * `Model Training & Checkpoint (GPU)` - Runs on `main` within a dedicated GPU agent pod requesting `nvidia.com/gpu: 1` on `hive-mind`. Pulls DVC manifests, streams real image observations from AWS S3 via `taxon_vision.pipelines.extract_features` into `cached_features.pt`, trains the head via Optuna sweeps, exports the ONNX graph, and pushes updated checkpoints to DagsHub DVC.
+    * `Deploy to Kubernetes` - Automatically applies [deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) (`imagePullPolicy: Always`) and monitors zero-downtime rolling update status in the `taxon-vision` namespace.
 
 ## Outstanding Implementation Tasks
 
-* **Data Pipeline Execution:** Actual execution of DVC pipelines to ingest and transform iNaturalist/GBIF DarwinCore observation data.
-* **Model Training & Benchmarking:** Implementation of the multi-backbone Pareto benchmarking (`BioCLIP-2`, `DINOv3`, `MobileNetV4`) as defined in the strategy report.
-* **Inference Optimisation:** ONNX Runtime export with static INT8 ONNX PTQ for low-latency inference.
-* **Uncertainty Calibration:** Verification of Split Conformal Prediction coverage bounds and OOD detection logic on full observation splits.
-* **Web Service & Dashboard:** Validation and enhancement of the unified FastAPI machine REST API and the server-rendered Jinja2/HTMX operator dashboard.
-* **Observability Stack:** Deployment of the Prometheus telemetry stack and Grafana dashboards for monitoring concept drift and latency budgets.
+* **Large-Scale Data Scaling:** Scaling the DarwinCore ingestion pipeline from pilot observation partitions (518 exemplars) to regional and global horizons (50,000+ observations).
+* **Multi-Backbone Pareto Benchmarking:** Implementation of empirical Pareto sweeps comparing DINOv3 against BioCLIP-2, DINOv2, and MobileNetV4.
+* **Static INT8 ONNX Quantization:** Calibration of static INT8 ONNX Post-Training Quantization (PTQ) for ultra-low latency serving.
+* **Unscheduled Drift and Active Learning Integration:** Automating scheduled DAG triggers for Evidently feature drift detection and BADGE active learning acquisition loops.
 
 ## Local Development Stack
 
