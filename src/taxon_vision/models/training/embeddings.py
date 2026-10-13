@@ -49,7 +49,19 @@ def _compute_additional_metrics(val_logits: torch.Tensor, val_lbl: torch.Tensor)
             y_true_bin = np.hstack((1 - y_true_bin, y_true_bin))
 
         val_f1 = float(f1_score(y_true, preds, average="macro", zero_division=0))
-        val_pr_auc = float(average_precision_score(y_true_bin, y_score, average="macro"))
+
+        present_classes = np.unique(y_true)
+        if len(present_classes) == 0:
+            val_pr_auc = 0.0
+        elif len(present_classes) < num_classes:
+            ap_scores = [
+                float(average_precision_score(y_true_bin[:, c], y_score[:, c]))
+                for c in present_classes
+                if np.sum(y_true_bin[:, c]) > 0
+            ]
+            val_pr_auc = float(np.mean(ap_scores)) if ap_scores else 0.0
+        else:
+            val_pr_auc = float(average_precision_score(y_true_bin, y_score, average="macro"))
         return val_f1, val_pr_auc
     except Exception:
         return 0.0, 0.0
@@ -275,11 +287,12 @@ def train_head_on_cached_embeddings(
         if scheduler is not None:
             scheduler.step(val_pr_auc)
 
+        tracking_score = val_pr_auc if val_pr_auc > 0.0 else val_acc
         best_pr_auc, best_weights, patience_counter = _track_checkpoint(
-            head, val_pr_auc, best_pr_auc, best_weights, patience_counter
+            head, tracking_score, best_pr_auc, best_weights, patience_counter
         )
 
-        if _should_stop_early(epoch, val_pr_auc, patience_counter, cfg):
+        if _should_stop_early(epoch, tracking_score, patience_counter, cfg):
             break
 
     if cfg.restore_best_weights and best_weights is not None:

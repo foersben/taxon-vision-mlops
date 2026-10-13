@@ -4,16 +4,147 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import io
 import logging
 from collections.abc import Generator
 from pathlib import Path
+from typing import Any
 
 import httpx
 import polars as pl
 from PIL import Image
 
 logger = logging.getLogger(__name__)
+
+
+def _prepare_balanced_manifest(
+    df: pl.DataFrame,
+    limit: int | None,
+    shuffle: bool,
+    seed: int,
+) -> list[dict[str, Any]]:
+    """Sample records evenly across unique taxa in the manifest.
+
+    Args:
+        df: Polars DataFrame holding observation records.
+        limit: Optional upper bound on records to yield.
+        shuffle: Whether to pseudorandomly shuffle records.
+        seed: PRNG seed for reproducible shuffling.
+
+    Returns:
+        List of observation record dictionaries.
+    """
+    taxa = df["taxon_id"].unique().to_list()
+    per_taxon = max(1, (limit + len(taxa) - 1) // len(taxa)) if limit is not None else len(df)
+    dfs = []
+    for tid in taxa:
+        sub = df.filter(pl.col("taxon_id") == tid)
+        if shuffle:
+            sub = sub.sample(fraction=1.0, shuffle=True, seed=seed)
+        dfs.append(sub.head(per_taxon))
+    combined = pl.concat(dfs)
+    if shuffle:
+        combined = combined.sample(fraction=1.0, shuffle=True, seed=seed)
+    return combined.head(limit).to_dicts() if limit is not None else combined.to_dicts()
+
+
+def _prepare_stream_records(
+    df: pl.DataFrame,
+    limit: int | None,
+    shuffle: bool,
+    balanced: bool,
+    seed: int,
+) -> list[dict[str, Any]]:
+    """Select, balance, and shuffle observation records for streaming.
+
+    Args:
+        df: Polars DataFrame holding observation records.
+        limit: Optional upper bound on records to yield.
+        shuffle: Whether to pseudorandomly shuffle records.
+        balanced: Whether to balance sample counts across unique taxon categories.
+        seed: PRNG seed for reproducible shuffling.
+
+    Returns:
+        List of selected observation record dictionaries.
+    """
+    if balanced and "taxon_id" in df.columns:
+        return _prepare_balanced_manifest(df, limit, shuffle, seed)
+    if shuffle:
+        shuffled = df.sample(fraction=1.0, shuffle=True, seed=seed)
+        return shuffled.head(limit).to_dicts() if limit is not None else shuffled.to_dicts()
+    return df.head(limit).to_dicts() if limit is not None else df.to_dicts()
+
+
+def _fetch_record_image(
+    record: dict[str, Any],
+    client: httpx.Client | None = None,
+) -> tuple[str, int, Image.Image] | None:
+    """Fetch and decode an image from a single observation record.
+
+    Args:
+        record: Observation record dictionary.
+        client: Optional existing httpx.Client to reuse.
+
+    Returns:
+        Tuple of (observation_uuid, taxon_id, Image) or None if retrieval failed.
+    """
+    obs_uuid = str(record["observation_uuid"])
+    taxon_id = int(record["taxon_id"])
+    image_url = str(record["image_url"])
+    try:
+        if client is not None:
+            response = client.get(image_url)
+        else:
+            with httpx.Client(timeout=15.0) as local_client:
+                response = local_client.get(image_url)
+        response.raise_for_status()
+        raw_img = Image.open(io.BytesIO(response.content))
+        img: Image.Image = raw_img.convert("RGB") if raw_img.mode != "RGB" else raw_img
+        return obs_uuid, taxon_id, img
+    except Exception as e:
+        logger.warning("Failed to stream %s from %s: %s", obs_uuid, image_url, e)
+        return None
+
+
+def _stream_sequential(
+    records: list[dict[str, Any]],
+) -> Generator[tuple[str, int, Image.Image], None, None]:
+    """Stream records sequentially using a persistent HTTP client session.
+
+    Args:
+        records: Observation record dictionaries to stream.
+
+    Yields:
+        Tuple of (observation_uuid, taxon_id, Image).
+    """
+    with httpx.Client(timeout=15.0) as client:
+        for record in records:
+            res = _fetch_record_image(record, client=client)
+            if res is not None:
+                yield res
+
+
+def _stream_concurrent(
+    records: list[dict[str, Any]],
+    max_workers: int,
+) -> Generator[tuple[str, int, Image.Image], None, None]:
+    """Stream records concurrently using a ThreadPoolExecutor.
+
+    Args:
+        records: Observation record dictionaries to stream.
+        max_workers: Thread worker pool concurrency limit.
+
+    Yields:
+        Tuple of (observation_uuid, taxon_id, Image).
+    """
+    chunk_size = max(1, min(32, len(records)))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        for i in range(0, len(records), chunk_size):
+            chunk = records[i : i + chunk_size]
+            for result in executor.map(_fetch_record_image, chunk):
+                if result is not None:
+                    yield result
 
 
 class S3ImageStreamer:
@@ -51,41 +182,37 @@ class S3ImageStreamer:
 
         self.df = pl.read_parquet(self.manifest_path)
 
-    def stream_images(self, limit: int | None = None) -> Generator[tuple[str, int, Image.Image], None, None]:
+    def stream_images(
+        self,
+        limit: int | None = None,
+        shuffle: bool = False,
+        balanced: bool = False,
+        seed: int = 42,
+        max_workers: int = 8,
+    ) -> Generator[tuple[str, int, Image.Image], None, None]:
         """Lazily yield streamed PIL images directly from remote S3 URLs.
 
         Why:
             Executing deep learning training or representation extraction without downloading the entire dataset prevents disk saturation and enables training on edge or memory-constrained workstations. Yielding a lazy generator ensures only one image buffer exists in RAM at any given instant per worker.
 
         How:
-            Iterates across dictionary records from the manifest up to the specified limit. Maintains an open `httpx.Client` session with connection pooling, issues HTTP GET requests, validates status codes via `raise_for_status()`, decodes binary buffers into PIL Images, and normalizes color modes to 3-channel RGB.
+            Prepares selected, balanced, and shuffled records from the manifest, then streams images sequentially or concurrently via connection-pooled HTTP workers.
 
         Args:
             limit: Optional upper bound on the number of images to yield from the manifest.
+            shuffle: Whether to pseudorandomly shuffle observation records prior to streaming.
+            balanced: Whether to balance sample counts across unique taxon categories.
+            seed: PRNG seed for reproducible manifest shuffling.
+            max_workers: Concurrency level for parallel HTTP GET streaming requests.
 
         Yields:
             Tuple of (observation_uuid, taxon_id, PIL.Image.Image) for each streamed record.
         """
-        records = self.df.to_dicts()
-        if limit is not None:
-            records = records[:limit]
-
-        with httpx.Client(timeout=15.0) as client:
-            for record in records:
-                obs_uuid = str(record["observation_uuid"])
-                taxon_id = int(record["taxon_id"])
-                image_url = str(record["image_url"])
-
-                try:
-                    response = client.get(image_url)
-                    response.raise_for_status()
-                    img: Image.Image = Image.open(io.BytesIO(response.content))
-                    # Convert to RGB to handle grayscale/RGBA inconsistencies
-                    if img.mode != "RGB":
-                        img = img.convert("RGB")
-                    yield obs_uuid, taxon_id, img
-                except Exception as e:
-                    logger.warning("Failed to stream %s from %s: %s", obs_uuid, image_url, e)
+        records = _prepare_stream_records(self.df, limit, shuffle, balanced, seed)
+        if max_workers <= 1 or len(records) <= 2:
+            yield from _stream_sequential(records)
+        else:
+            yield from _stream_concurrent(records, max_workers)
 
 
 def main() -> None:

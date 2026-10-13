@@ -47,6 +47,10 @@ spec:
             memory: "2Gi"
             # In clusters with NVIDIA time-slicing enabled, uncomment below to mount a virtual GPU slice:
             # nvidia.com/gpu: "1"
+        volumeMounts:
+        - name: checkpoints-volume
+          mountPath: /app/models/checkpoints
+          readOnly: true
         livenessProbe:
           httpGet:
             path: /health
@@ -63,6 +67,11 @@ spec:
           periodSeconds: 5
           timeoutSeconds: 3
           failureThreshold: 2
+      volumes:
+      - name: checkpoints-volume
+        hostPath:
+          path: /home/benni/taxon-vision-mlops/models/checkpoints
+          type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: Service

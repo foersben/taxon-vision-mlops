@@ -276,7 +276,7 @@ def stream_and_extract_representations(
     pending_labels: list[int] = []
 
     count = 0
-    for obs_uuid, taxon_id, pil_img in streamer.stream_images(limit=limit):
+    for obs_uuid, taxon_id, pil_img in streamer.stream_images(limit=limit, shuffle=True, balanced=True):
         if taxon_id not in taxon_to_index:
             logger.debug("Skipping unmapped taxon ID %d for observation %s", taxon_id, obs_uuid)
             continue
