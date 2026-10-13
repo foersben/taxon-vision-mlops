@@ -509,26 +509,32 @@ spec:
             which kubectl >/dev/null 2>&1 || pixi global install kubernetes-client
             git config --global --add safe.directory "*"
             pixi install --frozen -e dev
-            pixi run --frozen -e dev dvc pull || true
+            pixi run --frozen -e dev dvc pull -f
 
             # Extract vision foundation features from S3 manifest if not cached
             if [ ! -f "data/embeddings/cached_features.pt" ]; then
               pixi run --frozen -e dev python -m taxon_vision.pipelines.extract_features \
-                --extractor dinov3 \
+                --extractor "${EXTRACTOR:-dinov3}" \
                 --manifest data/manifests/dataset_manifest.parquet \
-                --out data/embeddings/cached_features.pt || true
+                --out data/embeddings/cached_features.pt
             fi
 
-            # Train classification head with Optuna Bayesian optimization
+            # Train classification head with calibrated hyperparameters
+            EXTRA_OPTS=""
+            if [ "${TUNE_HYPERPARAMETERS:-false}" = "true" ]; then
+              EXTRA_OPTS="--tune --n-trials 10"
+            fi
+
             pixi run --frozen -e dev python -m taxon_vision.models.trainer \
-              --extractor dinov3 \
+              --extractor "${EXTRACTOR:-dinov3}" \
               --epochs 15 \
-              --tune \
-              --n-trials 10 \
-              --cuda-memory-fraction 0.7
+              --require-cache \
+              --require-promotion \
+              --cuda-memory-fraction 0.7 \
+              $EXTRA_OPTS
 
             # Re-export ONNX computational graph and commit artifacts
-            pixi run --frozen -e dev python -m taxon_vision.inference.onnx_exporter --extractor dinov3
+            pixi run --frozen -e dev python -m taxon_vision.inference.onnx_exporter --extractor "${EXTRACTOR:-dinov3}"
             pixi run --frozen -e dev dvc commit -f models/checkpoints/head.pt models/checkpoints/model.onnx
             pixi run --frozen -e dev dvc push models/checkpoints/head.pt models/checkpoints/model.onnx
           '''

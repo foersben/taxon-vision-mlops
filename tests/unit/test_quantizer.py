@@ -2,8 +2,11 @@
 # SPDX-License-Identifier: MIT
 """Unit tests for static and dynamic ONNX quantization routines."""
 
+from __future__ import annotations
+
 import importlib.util
 import tempfile
+from collections.abc import Generator
 from pathlib import Path
 
 import numpy as np
@@ -17,6 +20,7 @@ from taxon_vision.inference.quantizer import (
 
 try:
     import onnxruntime
+    import onnxruntime.quantization
     import torch
     import torch.nn as nn
 
@@ -26,13 +30,15 @@ except ImportError:
 
 
 class DummyVisionModel(nn.Module):
-    def __init__(self):
+    """Minimal convolutional network for ONNX quantization testing."""
+
+    def __init__(self) -> None:
         super().__init__()
         self.conv = nn.Conv2d(3, 8, kernel_size=3, padding=1)
         self.relu = nn.ReLU()
         self.fc = nn.Linear(8 * 4 * 4, 2)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.conv(x)
         x = self.relu(x)
         x = x.view(x.size(0), -1)
@@ -40,7 +46,8 @@ class DummyVisionModel(nn.Module):
 
 
 @pytest.fixture
-def dummy_onnx_model():
+def dummy_onnx_model() -> Generator[Path, None, None]:
+    """Export a lightweight dummy model into a temporary ONNX file fixture."""
     if not HAS_DEPS:
         pytest.skip("Requires torch, onnx, onnxruntime")
 
@@ -53,7 +60,7 @@ def dummy_onnx_model():
 
         torch.onnx.export(
             model,
-            dummy_input,
+            (dummy_input,),
             str(input_path),
             input_names=["input"],
             output_names=["output"],
@@ -62,7 +69,8 @@ def dummy_onnx_model():
         yield input_path
 
 
-def test_taxon_calibration_data_reader():
+def test_taxon_calibration_data_reader() -> None:
+    """Verify that TaxonCalibrationDataReader yields batches sequentially and rewinds cleanly."""
     batches = [np.random.randn(2, 3, 4, 4).astype(np.float32) for _ in range(3)]
     reader = TaxonCalibrationDataReader(batches, input_name="input")
 
@@ -83,11 +91,11 @@ def test_taxon_calibration_data_reader():
 
 
 @pytest.mark.skipif(not HAS_DEPS, reason="Requires torch, onnx, onnxruntime")
-def test_quantize_onnx_dynamic(dummy_onnx_model, tmp_path):
+def test_quantize_onnx_dynamic(dummy_onnx_model: Path, tmp_path: Path) -> None:
+    """Verify that dynamic ONNX quantization produces a valid executable ONNX session."""
     output_path = tmp_path / "quantized_dynamic.onnx"
 
     result_path = quantize_onnx_dynamic(dummy_onnx_model, output_path)
-
     assert result_path.exists()
 
     # Verify it can be loaded
@@ -101,7 +109,8 @@ def test_quantize_onnx_dynamic(dummy_onnx_model, tmp_path):
 
 
 @pytest.mark.skipif(not HAS_DEPS, reason="Requires torch, onnx, onnxruntime")
-def test_quantize_onnx_static(dummy_onnx_model, tmp_path):
+def test_quantize_onnx_static(dummy_onnx_model: Path, tmp_path: Path) -> None:
+    """Verify that static ONNX calibration quantization yields a valid runnable model."""
     output_path = tmp_path / "quantized_static.onnx"
 
     # Create calibration data
@@ -109,7 +118,6 @@ def test_quantize_onnx_static(dummy_onnx_model, tmp_path):
     reader = TaxonCalibrationDataReader(batches, input_name="input")
 
     result_path = quantize_onnx_static(dummy_onnx_model, output_path, reader)
-
     assert result_path.exists()
 
     # Verify it can be loaded
@@ -120,3 +128,19 @@ def test_quantize_onnx_static(dummy_onnx_model, tmp_path):
     dummy_input = np.random.randn(1, 3, 4, 4).astype(np.float32)
     outputs = session.run(None, {"input": dummy_input})
     assert outputs[0].shape == (1, 2)
+
+
+@pytest.mark.skipif(not HAS_DEPS, reason="Requires torch, onnx, onnxruntime")
+def test_quantize_onnx_dynamic_fallback(
+    dummy_onnx_model: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Verify that quantize_onnx_dynamic falls back to copying source model when quantization fails."""
+
+    def mock_quantize(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("Simulated quantization failure")
+
+    monkeypatch.setattr(onnxruntime.quantization, "quantize_dynamic", mock_quantize)
+    output_path = tmp_path / "fallback_quant.onnx"
+    result = quantize_onnx_dynamic(dummy_onnx_model, output_path)
+    assert result.exists()
+    assert result.read_bytes() == dummy_onnx_model.read_bytes()

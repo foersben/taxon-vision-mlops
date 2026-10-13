@@ -2,12 +2,15 @@
 # SPDX-License-Identifier: MIT
 """Unit tests for centralized configuration and settings parsing."""
 
+from __future__ import annotations
+
 from pathlib import Path
 
 from taxon_vision.config import Settings, get_settings
 
 
 def test_default_settings_loading() -> None:
+    """Verify default system settings are populated from configuration YAML."""
     settings = get_settings()
     assert isinstance(settings, Settings)
     assert settings.model.image_size == 224
@@ -22,6 +25,7 @@ def test_default_settings_loading() -> None:
 
 
 def test_custom_settings_override(tmp_path: Path) -> None:
+    """Verify custom settings YAML properly overrides defaults."""
     custom_yaml = tmp_path / "custom.yaml"
     custom_yaml.write_text(
         """

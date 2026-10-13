@@ -1,9 +1,16 @@
+# SPDX-FileCopyrightText: 2026 Benjamin Förster
+# SPDX-License-Identifier: MIT
+"""Unit tests for out-of-distribution (OOD) energy score detection."""
+
+from __future__ import annotations
+
 import numpy as np
 
 from taxon_vision.uncertainty.ood_detector import EnergyOODDetector
 
 
 def test_ood_energy_detector() -> None:
+    """Verify energy-based detector flags flat/noisy logits as out-of-distribution."""
     detector = EnergyOODDetector(energy_threshold=-10.0)
     # Strong in-distribution logits
     id_logits = np.array([12.0, 1.0, -2.0])

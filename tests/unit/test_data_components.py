@@ -20,6 +20,7 @@ from taxon_vision.domain.taxonomy import TaxonNode
 
 
 def test_s3_image_streamer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Verify S3ImageStreamer reads parquet manifest and yields images."""
     manifest_file = tmp_path / "manifest.parquet"
     df = pl.DataFrame(
         {
@@ -66,6 +67,8 @@ def test_s3_image_streamer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> N
 
 @pytest.mark.asyncio
 async def test_inat_api_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify INatAPIClient asynchronously fetches observations."""
+
     class MockAsyncResponse:
         def __init__(self, json_data: dict[str, Any]) -> None:
             self._json = json_data
@@ -111,6 +114,7 @@ async def test_inat_api_client(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_observation_record() -> None:
+    """Verify ObservationRecord domain entity instantiation and properties."""
     taxon = TaxonNode(taxon_id=1, scientific_name="Danaus plexippus")
     attribution = AttributionRecord(
         photographer_name="Jane Doe",
