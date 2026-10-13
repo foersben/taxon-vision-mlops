@@ -120,3 +120,19 @@ def test_quantize_onnx_static(dummy_onnx_model, tmp_path):
     dummy_input = np.random.randn(1, 3, 4, 4).astype(np.float32)
     outputs = session.run(None, {"input": dummy_input})
     assert outputs[0].shape == (1, 2)
+
+
+@pytest.mark.skipif(not HAS_DEPS, reason="Requires torch, onnx, onnxruntime")
+def test_quantize_onnx_dynamic_fallback(
+    dummy_onnx_model: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import onnxruntime.quantization
+
+    def mock_quantize(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("Simulated quantization failure")
+
+    monkeypatch.setattr(onnxruntime.quantization, "quantize_dynamic", mock_quantize)
+    output_path = tmp_path / "fallback_quant.onnx"
+    result = quantize_onnx_dynamic(dummy_onnx_model, output_path)
+    assert result.exists()
+    assert result.read_bytes() == dummy_onnx_model.read_bytes()

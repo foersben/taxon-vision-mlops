@@ -228,20 +228,20 @@ spec:
             if [ ! -f "data/embeddings/cached_features.pt" ]; then
               echo ">>> Extracting vision foundation features from S3 manifest on GPU..."
               pixi run --frozen -e dev python -m taxon_vision.pipelines.extract_features \
-                --extractor "${params.EXTRACTOR ?: 'dinov3'}" \
+                --extractor "${EXTRACTOR:-dinov3}" \
                 --manifest data/manifests/dataset_manifest.parquet \
                 --out data/embeddings/cached_features.pt
             fi
 
             # Execute classification head training (with optional Optuna tuning)
             EXTRA_OPTS=""
-            if [ "${params.TUNE_HYPERPARAMETERS}" = "true" ]; then
+            if [ "${TUNE_HYPERPARAMETERS:-false}" = "true" ]; then
               echo ">>> Bayesian optimization enabled: running Optuna search..."
               EXTRA_OPTS="--tune --n-trials 10"
             fi
 
             pixi run --frozen -e dev python -m taxon_vision.models.trainer \
-              --extractor "${params.EXTRACTOR ?: 'dinov3'}" \
+              --extractor "${EXTRACTOR:-dinov3}" \
               --epochs 15 \
               --require-cache \
               --require-promotion \
@@ -249,7 +249,7 @@ spec:
               $EXTRA_OPTS
 
             # Re-export fresh ONNX computational graph
-            pixi run --frozen -e dev python -m taxon_vision.inference.onnx_exporter --extractor "${params.EXTRACTOR ?: 'dinov3'}"
+            pixi run --frozen -e dev python -m taxon_vision.inference.onnx_exporter --extractor "${EXTRACTOR:-dinov3}"
 
             # Record trained model artifacts in DVC cache and push to DagsHub remote
             pixi run --frozen -e dev dvc commit -f models/checkpoints/head.pt models/checkpoints/model.onnx

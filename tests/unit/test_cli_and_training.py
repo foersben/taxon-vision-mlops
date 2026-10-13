@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 import torch
@@ -100,3 +103,64 @@ def test_predict_module_missing_file() -> None:
         check=False,
     )
     assert proc.returncode == 1
+
+
+def test_train_cli_require_cache_missing() -> None:
+    with pytest.raises(FileNotFoundError, match="Synthetic fallback is disabled via --require-cache"):
+        train_cli(["--epochs", "1", "--cache-path", "non_existent_cache_file.pt", "--require-cache"])
+
+
+def test_train_cli_require_promotion_archived(monkeypatch: pytest.MonkeyPatch) -> None:
+    import taxon_vision.models.training.runner as runner_mod
+
+    orig_run = runner_mod.run_training_pipeline
+
+    def mock_run(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        res = orig_run(*args, **kwargs)
+        res["promotion_status"] = "Archived"
+        return res
+
+    monkeypatch.setattr(runner_mod, "run_training_pipeline", mock_run)
+    ret = train_cli(["--epochs", "1", "--require-promotion"])
+    assert ret == 1
+
+
+def test_train_pipeline_main_entrypoint() -> None:
+    from taxon_vision.pipelines.train import main as train_main
+
+    ret = train_main(["--epochs", "1", "--batch-size", "16"])
+    assert ret == 0
+
+
+def test_dispatch_remote_training(monkeypatch: pytest.MonkeyPatch) -> None:
+    import urllib.request
+    from urllib.error import URLError
+
+    from taxon_vision.models.training.runner import _dispatch_remote_training
+
+    class MockResponse:
+        def __init__(self, data: bytes) -> None:
+            self._data = data
+
+        def read(self) -> bytes:
+            return self._data
+
+        def __enter__(self) -> MockResponse:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+    def mock_urlopen_success(req: Any, timeout: float = 30) -> MockResponse:
+        return MockResponse(b'{"status": "ok", "message": "Success"}')
+
+    def mock_urlopen_fail(req: Any, timeout: float = 30) -> Any:
+        raise URLError("Connection refused")
+
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen_success)
+    ret_ok = _dispatch_remote_training("http://localhost:8000", "dinov3", 1, 16, 0.001)
+    assert ret_ok == 0
+
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen_fail)
+    ret_fail = _dispatch_remote_training("http://localhost:8000", "dinov3", 1, 16, 0.001)
+    assert ret_fail == 1

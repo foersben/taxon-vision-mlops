@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 import torch
 import torch.nn as nn
@@ -41,6 +43,28 @@ def test_feature_extractor_factory_and_caching() -> None:
     cached_feats, cached_lbls = extract_and_cache_features(backbone, dataloader)
     assert cached_feats.shape == (4, dim)
     assert cached_lbls.shape == (4,)
+
+
+def test_feature_extractor_device_and_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    import timm
+
+    backbone = nn.Sequential(nn.Flatten(), nn.Linear(3 * 32 * 32, 16))
+    dummy_images = torch.randn(2, 3, 32, 32)
+    feats = extract_features(backbone, dummy_images, device="cpu")
+    assert feats.shape == (2, 16)
+
+    empty_feats, empty_lbls = extract_and_cache_features(backbone, [])
+    assert empty_feats.shape == (0, 0)
+    assert empty_lbls.shape == (0,)
+
+    def mock_create(name: str, pretrained: bool = False, num_classes: int = 0) -> nn.Module:
+        if not name.startswith("mobilenetv4_conv_small"):
+            raise RuntimeError("Model download failed")
+        return nn.Linear(10, 10)
+
+    monkeypatch.setattr(timm, "create_model", mock_create)
+    extractor = create_feature_extractor("dinov3_offline_fallback")
+    assert extractor is not None
 
 
 def test_feature_extractor_and_head() -> None:
@@ -167,3 +191,13 @@ def test_cam_heatmap() -> None:
     assert heatmap.shape == (100, 100)
     assert heatmap.min() >= 0.0
     assert heatmap.max() <= 1.0
+
+
+def test_save_head_checkpoint_explicit_path(tmp_path: Path) -> None:
+    from taxon_vision.models.training.checkpoint import _save_checkpoint
+
+    head = nn.Sequential(nn.Linear(10, 2))
+    target = tmp_path / "custom_checkpoint.pt"
+    saved = _save_checkpoint(head, checkpoint_path=target)
+    assert saved == target
+    assert saved.exists()

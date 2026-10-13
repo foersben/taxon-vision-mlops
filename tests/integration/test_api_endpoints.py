@@ -1,9 +1,12 @@
 import io
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from taxon_vision.service.api import app
+from taxon_vision.service.routes.predict import _build_live_prediction
 
 client = TestClient(app)
 
@@ -82,3 +85,47 @@ def test_real_image_prediction_if_sample_exists() -> None:
         assert data["top_prediction"]["scientific_name"] is not None
         assert "conformal_prediction_set" in data
         assert data["is_ood_flagged"] is True or data["requires_human_review"] is True
+
+
+def test_predict_endpoint_valid_image() -> None:
+    buf = io.BytesIO()
+    Image.new("RGB", (32, 32), color="green").save(buf, format="JPEG")
+    buf.seek(0)
+    resp = client.post("/api/v1/predict", files={"file": ("valid.jpg", buf, "image/jpeg")})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "top_prediction" in data
+    assert data["top_prediction"]["scientific_name"] is not None
+    assert "conformal_prediction_set" in data
+    assert "latency_ms" in data
+
+
+def test_build_live_prediction_multiple_candidates() -> None:
+    pred = {
+        "scientific_name": "Danaus plexippus",
+        "common_name": "Monarch Butterfly",
+        "confidence": 0.85,
+        "conformal_set": ["Danaus plexippus", "Apis mellifera"],
+        "is_ood": False,
+        "requires_human_review": False,
+    }
+    resp = _build_live_prediction(pred, latency_ms=12.3)
+    assert resp.top_prediction.scientific_name == "Danaus plexippus"
+    assert len(resp.top_candidates) == 2
+    assert resp.top_candidates[1].scientific_name == "Apis mellifera"
+    assert resp.latency_ms == 12.3
+
+
+def test_predict_endpoint_internal_server_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    import taxon_vision.service.routes.predict as predict_mod
+
+    def mock_run_prediction(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("Simulated internal GPU memory fault")
+
+    monkeypatch.setattr(predict_mod, "run_prediction", mock_run_prediction)
+    buf = io.BytesIO()
+    Image.new("RGB", (32, 32), color="red").save(buf, format="JPEG")
+    buf.seek(0)
+    resp = client.post("/api/v1/predict", files={"file": ("error.jpg", buf, "image/jpeg")})
+    assert resp.status_code == 500
+    assert "Inference execution failed" in resp.json()["detail"]

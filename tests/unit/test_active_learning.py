@@ -15,10 +15,14 @@ def test_triage_queue() -> None:
     queue = TriageQueue()
     queue.push(TriageItem(observation_id="obs_1", uncertainty_score=0.4, conformal_set_size=1, image_url="url1"))
     queue.push(TriageItem(observation_id="obs_2", uncertainty_score=0.9, conformal_set_size=3, image_url="url2"))
+    assert len(queue) == 2
+    assert len(queue.queue) == 2
     # Highest uncertainty first
     item = queue.pop()
     assert item is not None
     assert item.observation_id == "obs_2"
     item2 = queue.pop()
+    assert item2 is not None
     assert item2.observation_id == "obs_1"
     assert queue.pop() is None
+    assert len(queue) == 0

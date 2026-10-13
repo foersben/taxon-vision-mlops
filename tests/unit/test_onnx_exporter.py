@@ -8,9 +8,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
 import onnxruntime
 import torch.nn as nn
 
+from taxon_vision.inference.onnx_engine import ONNXInferenceEngine
 from taxon_vision.inference.onnx_exporter import export_classifier_cli, export_to_onnx
 
 
@@ -62,3 +64,16 @@ def test_export_classifier_module_subprocess(tmp_path: Path) -> None:
     assert proc.returncode == 0
     assert "ONNX export succeeded" in (proc.stdout + proc.stderr)
     assert out_file.exists()
+
+
+def test_onnx_inference_engine(tmp_path: Path) -> None:
+    """Test ONNXInferenceEngine execution and probability computation."""
+    model = nn.Sequential(nn.Linear(8, 3))
+    out_file = tmp_path / "test_engine.onnx"
+    export_to_onnx(model, out_file, input_shape=(1, 8))
+
+    engine = ONNXInferenceEngine(str(out_file))
+    inputs = np.random.randn(2, 8).astype(np.float32)
+    probs = engine.predict(inputs)
+    assert probs.shape == (2, 3)
+    assert np.allclose(probs.sum(axis=-1), 1.0)
