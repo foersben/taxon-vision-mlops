@@ -23,7 +23,7 @@ class EnergyOODDetector:
         energy_threshold: Decision boundary threshold above which inputs are classified as OOD.
     """
 
-    def __init__(self, energy_threshold: float = -12.5) -> None:
+    def __init__(self, energy_threshold: float = -2.40) -> None:
         """Initialize the energy-based out-of-distribution detector.
 
         Args:

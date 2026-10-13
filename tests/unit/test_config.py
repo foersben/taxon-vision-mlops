@@ -21,7 +21,7 @@ def test_default_settings_loading() -> None:
     assert settings.model.default_extractor == "dinov3"
     assert settings.mlflow.experiment_name == "taxon-vision-head-tuning"
     assert settings.conformal.alpha == 0.05
-    assert settings.ood.energy_threshold == -12.5
+    assert settings.ood.energy_threshold == -2.40
 
 
 def test_custom_settings_override(tmp_path: Path) -> None:

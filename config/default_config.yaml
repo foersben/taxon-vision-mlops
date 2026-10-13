@@ -36,5 +36,5 @@ conformal:
   quantile_threshold: 0.85
 
 ood:
-  energy_threshold: -12.5
+  energy_threshold: -2.40
   entropy_threshold: 2.8
