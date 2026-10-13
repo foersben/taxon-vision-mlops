@@ -38,60 +38,123 @@
     \qa{Why not run everything on a single powerful machine?}{Decoupling development from production prevents developer experiments from starving production inference of GPU memory or crashing background pipeline jobs.}
 \end{frame}
 
+
 \begin{frame}[fragile]{Infrastructure Topology}{Dual-Node Diagram}
+    \providecolor{TaxonPrimary}{RGB}{34, 139, 34}      % Forest Green
+    \providecolor{TaxonSecondary}{RGB}{215, 110, 0}    % Amber / Orange
+    \providecolor{TaxonDark}{RGB}{0, 51, 102}          % Deep Navy Blue
+
     \begin{center}
-    \resizebox{0.9\textwidth}{!}{
+    \vspace{-0.15cm}
+    \resizebox{0.95\textwidth}{!}{
     \begin{tikzpicture}[
-        node distance=1.5cm and 2cm,
-        box/.style={draw, rounded corners, minimum width=3cm, minimum height=1cm, align=center, font=\sffamily},
-        flagship/.style={box, fill=TaxonSecondary!20, draw=TaxonPrimary, thick},
-        hivemind/.style={box, fill=TaxonPrimary!10, draw=TaxonDark, thick},
-        component/.style={box, fill=white, draw=TaxonPrimary, text width=2.5cm, minimum height=0.8cm, font=\scriptsize\sffamily},
-        arrow/.style={->, thick, TaxonDark, >=stealth}
+        box/.style={draw, rounded corners=4pt, align=center, font=\sffamily},
+        flagship/.style={box, fill=TaxonSecondary!10, draw=TaxonSecondary!80!black, thick},
+        hivemind/.style={box, fill=TaxonPrimary!6, draw=TaxonDark, thick},
+        component/.style={box, fill=white, draw=TaxonDark!70, font=\sffamily\scriptsize, minimum height=0.65cm},
+        gateway/.style={box, fill=TaxonDark!15, draw=TaxonDark, font=\sffamily\scriptsize, thick},
+        arrow/.style={->, thick, TaxonDark!85, >=stealth},
+        darrow/.style={<->, thick, TaxonDark!85, >=stealth},
+        dasharrow/.style={->, dashed, thick, TaxonDark!85, >=stealth},
+        lbl/.style={font=\sffamily\tiny\bfseries, text=TaxonDark, align=center}
     ]
-        % Flagship
-        \node[flagship, minimum height=3.5cm, minimum width=4cm] (flagship) {};
-        \node[above=0.2cm of flagship.south, font=\bfseries\sffamily, text=TaxonPrimary, align=center, yshift=-2mm] (flagshiptitle) {\texttt{flagship}\\Local Dev Workstation};
-        \node[component, above=0.2cm of flagshiptitle] (ide) {IDE / Unit Tests};
-        \node[component, above=0.2cm of ide] (git) {Git Feature Branches};
 
-        % Hive-mind
-        \node[hivemind, right=3cm of flagship, minimum height=5cm, minimum width=6cm] (hivemind) {};
-        \node[above=0.2cm of hivemind.south, font=\bfseries\sffamily, text=TaxonDark, align=center] (hivemindtitle) {\texttt{hive-mind}\\Bare-Metal Server (24/7)};
+        % =========================================================================
+        % NODE 1: FLAGSHIP (Local Dev Workstation) - X: 0.0 to 3.2
+        % =========================================================================
+        \node[flagship, minimum height=4.3cm, minimum width=3.2cm] (flagship) at (1.6, 0) {};
+        \node[anchor=north, font=\sffamily, align=center] at (1.6, 2.05) {%
+            \textbf{\color{TaxonDark}\texttt{flagship}}\\[-1pt]%
+            {\tiny\bfseries\color{TaxonSecondary!90!black}Developer Workstation}%
+        };
 
-        \node[component, above=0.2cm of hivemindtitle, xshift=-1.4cm] (k3s) {k3s Kubernetes};
-        \node[component, above=0.2cm of hivemindtitle, xshift=1.4cm] (jenkins) {Jenkins CI/CD};
-        \node[component, above=0.2cm of k3s] (nvidia) {NVIDIA Runtime};
-        \node[component, above=0.2cm of jenkins] (traefik) {Traefik Ingress};
-        \node[component, above=0.2cm of nvidia, xshift=1.4cm] (cf) {Cloudflare Tunnel};
+        \node[component, minimum width=2.7cm] (git) at (1.6, 0.65) {%
+            \textbf{Git Feature Branches}\\[-1pt]%
+            {\tiny Feature Dev $\cdot$ Signed Commits}%
+        };
 
-        % Connections
-        \draw[arrow, dashed] (git.east) -- node[above, font=\scriptsize, align=center] {Push / PR} (jenkins.west |- git.east);
-        \draw[arrow, <->] (flagship.east |- ide.east) -- node[below, font=\scriptsize, align=center] {HTTPS / SSH} (cf.west |- ide.east);
+        \node[component, minimum width=2.7cm] (ide) at (1.6, -0.75) {%
+            \textbf{IDE / Unit Tests}\\[-1pt]%
+            {\tiny Pixi Toolchain $\cdot$ Fast Feedback}%
+        };
+
+        \node[anchor=south, font=\sffamily\tiny, text=TaxonDark!60] at (1.6, -2.05) {[Isolated Dev Plane]};
+
+        % =========================================================================
+        % NODE 2: HIVE-MIND (Bare-Metal 24/7 Server) - X: 6.0 to 15.6 (width = 9.6cm)
+        % =========================================================================
+        \node[hivemind, minimum height=4.3cm, minimum width=9.6cm] (hivemind) at (10.8, 0) {};
+        \node[anchor=north, font=\sffamily, align=center] at (10.8, 2.05) {%
+            \textbf{\color{TaxonDark}\texttt{hive-mind}}\\[-1pt]%
+            {\tiny\bfseries\color{TaxonDark!80}Bare-Metal Server (24/7 Execution Plane)}%
+        };
+
+        % Ingress Barrier: Cloudflare Tunnel (X = 7.1, Width = 1.5cm -> bounds: 6.35 to 7.85)
+        \node[gateway, minimum width=1.5cm, minimum height=2.6cm, text width=1.45cm] (cf) at (7.1, -0.05) {%
+            \textbf{Cloudflare}\\[-1pt]%
+            \textbf{Tunnel}\\[3pt]%
+            {\tiny Zero-Trust}\\[-2pt]%
+            {\tiny Edge Daemon}\\[4pt]%
+            {\tiny\bfseries\color{TaxonPrimary!80!black}Zero Open}\\[-2pt]%
+            {\tiny\bfseries\color{TaxonPrimary!80!black}Host Ports}%
+        };
+
+        % Middle Column: Controllers & Runtimes (X = 10.3, Width = 2.2cm -> bounds: 9.2 to 11.4)
+        \node[component, minimum width=2.2cm] (jenkins) at (10.3, 0.65) {%
+            \textbf{Jenkins CI/CD}\\[-1pt]%
+            {\tiny Controller $\cdot$ Agent Pods}%
+        };
+
+        \node[component, minimum width=2.2cm] (traefik) at (10.3, -0.2) {%
+            \textbf{Traefik Ingress}\\[-1pt]%
+            {\tiny Ingress Controller $\cdot$ TLS}%
+        };
+
+        \node[component, minimum width=2.2cm] (nvidia) at (10.3, -1.05) {%
+            \textbf{NVIDIA Runtime}\\[-1pt]%
+            {\tiny 4-Slot GPU Time-Slicing}%
+        };
+
+        % Right Column: k3s Cluster Core (X = 14.1, Width = 2.4cm -> bounds: 12.9 to 15.3)
+        \node[component, minimum width=2.4cm, minimum height=2.6cm, text width=2.25cm] (k3s) at (14.1, -0.2) {%
+            \textbf{k3s Kubernetes}\\[2pt]%
+            {\tiny Single-Node}\\[-2pt]%
+            {\tiny Control Plane}\\[4pt]%
+            {\tiny\bfseries Namespaces:}\\[-2pt]%
+            {\tiny\texttt{taxon-vision}}\\[-2pt]%
+            {\tiny\texttt{jenkins-ci}}\\[-2pt]%
+            {\tiny\texttt{kube-system}}%
+        };
+
+        \node[anchor=south, font=\sffamily\tiny, text=TaxonDark!60] at (10.8, -2.05) {%
+            [Ubuntu 26.04 $\cdot$ RTX 5070 Ti (16\,GB GDDR7) $\cdot$ i7-14700K $\cdot$ k3s]%
+        };
+
+        % =========================================================================
+        % INTER-NODE ARROWS (Flagship -> Cloudflare Ingress Gateway)
+        % Gap from 3.2 to 6.35 is 3.15cm - plenty of space for labels
+        % =========================================================================
+        \draw[dasharrow] (git.east) -- node[above=2pt, lbl] {Push / PR Webhook} (cf.west |- git.east);
+        \draw[darrow] (ide.east) -- node[below=2pt, lbl] {HTTPS / SSH\\[-2pt]{\tiny (Zero-Trust)}} (cf.west |- ide.east);
+
+        % =========================================================================
+        % INTERNAL ROUTING (Inside hive-mind)
+        % Gap 1 (cf -> middle col): 7.85 to 9.2 = 1.35cm
+        % Gap 2 (middle col -> k3s): 11.4 to 12.9 = 1.50cm
+        % =========================================================================
+        \draw[arrow] (cf.east |- jenkins.west) -- node[above=1pt, font=\sffamily\tiny] {Webhook} (jenkins.west);
+        \draw[arrow] (cf.east |- traefik.west) -- node[above=1pt, font=\sffamily\tiny] {Traffic} (traefik.west);
+
+        \draw[arrow] (jenkins.east) -- node[above=1pt, font=\sffamily\tiny] {CI Pods} (k3s.west |- jenkins.east);
+        \draw[arrow] (traefik.east) -- node[above=1pt, font=\sffamily\tiny] {Route} (k3s.west);
+        \draw[arrow] (nvidia.east) -- node[above=1pt, font=\sffamily\tiny] {GPU} (k3s.west |- nvidia.east);
 
     \end{tikzpicture}
     }
     \end{center}
+
     \script{This diagram visualizes our physical separation. The flagship node is strictly for local dev. Once code is pushed, Jenkins running inside the hive-mind k3s cluster takes over. The Cloudflare Tunnel securely routes external requests to our Traefik ingress without exposing any ports.}
     \qa{Is the network traffic between these nodes encrypted?}{Yes, internal traffic can be routed over local LAN, while external web hooks and operator access run through the Cloudflare Zero Trust encrypted tunnel.}
-\end{frame}
-
-\begin{frame}{Host Architecture}{Heterogeneous CPU Topology \& Core Pinning}
-    \begin{block}{The Heterogeneous Scheduling Problem}
-        Modern CPUs like the Intel Core i7-14700K feature a split architecture: 8 Performance-Cores (P-cores) and 12 Efficient-Cores (E-cores). Default OS thread scheduling can misallocate critical operations.
-    \end{block}
-
-    \begin{itemize}
-        \item \textbf{Synchronization Stalls:} Unmanaged scheduling of heavy matrix ops or image decompression onto E-cores causes massive multi-threaded synchronization delays.
-        \item \textbf{Explicit Thread Pinning:} We strictly enforce CPU affinity and use core-conscious worker pools.
-        \item \textbf{Workload Isolation:} Compute-heavy tasks (e.g., PyTorch DataLoader) are pinned to P-cores, while background telemetry, logging, and OS tasks run on E-cores.
-    \end{itemize}
-
-    \vspace{0.2cm}
-    \statusdone
-
-    \script{Modern CPUs are no longer uniform; the i7-14700K combines high-frequency P-cores with low-power E-cores. If the Linux OS scheduler accidentally schedules an image decompression worker on an E-core while PyTorch is waiting on a P-core, your entire batch pipeline crawls to a halt. We use CPU affinity and core-conscious worker pools to ensure that compute-heavy tasks stay on P-cores while telemetry and background logging run on E-cores.}
-    \qa{Does standard PyTorch DataLoader handle P-core vs E-core allocation automatically?}{No. The standard OS scheduler treats all logical threads equally unless explicit taskset affinity or cgroup constraints are configured at the container runtime level.}
 \end{frame}
 
 \begin{frame}{GPU Accelerators}{NVIDIA RTX 5070 Ti Blackwell \& SM 120 Architecture}
