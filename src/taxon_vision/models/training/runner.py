@@ -139,6 +139,7 @@ def _prepare_embedding_split(
     dim: int,
     num_classes: int,
     cache_path: Path | str | None = None,
+    allow_synthetic: bool = True,
 ) -> EmbeddingSplit:
     """Construct or restore deterministic embedding splits for rapid head training.
 
@@ -153,15 +154,19 @@ def _prepare_embedding_split(
     How:
         1. Checks whether an embedding cache exists at `cache_path` (or standard `data/embeddings/cached_features.pt`).
         2. If found, deserializes the payload, validates that `split.feature_dim == dim`, and returns the cached split.
-        3. If absent or shape-incompatible, falls back to generating a deterministic synthetic Gaussian split.
+        3. If absent or shape-incompatible, falls back to generating a deterministic synthetic Gaussian split (unless disallowed).
 
     Args:
         dim: Dimensionality of feature vectors.
         num_classes: Total number of classification categories.
         cache_path: Optional custom filesystem path to a serialized `.pt` embedding cache.
+        allow_synthetic: Whether to fall back to synthetic Gaussian embeddings if cache is missing.
 
     Returns:
         Pre-allocated and validated EmbeddingSplit data container.
+
+    Raises:
+        FileNotFoundError: If cache is absent and allow_synthetic is False.
     """
     candidates: list[Path] = []
     if cache_path is not None:
@@ -172,6 +177,11 @@ def _prepare_embedding_split(
         loaded = _try_load_cached_split(candidate, dim)
         if loaded is not None:
             return loaded
+
+    if not allow_synthetic:
+        raise FileNotFoundError(
+            f"Embedding cache not found at candidates ({candidates}). Synthetic fallback is disabled via --require-cache."
+        )
 
     return _generate_synthetic_embedding_split(dim, num_classes)
 
@@ -224,6 +234,7 @@ def run_training_pipeline(
     tune: bool = False,
     n_trials: int = 15,
     cache_path: Path | str | None = None,
+    require_cache: bool = False,
 ) -> dict[str, Any]:
     """Execute end-to-end classification head training on cached or synthetic embeddings.
 
@@ -251,6 +262,7 @@ def run_training_pipeline(
         tune: Whether to execute Optuna Bayesian hyperparameter search prior to final training.
         n_trials: Number of Optuna evaluation trials when `tune` is enabled.
         cache_path: Optional custom filesystem path to serialized `.pt` embedding cache.
+        require_cache: Whether to strictly require real embedding cache and disable synthetic fallback.
 
     Returns:
         Dictionary containing training metrics, checkpoint path, duration, and status.
@@ -262,7 +274,7 @@ def run_training_pipeline(
     catalog = load_taxa_catalog()
     num_classes = len(catalog) if catalog else 10
     dim = _resolve_feature_dim(extractor)
-    data = _prepare_embedding_split(dim, num_classes, cache_path=cache_path)
+    data = _prepare_embedding_split(dim, num_classes, cache_path=cache_path, allow_synthetic=not require_cache)
     samples = data.samples_per_class or [1] * num_classes
 
     if tune:
@@ -307,6 +319,7 @@ def run_training_pipeline(
         "cuda_memory_fraction": applied_vram_fraction if applied_vram_fraction is not None else "cpu",
     }
     run_name = f"train_{extractor}_{int(time.time())}"
+    promotion_status: str | None = None
 
     with mlflow_run_scope(run_name=run_name, params=params, log_file=log_file) as active_run:
         history = train_head_on_cached_embeddings(
@@ -323,7 +336,7 @@ def run_training_pipeline(
         if active_run:
             _log_mlflow_metrics(history, duration)
             val_pr_auc = float(history.get("val_pr_auc", [0.0])[-1]) if history.get("val_pr_auc") else 0.0
-            _promote_model_if_better(head, val_pr_auc)
+            promotion_status = _promote_model_if_better(head, val_pr_auc)
 
     train_loss = float(history["train_loss"][-1]) if history.get("train_loss") else 0.0
     val_loss = float(history["val_loss"][-1]) if history.get("val_loss") else 0.0
@@ -346,6 +359,7 @@ def run_training_pipeline(
         "final_val_accuracy": round(val_acc, 4),
         "checkpoint_path": str(target_path),
         "duration_seconds": round(duration, 3),
+        "promotion_status": promotion_status,
         "history": history,
     }
 
@@ -471,6 +485,16 @@ def train_cli(argv: list[str] | None = None) -> int:
         default=None,
         help="Optional path to serialized .pt feature embedding cache file",
     )
+    parser.add_argument(
+        "--require-cache",
+        action="store_true",
+        help="Disallow fallback to synthetic data if embedding cache is absent",
+    )
+    parser.add_argument(
+        "--require-promotion",
+        action="store_true",
+        help="Exit with non-zero status if trained model is tagged as Archived instead of Challenger/Production",
+    )
     args = parser.parse_args(argv)
 
     setup_logging(level=logging.INFO, log_file=args.log_file)
@@ -498,6 +522,7 @@ def train_cli(argv: list[str] | None = None) -> int:
         tune=args.tune,
         n_trials=args.n_trials,
         cache_path=args.cache_path,
+        require_cache=args.require_cache,
     )
 
     logger.info("Training Completed Successfully")
@@ -506,4 +531,9 @@ def train_cli(argv: list[str] | None = None) -> int:
     logger.info("  Final Val Loss:   %s", result["final_val_loss"])
     logger.info("  Final Val Acc:    %.1f%%", result["final_val_accuracy"] * 100)
     logger.info("  Saved Checkpoint: %s", result["checkpoint_path"])
+
+    if args.require_promotion and result.get("promotion_status") == "Archived":
+        logger.error("Model did not outperform production baseline (status: Archived). Failing promotion gate.")
+        return 1
+
     return 0

@@ -35,6 +35,12 @@ spec:
     }
   }
 
+  parameters {
+    booleanParam(name: 'RETRAIN_MODEL', defaultValue: false, description: 'Force GPU feature extraction and model retraining on deployment')
+    booleanParam(name: 'TUNE_HYPERPARAMETERS', defaultValue: false, description: 'Run Optuna Bayesian hyperparameter optimization during training')
+    string(name: 'EXTRACTOR', defaultValue: 'dinov3', description: 'Vision foundation backbone extractor')
+  }
+
   options {
     buildDiscarder(logRotator(numToKeepStr: '15', daysToKeepStr: '14'))
     timeout(time: 240, unit: 'MINUTES')
@@ -69,7 +75,7 @@ spec:
             pixi --version
             pixi install --frozen -e ci-dev
             echo ">>> Pulling DVC tracked datasets and model checkpoints from DagsHub..."
-            pixi run --frozen -e ci-dev dvc pull || echo "WARNING: DVC pull skipped or failed; continuing with workspace cache."
+            pixi run --frozen -e ci-dev dvc pull -f || echo "WARNING: DVC pull skipped or failed; continuing with workspace cache."
           '''
         }
       }
@@ -153,9 +159,17 @@ spec:
         timeout(time: 150, unit: 'MINUTES')
       }
       when {
-        anyOf {
-          branch 'main'
-          branch 'develop'
+        allOf {
+          anyOf {
+            branch 'main'
+            branch 'develop'
+          }
+          anyOf {
+            expression { params.RETRAIN_MODEL == true }
+            changeset "data/**"
+            changeset "src/taxon_vision/models/**"
+            changeset "src/taxon_vision/pipelines/**"
+          }
         }
       }
       agent {
@@ -203,32 +217,39 @@ spec:
             which git >/dev/null 2>&1 || pixi global install git
             which kubectl >/dev/null 2>&1 || pixi global install kubernetes-client
             git config --global --add safe.directory "*"
-            echo ">>> Executing automated model training with Optuna Bayesian optimization..."
+            echo ">>> Setting up GPU training pipeline..."
             # Install GPU-enabled dev environment
             pixi install --frozen -e dev
 
             # Pull latest DVC manifests and datasets from DagsHub
-            pixi run --frozen -e dev dvc pull || true
+            pixi run --frozen -e dev dvc pull -f
 
             # Extract vision foundation features from S3 manifest if not cached
             if [ ! -f "data/embeddings/cached_features.pt" ]; then
               echo ">>> Extracting vision foundation features from S3 manifest on GPU..."
               pixi run --frozen -e dev python -m taxon_vision.pipelines.extract_features \
-                --extractor dinov3 \
+                --extractor "${params.EXTRACTOR ?: 'dinov3'}" \
                 --manifest data/manifests/dataset_manifest.parquet \
-                --out data/embeddings/cached_features.pt || true
+                --out data/embeddings/cached_features.pt
             fi
 
-            # Execute classification head training with DINOv3 backbone, Optuna tuning, and VRAM limit
+            # Execute classification head training (with optional Optuna tuning)
+            EXTRA_OPTS=""
+            if [ "${params.TUNE_HYPERPARAMETERS}" = "true" ]; then
+              echo ">>> Bayesian optimization enabled: running Optuna search..."
+              EXTRA_OPTS="--tune --n-trials 10"
+            fi
+
             pixi run --frozen -e dev python -m taxon_vision.models.trainer \
-              --extractor dinov3 \
+              --extractor "${params.EXTRACTOR ?: 'dinov3'}" \
               --epochs 15 \
-              --tune \
-              --n-trials 10 \
-              --cuda-memory-fraction 0.7
+              --require-cache \
+              --require-promotion \
+              --cuda-memory-fraction 0.7 \
+              $EXTRA_OPTS
 
             # Re-export fresh ONNX computational graph
-            pixi run --frozen -e dev python -m taxon_vision.inference.onnx_exporter --extractor dinov3
+            pixi run --frozen -e dev python -m taxon_vision.inference.onnx_exporter --extractor "${params.EXTRACTOR ?: 'dinov3'}"
 
             # Record trained model artifacts in DVC cache and push to DagsHub remote
             pixi run --frozen -e dev dvc commit -f models/checkpoints/head.pt models/checkpoints/model.onnx
@@ -252,6 +273,14 @@ spec:
             echo ">>> Executing zero-downtime rolling deployment to Kubernetes cluster..."
             # Verify in-cluster service account access
             kubectl version --client || true
+
+            # Hydrate model checkpoints from DVC if needed
+            pixi run --frozen -e ci-dev dvc pull -f models/checkpoints/head.pt models/checkpoints/model.onnx || true
+
+            # Ensure checkpoints are synchronised to host volume if accessible
+            if [ -d "/home/benni/taxon-vision-mlops/models/checkpoints" ] && [ -f "models/checkpoints/head.pt" ]; then
+              cp -f models/checkpoints/* /home/benni/taxon-vision-mlops/models/checkpoints/ || true
+            fi
 
             # Apply API deployment and service manifests
             kubectl apply -f deploy/k8s/api-deployment.yaml

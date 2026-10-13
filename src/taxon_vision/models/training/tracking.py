@@ -180,7 +180,7 @@ def _log_mlflow_metrics(history: dict[str, list[float]], duration: float) -> Non
         logger.debug("Failed to log MLflow metrics: %s", err)
 
 
-def _promote_model_if_better(model: nn.Module, pr_auc: float) -> None:
+def _promote_model_if_better(model: nn.Module, pr_auc: float) -> str | None:
     """Evaluate performance and conditionally promote the model via MLflow Model Registry.
 
     Why:
@@ -192,6 +192,9 @@ def _promote_model_if_better(model: nn.Module, pr_auc: float) -> None:
     Args:
         model: The trained PyTorch classification head.
         pr_auc: The final validation Macro PR-AUC score.
+
+    Returns:
+        The applied promotion alias string ('Challenger', 'Archived', 'Production'), or None.
     """
     from mlflow.tracking import MlflowClient
 
@@ -226,7 +229,7 @@ def _promote_model_if_better(model: nn.Module, pr_auc: float) -> None:
             )
         except Exception as err:
             logger.warning("Failed to log model to registry: %s", err)
-            return
+            return None
 
     client = MlflowClient()
     try:
@@ -239,9 +242,12 @@ def _promote_model_if_better(model: nn.Module, pr_auc: float) -> None:
         if pr_auc > prod_score:
             logger.info("New model outperforms production (%.4f > %.4f). Tagging as Challenger.", pr_auc, prod_score)
             client.set_registered_model_alias(model_name, "Challenger", model_info.registered_model_version)
+            return "Challenger"
         else:
             logger.info("New model is worse than production (%.4f <= %.4f). Tagging as Archived.", pr_auc, prod_score)
             client.set_registered_model_alias(model_name, "Archived", model_info.registered_model_version)
+            return "Archived"
     except Exception:
         logger.info("No production alias found. Tagging initial model as Production.")
         client.set_registered_model_alias(model_name, "Production", model_info.registered_model_version)
+        return "Production"

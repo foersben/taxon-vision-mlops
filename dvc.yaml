@@ -12,7 +12,7 @@ stages:
     outs:
       - data/manifests
   train:
-    cmd: pixi run --frozen -e dev python -m taxon_vision.models.trainer --epochs 5 --extractor mobilenetv4_conv_small
+    cmd: pixi run --frozen -e dev python -m taxon_vision.models.trainer --epochs 5 --extractor dinov3
     deps:
       - data/manifests
       - src/taxon_vision/models/
