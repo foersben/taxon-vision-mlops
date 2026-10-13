@@ -132,13 +132,13 @@
             \item \textbf{Data Lineage:} 100\% deterministic Parquet metadata with DVC SHA256 immutability.
             \item \textbf{Hermetic Toolchains:} Zero reliance on unpinned pip/conda environments; strict lockfiles via Pixi.
             \item \textbf{Mathematical Safety:} Automated test gates asserting conformal coverage $1-\alpha$ on holdout splits.
-            \item \textbf{Continuous Deployment:} Jenkins OCI image builds, automated Trivy scanning, and k3s declarative rollouts.
+            \item \textbf{Continuous Deployment \& Observability:} Jenkins OCI image builds and k3s manifests established; streaming drift monitors and Label Studio triage scheduled as Phase 3 roadmap.
         \end{itemize}
     \end{block}
 
     \vspace{0.25cm}
-    \statusdone
+    \statuspartial
 
-    \script{This checklist provides our concrete evaluation criteria for Level 4 MLOps maturity. Every single commit in this repository passes through strict hermetic gates before entering our deployment pipeline.}
-    \qa{What is the single most critical gate before deployment?}{The combination of hermetic package lockfiles and mathematical conformal coverage verification on holdout data.}
+    \script{This checklist provides our concrete evaluation criteria for Level 4 MLOps maturity. While core data lineage, hermetic toolchains, and mathematical conformal safety gates are fully operational, our end-to-end telemetry daemons and active learning loops remain actively under development.}
+    \qa{What is the single most critical gate currently enforced before deployment?}{The combination of hermetic Pixi package lockfiles and mathematical conformal coverage verification on holdout data.}
 \end{frame}

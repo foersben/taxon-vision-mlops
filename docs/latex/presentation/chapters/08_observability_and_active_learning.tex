@@ -8,33 +8,33 @@
     {\huge \textbf{Observability \& Active Learning}} \\[0.35cm]
     {\normalsize \textcolor{black!70}{Prometheus Telemetry, Concept Drift Detection \& Continuous Human-in-the-Loop Triage}} \\[0.5cm]
     \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
-    \statusdone
+    \statuspartial
     \vfill
-    \script{In Chapter 8, we present production observability: tracking domain-specific epistemic metrics, detecting embedding drift via Wasserstein distance, and closing the active learning feedback loop.}
+    \script{In Chapter 8, we present our observability and active learning architecture. We must be completely candid about implementation reality: while our core inference pipeline and basic metric endpoints are operational, full drift monitoring, Evidently AI, Prometheus/Grafana scrape daemons, and Label Studio triage loops are high-priority target roadmap items currently in progress or planned for upcoming sprints.}
     \qa{How does MLOps observability differ from traditional software monitoring?}{An ML API can return HTTP 200 OK while failing silently; we monitor average conformal prediction set sizes and drift distances to detect data shifts in real time.}
 \end{frame}
 
-\begin{frame}{Observability}{Production Telemetry: Prometheus Metrics \& Grafana}
+\begin{frame}{Observability}{Production Telemetry: Prometheus Metrics \& Grafana (Roadmap)}
     \begin{block}{Domain-Specific Telemetry Beyond HTTP 200}
         \begin{itemize}\small
-            \item \textbf{System Metrics:} p95/p99 inference latency ($<50$ ms budget), GPU VRAM utilization, request throughput.
-            \item \textbf{Epistemic Metrics:} Average conformal set size ($|C(X)|$), energy-based OOD anomaly rate.
-            \item \textbf{Operational Metrics:} Triage referral rate to human taxonomists (Label Studio queue depth).
-            \item \textbf{Decoupled Polling:} FastAPI \texttt{/metrics} endpoint scraped every 15s by Prometheus, feeding real-time Grafana dashboards without hot-path inference overhead.
+            \item \textbf{System Metrics:} p95/p99 inference latency ($<50$ ms budget), GPU VRAM utilization \textcolor{signalorange}{\textbf{[Target Metric]}}.
+            \item \textbf{Epistemic Metrics:} Average conformal set size ($|C(X)|$), energy-based OOD anomaly rate \textcolor{signalorange}{\textbf{[Target Metric]}}.
+            \item \textbf{Operational Metrics:} Triage referral rate to human taxonomists (Label Studio queue depth) \textcolor{deepblue}{\textbf{[Roadmap]}}.
+            \item \textbf{Instrumentation Status:} FastAPI \texttt{/metrics} endpoint and basic counters implemented in \texttt{telemetry.py} \textcolor{plantgreen}{\textbf{[Implemented]}}; external Prometheus scraper and Grafana dashboards \textcolor{deepblue}{\textbf{[Target Roadmap]}}.
         \end{itemize}
     \end{block}
 
     \vspace{0.15cm}
-    \statusdone
+    \statustarget
 
-    \script{Observability in MLOps is fundamentally different from traditional DevOps. In web development, you monitor CPU and HTTP status codes. In MLOps, an API can return HTTP 200 OK all day while predicting complete nonsense! We monitor domain-specific metrics: average conformal prediction set size, percentage of samples routed to human review, and OOD energy distributions. If average set size jumps from 1.2 to 4.5, we know immediately that the data distribution has shifted.}
-    \qa{How does Prometheus scrape metrics from our service?}{FastAPI instruments latency and counters using the \texttt{prometheus\_client} library, exposing a \texttt{/metrics} endpoint that the Prometheus server polls every 15 seconds.}
-    \qa{Why not push metrics directly to a database?}{The pull-based model of Prometheus ensures that if the monitoring system goes down, the inference service is unaffected. It drops the scraping request rather than blocking the main thread on a database timeout.}
+    \script{\footnotesize Observability in MLOps differs fundamentally from DevOps: an API can return HTTP 200 OK while predicting nonsense. We track conformal set sizes, referral rates, and OOD energy. Transparently, while FastAPI exposes \texttt{/metrics} and core counters in \texttt{telemetry.py}, dedicated Prometheus scrapers and Grafana dashboards are target Phase 3 roadmap infrastructure.}
+    \qa{Are Prometheus and Grafana actively scraping the service?}{\footnotesize Not yet. Metric counters exist in \texttt{telemetry.py}, but Prometheus daemons and Grafana dashboards remain on our roadmap.}
+    \qa{Why pull-based Prometheus scraping over push?}{\footnotesize Pull scraping prevents telemetry bottlenecks or database timeouts from blocking the inference path.}
 \end{frame}
 
-\begin{frame}{Telemetry Architecture}{FastAPI $\rightarrow$ Prometheus $\rightarrow$ Grafana Pipeline}
+\begin{frame}{Telemetry Architecture}{Target Telemetry Topology: FastAPI $\rightarrow$ Prometheus $\rightarrow$ Grafana}
     \begin{center}
-    \resizebox{0.85\textwidth}{!}{
+    \resizebox{0.82\textwidth}{!}{
     \begin{tikzpicture}[
         node distance=1.5cm and 2cm,
         box/.style={rectangle, draw=deepblue, thick, fill=blue!5, text width=3cm, align=center, minimum height=1.5cm, rounded corners},
@@ -42,24 +42,28 @@
         db/.style={cylinder, draw=soilbrown, thick, aspect=0.25, fill=orange!10, text width=2.5cm, align=center, minimum height=1.5cm, shape border rotate=90}
     ]
         % Nodes
-        \node[box] (fastapi) {\textbf{FastAPI Pod} \\ \texttt{/metrics} endpoint \\ (Counters, Gauges, Histograms)};
-        \node[db, right=of fastapi] (prometheus) {\textbf{Prometheus} \\ Time-Series Database \\ (Scrapes every 15s)};
-        \node[box, right=of prometheus] (grafana) {\textbf{Grafana} \\ Real-time Dashboards \\ (Latency, VRAM, Drift)};
-        \node[box, below=of fastapi, fill=green!5, draw=plantgreen] (model) {\textbf{ONNX Runtime} \\ Inference Engine};
+        \node[box] (fastapi) {\textbf{FastAPI Pod} \\ \texttt{/metrics} endpoint \\ \textcolor{plantgreen}{\textbf{[Active Endpoint]}}};
+        \node[db, right=of fastapi] (prometheus) {\textbf{Prometheus} \\ Time-Series Database \\ \textcolor{deepblue}{\textbf{[Target Daemon]}}};
+        \node[box, right=of prometheus] (grafana) {\textbf{Grafana} \\ Real-time Dashboards \\ \textcolor{deepblue}{\textbf{[Target Dashboards]}}};
+        \node[box, below=of fastapi, fill=green!5, draw=plantgreen] (model) {\textbf{ONNX Runtime} \\ Inference Engine \\ \textcolor{plantgreen}{\textbf{[Active Service]}}};
 
         % Arrows
         \draw[arrow] (model.west) |- node[near start, left, align=right, xshift=-0.1cm] {Latency \& \\ OOD stats} (fastapi.west);
-        \draw[arrow] (prometheus) -- node[above] {HTTP Pull} (fastapi);
-        \draw[arrow] (grafana) -- node[above] {PromQL Queries} (prometheus);
+        \draw[arrow, dashed] (prometheus) -- node[above] {HTTP Pull (Roadmap)} (fastapi);
+        \draw[arrow, dashed] (grafana) -- node[above] {PromQL (Roadmap)} (prometheus);
     \end{tikzpicture}
     }
     \end{center}
 
-    \script{This diagram illustrates our telemetry flow. The core inference engine passes latency and out-of-distribution statistics up to the FastAPI layer, which aggregates them in memory using the Prometheus client. The Prometheus server periodically pulls these metrics, and Grafana queries Prometheus to build the dashboards you see in the control room.}
+    \vspace{0.05cm}
+    \statustarget
+
+    \script{This diagram illustrates our target telemetry architecture. In the target state, ONNX Runtime passes statistics to FastAPI, Prometheus scrapes them every 15 seconds, and Grafana renders dashboards. Today, the FastAPI /metrics plumbing is in place, while the full Prometheus and Grafana cluster deployment is our next milestone.}
+    \qa{Is this telemetry pipeline currently running live in production?}{The FastAPI endpoint and ONNX runtime are active, but the Prometheus collector daemon and Grafana dashboard nodes are target architecture currently being set up.}
     \qa{Why does Prometheus pull rather than the service pushing metrics?}{Pull-based monitoring prevents the application from hanging if the metrics server goes down or becomes slow, ensuring zero impact on the critical inference path.}
 \end{frame}
 
-\begin{frame}{Drift Monitoring}{Drift Metrics: Wasserstein-1 Distance vs. MMD}
+\begin{frame}{Drift Monitoring}{Drift Metrics: Wasserstein-1 (Prototype) vs. MMD (Target Design)}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
             \begin{block}{Wasserstein-1 Distance (Earth Mover's)}
@@ -67,7 +71,8 @@
                 {\footnotesize $$W_1(P, Q) = \int_{-\infty}^{\infty} |F_P(x) - F_Q(x)| \, dx$$}
                 \vspace{-0.2cm}
                 \footnotesize
-                \textbf{Complexity:} $\mathcal{O}(N \log N)$ over 1D projected scalar norms. Runs online inside live Prometheus exporters for real-time alerts.
+                \textbf{Complexity:} $\mathcal{O}(N \log N)$ over 1D projected scalar norms.\\
+                \textbf{Code Status:} \textcolor{signalorange}{\textbf{Offline prototype}} in \texttt{src/taxon\_vision/monitoring/drift.py}; not yet wired into live streaming inference.
             \end{block}
         \end{column}
         \begin{column}{0.48\textwidth}
@@ -76,54 +81,57 @@
                 {\scriptsize $$\text{MMD}^2(P, Q) = \mathbb{E}[k(x, x')] - 2\mathbb{E}[k(x, y)] + \mathbb{E}[k(y, y')]$$}
                 \vspace{-0.2cm}
                 \footnotesize
-                \textbf{Complexity:} $\mathcal{O}(N^2 \cdot D)$ using RBF Gaussian kernel in RKHS. Detects non-linear manifold shifts in batch audits.
+                \textbf{Complexity:} $\mathcal{O}(N^2 \cdot D)$ using RBF Gaussian kernel in RKHS.\\
+                \textbf{Code Status:} \textcolor{deepblue}{\textbf{Target Design Specification}}; not yet implemented in codebase.
             \end{block}
         \end{column}
     \end{columns}
 
     \vspace{0.15cm}
-    \statusdone
+    \statustarget
 
-    \script{We utilize two complementary mathematical strategies for drift detection. On the left, Wasserstein-1, or Earth Mover's Distance, computes the cost to transform our online 1D feature projections to match the baseline training distribution. It is fast enough to run continuously. On the right, MMD evaluates complete structural manifold shifts in high-dimensional space using kernel methods. Because it's computationally expensive, we schedule MMD for offline batch audits.}
-    \qa{Why use 1D projections for Wasserstein instead of full embeddings?}{Computing optimal transport in high dimensions is computationally intractable for real-time alerting; 1D scalar projections give us a fast, conservative proxy for distribution shifts.}
-    \qa{What does the kernel function $k$ represent in MMD?}{The kernel $k$, typically a Gaussian RBF, maps our raw embeddings into a reproducing kernel Hilbert space (RKHS) where non-linear differences between distributions become linear and measurable.}
+    \script{Let's be fully transparent about our drift monitoring status. We have implemented a 1D Wasserstein scalar distance function in drift.py as an offline prototype, but it is not yet hooked into our live inference pipeline. MMD is our target algorithm for periodic high-dimensional batch audits, but it is not yet implemented in code. This represents high-priority work for our upcoming engineering sprints.}
+    \qa{Are Wasserstein and MMD currently running in production?}{No. Wasserstein-1 is implemented as an offline evaluation function in drift.py, while MMD and live stream drift alerts are target roadmap specifications.}
+    \qa{What remains to be done for drift monitoring?}{We need to implement the MMD kernel matrix math, connect Wasserstein drift to live prediction batches, and configure alerting thresholds.}
 \end{frame}
 
-\begin{frame}{Telemetry Architecture}{Production Prometheus \& Grafana Telemetry Inventory}
+\begin{frame}{Telemetry Architecture}{Target Metric Inventory (Prometheus Roadmap)}
     \begin{block}{Production Metric Scrape Architecture}
         \footnotesize
         Pull-based collection scraping FastAPI \texttt{/metrics} endpoint every 15 seconds.
         \begin{enumerate}
-            \item \texttt{taxon\_inference\_latency\_seconds} (p50/p95/p99 histograms across preprocess, ONNX, and conformal gates).
-            \item \texttt{taxon\_predictions\_total} (counter by species and status: singleton, ambiguous, OOD).
-            \item \texttt{taxon\_conformal\_set\_size} (histogram and real-time gauge of $|\hat{C}(x)|$).
-            \item \texttt{taxon\_ood\_energy} (Helmholtz free energy distribution).
-            \item \texttt{taxon\_human\_referrals\_active} (Label Studio triage queue depth).
+            \item \texttt{taxon\_predictions\_total} \textcolor{plantgreen}{\textbf{[Implemented in \texttt{telemetry.py}]}}
+            \item \texttt{taxon\_inference\_latency\_seconds} \textcolor{deepblue}{\textbf{[Target Histogram]}}
+            \item \texttt{taxon\_conformal\_set\_size} \textcolor{deepblue}{\textbf{[Target Gauge]}}
+            \item \texttt{taxon\_ood\_energy} \textcolor{deepblue}{\textbf{[Target Distribution]}}
+            \item \texttt{taxon\_human\_referrals\_active} \textcolor{deepblue}{\textbf{[Roadmap / Target]}}
         \end{enumerate}
     \end{block}
 
     \vspace{0.15cm}
-    \statusdone
+    \statustarget
 
-    \script{Our telemetry inventory relies on a robust pull-based collection. Prometheus scrapes the FastAPI `/metrics` endpoint every 15 seconds. We track standard latency histograms alongside deep epistemic metrics like the conformal set size, OOD free energy, and the human referral queue depth. This unified pipeline enables Grafana to alert us not just when the service slows down, but when its statistical confidence deteriorates.}
-    \qa{What is the advantage of tracking conformal set size as a histogram rather than a simple average?}{A histogram reveals if the model is perfectly confident on 90\% of inputs but completely uncertain on 10\%, which an average might hide as a mild, acceptable increase.}
+    \script{This slide lists our target metric inventory. Currently in telemetry.py, only the prediction counter is wired up to FastAPI routes. Epistemic metrics like conformal set size and OOD free energy gauges, as well as human referral queue tracking, are defined as constants or design targets awaiting end-to-end integration.}
+    \qa{Which metrics are actively collected today?}{Only prediction counts grouped by status in predict.py. Conformal set size, latency histograms, and referral rate metrics are defined as constants but await end-to-end wiring.}
     \qa{Why measure OOD energy instead of standard softmax probabilities?}{Softmax is notoriously overconfident, pushing unknown inputs to high probability classes. Helmholtz free energy provides a more reliable, unnormalized measure of how far an input is from the training manifold.}
 \end{frame}
 
-\begin{frame}{Drift Monitoring}{Data \& Concept Drift: Wasserstein-1 Distance vs MMD}
-    \begin{block}{Multi-Scale Distributional Drift Detection}
+\begin{frame}{Drift Monitoring}{Target Multi-Scale Drift Strategy \& Evidently AI (Roadmap)}
+    \begin{block}{Multi-Scale Distributional Drift Architecture (Roadmap)}
         \begin{itemize}\small
             \item \textbf{Environmental Shift:} Phenological seasonality and new camera sensors cause feature representations to drift from baseline distributions.
-            \item \textbf{Online Marginal Tests (1D):} 1D projection with Wasserstein-1 (Earth Mover's) distance for real-time alerting with negligible CPU cost.
-            \item \textbf{Offline Manifold Tests (Multivariate):} Maximum Mean Discrepancy (MMD) with RBF kernels evaluates complete structural manifold shifts in scheduled batch audits ($O(N^2)$).
-            \item \textbf{Drift Retraining Triggers:} Sustained statistical divergence triggers automated active learning data extraction.
+            \item \textbf{Online Marginal Tests (1D):} 1D projection with Wasserstein-1 distance for real-time alerting \textcolor{signalorange}{\textbf{[Prototype in \texttt{drift.py}}]}.
+            \item \textbf{Offline Manifold Tests (Multivariate):} Maximum Mean Discrepancy (MMD) with RBF kernels evaluates complete structural manifold shifts \textcolor{deepblue}{\textbf{[Not Yet Implemented]}}.
+            \item \textbf{Evidently AI Integration:} Target framework for automated scheduled visual drift reporting \textcolor{deepblue}{\textbf{[Not Yet Setup/Configured]}}.
+            \item \textbf{Drift Retraining Triggers:} Sustained divergence triggering active learning extraction \textcolor{deepblue}{\textbf{[Phase 3 Target]}}.
         \end{itemize}
     \end{block}
 
     \vspace{0.15cm}
-    \statusdone
+    \statustarget
 
-    \script{Machine learning models degrade over time because the real world changes—we call this data drift. If autumn arrives, leaves turn yellow and lighting shifts, but our training set was collected in summer. We use the Wasserstein-1 Earth Mover's Distance to monitor the distribution of incoming feature embeddings against our baseline training distribution. When the statistical distance crosses our alert threshold, the system flags the drift and prepares an active learning cycle.}
+    \script{Machine learning models degrade over time because the real world changes—we call this data drift. We want to be completely open with our teammates about where this system stands: Evidently AI is not yet installed or set up, MMD is not yet coded, and automated drift-triggered retraining is an architectural design on our Phase 3 roadmap. There is significant, impactful engineering work left to build here.}
+    \qa{Is Evidently AI currently operational in TaxonVision?}{No. Evidently AI is our planned tool for drift reports and visual dashboards, but it has not been configured or integrated into our repository yet.}
     \qa{Why not run multivariate MMD on every single incoming inference request?}{Computing full-manifold MMD across high-dimensional embeddings has quadratic complexity $O(N^2)$ in sample size. We perform 1D Wasserstein distance on projected features in real time and reserve full MMD for periodic offline batch audits.}
 \end{frame}
 
@@ -145,57 +153,61 @@
     \statuspartial
 
     \script{Annotation by expert taxonomists is expensive and slow. If you send them 10,000 photos of the same common dandelion, you waste their time. BADGE solves this by analyzing the gradients that each unlabelled image would induce in the model. It uses k-MEANS++ clustering in gradient space to pick a batch of images that are both highly uncertain AND visually diverse. This maximizes the model's accuracy improvement per dollar spent on human labeling.}
-    \qa{What is the current status of the active learning pipeline?}{The BADGE mathematical sampling algorithm and Label Studio export formats are fully implemented in \texttt{src/taxon\_vision/active\_learning/badge.py}. The automated webhook that triggers unattended model retraining upon annotation completion is our Phase 3 target milestone.}
+    \qa{What is the current status of the active learning pipeline?}{The BADGE mathematical sampling algorithm is fully implemented in \texttt{src/taxon\_vision/active\_learning/badge.py}. However, the human review queue integration and automated retraining triggers are in progress.}
 \end{frame}
 
-\begin{frame}{Active Learning}{Active Learning Loop: Label Studio \& DagsHub Integration}
-    \begin{block}{Architectural \& Operational Details}
+\begin{frame}{Active Learning}{Target Active Learning Loop: Label Studio \& DagsHub (Roadmap)}
+    \begin{block}{Architectural \& Operational Target Blueprint}
         \begin{itemize}\small
+            \item \textbf{Current Implementation Reality:} Label Studio is \textbf{not yet set up or prepared} in our infrastructure. This slide details the target design for our Phase 3 human-in-the-loop triage engine.
             \item \textbf{Triggering Mechanisms:}
             \begin{itemize}\footnotesize
                 \item \textbf{Conformal Ambiguity Filter:} Samples where prediction set size $|\hat{C}(x)| > 1$ or empty sets $|\hat{C}(x)| = 0$.
-                \item \textbf{BADGE Diversity Sampling:} Clustering hallucinated gradient embeddings to capture boundary uncertainty.
+                \item \textbf{BADGE Diversity Sampling:} Clustering hallucinated gradient embeddings to capture boundary uncertainty \textcolor{plantgreen}{\textbf{[Algorithm Implemented]}}.
             \end{itemize}
-            \item \textbf{Annotation Loop:} Automated batch export to Label Studio on DagsHub $\to$ Domain expert/taxonomist review $\to$ Versioned DVC dataset commit $\to$ Jenkins retraining webhook.
+            \item \textbf{Annotation Loop (Target):} Automated batch export to Label Studio on DagsHub $\to$ Domain expert review $\to$ DVC dataset commit $\to$ Jenkins retraining webhook \textcolor{deepblue}{\textbf{[Roadmap]}}.
             \item \textbf{Cost Efficiency:} Prevents sending redundant high-confidence common taxa to human reviewers, cutting labeling expenses by $> 70\%$.
         \end{itemize}
     \end{block}
 
     \vspace{0.15cm}
-    \statusdone
+    \statustarget
 
-    \script{\footnotesize Our active learning loop integrates Label Studio and DagsHub to maximize human annotation efficiency. We first use the Conformal Ambiguity filter to capture samples with prediction set sizes greater than one or empty sets. We then apply BADGE diversity sampling to cluster gradient embeddings, capturing boundary uncertainty. This curated batch is exported to Label Studio on DagsHub. After taxonomists review the data, a new versioned DVC dataset commit automatically triggers a Jenkins retraining webhook. By preventing redundant high-confidence samples from reaching reviewers, we cut labeling expenses by more than 70\%.}
-    \qa{Why do we need both Conformal Filtering and BADGE?}{\footnotesize Conformal Prediction provides a fast, statistically rigorous way to filter out certain predictions. BADGE operates on the remaining uncertain subset to ensure the final annotation batch is maximally diverse across the feature space, preventing us from labeling the same ambiguous class 50 times.}
-    \qa{How does the Jenkins retraining webhook maintain reproducibility?}{\footnotesize The webhook is triggered exclusively by a Git commit containing the new DVC hash. Jenkins pulls the exact versioned dataset from the DagsHub S3 endpoint, guaranteeing that the resulting model weights correspond precisely to the updated human annotations.}
+    \script{\footnotesize On this slide, we illustrate our target active learning loop. To be completely clear with the team: Label Studio is not yet set up, configured, or integrated into our deployment. The sampling math in BADGE exists in badge.py, but the web UI, annotation ingestion pipelines, and automated DVC retraining webhooks are target roadmap items that our team will build next.}
+    \qa{Is Label Studio currently deployed and operational?}{\footnotesize No. There is nothing prepared for Label Studio yet in our infrastructure; it is purely a target architectural blueprint for Phase 3.}
+    \qa{Why show this workflow if Label Studio is not yet set up?}{\footnotesize To define the exact data contract and trigger mechanisms so that the engineering team can build the Label Studio connector against a unified specification.}
 \end{frame}
 
-
-\begin{frame}{Active Learning Flow}{Closing the Loop: Stream $\rightarrow$ BADGE $\rightarrow$ Label Studio}
+\begin{frame}{Active Learning Flow}{Target Closed-Loop Architecture: Stream $\rightarrow$ BADGE $\rightarrow$ Label Studio}
     \begin{center}
-    \resizebox{0.95\textwidth}{!}{
+    \resizebox{!}{0.48\textheight}{
     \begin{tikzpicture}[
-        node distance=1cm and 1.5cm,
-        stepbox/.style={rectangle, draw=deepblue, thick, fill=blue!5, text width=2.5cm, align=center, minimum height=1.2cm, rounded corners},
+        node distance=0.8cm and 1.2cm,
+        stepbox/.style={rectangle, draw=deepblue, thick, fill=blue!5, text width=2.5cm, align=center, minimum height=1.0cm, rounded corners},
         arrow/.style={->, thick, >=stealth},
-        labelbox/.style={rectangle, draw=signalorange, thick, fill=orange!10, text width=2.5cm, align=center, minimum height=1.2cm, rounded corners}
+        labelbox/.style={rectangle, draw=signalorange, thick, fill=orange!10, text width=2.5cm, align=center, minimum height=1.0cm, rounded corners}
     ]
         % Nodes
-        \node[stepbox] (stream) {\textbf{1. Live Stream} \\ Unlabelled Observations};
-        \node[stepbox, right=of stream] (conformal) {\textbf{2. Conformal Filter} \\ Identify low-confidence samples};
-        \node[stepbox, right=of conformal] (badge) {\textbf{3. BADGE} \\ Gradient diversity ($k$-MEANS++)};
-        \node[labelbox, below=of badge] (labelstudio) {\textbf{4. Label Studio} \\ Expert Human Annotation};
-        \node[stepbox, left=of labelstudio] (retrain) {\textbf{5. Retraining Trigger} \\ DVC Pipeline Update};
+        \node[stepbox] (stream) {\textbf{1. Live Stream} \\ Unlabelled Data \\ {\footnotesize\textcolor{plantgreen}{\textbf{[Active Data]}}}};
+        \node[stepbox, right=of stream] (conformal) {\textbf{2. Conformal Filter} \\ Identify ambiguous \\ {\footnotesize\textcolor{plantgreen}{\textbf{[Active Filter]}}}};
+        \node[stepbox, right=of conformal] (badge) {\textbf{3. BADGE} \\ Diversity sampling \\ {\footnotesize\textcolor{plantgreen}{\textbf{[Implemented]}}}};
+        \node[labelbox, below=of badge] (labelstudio) {\textbf{4. Label Studio} \\ Expert Review \\ {\footnotesize\textcolor{deepblue}{\textbf{[Target System]}}}};
+        \node[stepbox, left=of labelstudio] (retrain) {\textbf{5. Retraining} \\ DVC Retrain Trigger \\ {\footnotesize\textcolor{deepblue}{\textbf{[Target Webhook]}}}};
 
         % Arrows
         \draw[arrow] (stream) -- (conformal);
         \draw[arrow] (conformal) -- (badge);
-        \draw[arrow] (badge) -- (labelstudio);
-        \draw[arrow] (labelstudio) -- (retrain);
+        \draw[arrow, dashed] (badge) -- (labelstudio);
+        \draw[arrow, dashed] (labelstudio) -- (retrain);
         \draw[arrow, dashed] (retrain) -| (stream);
     \end{tikzpicture}
     }
     \end{center}
 
-    \script{This flow shows how active learning operates in production. Unlabelled data flows in from our web streams. The split conformal prediction layer filters out cases where the model is highly confident. The remaining low-confidence samples are processed by the BADGE algorithm, which clusters their gradients to select a small, diverse batch. This batch is sent to Label Studio for expert taxonomists to review. Once reviewed, it triggers a DVC pipeline update, retraining the model and updating the live stream.}
-    \qa{How does the Conformal Filter help BADGE?}{By filtering out high-confidence samples first, we significantly reduce the size of the dataset BADGE needs to process, making the $O(N \log N)$ $k$-MEANS++ clustering computationally feasible.}
+    \vspace{0.05cm}
+    \statustarget
+
+    \script{\footnotesize This flow shows our target architecture for active learning in production. While streaming observations and conformal filtering are active, and BADGE sampling math is implemented in badge.py, automated Label Studio dispatch and closed-loop retraining webhooks remain roadmap goals.}
+    \qa{Which parts of this 5-step loop are implemented today?}{\footnotesize Steps 1 and 2 (streaming data and conformal filtering) and step 3 math (BADGE) are ready. Steps 4 and 5 (Label Studio annotation and automated retraining webhook) are roadmap items.}
+    \qa{Why sequence Conformal Filtering before BADGE?}{\footnotesize Conformal filtering quickly isolates ambiguous predictions, shrinking the candidate pool so that BADGE gradient clustering runs in seconds.}
 \end{frame}
