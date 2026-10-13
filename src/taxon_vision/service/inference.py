@@ -85,15 +85,24 @@ def get_conformal_engine() -> ConformalPredictionEngine:
     """Instantiate and cache the conformal prediction engine.
 
     Why:
-        The conformal prediction engine contains pre-calibrated error tolerances (alpha) and quantile non-conformity cutoffs (q_hat). Caching a singleton engine ensures consistent calibration parameters across concurrent requests without per-request instantiation overhead.
+        The conformal prediction engine contains pre-calibrated error tolerances (alpha)
+        and quantile non-conformity cutoffs (q_hat). Caching a singleton engine ensures
+        consistent calibration parameters across concurrent requests without per-request
+        instantiation overhead.
 
     How:
-        Initializes a ConformalPredictionEngine with default calibrated thresholds and returns the cached instance.
+        Retrieves global application settings and initializes a ConformalPredictionEngine
+        with configured alpha, quantile threshold, and k_max parameters.
 
     Returns:
         The cached ConformalPredictionEngine singleton.
     """
-    return ConformalPredictionEngine()
+    settings = get_settings()
+    return ConformalPredictionEngine(
+        q_hat=settings.conformal.quantile_threshold,
+        alpha=settings.conformal.alpha,
+        k_max=settings.conformal.k_max,
+    )
 
 
 @lru_cache(maxsize=1)
