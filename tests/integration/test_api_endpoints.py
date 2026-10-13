@@ -1,3 +1,9 @@
+# SPDX-FileCopyrightText: 2026 Benjamin Förster
+# SPDX-License-Identifier: MIT
+"""Integration tests for FastAPI REST inference, health, and training endpoints."""
+
+from __future__ import annotations
+
 import io
 from pathlib import Path
 
@@ -6,24 +12,28 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from taxon_vision.service.api import app
+from taxon_vision.service.routes import predict as predict_mod
 from taxon_vision.service.routes.predict import _build_live_prediction
 
 client = TestClient(app)
 
 
 def test_health_endpoint() -> None:
+    """Verify liveness probe returns HTTP 200 with healthy status."""
     resp = client.get("/health")
     assert resp.status_code == 200
     assert resp.json()["status"] == "healthy"
 
 
 def test_health_ready_endpoint() -> None:
+    """Verify readiness probe returns HTTP 200 with ready status."""
     resp = client.get("/health/ready")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ready"
 
 
 def test_predict_endpoint() -> None:
+    """Verify /api/v1/predict fallback behavior when given non-image mock bytes."""
     dummy_img = io.BytesIO(b"fake image bytes")
     resp = client.post("/api/v1/predict", files={"file": ("test.jpg", dummy_img, "image/jpeg")})
     assert resp.status_code == 200
@@ -34,6 +44,7 @@ def test_predict_endpoint() -> None:
 
 
 def test_top_level_predict_endpoint() -> None:
+    """Verify /predict top-level route alias matches API response structure."""
     dummy_img = io.BytesIO(b"fake image bytes")
     resp = client.post("/predict", files={"file": ("test.jpg", dummy_img, "image/jpeg")})
     assert resp.status_code == 200
@@ -43,6 +54,7 @@ def test_top_level_predict_endpoint() -> None:
 
 
 def test_training_endpoint_sync() -> None:
+    """Verify synchronous model training endpoint returns completed job summary."""
     payload = {
         "extractor": "mobilenetv4_conv_small",
         "epochs": 2,
@@ -61,6 +73,7 @@ def test_training_endpoint_sync() -> None:
 
 
 def test_train_alias_endpoint() -> None:
+    """Verify legacy /train alias triggers training pipeline correctly."""
     resp = client.post("/train", json={"epochs": 1})
     assert resp.status_code == 200
     data = resp.json()
@@ -69,6 +82,7 @@ def test_train_alias_endpoint() -> None:
 
 
 def test_training_endpoint_background() -> None:
+    """Verify asynchronous training endpoint dispatches background task."""
     resp = client.post("/training", json={"epochs": 1, "background": True})
     assert resp.status_code == 200
     data = resp.json()
@@ -76,6 +90,7 @@ def test_training_endpoint_background() -> None:
 
 
 def test_real_image_prediction_if_sample_exists() -> None:
+    """Verify prediction endpoint with sample disk observation fixture if present."""
     sample_path = Path("data/sample/406185885_taxon_47120.jpg")
     if sample_path.exists():
         with open(sample_path, "rb") as f:
@@ -88,6 +103,7 @@ def test_real_image_prediction_if_sample_exists() -> None:
 
 
 def test_predict_endpoint_valid_image() -> None:
+    """Verify end-to-end prediction on a valid in-memory RGB JPEG image."""
     buf = io.BytesIO()
     Image.new("RGB", (32, 32), color="green").save(buf, format="JPEG")
     buf.seek(0)
@@ -101,6 +117,7 @@ def test_predict_endpoint_valid_image() -> None:
 
 
 def test_build_live_prediction_multiple_candidates() -> None:
+    """Verify _build_live_prediction formats multiple conformal candidate taxa."""
     pred = {
         "scientific_name": "Danaus plexippus",
         "common_name": "Monarch Butterfly",
@@ -117,7 +134,7 @@ def test_build_live_prediction_multiple_candidates() -> None:
 
 
 def test_predict_endpoint_internal_server_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    import taxon_vision.service.routes.predict as predict_mod
+    """Verify prediction endpoint surfaces unexpected engine crashes as HTTP 500."""
 
     def mock_run_prediction(*args: object, **kwargs: object) -> None:
         raise RuntimeError("Simulated internal GPU memory fault")

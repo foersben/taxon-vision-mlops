@@ -1,6 +1,13 @@
+# SPDX-FileCopyrightText: 2026 Benjamin Förster
+# SPDX-License-Identifier: MIT
+"""Unit tests for model architecture components, feature extractors, and training routines."""
+
+from __future__ import annotations
+
 from pathlib import Path
 
 import pytest
+import timm
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -24,9 +31,11 @@ from taxon_vision.models.trainer import (
     train_head_on_cached_embeddings,
     tune_hyperparameters,
 )
+from taxon_vision.models.training.checkpoint import _save_checkpoint
 
 
 def test_feature_extractor_factory_and_caching() -> None:
+    """Verify feature extractor instantiation and dataset feature caching."""
     backbone = create_feature_extractor("mobilenetv4_conv_small", pretrained=False)
     dim = get_feature_dimension(backbone)
     assert dim > 0
@@ -46,8 +55,7 @@ def test_feature_extractor_factory_and_caching() -> None:
 
 
 def test_feature_extractor_device_and_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
-    import timm
-
+    """Verify device-specific feature extraction and fallback extractor on download failures."""
     backbone = nn.Sequential(nn.Flatten(), nn.Linear(3 * 32 * 32, 16))
     dummy_images = torch.randn(2, 3, 32, 32)
     feats = extract_features(backbone, dummy_images, device="cpu")
@@ -68,6 +76,7 @@ def test_feature_extractor_device_and_fallback(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_feature_extractor_and_head() -> None:
+    """Verify forward passes through TaxonClassifier and forward_head."""
     backbone = nn.Sequential(nn.Flatten(), nn.Linear(3 * 224 * 224, 64))
     classifier = TaxonClassifier(backbone=backbone, feature_dim=64, num_classes=5)
 
@@ -82,6 +91,7 @@ def test_feature_extractor_and_head() -> None:
 
 
 def test_train_head_epoch_and_evaluate() -> None:
+    """Verify train_head_epoch updates parameters and evaluate_head computes metrics."""
     backbone = nn.Sequential(nn.Flatten(), nn.Linear(3 * 32 * 32, 16))
     classifier = TaxonClassifier(backbone=backbone, feature_dim=16, num_classes=3)
     optimizer = optim.SGD(classifier.head.parameters(), lr=0.01)
@@ -97,6 +107,7 @@ def test_train_head_epoch_and_evaluate() -> None:
 
 
 def test_train_head_on_cached_embeddings() -> None:
+    """Verify classification head training on pre-computed feature representations."""
     feature_dim = 16
     num_classes = 3
     head = nn.Sequential(nn.Dropout(p=0.1), nn.Linear(feature_dim, num_classes))
@@ -128,7 +139,8 @@ def test_train_head_on_cached_embeddings() -> None:
     assert len(history["val_accuracy"]) == 3
 
 
-def test_tune_hyperparameters_optuna(tmp_path: pytest.TempPathFactory) -> None:
+def test_tune_hyperparameters_optuna(tmp_path: Path) -> None:
+    """Verify Optuna Bayesian hyperparameter search integration with MLflow."""
     feature_dim = 8
     num_classes = 2
     train_z = torch.randn(20, feature_dim)
@@ -166,6 +178,7 @@ def test_tune_hyperparameters_optuna(tmp_path: pytest.TempPathFactory) -> None:
 
 
 def test_embedding_split_validation() -> None:
+    """Verify EmbeddingSplit dataclass asserts equal feature dimensions and sample sizes."""
     # Dimension mismatch check
     with pytest.raises(ValueError, match="Feature dimension mismatch"):
         EmbeddingSplit(
@@ -186,6 +199,7 @@ def test_embedding_split_validation() -> None:
 
 
 def test_cam_heatmap() -> None:
+    """Verify Class Activation Mapping saliency matrix generation and bounds."""
     img = Image.new("RGB", (100, 100))
     heatmap = generate_heatmap(img)
     assert heatmap.shape == (100, 100)
@@ -194,8 +208,7 @@ def test_cam_heatmap() -> None:
 
 
 def test_save_head_checkpoint_explicit_path(tmp_path: Path) -> None:
-    from taxon_vision.models.training.checkpoint import _save_checkpoint
-
+    """Verify checkpoint persistence to an explicitly provided file destination."""
     head = nn.Sequential(nn.Linear(10, 2))
     target = tmp_path / "custom_checkpoint.pt"
     saved = _save_checkpoint(head, checkpoint_path=target)

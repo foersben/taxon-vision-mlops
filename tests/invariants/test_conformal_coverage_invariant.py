@@ -1,3 +1,9 @@
+# SPDX-FileCopyrightText: 2026 Benjamin Förster
+# SPDX-License-Identifier: MIT
+"""Architectural invariant test verifying mathematical conformal prediction coverage."""
+
+from __future__ import annotations
+
 import numpy as np
 
 from taxon_vision.uncertainty.conformal import ConformalPredictionEngine

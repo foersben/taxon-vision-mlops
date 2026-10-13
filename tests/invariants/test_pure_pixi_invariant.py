@@ -1,4 +1,8 @@
+# SPDX-FileCopyrightText: 2026 Benjamin Förster
+# SPDX-License-Identifier: MIT
 """Scientific and architectural invariants verifying pure Pixi isolation and VSCode integration."""
+
+from __future__ import annotations
 
 import json
 import tomllib
