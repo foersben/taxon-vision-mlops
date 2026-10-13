@@ -73,7 +73,7 @@
                     ]
                     \addplot[fill=TaxonPrimary!20, draw=TaxonPrimary, thick, domain=0:0.9, samples=100] {exp(-5*x^2)};
                     \addplot[fill=TaxonAccent!30, draw=TaxonAccent, thick, domain=0.9:1, samples=50] {exp(-5*x^2)};
-                    \draw[dashed, thick, TaxonAccent] (axis cs:0.9,0) -- (axis cs:0.9,1.1) node[above] {$\hat{q}$ (e.g. 95\%)};
+                    \draw[dashed, thick, TaxonAccent] (axis cs:0.9,0) -- (axis cs:0.9,1.1) node[above, yshift=2pt] {$\hat{q}$ (e.g. 95\%)};
                     \end{axis}
                 \end{tikzpicture}
                 \\ \vspace{0.2cm}

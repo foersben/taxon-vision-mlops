@@ -37,7 +37,7 @@ spec:
 
   options {
     buildDiscarder(logRotator(numToKeepStr: '15', daysToKeepStr: '14'))
-    timeout(time: 45, unit: 'MINUTES')
+    timeout(time: 240, unit: 'MINUTES')
     timestamps()
     disableConcurrentBuilds(abortPrevious: true)
   }
@@ -48,6 +48,7 @@ spec:
     AWS_SECRET_ACCESS_KEY = "${DAGSHUB_TOKEN}"
     MLFLOW_TRACKING_USERNAME = 'foersben'
     MLFLOW_TRACKING_PASSWORD = "${DAGSHUB_TOKEN}"
+    PYTHONUNBUFFERED = '1'
     OMP_NUM_THREADS = '4'
     MKL_NUM_THREADS = '4'
     OPENBLAS_NUM_THREADS = '4'
@@ -148,6 +149,9 @@ spec:
     }
 
     stage('Model Training & Checkpoint (GPU)') {
+      options {
+        timeout(time: 150, unit: 'MINUTES')
+      }
       when {
         anyOf {
           branch 'main'
@@ -195,6 +199,7 @@ spec:
         container('ml-runner') {
           sh '''
             export PATH="/root/.pixi/bin:$PATH"
+            export PYTHONUNBUFFERED=1
             which git >/dev/null 2>&1 || pixi global install git
             which kubectl >/dev/null 2>&1 || pixi global install kubernetes-client
             git config --global --add safe.directory "*"

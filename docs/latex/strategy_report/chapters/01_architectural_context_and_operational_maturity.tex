@@ -14,29 +14,22 @@ Fine-grained biological species identification at a global scale represents a fo
 
 When predictive models are trained in isolated Jupyter notebooks -- a state defined as Level 0 (Manual Process) maturity -- they already suffer from non-reproducible software environments, untracked parameter drift, and silent degradation under natural distribution shifts. In an operational setting, these isolated scripts break down entirely during the handoff between data science and deployment teams. This renders the system incapable of sustaining continuous updates or scaling to support thousands of distinct taxa.
 
-\section{The MLOps Evolution Paradigm}
-In order to reliably process citizen-science streams, the TaxonVision-MLOps architecture forces a paradigm shift. We must treat visual identification not as a static model, but as a continuously evolving enterprise service. This requires abandoning manual intervention in favour of a strictly automated, tiered Machine Learning Operations (MLOps) framework designed to advance directly to Level 3 and Level 4 maturity.
-
-By framing the infrastructure as an automated pipeline, the architecture mandates three foundational pillars:
-\begin{enumerate}
-    \item \textbf{Continuous Integration and Deployment (CI/CD):} The implementation of rapid, automated pipeline code releases and testing triggered by version control events.
-    \item \textbf{Cryptographic Reproducibility:} The mathematically verifiable versioning of both the execution logic (via Git) and the underlying data states (via Data Version Control).
-    \item \textbf{Epistemic Safety:} The rejection of raw, uncalibrated softmax probability scores in favour of Split Conformal Prediction. This provides formal, distribution-free mathematical guarantees that the true species is contained within the prediction set up to a user-defined error tolerance, $\alpha$.
-\end{enumerate}
+\section{The TaxonVision Operational Maturity Framework}
+To process citizen-science visual streams reliably, the TaxonVision-MLOps architecture enforces a structured paradigm shift. Rather than relying solely on traditional MLOps reference architectures, we adopt Google’s foundational 3-level MLOps spectrum (Levels 0–2: Manual, Automated Pipeline, and CI/CD) and extend it into a tailored 5-Tier Operational Maturity Framework. By introducing Level 3 (Feedback \& Active Learning) and Level 4 (Epistemic Safety), the platform bridges standard deployment automation with mathematical coverage guarantees required for ecological monitoring.
 
 \begin{table}[htbp]
 \centering
-\caption{TaxonVision-MLOps Maturity Framework}
+\caption{TaxonVision-MLOps 5-Tier Operational Maturity Framework (Adapted from Google MLOps)}
 \label{tab:maturity_framework}
 \begin{tabularx}{\textwidth}{@{}l X X@{}}
 \toprule
 \textbf{Maturity Level} & \textbf{Infrastructure Configuration} & \textbf{Operational Focus} \\
 \midrule
-\textbf{0: Manual} & Isolated interactive notebooks; manual state handoffs. & Localized algorithm prototyping. \\
-\textbf{1: Pipeline} & Automated Directed Acyclic Graphs (DAGs); basic data validation. & Establishing a continuous training baseline. \\
-\textbf{2: CI/CD} & GitHub Actions and Jenkins integration; dynamic ONNX graph export. & Rapid, repeatable code releases. \\
-\textbf{3: Feedback} & Automated telemetry scraping; Active Learning triage queues. & Data-engine iterations and real-time concept drift detection. \\
-\textbf{4: Safety} & Split Conformal Prediction; Energy-Based OOD rejection. & Distribution-free coverage guarantees ($1 - \alpha$). \\
+\textbf{0: Manual (Google Baseline)} & Isolated interactive notebooks; manual state handoffs. & Localized algorithm prototyping. \\
+\textbf{1: Pipeline (Google Baseline)} & Automated DAGs; basic data validation. & Continuous training baseline. \\
+\textbf{2: CI/CD (Google Baseline)} & GitHub Actions \& Jenkins; ONNX graph export. & Rapid, repeatable code \& model releases. \\
+\textbf{3: Feedback (TaxonVision Extension)} & Telemetry scraping; Active Learning triage queues. & Real-time drift detection \& data loops. \\
+\textbf{4: Safety (TaxonVision Extension)} & Split Conformal Prediction; Energy-Based OOD. & Distribution-free coverage guarantees ($1-\alpha$). \\
 \bottomrule
 \end{tabularx}
 \end{table}

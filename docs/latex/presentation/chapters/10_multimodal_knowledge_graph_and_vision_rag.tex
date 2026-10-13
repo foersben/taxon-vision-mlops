@@ -88,9 +88,10 @@
 \begin{frame}{Visual Pre-Processing}{Parent-Child Visual Chunking Diagram}
     \begin{center}
         \resizebox{0.9\textwidth}{!}{
+            \makebox[\textwidth][c]{
             \begin{tikzpicture}[
-                node distance=1.5cm,
-                box/.style={rectangle, draw, rounded corners, align=center, thick, fill=gray!10, minimum height=1.2cm},
+                node distance=0.8cm,
+                box/.style={rectangle, draw, rounded corners, align=center, thick, fill=gray!10, minimum height=1.2cm, text width=2.4cm},
                 arrow/.style={-stealth, thick},
                 font=\small\sffamily
             ]
@@ -100,7 +101,7 @@
             \providecolor{TaxonAccent}{RGB}{231, 76, 60}
 
             % Parent Image
-            \node[box, fill=gray!10, draw=gray, minimum width=4cm, minimum height=3cm] (parent) {};
+            \node[box, fill=gray!10, draw=gray, minimum width=4cm, minimum height=3cm, text width=3.5cm] (parent) {};
             \node[anchor=north, font=\small\sffamily\bfseries] at (parent.north) {Full Parent Scene ($I_{\text{parent}}$)};
             \node[anchor=center, text width=3.5cm, align=center] at (parent.center) {\scriptsize Macro-habitat context, \\ background foliage/soil noise};
 
@@ -108,10 +109,10 @@
             \draw[thick, dashed, draw=TaxonAccent] ([xshift=-1cm,yshift=-0.5cm]parent.center) rectangle ([xshift=1cm,yshift=1cm]parent.center);
 
             % Detector node
-            \node[box, fill=TaxonPrimary!20, draw=TaxonPrimary, right=2cm of parent] (detector) {\textbf{Zero-Shot Detector} \\ \scriptsize YOLO-World / OWL-ViT};
+            \node[box, fill=TaxonPrimary!20, draw=TaxonPrimary, right=1.2cm of parent] (detector) {\textbf{Zero-Shot Detector} \\ \scriptsize YOLO-World / OWL-ViT};
 
             % Child Crop
-            \node[box, fill=TaxonSecondary!20, draw=TaxonSecondary, right=2cm of detector, minimum width=2.5cm, minimum height=2.5cm] (child) {};
+            \node[box, fill=TaxonSecondary!20, draw=TaxonSecondary, right=1.2cm of detector, minimum width=2.5cm, minimum height=2.5cm] (child) {};
             \node[anchor=north, font=\small\sffamily\bfseries] at (child.north) {Child Crop ($I_{\text{child}}$)};
             \node[anchor=center, text width=2cm, align=center] at (child.center) {\scriptsize Clean Organism};
 
@@ -123,6 +124,7 @@
             \draw[arrow] (child.south) -- (vector.north);
 
             \end{tikzpicture}
+            }
         }
     \end{center}
 

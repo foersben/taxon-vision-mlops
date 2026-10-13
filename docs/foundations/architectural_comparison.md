@@ -78,7 +78,7 @@ The table below summarizes the key architectural dimensions across both paradigm
 
 * Formulates the complete mathematical, physical, and legal constraints before writing code.
 * Replaces naive paradigms with TaxonVision-MLOps architectures guaranteeing data immutability via DVC, zero-copy streaming, Split Conformal prediction coverage guarantees, and zero-open-ports edge ingress topology via Cloudflare Tunnels.
-* Defines a formal four-tier operational maturity framework spanning from manual prototypes (Level 0) to Epistemic Safety (Level 4).
+* Defines a formal five-tier operational maturity framework spanning from manual prototypes (Level 0) to Epistemic Safety (Level 4), adapted from Google's MLOps spectrum.
 * Formulates the long-tail problem: biological biodiversity naturally follows a Pareto distribution where head taxa have tens of thousands of observations while thousands of endangered species have fewer than ten observations.
 * Establishes hardware allocation rules: heterogeneous CPU pin-binding (P-cores for gradient math, E-cores for async I/O) on bare-metal workstations.
 

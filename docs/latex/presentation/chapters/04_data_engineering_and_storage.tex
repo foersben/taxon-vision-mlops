@@ -28,7 +28,7 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.2cm}
+    \vspace{0.1cm}
     \statusdone
 
     \script{In large-scale biological vision, downloading 50 terabytes of raw images is impossible for individual developers. Instead of downloading JPEGs, TaxonVision uses lightweight Apache Parquet index manifests. The images remain on remote AWS Open Data S3 buckets, while our local system works with columnar metadata that can be filtered and sliced in milliseconds.}
@@ -45,65 +45,219 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.2cm}
+    \vspace{0.1cm}
     \statusdone
 
     \script{How do we ensure that an image on S3 hasn't been corrupted or altered over time? Inside our Parquet manifest, every single observation has a cryptographic SHA-256 validation hash stored alongside its S3 URL. When our S3Streamer module streams the image into memory, it checks the SHA-256 hash immediately before decoding. If a single byte is corrupted, the observation is caught and logged instantly.}
     \qa{Does on-the-fly hash verification introduce CPU bottlenecks?}{SHA-256 hashing in hardware-accelerated CPU instructions takes microseconds per image buffer, which is entirely hidden behind network transfer and image decoding latency.}
 \end{frame}
 
-\begin{frame}{Memory Optimization}{1:1 Row Alignment with Feature Embeddings (np.memmap)}
-    \begin{block}{Zero-RAM Bloat Feature Loading}
-        \begin{itemize}\small
-            \item \textbf{Exact 1:1 Invariant:} Row $i$ in \texttt{observations.parquet} maps deterministically to vector $i$ in disk-backed \texttt{embeddings.npy}.
-            \item \textbf{Memory-Mapped Slicing:} PyTorch dataloaders slice multi-gigabyte embedding arrays on-demand via \texttt{np.memmap} without RAM saturation.
+
+\begin{frame}{Data Formats}{Columnar Storage \& In-Memory Layout: Parquet vs. Arrow}
+    \begin{block}{Storage and Layout Architectures}
+        \begin{itemize}\footnotesize
+            \item \textbf{Visual/Conceptual:} Row-oriented (CSV) vs. Columnar on-disk (Parquet) vs. In-memory columnar (Arrow).
+            \item \textbf{Apache Parquet (On-Disk):}
+            \begin{itemize}
+                \item \textit{Why:} Tabular data row-by-row scans unneeded columns. Parquet uses column-by-column Row Groups.
+                \item \textit{Encodings:} Dictionary, RLE, Snappy/Zstd.
+                \item \textit{Acceleration:} Column projection + Predicate pushdown (skips groups via min/max).
+            \end{itemize}
+            \item \textbf{Apache Arrow (In-Memory):}
+            \begin{itemize}
+                \item \textit{Why:} Eliminates serialization when passing tabular data across language boundaries.
+                \item \textit{Layout:} Values buffer, validity bitmap, offset buffer.
+                \item \textit{Alignment:} Structured for CPU cache lines and SIMD.
+            \end{itemize}
         \end{itemize}
     \end{block}
 
-    \vspace{-0.1cm}
-    \begin{center}
-    \resizebox{0.85\linewidth}{!}{
-    \begin{tikzpicture}[
-        node distance=0.5cm and 1cm,
-        table_node/.style={draw=TaxonPrimary, fill=TaxonPrimary!10, rounded corners, rectangle, align=center, thick, minimum width=4.5cm, minimum height=1.2cm},
-        array_node/.style={draw=TaxonSecondary, fill=TaxonSecondary!10, rounded corners, rectangle, align=center, thick, minimum width=3.5cm, minimum height=1.2cm},
-        arrow/.style={->, thick, draw=TaxonDark, shorten >=2pt, shorten <=2pt},
-        label_text/.style={font=\small\sffamily\bfseries, color=TaxonDark}
-    ]
+    \vspace{0.1cm}
+    \statusdone
 
-        % Left Node: observations.parquet
-        \node[table_node] (parquet) {
-            \textbf{observations.parquet}\\
-            \scriptsize \texttt{row\_id, hash, taxon\_id, url}
-        };
+    \script{Let's break down the difference between how data is stored on disk and how it exists in memory. Parquet is an on-disk format: instead of storing data row-by-row like a CSV, it stores data column-by-column, allowing us to read only the columns we need, like taxon ID, while skipping the rest. Arrow, on the other hand, is an in-memory layout. It standardizes how tabular data sits in RAM, eliminating costly serialization when we pass data between Python and C++.}
+    \qa{What is predicate pushdown in Parquet?}{It is an optimization where the query engine checks the min/max statistics in the Parquet metadata. If our filter is outside that range, the engine skips the entire row group without ever reading the actual data blocks.}
+    \qa{Why do we need Arrow if we already have Pandas dataframes?}{Arrow provides a standardized, contiguous memory layout designed for SIMD instructions, whereas traditional Pandas stored strings as scattered Python objects, causing massive cache misses and serialization overhead.}
+\end{frame}
 
-        % Right Node: embeddings.npy
-        \node[array_node, right=3cm of parquet] (memmap) {
-            \textbf{embeddings.npy}\\
-            \scriptsize $z \in \mathbb{R}^{768}$ (np.memmap)
-        };
+\begin{frame}[fragile]{Query Engine}{DuckDB: Vectorized In-Process Analytics \& Zero-Copy Arrow}
+    \begin{columns}
+        \begin{column}{0.5\textwidth}
+            \begin{block}{Vectorized Execution Pipeline}
+                \begin{itemize}\footnotesize
+                    \item \textbf{What is DuckDB:} Embedded, in-process OLAP database engine ("SQLite for Analytics"). Runs directly inside FastAPI without daemon overhead.
+                    \item \textbf{Arrow in DuckDB:}
+                    \begin{itemize}
+                        \item Consumes/emits Arrow RecordBatches natively via C Data Interface (zero-copy).
+                        \item \textit{Vectorized:} 2048-tuple morsels in L1/L2 caches.
+                        \item \textit{Filtering:} Filters millions of records in ms with 0 RAM bloat.
+                    \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
 
-        % Draw rows
-        \foreach \i/\y in {0/0.4, 1/0, 2/-0.4} {
-            \draw[TaxonPrimary, thick] ([yshift=\y cm, xshift=-2.2cm]parquet.center) -- ([yshift=\y cm, xshift=2.2cm]parquet.center);
-            \draw[TaxonSecondary, thick] ([yshift=\y cm, xshift=-1.7cm]memmap.center) -- ([yshift=\y cm, xshift=1.7cm]memmap.center);
-        }
+        \begin{column}{0.48\textwidth}
+            \vspace{-0.1cm}
+            \begin{center}
+            \resizebox{0.95\linewidth}{!}{
+            \begin{tikzpicture}[
+                node distance=0.2cm and 0.2cm,
+                block/.style={draw=TaxonPrimary, fill=TaxonPrimary!10, rounded corners, rectangle, align=center, thick, minimum width=3.5cm, minimum height=0.6cm, font=\tiny\sffamily},
+                arrow/.style={->, thick, draw=TaxonDark, shorten >=2pt, shorten <=2pt},
+                label_text/.style={font=\tiny\sffamily\bfseries, color=TaxonAccent}
+            ]
 
-        % Draw arrows indicating 1:1 mapping
-        \draw[arrow, color=TaxonAccent] ([yshift=0.2cm]parquet.east) -- node[above, label_text, color=TaxonAccent] {Exact 1:1 Row Alignment} ([yshift=0.2cm]memmap.west);
-        \draw[arrow, color=TaxonAccent] ([yshift=-0.2cm]parquet.east) -- ([yshift=-0.2cm]memmap.west);
+                % Nodes
+                \node[block] (disk) {observations.parquet\\(On Disk)};
+                \node[block, below=of disk] (arrow_c) {Arrow C Data Interface\\(Zero-Copy)};
+                \node[block, draw=TaxonSecondary, fill=TaxonSecondary!10, below=of arrow_c] (duckdb) {DuckDB Vectorized Pipeline\\(In-Process)};
+                \node[block, draw=TaxonAccent, fill=TaxonAccent!10, below=of duckdb] (results) {Sub-millisecond SQL Results};
 
-        \node[below=0.6cm of parquet, text width=5cm, align=center] {\scriptsize Columnar metadata loaded rapidly into Pandas/Polars RAM};
-        \node[below=0.6cm of memmap, text width=4cm, align=center] {\scriptsize Disk-backed NVMe array sliced directly via PyTorch};
+                % Arrows
+                \draw[arrow] (disk) -- (arrow_c);
+                \draw[arrow] (arrow_c) -- node[right, label_text] {2048-tuple morsels} (duckdb);
+                \draw[arrow] (duckdb) -- (results);
 
-    \end{tikzpicture}
-    }
-    \end{center}
+            \end{tikzpicture}
+            }
+            \end{center}
+        \end{column}
+    \end{columns}
+
+    \vspace{0.1cm}
+    \statusdone
+
+    \script{To query this Parquet and Arrow data, we embed DuckDB directly into our Python process. Think of DuckDB as SQLite for analytics. It doesn't run as a separate server, which means there is no network overhead. DuckDB consumes our Arrow buffers natively with zero memory copies. It processes data in morsels of 2048 tuples, keeping everything perfectly sized for the CPU's L1 and L2 caches, resulting in sub-millisecond taxonomic filtering.}
+    \qa{Why not use PostgreSQL for filtering observations?}{PostgreSQL requires a separate daemon process, meaning data must be serialized, sent over a network socket, and deserialized. DuckDB runs in-process and queries Arrow buffers directly via shared memory pointers.}
+    \qa{What does 'vectorized execution' mean here?}{Instead of processing rows one at a time (tuple-at-a-time), vectorized engines process small batches (vectors) of data at once, reducing loop overhead and allowing the CPU to use SIMD instructions.}
+\end{frame}
+
+\begin{frame}{Memory Optimization}{1:1 Row Alignment with Feature Embeddings (np.memmap)}
+    \begin{columns}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Zero-RAM Bloat Feature Loading}
+                \begin{itemize}\small
+                    \item \textbf{Exact 1:1 Invariant:} Row $i$ in \texttt{observations.parquet} maps deterministically to vector $i$ in disk-backed \texttt{embeddings.npy}.
+                    \item \textbf{Memory-Mapped Slicing:} PyTorch dataloaders slice multi-gigabyte embedding arrays on-demand via \texttt{np.memmap} without RAM saturation.
+                \end{itemize}
+            \end{block}
+        \end{column}
+
+        \begin{column}{0.48\textwidth}
+            \vspace{-0.1cm}
+            \begin{center}
+            \resizebox{0.85\linewidth}{!}{
+            \begin{tikzpicture}[
+                node distance=0.5cm and 1cm,
+                table_node/.style={draw=TaxonPrimary, fill=TaxonPrimary!10, rounded corners, rectangle, align=center, thick, minimum width=4.5cm, minimum height=1.2cm},
+                array_node/.style={draw=TaxonSecondary, fill=TaxonSecondary!10, rounded corners, rectangle, align=center, thick, minimum width=3.5cm, minimum height=1.2cm},
+                arrow/.style={->, thick, draw=TaxonDark, shorten >=2pt, shorten <=2pt},
+                label_text/.style={font=\small\sffamily\bfseries, color=TaxonDark}
+            ]
+
+                % Left Node: observations.parquet
+                \node[table_node] (parquet) {
+                    \textbf{observations.parquet}\\
+                    \scriptsize \texttt{row\_id, hash, taxon\_id, url}
+                };
+
+                % Right Node: embeddings.npy
+                \node[array_node, right=3cm of parquet] (memmap) {
+                    \textbf{embeddings.npy}\\
+                    \scriptsize $z \in \mathbb{R}^{768}$ (np.memmap)
+                };
+
+                % Draw rows
+                \foreach \i/\y in {0/0.4, 1/0, 2/-0.4} {
+                    \draw[TaxonPrimary, thick] ([yshift=\y cm, xshift=-2.2cm]parquet.center) -- ([yshift=\y cm, xshift=2.2cm]parquet.center);
+                    \draw[TaxonSecondary, thick] ([yshift=\y cm, xshift=-1.7cm]memmap.center) -- ([yshift=\y cm, xshift=1.7cm]memmap.center);
+                }
+
+                % Draw arrows indicating 1:1 mapping
+                \draw[arrow, color=TaxonAccent] ([yshift=0.2cm]parquet.east) -- node[above, label_text, color=TaxonAccent] {Exact 1:1 Row Alignment} ([yshift=0.2cm]memmap.west);
+                \draw[arrow, color=TaxonAccent] ([yshift=-0.2cm]parquet.east) -- ([yshift=-0.2cm]memmap.west);
+
+                \node[below=0.6cm of parquet, text width=5cm, align=center] {\scriptsize Columnar metadata loaded rapidly into Pandas/Polars RAM};
+                \node[below=0.6cm of memmap, text width=4cm, align=center] {\scriptsize Disk-backed NVMe array sliced directly via PyTorch};
+
+            \end{tikzpicture}
+            }
+            \end{center}
+        \end{column}
+    \end{columns}
 
     \statusdone
 
     \script{Once features are extracted, how do we load them without eating 30 gigabytes of RAM? We enforce an exact 1:1 row alignment between our Parquet manifest and a disk-backed NumPy memmap file. Row 500 in Parquet corresponds precisely to vector 500 in embeddings.npy. PyTorch dataloaders can slice any batch directly from NVMe storage with zero RAM allocation overhead.}
     \qa{What happens if an observation is deleted or filtered out?}{The entire split is re-indexed deterministically during feature extraction, guaranteeing that Parquet rows and memmap indices never fall out of synchronization.}
+\end{frame}
+
+\begin{frame}{Feature Engineering}{Persistent Feature Caching: Mechanics \& Speedup}
+    \begin{block}{Visual Data Flow}
+        \centering\vspace{0.2cm}
+        Raw S3 Image $\to$ Frozen Backbone Forward Pass $\to$ \texttt{embeddings.npy} (\texttt{np.memmap}) $\leftrightarrow$ \texttt{observations.parquet}
+        \vspace{0.2cm}
+    \end{block}
+
+    \begin{block}{Why it Works (FLOPs \& IOPS)}
+        \begin{itemize}\small
+            \item \textbf{Egress \& Decompression:} Continuous S3 network egress and JPEG decompression overhead are eliminated after epoch 0.
+            \item \textbf{Computational Reduction:} Linear probe epoch FLOPs drop from $\mathcal{O}(N \cdot P_{\text{backbone}})$ (e.g. 86M params) down to convex linear projection $\mathcal{O}(N \cdot D \cdot K)$ ($D \le 1280$, $K=10$).
+            \item \textbf{Runtime Impact:} Reduces training runtime from \textbf{4 hours} to \textbf{10 seconds}.
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.1cm}
+    \statusdone
+
+    \script{By caching features persistently, we eliminate the need to repeatedly download and decompress JPEGs from S3 after the first epoch. More importantly, our computational complexity plummets. Instead of passing images through an 86-million parameter backbone every epoch, we perform a simple convex linear projection. This optimization reduces our training runtime from 4 hours down to just 10 seconds.}
+    \qa{Why not cache images locally instead of feature embeddings?}{Caching images avoids S3 egress but still incurs JPEG decompression and the massive $\mathcal{O}(N \cdot P_{\text{backbone}})$ forward pass cost per epoch. Caching embeddings eliminates both.}
+    \qa{Does this approach work for fine-tuning the backbone?}{No. Persistent feature caching is specifically designed for linear probing or training lightweight heads on top of a frozen backbone. Full fine-tuning requires backpropagating through the backbone every epoch.}
+\end{frame}
+
+\begin{frame}{Cache Invalidation}{Multi-Cache Invalidation Matrix: Criteria \& Scenarios}
+    \begin{block}{Cache Key Cryptographic Invariant}
+        \vspace{-0.2cm}
+        \[
+        \resizebox{0.95\linewidth}{!}{$\text{Cache Key} = \text{SHA256}(\text{Backbone ID} \,\Vert{}\, \text{Resolution} \,\Vert{}\, \text{Transform Params} \,\Vert{}\, \text{DVC Split Hash} \,\Vert{}\, \text{Chunking Mode})$}
+        \]
+    \end{block}
+
+    \begin{block}{When Multiple Caches are Required (The Matrix)}
+        \begin{enumerate}\footnotesize
+            \item \textbf{Backbone Architecture:} ViT (DINOv3, 384-d) vs. Domain ViT (BioCLIP-2, 512-d) vs. Modern CNN (MobileNetV4, 960-d).
+            \item \textbf{Input Resolution:} Standard $224 \times 224$ vs. High-resolution fine-grained crop ($384 \times 384$).
+            \item \textbf{Preprocessing Modes:} Macro parent scene ($I_{\text{parent}}$) vs. Zero-shot detected child crop ($I_{\text{child}}$).
+            \item \textbf{Dataset Partitions:} Independent immutable caches for \texttt{train}, \texttt{val}, and \texttt{test} splits.
+        \end{enumerate}
+    \end{block}
+
+    \vspace{0.1cm}
+    \statusdone
+
+    \script{Because we cache features, any change to the extraction pipeline necessitates a new cache. We formalise this using a SHA-256 cryptographic invariant that hashes the backbone identity, resolution, transforms, DVC split hash, and chunking mode. This multi-cache invalidation matrix dictates exactly when independent caches must be built---such as when switching from DINOv3 to BioCLIP-2, changing input resolution, or updating dataset partitions.}
+    \qa{Why include the DVC Split Hash in the cache key?}{The DVC hash ensures that if the underlying dataset rows or their partition assignments change, the cache is automatically invalidated, preventing data leaks or stale features.}
+    \qa{How do we manage the disk space for multiple caches?}{Because the caches are dense NumPy memmap arrays without image overhead, they remain lightweight. We use a Least Recently Used (LRU) policy to evict old caches from the local NVMe drive when approaching the storage limit.}
+\end{frame}
+
+\begin{frame}{Storage Engineering}{Object Storage Topology: MinIO vs. DagsHub vs. AWS S3}
+    \begin{block}{Three-Tier Object Storage Breakdown}
+        \begin{itemize}\small
+            \item \textbf{Tier 1: MinIO Local Offline Mock (\texttt{docker-compose.local.yaml}):}
+            Runs S3-compatible service locally on developer workstation (\texttt{http://localhost:9000}). Used strictly to unit-test S3 streaming connectors and verify DVC operations offline with zero cloud latency and zero AWS egress fees.
+            \item \textbf{Tier 2: DagsHub S3 Endpoint (\texttt{s3://dvc}):}
+            Remote Content-Addressed Storage (CAS) for tracked dataset manifests and model checkpoints, authenticated via unified HMAC tokens.
+            \item \textbf{Tier 3: AWS Open Data Registry (\texttt{s3://inaturalist-open-data}):}
+            Public immutable repository hosting raw citizen-science image archives (terabytes of biodiversity imagery), streamed via zero-copy HTTP range requests without downloading archives.
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.15cm}
+    \statusdone
+
+    \script{\footnotesize Our object storage architecture spans three distinct tiers to balance cost, speed, and immutability. Tier 1 is our local MinIO mock, which lets developers test S3 streaming and DVC sync operations offline without hitting real AWS egress fees. Tier 2 is the DagsHub S3 endpoint, acting as our content-addressed storage for heavy Parquet manifests and model checkpoints. Finally, Tier 3 is the public AWS Open Data Registry, which hosts the massive citizen-science image archives we stream directly during feature extraction.}
+    \qa{Why not use AWS S3 for Tier 1 and Tier 2?}{\footnotesize Tier 1 uses MinIO to ensure offline developer autonomy and zero latency during rapid unit-testing. Tier 2 uses DagsHub because it automatically syncs with our MLflow tracking server and provides generous free-tier storage for ML artifacts compared to standard AWS S3 buckets.}
+    \qa{How do we handle credentials for all these buckets?}{\footnotesize Tier 1 uses local mock credentials. Tier 3 is publicly readable, requiring no authentication. Tier 2 utilizes short-lived HMAC tokens injected by our CI agent or local environment variables.}
 \end{frame}
 
 \begin{frame}{Version Control}{DVC Master Tracking \& Git Pointer Decoupling (.dvc)}
@@ -132,8 +286,7 @@
         };
 
         \node[pointer, right=2cm of parquet] (dvc_ptr) {
-            \textbf{sample.dvc}\\
-            \scriptsize \texttt{md5: f546...aac.dir}
+            \textbf{sample.dvc}
         };
 
         \node[remote, above=1.2cm of dvc_ptr] (git_repo) {
@@ -147,7 +300,7 @@
         };
 
         % Arrows
-        \draw[arrow, color=TaxonAccent] (parquet) -- node[above, label_text, color=TaxonAccent] {DVC MD5 Hash} (dvc_ptr);
+        \draw[arrow, color=TaxonAccent] (parquet) -- node[above=0.1cm, label_text, color=TaxonAccent] {DVC MD5 Hash} node[above=0.6cm, font=\scriptsize\sffamily, color=TaxonDark] {md5: f546...aac.dir} (dvc_ptr);
         \draw[arrow] (dvc_ptr) -- node[right, label_text] {Commits pointer} (git_repo);
         \draw[arrow, color=TaxonPrimary] (parquet) -- node[left, label_text, color=TaxonPrimary] {DVC push} (s3_remote);
 
@@ -178,7 +331,7 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.2cm}
+    \vspace{0.1cm}
     \statusdone
 
     \script{In \texttt{extract\_features.py}, we execute our batch feature extraction. It connects to S3, loads batches of images through our frozen vision backbone, normalizes the embeddings, and writes them out into compact columnar Parquet files. Crucially, it builds a global taxon index map that deterministically assigns each species an integer index across all train, validation, and test splits. This guarantees that class 42 is always identical across all experiments.}
