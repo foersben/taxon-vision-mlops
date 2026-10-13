@@ -68,10 +68,12 @@ data/processed/
 data/sample/*.jpg
 data/sample/*.jpeg
 data/sample/*.png
-models/checkpoints/
+models/checkpoints/*
+!models/checkpoints/head.pt
 *.onnx
 *.pth
 *.pt
+!models/checkpoints/head.pt
 
 # UV ban
 uv.lock

@@ -66,7 +66,7 @@ def get_classifier() -> TaxonClassifier:
     checkpoint_path = Path(__file__).resolve().parent.parent.parent.parent / settings.model.head_checkpoint_path
 
     if checkpoint_path.exists():
-        state_dict = torch.load(checkpoint_path, weights_only=True)
+        state_dict = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
         if "1.weight" in state_dict and state_dict["1.weight"].shape == classifier.head[1].weight.shape:
             classifier.head.load_state_dict(state_dict)
         else:

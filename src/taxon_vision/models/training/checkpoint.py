@@ -37,7 +37,8 @@ def _save_checkpoint(head: nn.Module, checkpoint_path: Path | str | None) -> Pat
         target_path = Path(checkpoint_path)
 
     target_path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(head.state_dict(), target_path)
+    cpu_state_dict = {k: v.detach().cpu() for k, v in head.state_dict().items()}
+    torch.save(cpu_state_dict, target_path)
 
     with contextlib.suppress(Exception):
         get_classifier.cache_clear()
