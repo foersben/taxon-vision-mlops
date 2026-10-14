@@ -10,10 +10,15 @@ from pathlib import Path
 
 import numpy as np
 import onnxruntime
+import torch
 import torch.nn as nn
 
 from taxon_vision.inference.onnx_engine import ONNXInferenceEngine
-from taxon_vision.inference.onnx_exporter import export_classifier_cli, export_to_onnx
+from taxon_vision.inference.onnx_exporter import (
+    _load_head_checkpoint,
+    export_classifier_cli,
+    export_to_onnx,
+)
 
 
 def test_export_to_onnx_dummy_module(tmp_path: Path) -> None:
@@ -35,17 +40,99 @@ def test_export_to_onnx_dummy_module(tmp_path: Path) -> None:
     assert len(session.get_outputs()) == 1
 
 
-def test_export_classifier_cli_execution(tmp_path: Path) -> None:
-    """Test CLI execution of export_classifier_cli."""
+def test_export_classifier_cli_allow_untrained(tmp_path: Path) -> None:
+    """Test CLI execution of export_classifier_cli with --allow-untrained flag."""
     out_file = tmp_path / "cli_model.onnx"
-    ret = export_classifier_cli(["--output", str(out_file), "--extractor", "mobilenetv4_conv_small"])
+    ret = export_classifier_cli(
+        [
+            "--output",
+            str(out_file),
+            "--extractor",
+            "mobilenetv4_conv_small",
+            "--allow-untrained",
+        ]
+    )
     assert ret == 0
     assert out_file.exists()
     assert out_file.stat().st_size > 0
 
 
+def test_export_classifier_cli_strict_failure_on_mismatch(tmp_path: Path) -> None:
+    """Test that CLI strictly fails (exit code 1) when checkpoint is mismatched and --allow-untrained is absent."""
+    mismatched_ckpt = tmp_path / "mismatched_head.pt"
+    torch.save({"1.weight": torch.randn(10, 64), "1.bias": torch.randn(10)}, mismatched_ckpt)
+    out_file = tmp_path / "should_fail.onnx"
+
+    ret = export_classifier_cli(
+        [
+            "--output",
+            str(out_file),
+            "--checkpoint",
+            str(mismatched_ckpt),
+            "--extractor",
+            "mobilenetv4_conv_small",
+        ]
+    )
+    assert ret == 1
+    assert not out_file.exists()
+
+
+def test_export_classifier_cli_with_valid_checkpoint_and_quantization(tmp_path: Path) -> None:
+    """Test CLI export with valid trained checkpoint and optional INT8 quantization."""
+    ckpt_file = tmp_path / "valid_head.pt"
+    # mobilenetv4_conv_small has feat_dim=1280, num_classes=10
+    torch.save({"1.weight": torch.randn(10, 1280), "1.bias": torch.randn(10)}, ckpt_file)
+    out_file = tmp_path / "trained_model.onnx"
+
+    ret = export_classifier_cli(
+        [
+            "--output",
+            str(out_file),
+            "--checkpoint",
+            str(ckpt_file),
+            "--extractor",
+            "mobilenetv4_conv_small",
+            "--quantize-int8",
+        ]
+    )
+    assert ret == 0
+    assert out_file.exists()
+    assert out_file.stat().st_size > 0
+
+    quantized_file = tmp_path / "trained_model.int8.onnx"
+    assert quantized_file.exists()
+    assert quantized_file.stat().st_size > 0
+
+
+def test_load_head_checkpoint_formats(tmp_path: Path) -> None:
+    """Test _load_head_checkpoint with raw, wrapped, and prefixed state dictionaries."""
+    dummy_classifier = nn.Module()
+    dummy_classifier.head = nn.Sequential(nn.Dropout(0.2), nn.Linear(32, 5))
+
+    weight = torch.randn(5, 32)
+    bias = torch.randn(5)
+
+    # 1. Raw head state dict
+    ckpt1 = tmp_path / "raw.pt"
+    torch.save({"1.weight": weight, "1.bias": bias}, ckpt1)
+    _load_head_checkpoint(dummy_classifier, ckpt1)
+    assert torch.allclose(dummy_classifier.head[1].weight, weight)
+
+    # 2. Wrapped state dict
+    ckpt2 = tmp_path / "wrapped.pt"
+    torch.save({"model_state_dict": {"1.weight": weight * 2, "1.bias": bias * 2}}, ckpt2)
+    _load_head_checkpoint(dummy_classifier, ckpt2)
+    assert torch.allclose(dummy_classifier.head[1].weight, weight * 2)
+
+    # 3. Prefixed state dict (from full classifier.state_dict())
+    ckpt3 = tmp_path / "prefixed.pt"
+    torch.save({"head.1.weight": weight * 3, "head.1.bias": bias * 3}, ckpt3)
+    _load_head_checkpoint(dummy_classifier, ckpt3)
+    assert torch.allclose(dummy_classifier.head[1].weight, weight * 3)
+
+
 def test_export_classifier_module_subprocess(tmp_path: Path) -> None:
-    """Test executing onnx_exporter via python -m subprocess."""
+    """Test executing onnx_exporter via python -m subprocess with --allow-untrained."""
     out_file = tmp_path / "subproc_model.onnx"
     proc = subprocess.run(
         [
@@ -56,6 +143,7 @@ def test_export_classifier_module_subprocess(tmp_path: Path) -> None:
             str(out_file),
             "--extractor",
             "mobilenetv4_conv_small",
+            "--allow-untrained",
         ],
         capture_output=True,
         text=True,

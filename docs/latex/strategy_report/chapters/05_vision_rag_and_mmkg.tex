@@ -2,7 +2,7 @@
 \chapter{Vision RAG \& Multimodal Knowledge Graph}
 \label{ch:vision_rag}
 
-Standard text-centric Retrieval-Augmented Generation (RAG) paradigms typically rely on document chunking, token embedding, and semantic similarity search in order to ground large language models. In visual ecology, we must fundamentally transform this concept into multimodal equivalents. Citizen-science platforms aggregate massive volumes of environmental imagery, but we must acknowledge that raw field photographs are highly dense, noisy, and unstructured. Rather than attempting to compute and search vector embeddings across the entire 170-million-image iNaturalist corpus \cite{vanhorn2018inaturalist}, the TaxonVision-MLOps architecture (mapped in the preceding architectural overview) couples a curated Reference Exemplar Catalogue with single-stage spatial-temporal filtered graph traversal and conformal-driven lazy execution.
+Standard text-centric Retrieval-Augmented Generation (RAG) paradigms typically rely on document chunking, token embedding, and semantic similarity search in order to ground large language models. In visual ecology, we must fundamentally transform this concept into multimodal equivalents. Citizen-science platforms aggregate massive volumes of environmental imagery, but raw field photographs are highly dense, noisy, and unstructured. Rather than attempting to compute and search vector embeddings across the entire 170-million-image iNaturalist corpus \cite{vanhorn2018inaturalist}, the TaxonVision-MLOps architecture couples a curated Reference Exemplar Catalogue with single-stage spatio-temporal filtered graph traversal in LanceDB and conformal-driven lazy execution.
 
 \section{Ingestion Engine \& Reference Exemplar Catalogue Curation}
 \label{sec:exemplar_curation}
@@ -17,9 +17,9 @@ The platform actively circumvents this computational barrier by curating a deter
     \item \textbf{Diversity Sampling:} The catalogue selects up to 50 exemplar observations per taxon. In order to capture seasonal and geographical morphological variations, observations are partitioned into discrete spatial clusters using Uber H3 hexagonal spatial cells at Resolution 4.
 \end{enumerate}
 
-By bounding the catalogue to 2,000 baseline taxa with 50 exemplars each, the vector database maintains an upper bound of 100,000 reference vectors. The total memory required to hold these 768-dimensional FP32 vectors in RAM evaluates to:
+By bounding the catalogue to 2,000 baseline taxa with 50 exemplars each, the vector database maintains an upper bound of 100,000 reference vectors. The total memory required to hold these 768-dimensional FP32 vectors in RAM evaluates to
 \[
-\text{Memory}_{\text{Vectors}} = 100{,}000 \times 768 \times 4 \text{ bytes} \approx 307.2 \text{ MB}
+\text{Memory}_{\text{Vectors}} = 100{,}000 \times 768 \times 4 \text{ bytes} \approx 307.2 \text{ MB}.
 \]
 Stored as compressed WebP image crops averaging 45 KB each, the total exemplar disk image footprint is approximately 4.5 GB. This architectural decision allows the entire retrieval index to reside in high-speed host RAM, completely eliminating disk I/O bottlenecks during retrieval.
 
@@ -28,74 +28,52 @@ Stored as compressed WebP image crops averaging 45 KB each, the total exemplar d
 
 In text-based RAG architectures, feeding an entire multi-page document into an embedding model dilutes key semantic signals. Similarly, passing an uncropped field photograph into a Vision Foundation Model introduces severe environmental noise. Background clutter -- such as soil, sky, vegetation, water reflections, or human hands holding a specimen -- dominates the receptive field, creating spurious cosine similarities between taxonomically distant species that inhabit similar macro-environments.
 
-In order to isolate diagnostic visual signals, the system implements Parent-Child Visual Chunking:
-\begin{itemize}
-    \item \textbf{Child Visual Chunk ($I_{\text{child}}$):} An upstream zero-shot detector (YOLO-World or OWL-ViT v2) scans the raw photograph to isolate the target specimen, outputting a normalised bounding box coordinates vector $B = [x_{\min}, y_{\min}, x_{\max}, y_{\max}]$. The organism is cropped, scaled to $224 \times 224$ pixels, and forwarded to the frozen feature extractor (BioCLIP-2 \cite{stevens2024bioclip}) to produce the dense visual query embedding $z_{\text{child}} \in \mathbb{R}^{768}$:
-    \[
-    z_{\text{child}} = f_{\text{VFM}}(I_{\text{child}}), \quad \|z_{\text{child}}\|_2 = 1
-    \]
-    Where $f_{\text{VFM}}$ represents the forward pass of the frozen vision backbone, and $z_{\text{child}}$ is normalised to unit length on the hypersphere.
-    \item \textbf{Parent Scene Context ($I_{\text{parent}}$):} The original uncropped field photograph is strictly preserved as an environmental habitat context layer. It is cryptographically linked to the child crop via a relational manifest tuple:
-    \[
-    \text{EntityLink} = \left\langle \text{CropID}, \text{ParentURI}, B, \text{DarwinCorePayload} \right\rangle
-    \]
-\end{itemize}
-During inference, vector similarity search operates strictly over the child visual embeddings ($z_{\text{child}}$). However, when exemplars are retrieved for downstream multimodal reasoning, both the child crop (fine morphology) and the parent scene (macro-habitat context) are injected into the context window. This elegantly prevents background clutter from distorting the nearest-neighbour search.
+In order to isolate diagnostic visual signals, the system implements Parent-Child Visual Chunking. An upstream zero-shot detector (YOLO-World or OWL-ViT v2) scans the raw photograph to isolate the target specimen, extracting a normalised bounding box $B = [x_{\min}, y_{\min}, x_{\max}, y_{\max}]$. The organism crop ($I_{\text{child}}$) is scaled to $224 \times 224$ pixels and forwarded to the frozen vision backbone (BioCLIP-2 or DINOv3) to produce a unit-normalised visual embedding vector $z_{\text{child}} \in \mathbb{R}^d$ ($d=384$ or $512$):
+\[
+z_{\text{child}} = \frac{f_{\text{VFM}}(I_{\text{child}})}{\|f_{\text{VFM}}(I_{\text{child}})\|_2},
+\]
+where $f_{\text{VFM}}$ represents the forward pass of the frozen vision backbone. The original uncropped field photograph ($I_{\text{parent}}$) is preserved as an environmental habitat context layer and cryptographically linked to the child crop via the relational manifest tuple:
+\[
+\text{EntityLink} = \left\langle \text{CropID}, \text{ParentURI}, B, \text{DarwinCorePayload} \right\rangle.
+\]
+During vector search, similarity queries execute strictly over child embeddings ($z_{\text{child}}$); upon retrieval for multimodal reasoning, both the child crop and parent context are presented to the evaluator.
 
-\section{Vector Database: Single-Stage Filtered HNSW}
+\section[Single-Stage Filtered HNSW in LanceDB]{Vector Database: Single-Stage Filtered HNSW in LanceDB}
 \label{sec:filtered_hnsw}
 
 Biological retrieval systems face a severe domain-specific failure mode known as \textit{convergent evolution}. Under similar ecological pressures, unrelated organisms across distinct continents frequently evolve nearly identical visual morphologies. For example, the European Hornet (\textit{Vespa crabro}) and the North American Cicada Killer (\textit{Sphecius speciosus}) exhibit strikingly similar body geometry and colouration patterns.
 
 If a retrieval engine implements standard two-stage post-filtering -- performing a global nearest-neighbour vector search first, and then filtering results based on geographical metadata -- the query will fail. If a user in Germany submits a photo of a European wasp, the top-50 visually nearest neighbours returned by an unconstrained vector index might consist entirely of visually indistinguishable American species. Applying a subsequent geographical filter then drops all 50 candidates, resulting in an empty retrieval set and catastrophic context starvation.
 
-In order to resolve this, the architecture adopts \textbf{Single-Stage Metadata-Filtered HNSW}. The Hierarchical Navigable Small World (HNSW) graph evaluates geographic and temporal boolean constraints natively \textit{during} graph traversal, rather than after retrieval.
+In order to resolve this, the architecture adopts \textbf{Single-Stage Metadata-Filtered HNSW} implemented within LanceDB. LanceDB integrates Apache Arrow columnar data structures directly with vector indices, evaluating geographic and temporal boolean constraints natively \textit{during} graph traversal rather than post-retrieval.
 
 Let $\mathbf{x}_{\text{query}} = (\text{lat}_{\text{query}}, \text{lon}_{\text{query}})$ denote the GPS coordinates of the query, and $\tau_{\text{month}} \in \{1, \dots, 12\}$ denote the observation month. For each candidate node $j$ encountered during the HNSW beam search, the traversal engine evaluates the deterministic predicate $\mathcal{P}(j)$:
 \[
-\mathcal{P}(j) = \left[ \mathcal{D}_{\text{geodesic}}(\mathbf{x}_{\text{query}}, \mathbf{x}_{j}) \le R_{\max} \right] \land \left[ |\tau_{\text{month}} - \tau_{j}| \pmod{12} \le \Delta_{\text{season}} \right]
+\mathcal{P}(j) = \left[ \mathcal{D}_{\text{geodesic}}(\mathbf{x}_{\text{query}}, \mathbf{x}_{j}) \le R_{\max} \right] \land \left[ |\tau_{\text{month}} - \tau_{j}| \pmod{12} \le \Delta_{\text{season}} \right],
 \]
-Where:
-\begin{itemize}
-    \item $\mathcal{D}_{\text{geodesic}}$ is the great-circle geographic distance between coordinate vectors, computed via the Haversine equation.
-    \item $\mathbf{x}_{j}$ represents the historical observation coordinates associated with exemplar node $j$.
-    \item $R_{\max}$ is the maximum admissible geographic search radius (for example, $500 \text{ km}$).
-    \item $\tau_{j}$ is the recorded observation month of exemplar node $j$.
-    \item $\Delta_{\text{season}}$ is the seasonal tolerance window ($\Delta_{\text{season}} = 1$, corresponding to a 3-month window centred on the query date).
-\end{itemize}
-
-If node $j$ violates $\mathcal{P}(j)$, its outgoing edges are mathematically pruned from the current search path. This prevents the algorithm from descending into biogeographically invalid regions of the graph. This formulation ensures that the retrieved candidates are guaranteed to be both visually similar and physically plausible, thereby maintaining $100\%$ valid retrieval recall in under $5 \text{ ms}$.
+where $\mathcal{D}_{\text{geodesic}}$ is the great-circle geographic distance computed via the Haversine equation, $\mathbf{x}_{j}$ represents the coordinates of exemplar node $j$, $R_{\max} = 500\text{ km}$ is the maximum admissible geographic search radius, $\tau_{j}$ is the historical observation month of exemplar $j$, and $\Delta_{\text{season}} = 1$ enforces a 3-month seasonal window centred on the observation epoch. If node $j$ violates $\mathcal{P}(j)$, its outgoing edges are pruned immediately, preventing the search from descending into biogeographically invalid graph clusters and guaranteeing 100\% valid retrieval recall in under $5\text{ ms}$.
 
 \section{Conformal-Driven Lazy Execution}
 \label{sec:lazy_execution}
 
-Executing zero-shot entity linking, vector graph traversal, and generative multimodal reasoning for every incoming request imposes prohibitive latency and computational costs. In order to maintain an SLA of under $25 \text{ ms}$ for high-volume inference, the Vision RAG pipeline utilises conformal-driven lazy execution.
-
-The incoming observation is first evaluated by the primary, lightweight INT8 ONNX classification head. The Split Conformal Prediction engine formally calculates the dynamic prediction set $\hat{C}(X)$ bounded by significance parameter $\alpha = 0.05$:
-\begin{itemize}
-    \item \textbf{Decisive Prediction ($|\hat{C}(X)| = 1$):} The model exhibits high confidence in a single taxon. The identification is returned immediately to the client within the sub-$25\text{ ms}$ latency budget. The Vision RAG pipeline remains completely idle, allowing decisive, high-confidence observations to resolve without heavy retrieval overhead (with exact fast-path ratios monitored dynamically via production telemetry).
-    \item \textbf{Severe Ambiguity ($|\hat{C}(X)| > k_{\max}$):} The model cannot distinguish between multiple closely related sibling species within the $95\%$ confidence bound ($k_{\max} = 3$). The system triggers the Vision RAG engine to retrieve parent-child exemplars for all taxa contained within $\hat{C}(X)$, explicitly providing context for comparative multimodal diagnosis.
-    \item \textbf{Novelty and Out-of-Distribution ($|\hat{C}(X)| = 0$):} No known class meets the non-conformity threshold, signalling an anomalous, severely degraded, or uncatalogued taxon. The Vision RAG engine executes in unconstrained mode (with spatial filters relaxed), retrieving structural visual analogues across the global tree of life to assist taxonomic triage.
-\end{itemize}
+Executing zero-shot entity linking, vector graph traversal, and generative multimodal reasoning for every incoming request imposes prohibitive latency and computational costs. In order to maintain an SLA of under $25\text{ ms}$ for high-volume inference, the Vision RAG pipeline utilises conformal-driven lazy execution governed by the 4-tier conformal routing contract:
+\begin{enumerate}
+    \item \textbf{Decisive Classification ($|\hat{C}(X)| = 1$):} The model exhibits high confidence and low epistemic ambiguity. The endpoint dispatches the single predicted taxon immediately, fulfilling the strict sub-$25\text{ ms}$ Service Level Agreement (SLA) without activating retrieval overhead.
+    \item \textbf{Moderate Ambiguity ($1 < |\hat{C}(X)| \le k_{\max}$, with $k_{\max} = 3$):} The conformal prediction set contains between two and three plausible sibling taxa. The serving engine executes a single-stage filtered HNSW traversal over LanceDB, constrained by the candidate class identifiers and spatio-temporal metadata, and performs Reciprocal Rank Fusion (RRF) over visual exemplar crops with less than $6\text{ ms}$ overhead to deliver a multi-candidate comparative differential to the operator.
+    \item \textbf{Severe Ambiguity ($|\hat{C}(X)| > k_{\max}$):} The prediction set exceeds the bound of actionable human differential review. The query is scheduled for asynchronous multimodal resolution via gRPC to the quantised visual language model (\texttt{taxon-vision-vlm}, based on Qwen2-VL-2B) and appended to the Active Learning triage queue (\texttt{triage\_queue.lance}) on MinIO for expert annotation.
+    \item \textbf{Epistemic Novelty / Complete Abstention ($|\hat{C}(X)| = 0$):} The observed sample violates the conformal coverage boundary, indicating an out-of-distribution observation, unmodelled developmental instar, or extreme sensor degradation. The system executes complete epistemic abstention, bypasses automated classification entirely, executes an unconstrained nearest-neighbour retrieval over the global exemplar space, and dispatches an immediate priority triage alert to human taxonomists.
+\end{enumerate}
 
 \section{Multi-Modal Re-Ranking via Reciprocal Rank Fusion}
 \label{sec:rrf_reranking}
 
 Nearest-neighbour vector search establishes raw visual affinity, but visual embeddings alone cannot capture fine morphological traits, such as minor wing venation patterns or subtle genital plate structures. In order to enhance diagnostic relevance, retrieved candidates are re-ranked using Reciprocal Rank Fusion (RRF), integrating visual similarity with empirical biogeographical observation frequencies:
 \[
-\text{Score}_{\text{RRF}}(i) = \frac{w_{\text{vis}}}{k + r_{\text{vis}}(i)} + \frac{w_{\text{geo}}}{k + r_{\text{geo}}(i)}
+\text{Score}_{\text{RRF}}(i) = \frac{w_{\text{vis}}}{k + r_{\text{vis}}(i)} + \frac{w_{\text{geo}}}{k + r_{\text{geo}}(i)},
 \]
-Where:
-\begin{itemize}
-    \item $\text{Score}_{\text{RRF}}(i)$ is the consolidated ranking metric for candidate exemplar $i$.
-    \item $w_{\text{vis}}$ is the scalar weighting factor assigned to visual cosine similarity ($w_{\text{vis}} = 0.65$).
-    \item $w_{\text{geo}}$ is the scalar weighting factor assigned to the biogeographical occurrence prior ($w_{\text{geo}} = 0.35$).
-    \item $k$ is a rank-smoothing constant ($k = 60$) that prevents low-ranking outliers from dominating the fused score.
-    \item $r_{\text{vis}}(i)$ is the ordinal rank ($1, 2, 3, \dots$) of candidate $i$ sorted descending by cosine similarity $z_{\text{child}} \cdot z_{i}$.
-    \item $r_{\text{geo}}(i)$ is the ordinal rank of candidate $i$ sorted descending by historical observation density $P(y_i \mid \text{Cell}_{\text{H3}}, \tau_{\text{month}})$, derived from pre-indexed GBIF occurrence frequencies.
-\end{itemize}
+where $\text{Score}_{\text{RRF}}(i)$ is the consolidated ranking metric for candidate exemplar $i$, $w_{\text{vis}} = 0.65$ and $w_{\text{geo}} = 0.35$ denote scalar weighting factors for visual cosine similarity and biogeographical occurrence priors respectively, $k = 60$ is a rank-smoothing constant that prevents low-ranking outliers from dominating the fused score, $r_{\text{vis}}(i)$ is the ordinal rank of candidate $i$ sorted descending by cosine similarity $z_{\text{child}} \cdot z_{i}$, and $r_{\text{geo}}(i)$ is the ordinal rank sorted descending by historical observation density $P(y_i \mid \text{Cell}_{\text{H3}}, \tau_{\text{month}})$ derived from pre-indexed GBIF occurrence frequencies.
 
-This rank fusion guarantees that candidates appearing at the top of the context window are both visually representative of the query and frequently documented within that ecological spatial-temporal niche.
+This rank fusion guarantees that candidates appearing at the top of the context window are both visually representative of the query and frequently documented within that ecological spatio-temporal niche.
 
 \section{Multimodal Context Synthesis \& VLM Diagnostics}
 \label{sec:vlm_synthesis}
@@ -117,29 +95,17 @@ In order to ensure machine readability and eliminate ungrounded generation or co
 
 This structured response is rendered on the HTMX operator dashboard as a comparative differential diagnosis card. This allows human specialists to inspect aligned visual crops alongside identified discriminative keys.
 
-% \section{Closed-Loop Active Learning \& Taxonomic Mutations}
-% \label{sec:active_learning_rag}
-% 
-% The Vision RAG infrastructure acts as the primary data ingestion engine for human-in-the-loop active learning workflows. When the VLM returns an epistemic verdict of \texttt{HUMAN\_\allowbreak TRIAGE\_\allowbreak RECOMMENDED}, the observation and its candidate context are mirrored directly to the DagsHub Label Studio workspace. Expert annotations subsequently flow back into the system, expanding the training manifests and updating the reference exemplar index.
-% 
-% Furthermore, biological classification systems frequently undergo Linnaean realignments:
-% \begin{itemize}
-%     \item \textbf{Taxonomic Split:} When a recognised species is divided into two distinct taxa, historical vectors in the HNSW database matching the parent taxon are flagged with the metadata attribute \texttt{requires\_\allowbreak reannotation}. The system gracefully routes these exemplars to Label Studio for expert sorting, purging obsolete nodes from the active index without requiring neural network retraining.
-%     \item \textbf{Taxonomic Lump:} When two distinct taxa are combined into a single unified species, the system performs an in-place metadata alias update on the vector node payloads. The underlying embedding vectors remain mathematically valid, thereby updating the taxonomic knowledge base in milliseconds.
-% \end{itemize}
-
-\section{Operationalizing Taxonomic Mutations in the MMKG}
+\section{Operationalising Taxonomic Mutations in the MMKG}
 \label{sec:taxonomic_mutations}
 
 The Vision RAG architecture functions as the ingestion engine for human-in-the-loop active learning workflows. When the Vision-Language Model assigns an epistemic verdict of \texttt{HUMAN\_\allowbreak TRIAGE\_\allowbreak RECOMMENDED} to an ambiguous query, the observation and its retrieved visual context are mirrored to the DagsHub Label Studio workspace. Once experts validate the taxonomy, the new annotations expand the training manifests and update the reference exemplar index.
 
 However, beyond classifying new observations, the system must dynamically adapt to Linnaean taxonomic realignments. Biological taxonomies are fluid; the scientific community frequently splits a single species into multiple distinct taxa, or lumps distinct taxa into a single unified classification. Retraining a neural network or recalculating millions of vector embeddings every time a nomenclature committee publishes an update is computationally unviable. 
 
-The Multimodal Knowledge Graph resolves this by decoupling the immutable visual embedding vectors from the mutable relational metadata using DuckDB and Parquet manifests.
-
+The Multimodal Knowledge Graph resolves this by decoupling the immutable visual embedding vectors from the mutable relational metadata using DuckDB operating over LanceDB dataset tables:
 \begin{itemize}
-    \item \textbf{Taxonomic Lumps (Merging):} When two distinct taxa (e.g., Species A and Species B) are combined into a single valid species (Species C), the pipeline does not re-embed any visual data. Instead, it executes an $\mathcal{O}(1)$ alias mapping operation. A background DuckDB worker updates the relational Parquet mapping table, pointing the historical taxon keys for A and B to the unified key for C. The underlying dense vectors residing in the HNSW graph remain perfectly valid, instantly updating the entire taxonomic knowledge base with zero GPU inference cost.
-    \item \textbf{Taxonomic Splits (Dividing):} When a recognised species is divided into two distinct taxa, historical visual crops associated with the parent taxon become scientifically ambiguous. The DuckDB reconciliation worker flags these specific nodes in the HNSW database with a boolean metadata attribute, \texttt{requires\_reannotation}. The system programmatically purges these isolated nodes from the active traversal graph to prevent contaminated retrieval, and routes the corresponding exemplars to Label Studio. Experts visually sort the historical crops into the newly established taxonomic branches, after which the nodes are re-injected into the active graph.
+    \item \textbf{Taxonomic Lumps (Merging):} When two distinct taxa (e.g., Species A and Species B) are combined into a single valid species (Species C), the pipeline does not re-embed any visual data. Instead, it executes an $\mathcal{O}(1)$ alias mapping operation. A background DuckDB worker executes an in-place update on the relational Lance manifest, pointing historical taxon keys for A and B to the unified key for C. The underlying dense vectors residing in the HNSW index remain untouched, updating the taxonomic knowledge base in milliseconds with zero GPU compute overhead.
+    \item \textbf{Taxonomic Splits (Dividing):} When a recognised species is divided into two distinct taxa, historical visual crops associated with the parent taxon become scientifically ambiguous. The DuckDB reconciliation worker sets a boolean metadata flag \texttt{requires\_reannotation = true} over those specific records in the Lance table. LanceDB's single-stage filtered HNSW traversal natively excludes nodes where \texttt{requires\_reannotation = true}, preventing contaminated retrieval in production whilst routing the affected exemplars to Label Studio for expert sorting.
 \end{itemize}
 
 \section{End-to-End Latency \& Resource Allocation}
@@ -147,7 +113,7 @@ The Multimodal Knowledge Graph resolves this by decoupling the immutable visual 
 
 Operating a decoupled serving architecture requires clear engineering resource bounds. To guarantee the overarching sub-$25\text{ ms}$ Service Level Agreement (SLA) on production GPU silicon (NVIDIA RTX 5070 Ti), the platform partitions the execution timeline into bounded budget allocations. Table~\ref{tab:rag_latency} details these engineering budget ceilings across the fast hot-path and the lazy retrieval path.
 
-Crucially, these figures represent allocated architectural SLA ceilings rather than static, universal hardware constants. Physical backbone inference latency varies substantially across execution providers: a domain transformer such as BioCLIP-2 or DINOv3 executes in under $9\text{ ms}$ when compiled with FP16 TensorRT or ONNX Runtime on modern desktop GPU Tensor Cores, but requires $20\text{--}50\text{ ms}$ or more when deployed on general-purpose CPUs without dedicated SIMD acceleration. Consequently, downstream operational deployments strictly profile candidate extractors dynamically using the Pareto benchmark suite rather than assuming static values from external literature.
+Crucially, these figures represent allocated architectural SLA ceilings rather than static, universal hardware constants. Physical backbone inference latency varies substantially across execution providers: a domain transformer such as BioCLIP-2 or DINOv3 executes in under $9\text{ ms}$ when compiled with FP16 TensorRT or ONNX Runtime on modern desktop GPU Tensor Cores, but requires $20\text{ to }50\text{ ms}$ or more when deployed on general-purpose CPUs without dedicated SIMD acceleration. Consequently, downstream operational deployments strictly profile candidate extractors dynamically using the Pareto benchmark suite rather than assuming static values from external literature. Furthermore, during active Jenkins GPU training windows, \texttt{taxon-vision-vlm} either scales to zero or offloads inference to the 16 host CPU P-cores and 128~GB system memory, guaranteeing that concurrent serving allocations never exceed the 4.8~GB VRAM reserve derived in Section~\ref{sec:gpu_partitioning}.
 
 \begin{table}[htbp]
 \centering
@@ -161,8 +127,8 @@ Crucially, these figures represent allocated architectural SLA ceilings rather t
 Zero-Shot Cropping & YOLO-World (ORT INT8) & $\le 12.0$ & $\le 400$ VRAM \\
 VFM Feature Extraction & Vision Backbone (ORT FP16) & $\le 9.0$ & $\le 1{,}200$ VRAM \\
 Conformal Gate & PyTorch / C-Array & $\le 1.0$ & $< 50$ RAM \\
-Filtered HNSW & Embedded HNSWlib & $\le 4.0$ & $\le 250$ RAM \\
-Multi-Modal RRF & In-Memory Polars / DuckDB & $\le 1.5$ & $< 20$ RAM \\
+Filtered HNSW & LanceDB (Arrow + HNSW) & $\le 4.0$ & $\le 250$ RAM \\
+Multi-Modal RRF & In-Memory DuckDB / Polars & $\le 1.5$ & $< 20$ RAM \\
 VLM Synthesis (Lazy) & Quantised 2B VLM & $\le 2{,}500.0$ & $\le 2{,}500$ VRAM \\
 \midrule
 \textbf{Fast Hot-Path} & \textbf{Crop + ORT Backbone} & $\mathbf{\le 22.0}$ & $\mathbf{\le 1{,}600}$ \textbf{VRAM} \\

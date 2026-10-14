@@ -142,3 +142,7 @@ def quantize_onnx_dynamic(input_onnx: Path, output_onnx: Path) -> Path:
         output_onnx.parent.mkdir(parents=True, exist_ok=True)
         output_onnx.write_bytes(input_onnx.read_bytes())
     return output_onnx
+
+
+# Convenience alias for dynamic INT8 quantization
+quantize_onnx_model = quantize_onnx_dynamic

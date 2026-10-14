@@ -15,9 +15,9 @@ This pointer file is subsequently committed to Git. When a deployment runner or 
 \section{Unified Management Plane}
 \label{sec:dagshub}
 
-Operating a distributed MLOps toolchain traditionally requires provisioning disparate infrastructure: an AWS S3 bucket for data object storage, a PostgreSQL database for experiment telemetry, and a complex matrix of Identity and Access Management (IAM) policies in order to broker communication between them.
+Operating a distributed MLOps toolchain traditionally requires provisioning disparate enterprise infrastructure: an external PostgreSQL database cluster for experiment telemetry, dedicated S3 storage buckets, and complex Identity and Access Management (IAM) matrices to broker inter-service communication.
 
-In order to eliminate this DevOps overhead, the architecture standardises on DagsHub as the central management plane. By mirroring the primary GitHub repository, DagsHub acts as an automated nexus that instantly provisions a secure, S3-compatible remote storage backend for DVC and a managed MLflow Tracking Server. This integration effectively collapses the required infrastructure footprint, allowing self-hosted execution runners and local development environments to authenticate and stream both multi-gigabyte datasets and real-time loss metrics through a unified API token gateway.
+For a single-host k3s deployment, running an enterprise-scale PostgreSQL server introduces an unjustifiable persistent memory footprint of 1.0 to 2.0~GB RAM. The architecture eliminates this overhead by deploying an embedded MLflow tracking backend powered by SQLite configured in Write-Ahead Logging (\texttt{WAL}) mode. Operating with an active memory footprint of approximately 15~MB, SQLite WAL guarantees full ACID transaction isolation and robust multi-process concurrency on NVMe storage. Heavy binary artefacts are offloaded directly to the local MinIO object store (\texttt{s3://taxon-lakehouse/}) or mirrored to DagsHub, establishing a zero-maintenance telemetry plane with zero public cloud egress charges.
 
 \section{Bayesian Hyperparameter Optimisation and Telemetry}
 \label{sec:hyperparameter_opt}
@@ -28,31 +28,24 @@ Model convergence, latency minimisation, and epistemic reliability depend fundam
 
 Neural network architectures require the optimisation of external hyperparameters, such as learning rates, weight decay penalties, and conformal confidence thresholds. Traditional Grid Search algorithms evaluate these spaces exhaustively, incurring a computational cost of $\mathcal{O}(S^D)$, where $S$ represents the number of discrete steps evaluated across $D$ hyperparameter dimensions. On a single-node bare-metal architecture, this geometric explosion renders hyperparameter tuning computationally unviable.
 
-The platform replaces brute-force evaluation with Optuna, a framework driven by the Tree-structured Parzen Estimator (TPE). TPE abandons blind search grids in favour of Bayesian probability. Instead of modelling the objective function directly, it models the parameter probability distributions conditioned on historical trial performance. Formally, for a given hyperparameter configuration $\theta$ and a target loss metric $y$ (in this system, the validation Macro PR-AUC defined in Chapter~\ref{ch:observability}), TPE models the conditional probability $P(\theta \mid y)$ as follows:
+The platform replaces brute-force evaluation with Optuna, driven by the Tree-structured Parzen Estimator (TPE). TPE abandons blind search grids in favour of Bayesian conditional density modelling. Let $y$ denote the objective validation Macro PR-AUC metric to be maximised, and let $y^*$ represent a dynamically evaluated scalar quantile threshold separating the upper quantile of top-performing trials from the baseline distribution. TPE models the conditional parameter probability distribution $p(\theta \mid y)$ directly as
 \[
-P(\theta \mid y) = 
+p(\theta \mid y) = 
 \begin{cases} 
-    \ell(\theta) & \text{if } y < y^* \\ 
-    g(\theta) & \text{if } y \ge y^* 
+    \ell(\theta) & \text{if } y \ge y^*, \\ 
+    g(\theta) & \text{if } y < y^*,
 \end{cases}
 \]
-In this formulation:
-\begin{itemize}
-    \item $\theta$ is the specific hyperparameter configuration (for example, learning rate) being evaluated.
-    \item $y$ is the empirical loss achieved by executing the network with configuration $\theta$.
-    \item $y^*$ is a dynamically computed scalar quantile threshold separating high-performing trials from poor-performing trials.
-    \item $\ell(\theta)$ is the probability density function formed by the parameters of successful past trials ($y < y^*$).
-    \item $g(\theta)$ is the probability density function formed by the parameters of unsuccessful past trials ($y \ge y^*$).
-\end{itemize}
+where $\theta$ denotes the evaluated hyperparameter vector, $\ell(\theta)$ is the non-parametric probability density function constructed over the parameter configurations of superior historical trials ($y \ge y^*$), and $g(\theta)$ represents the density function constructed over sub-optimal evaluations ($y < y^*$).
 
-The algorithm iteratively selects new configurations that maximise the ratio $\ell(\theta) / g(\theta)$. This guides the GPU to sample from regions mathematically correlated with low loss, whilst preserving enough variance to escape local minima. Because the validation Macro PR-AUC is to be maximised rather than minimised, the study is configured with the direction \textit{maximise}; the formulation above then applies to the correspondingly sign-adjusted objective.
+The acquisition algorithm iteratively samples candidate configurations that maximise the density ratio $\ell(\theta) / g(\theta)$. This guides the GPU to evaluate parameter domains mathematically correlated with elevated classification precision on long-tail taxa, whilst maintaining sufficient dispersion to escape local extrema.
 
-In order to further conserve hardware cycles, Optuna applies the Asynchronous Successive Halving Algorithm (ASHA) with a minimum resource of two epochs and a reduction factor of $\eta = 2$. A trial is first evaluated after two epochs. At each subsequent rung, only the better half of the trials, that is a fraction $1/\eta$, is permitted to continue, whilst the remainder is terminated. This immediately frees the GPU to evaluate a more promising region of the search space.
+In order to conserve hardware cycles, Optuna applies the Asynchronous Successive Halving Algorithm (ASHA) with a minimum resource allocation of two epochs and a reduction factor of $\eta = 2$. A trial is first evaluated after two epochs; at each subsequent rung, only the superior half of the candidate configurations ($1/\eta$) is permitted to proceed, whilst inferior trajectories are terminated immediately.
 
 \subsection{Search Space and Optimiser}
 \label{sec:search_space}
 
-The search space comprises four dimensions, which are sampled anew for every trial (Table~\ref{tab:search_space}). The sampler is seeded, so that the exploration of the search space is deterministic and reproducible. Each trial instantiates a classification head consisting of a dropout layer followed by a linear layer, trains it with the AdamW optimiser under Class-Balanced Loss \cite{cui2019classbalanced}, and reports the validation Macro PR-AUC as its score.
+The hyperparameter space comprises six dimensions, sampled deterministically via a fixed pseudorandom seed (Table~\ref{tab:search_space}). Each trial initialises a classification head consisting of feature-jitter regularisation, dropout, and a dense projection layer, trained via the AdamW optimiser under Class-Balanced Loss \cite{cui2019classbalanced}.
 
 \begin{table}[htbp]
 \centering
@@ -63,9 +56,11 @@ The search space comprises four dimensions, which are sampled anew for every tri
 \textbf{Hyperparameter} & \textbf{Distribution} & \textbf{Range and role} \\
 \midrule
 Learning rate $\eta_{\text{lr}}$ & log-uniform & $[10^{-4}, 10^{-1}]$; step size of the AdamW optimiser. \\
-Weight decay $\lambda$ & log-uniform & $[10^{-6}, 10^{-2}]$; regularisation of the head weights. \\
-Dropout probability $p$ & uniform & $[0.0, 0.5]$; regularisation of the input embedding. \\
-Class-Balanced Loss $\beta$ & uniform & $[0.99, 0.9999]$; controls the effective number of samples per class and hence the re-weighting of long-tail taxa. \\
+Weight decay $\lambda$ & log-uniform & $[10^{-6}, 10^{-2}]$; $L_2$ weight regularisation penalty. \\
+Dropout probability $p$ & uniform & $[0.0, 0.5]$; feature dropout rate prior to projection. \\
+Class-Balanced Loss $\beta$ & uniform & $[0.99, 0.9999]$; effective sample re-weighting parameter. \\
+Mini-batch size $B$ & discrete & $\{32, 64, 128\}$; stochastic batch sample cardinality. \\
+Feature jitter $\sigma$ & uniform & $[0.0, 0.05]$; zero-mean Gaussian perturbation $\mathcal{N}(0, \sigma^2 \mathbf{I})$. \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -74,9 +69,9 @@ Class-Balanced Loss $\beta$ & uniform & $[0.99, 0.9999]$; controls the effective
 
 While Optuna efficiently orchestrates the search mathematics, it inherently lacks the infrastructure to permanently archive model provenance across a distributed engineering team. MLflow bridges this gap, operating as the continuous flight data recorder for our training pipeline.
 
-The coupling is implemented explicitly within the objective function rather than through a generic callback. The tuning session is registered as an MLflow experiment on the DagsHub tracking server, and every parameter combination evaluated by Optuna is opened as a nested child run, in which the sampled parameters and the per-epoch metrics (training loss, validation loss, Top-1 accuracy, Macro F1-score and Macro PR-AUC) are logged. A consolidated run records the best configuration found. The lifecycle of the top-level training run is managed by a context manager (resource acquisition is initialisation), which marks the run as failed if an exception occurs instead of leaving it in a perpetual running state.
+The integration is implemented directly within the objective function. The tuning session registers as an MLflow experiment on the tracking server, and each trial is executed within a nested child run. To avoid socket starvation and excessive network I/O during rapid hyperparameter sweeps, all epoch metrics -- training loss, validation loss, Top-1 accuracy, Macro F1-score, and validation Macro PR-AUC -- are aggregated in memory and submitted at trial completion or ASHA pruning using \texttt{MlflowClient().log\_batch()}. The lifecycle of the primary run is governed by a deterministic context manager, guaranteeing that unexpected execution exceptions transition the run to a \texttt{FAILED} state rather than hanging perpetually.
 
-Model promotion is governed by a single criterion. The validation Macro PR-AUC of the candidate is compared with that of the model currently carrying the \texttt{Production} alias in the MLflow Model Registry. A better candidate receives the alias \texttt{Challenger} and awaits formal deployment testing; an inferior candidate receives the alias \texttt{Archived}; and the very first model is initialised as \texttt{Production}. The multi-objective trade-off between accuracy, latency and memory is evaluated separately, at the level of backbone selection, by the Pareto benchmark described in Section~\ref{sec:latency_budget}.
+Model promotion evaluates candidate Macro PR-AUC against the incumbent holding the \texttt{Production} alias in the MLflow Model Registry. Qualified candidates receive the alias \texttt{Challenger} pending automated deployment verification. Upon final promotion, the pipeline compiles the classification head into an optimised ONNX computational graph, registered via \texttt{mlflow.onnx.log\_model} with an explicit \texttt{ModelSignature} mapping Float32 visual embeddings of shape $[-1, 3, 224, 224]$ or pre-pooled vectors $[-1, d]$ to class logits $[-1, K]$. Crucially, the calibrated Conformal Prediction thresholds (\texttt{conformal\_config.yaml}) are packaged directly into the MLflow model artefact directory, guaranteeing atomic deployments of both neural weights and epistemic safety bounds.
 
 \section{Training Dynamics and Convergence Control}
 \label{sec:training_dynamics}
