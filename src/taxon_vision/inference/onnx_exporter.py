@@ -105,7 +105,16 @@ def _resolve_backbone(
     fallback_extractor: str,
     allow_untrained: bool,
 ) -> nn.Module | None:
-    """Instantiate the backbone feature extractor, respecting the untrained flag."""
+    """Instantiate the backbone feature extractor, respecting the untrained flag.
+
+    Args:
+        extractor_name: Name of the backbone feature extractor.
+        fallback_extractor: Name of the fallback feature extractor.
+        allow_untrained: Whether to allow untrained backbone.
+
+    Returns:
+        Backbone feature extractor.
+    """
     use_pretrained = not allow_untrained
     logger.info("Initializing backbone feature extractor: %s (pretrained=%s)", extractor_name, use_pretrained)
     try:
@@ -131,7 +140,19 @@ def _restore_head(
     feat_dim: int,
     num_classes: int,
 ) -> bool:
-    """Restore checkpoint weights or validate fallback behavior."""
+    """Restore checkpoint weights or validate fallback behavior.
+
+    Args:
+        classifier: Classifier module to load weights into.
+        checkpoint_file: Path to checkpoint file.
+        allow_untrained: Whether to allow untrained backbone.
+        extractor_name: Name of the feature extractor.
+        feat_dim: Feature dimension.
+        num_classes: Number of classes.
+
+    Returns:
+        True if head was restored or fallback is allowed, False otherwise.
+    """
     if not checkpoint_file.exists():
         if not allow_untrained:
             logger.error(
@@ -162,7 +183,11 @@ def _restore_head(
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
-    """Construct argument parser for the ONNX exporter CLI."""
+    """Construct argument parser for the ONNX exporter CLI.
+
+    Returns:
+        ArgumentParser instance.
+    """
     parser = argparse.ArgumentParser(description="TaxonVision ONNX Graph Exporter CLI")
     parser.add_argument(
         "--checkpoint",

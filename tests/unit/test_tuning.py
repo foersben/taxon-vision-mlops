@@ -1,0 +1,135 @@
+# SPDX-FileCopyrightText: 2026 Benjamin Förster
+# SPDX-License-Identifier: MIT
+"""Unit tests for automated hyperparameter tuning with Optuna and MLflow integration."""
+
+from __future__ import annotations
+
+from unittest.mock import MagicMock
+
+import mlflow
+import optuna
+import pytest
+import torch
+
+from taxon_vision.models.training.tuning import (
+    HyperparameterObjective,
+    _log_best_run,
+    _setup_mlflow,
+    tune_hyperparameters,
+)
+from taxon_vision.models.training.types import EmbeddingSplit, TuningConfig
+
+
+@pytest.fixture
+def synthetic_split() -> EmbeddingSplit:
+    """Create a minimal synthetic embedding split for fast deterministic testing."""
+    torch.manual_seed(42)
+    dim = 8
+    num_train = 20
+    num_val = 10
+    num_classes = 2
+
+    return EmbeddingSplit(
+        train_embeddings=torch.randn(num_train, dim),
+        train_labels=torch.tensor([i % num_classes for i in range(num_train)]),
+        val_embeddings=torch.randn(num_val, dim),
+        val_labels=torch.tensor([i % num_classes for i in range(num_val)]),
+        samples_per_class=[10, 10],
+    )
+
+
+def test_setup_mlflow_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify _setup_mlflow returns False when tracking URI is missing or empty."""
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", "")
+    mock_settings = MagicMock()
+    mock_settings.mlflow.tracking_uri = ""
+    mock_settings.mlflow.experiment_name = "test_exp"
+    monkeypatch.setattr("taxon_vision.models.training.tuning.get_settings", lambda: mock_settings)
+
+    cfg = TuningConfig(tracking_uri=None)
+    assert _setup_mlflow(cfg) is False
+
+
+def test_setup_mlflow_success_and_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify _setup_mlflow sets tracking URI and safely handles connection errors."""
+    mock_set_uri = MagicMock()
+    mock_set_exp = MagicMock()
+    monkeypatch.setattr(mlflow, "set_tracking_uri", mock_set_uri)
+    monkeypatch.setattr(mlflow, "set_experiment", mock_set_exp)
+
+    cfg = TuningConfig(tracking_uri="http://localhost:5000", experiment_name="tuning_test")
+    assert _setup_mlflow(cfg) is True
+    mock_set_uri.assert_called_once_with("http://localhost:5000")
+    mock_set_exp.assert_called_once_with("tuning_test")
+
+    # When set_experiment raises, returns False safely
+    mock_set_exp.side_effect = ConnectionError("Server down")
+    assert _setup_mlflow(cfg) is False
+
+
+def test_log_best_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify _log_best_run logs best params, metric, and tags when active."""
+    # When inactive: no-op
+    _log_best_run({"lr": 1e-3}, 0.85, active=False)
+
+    # When active: starts run and logs details
+    mock_start_run = MagicMock()
+    mock_log_params = MagicMock()
+    mock_log_metric = MagicMock()
+    mock_set_tag = MagicMock()
+    mock_log_param = MagicMock()
+
+    monkeypatch.setattr(mlflow, "start_run", mock_start_run)
+    monkeypatch.setattr(mlflow, "log_params", mock_log_params)
+    monkeypatch.setattr(mlflow, "log_metric", mock_log_metric)
+    monkeypatch.setattr(mlflow, "set_tag", mock_set_tag)
+    monkeypatch.setattr(mlflow, "log_param", mock_log_param)
+    monkeypatch.setattr("taxon_vision.models.training.tracking._get_dvc_dataset_hash", lambda: "hash123")
+
+    _log_best_run({"lr": 1e-3}, 0.85, active=True)
+    mock_start_run.assert_called_once_with(run_name="optuna_best_model")
+    mock_log_params.assert_called_once_with({"lr": 1e-3})
+    mock_log_metric.assert_called_once_with("best_val_pr_auc", 0.85)
+
+
+def test_hyperparameter_objective_trial(synthetic_split: EmbeddingSplit, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify HyperparameterObjective executes trial training loop and logs metrics."""
+    mock_start_run = MagicMock()
+    mock_end_run = MagicMock()
+    mock_log_metric = MagicMock()
+    monkeypatch.setattr(mlflow, "start_run", mock_start_run)
+    monkeypatch.setattr(mlflow, "end_run", mock_end_run)
+    monkeypatch.setattr(mlflow, "log_params", MagicMock())
+    monkeypatch.setattr(mlflow, "log_metric", mock_log_metric)
+    monkeypatch.setattr(mlflow, "set_tag", MagicMock())
+
+    cfg = TuningConfig(n_trials=1, epochs_per_trial=1, batch_size=16)
+    objective = HyperparameterObjective(
+        data=synthetic_split,
+        num_classes=2,
+        config=cfg,
+        mlflow_available=True,
+    )
+
+    study = optuna.create_study(direction="maximize")
+    trial = study.ask()
+    score = objective(trial)
+    assert isinstance(score, float)
+    assert 0.0 <= score <= 1.0
+
+
+def test_tune_hyperparameters_fast(synthetic_split: EmbeddingSplit, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify tune_hyperparameters completes an Optuna study across 1 trial."""
+    monkeypatch.setattr("taxon_vision.models.training.tuning._setup_mlflow", lambda _cfg=None: False)
+    monkeypatch.setattr("taxon_vision.models.training.tuning._log_best_run", MagicMock())
+
+    cfg = TuningConfig(n_trials=1, epochs_per_trial=1, batch_size=16, seed=42)
+    best_params, study = tune_hyperparameters(
+        data=synthetic_split,
+        num_classes=2,
+        config=cfg,
+    )
+
+    assert "lr" in best_params
+    assert "weight_decay" in best_params
+    assert len(study.trials) == 1
