@@ -128,6 +128,8 @@ def test_export_classifier_cli_with_valid_checkpoint_and_quantization(tmp_path: 
             "--extractor",
             "mobilenetv4_conv_small",
             "--quantize-int8",
+            "--quantize-mode",
+            "dynamic",
         ]
     )
     assert ret == 0

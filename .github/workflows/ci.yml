@@ -30,6 +30,23 @@ jobs:
         with:
           environments: ci-dev
 
+      - name: Hydrate Model Checkpoints from DVC
+        env:
+          DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+        run: |
+          mkdir -p models/checkpoints
+
+          if [ -z "$DAGSHUB_TOKEN" ]; then
+            echo "::error::DAGSHUB_TOKEN is required to run model-dependent tests"
+            exit 1
+          fi
+
+          AWS_ACCESS_KEY_ID="$DAGSHUB_TOKEN" \
+          AWS_SECRET_ACCESS_KEY="$DAGSHUB_TOKEN" \
+          pixi run --frozen -e ci-dev dvc pull \
+            models/checkpoints/head.pt \
+            models/checkpoints/model.onnx
+
       - name: Pre-Commit Quality Checks
         run: SKIP=enforce-author-identity pixi run --frozen -e ci-dev pre-commit run --all-files
 
