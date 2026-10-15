@@ -4,18 +4,30 @@
 
 Operating a high-throughput machine learning service under strict latency service-level agreements (SLAs) requires moving decisively beyond theoretical model performance and addressing the physical limitations of silicon. This chapter explicitly defines the mathematical transformations utilised to compress neural network memory footprints, the formal theorems rigorously governing epistemic safety thresholds, and the memory complexity equations required to safely bound vector database consumption.
 
-\section{Dynamic Quantisation and Tensor Compression}
+\section{Static and Dynamic Quantisation Architectures}
 \label{sec:quantization_math}
 
-Deep neural networks are fundamentally composed of dense, high-dimensional weight matrices. By default, standard training frameworks construct these matrices using 32-bit floating-point (FP32) numerical representations. Whilst FP32 provides extreme gradient precision during the backpropagation phase of training, it is highly inefficient during production inference. FP32 tensors consume vast amounts of GPU VRAM, and executing matrix multiplications at this precision severely bottlenecks the memory bandwidth, thereby increasing prediction latency.
+Deep neural networks are fundamentally composed of dense, high-dimensional weight matrices. By default, standard training frameworks construct these matrices using 32-bit floating-point (FP32) numerical representations. Whilst FP32 provides extreme gradient precision during the backpropagation phase of training, it is highly inefficient during production inference. FP32 tensors consume vast amounts of GPU VRAM, and executing matrix multiplications at this precision severely bottlenecks memory bandwidth, thereby inflating prediction latency.
 
-In order to optimise the deployment architecture, the PyTorch classification head and feature extractor are exported to the Open Neural Network Exchange (ONNX) format, cleanly decoupling the computational graph from Python's execution overhead. Subsequently, the ONNX Runtime strategically applies Integer-8 (INT8) static quantisation. This mathematical operation robustly maps the high-resolution continuous floating-point weights onto a discrete 8-bit integer grid. Static Post-Training Quantisation (PTQ) with a calibration dataset is strictly required for the convolutional and vision-transformer backbones, while dynamic quantization is reserved exclusively for the Vision-Language Model's linear projection layers.
+In order to optimise the deployment architecture, the PyTorch classification head and feature extractor are compiled into the Open Neural Network Exchange (ONNX) format with dual output nodes ($f(x) \in \mathbb{R}^K$, $z(x) \in \mathbb{R}^D$), cleanly decoupling the computational graph from Python's interpreter overhead. Subsequently, the ONNX Runtime applies Integer-8 (INT8) Post-Training Quantisation (PTQ). This mathematical operation maps the continuous floating-point weights and activations onto a discrete 8-bit integer grid.
 
-The quantisation mapping function is formally defined as:
-\[
-q = \text{round}\left(\frac{x}{S}\right) + Z,
-\]
-where $q$ denotes the 8-bit quantised integer representation, $x$ represents the continuous 32-bit floating-point weight or activation value from the trained network, $S \in \mathbb{R}^+$ is the floating-point scale factor defining the step size between discrete quantised bins, and $Z \in \mathbb{Z}$ is the 8-bit integer zero-point offset that aligns real-world mathematical zero with the quantised integer zero to ensure zero-padding operations remain exact.
+The linear quantisation mapping function is formally defined as:
+\begin{equation}
+q = \text{clamp}\left( \text{round}\left(\frac{x}{S}\right) + Z, \, q_{\min}, \, q_{\max} \right)
+\label{eq:quant_mapping}
+\end{equation}
+where $q \in [q_{\min}, q_{\max}]$ denotes the 8-bit quantised integer (typically $[-128, 127]$ for signed INT8 or $[0, 255]$ for unsigned uint8), $x$ represents the continuous 32-bit floating-point activation or weight value, $S \in \mathbb{R}^+$ is the positive real scale factor defining the step size between discrete quantised bins, and $Z \in \mathbb{Z}$ is the integer zero-point offset that aligns real-world mathematical zero with the discrete grid to ensure zero-padding operations remain exact.
+
+The platform implements two distinct quantization paradigms depending on operational context:
+\begin{enumerate}
+    \item \textbf{Static INT8 QDQ Quantisation with Empirical Calibration:} Static Post-Training Quantisation inserts explicit QuantizeLinear/DequantizeLinear (QDQ) operator pairs surrounding convolutional and linear layers. The dynamic range of intermediate activation tensors is calibrated empirically using a dedicated calibration dataset reader (\texttt{Taxon\-Calibration\-Data\-Reader}) streaming genuine biological image batches. For symmetric signed quantisation, the scale factor $S$ is computed using MinMax calibration:
+    \begin{equation}
+    S = \frac{\max\left( |x_{\min}|, \, |x_{\max}| \right)}{127}, \quad Z = 0
+    \label{eq:minmax_calibration}
+    \end{equation}
+    Static calibration eliminates runtime scaling overhead entirely, enabling fused integer matrix multiplications on hardware accelerators.
+    \item \textbf{Dynamic INT8 Quantisation with Logit Node Preservation:} In resource-constrained CPU environments lacking calibration data, dynamic quantization quantises weights statically to INT8 whilst calculating activation scale factors dynamically at inference time. Crucially, as implemented in \nolinkurl{quantizer.py}, the terminal linear projection layers directly emitting classification logits are excluded from aggressive quantisation. Preserving FP32 precision on logit output nodes prevents rounding distortions that would otherwise perturb the delicate unnormalised activation margins required by the Helmholtz energy detector and Split Conformal Prediction.
+\end{enumerate}
 
 By mapping 32-bit floats to 8-bit integers, the model's theoretical tensor parameter footprint is deterministically reduced by $75\%$ (an exact $4:1$ bit-width ratio; for example, reducing an illustrative 400~MB model to approximately 100~MB). Because INT8 operands are significantly smaller, modern hardware can efficiently pack multiple operations into single SIMD (Single Instruction, Multiple Data) registers, strongly leveraging AVX-512 Vector Neural Network Instructions (VNNI) on CPUs or Tensor Cores on GPUs. In published deployment benchmarks across standard vision backbones, this quantisation pattern yields an empirical $2\times$ to $4\times$ latency acceleration with typically less than a $1\%$ degradation in top-1 accuracy (subject to validation on target biological splits).
 

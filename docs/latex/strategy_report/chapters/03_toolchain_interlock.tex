@@ -42,6 +42,8 @@ The acquisition algorithm iteratively samples candidate configurations that maxi
 
 In order to conserve hardware cycles, Optuna applies the Asynchronous Successive Halving Algorithm (ASHA) with a minimum resource allocation of two epochs and a reduction factor of $\eta = 2$. A trial is first evaluated after two epochs; at each subsequent rung, only the superior half of the candidate configurations ($1/\eta$) is permitted to proceed, whilst inferior trajectories are terminated immediately.
 
+To guarantee continuity across iterative training cycles and prevent redundant evaluations, Optuna studies are backed by persistent SQLite storage (\nolinkurl{sqlite:///data/optuna_studies.db}) with study identifiers scoped deterministically by vision backbone (for example, \texttt{tuning\_dinov3} or \texttt{tuning\_bioclip2}) under \texttt{load\_if\_exists=True}. This persistence layer enables subsequent tuning invocations to warm-start from prior historical parameter trials, progressively refining the non-parametric Parzen density estimates without discarding previous evaluations.
+
 \subsection{Search Space and Optimiser}
 \label{sec:search_space}
 
@@ -71,7 +73,15 @@ While Optuna efficiently orchestrates the search mathematics, it inherently lack
 
 The integration is implemented directly within the objective function. The tuning session registers as an MLflow experiment on the tracking server, and each trial is executed within a nested child run. To avoid socket starvation and excessive network I/O during rapid hyperparameter sweeps, all epoch metrics -- training loss, validation loss, Top-1 accuracy, Macro F1-score, and validation Macro PR-AUC -- are aggregated in memory and submitted at trial completion or ASHA pruning using \texttt{MlflowClient().log\_batch()}. The lifecycle of the primary run is governed by a deterministic context manager, guaranteeing that unexpected execution exceptions transition the run to a \texttt{FAILED} state rather than hanging perpetually.
 
-Model promotion evaluates candidate Macro PR-AUC against the incumbent holding the \texttt{Production} alias in the MLflow Model Registry. Qualified candidates receive the alias \texttt{Challenger} pending automated deployment verification. Upon final promotion, the pipeline compiles the classification head into an optimised ONNX computational graph, registered via \texttt{mlflow.onnx.log\_model} with an explicit \texttt{ModelSignature} mapping Float32 visual embeddings of shape $[-1, 3, 224, 224]$ or pre-pooled vectors $[-1, d]$ to class logits $[-1, K]$. Crucially, the calibrated Conformal Prediction thresholds (\texttt{conformal\_config.yaml}) are packaged directly into the MLflow model artefact directory, guaranteeing atomic deployments of both neural weights and epistemic safety bounds.
+Model promotion evaluates candidate Macro PR-AUC against the incumbent holding the \texttt{Production} alias in the MLflow Model Registry. Qualified candidates receive the alias \texttt{Challenger} pending automated deployment verification. During registry registration, an explicit \texttt{ModelSignature} is inferred directly from genuine validation batch tensors (\texttt{val\_embeddings}) via \texttt{infer\_signature()}, completely eliminating synthetic tensor mocks and guaranteeing type-safe schema enforcement. The model version entry is enriched with immutable audit metadata, including the vision backbone tag, empirical validation Macro PR-AUC score, and human-readable architecture descriptions.
+
+Crucially, every training execution renders and logs publication-grade evaluation artifacts directly into the MLflow run:
+\begin{enumerate}
+    \item \nolinkurl{visualizations/confusion_matrix.png}: A class-normalized confusion matrix validating individual taxonomic boundaries.
+    \item \nolinkurl{visualizations/precision_recall_curves.png}: Per-class Precision-Recall trajectories annotated with individual Average Precision (AP) scores across all catalogued taxa.
+    \item \nolinkurl{visualizations/energy_distribution.png}: The empirical validation Helmholtz free-energy distribution annotated with the calibrated epistemic decision boundary $\tau_{\text{OOD}}$.
+\end{enumerate}
+When hyperparameter tuning is triggered, diagnostic Optuna plots (\nolinkurl{optuna_optimization_history.png} and \nolinkurl{optuna_param_importances.png}) are synchronously attached. Furthermore, the calibrated Conformal Prediction thresholds (\nolinkurl{config/conformal_config.yaml}) are packaged directly into the model directory, guaranteeing atomic deployments of neural weights alongside their epistemic safety parameters.
 
 \section{Training Dynamics and Convergence Control}
 \label{sec:training_dynamics}

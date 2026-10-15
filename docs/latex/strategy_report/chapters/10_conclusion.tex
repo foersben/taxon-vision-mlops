@@ -21,26 +21,29 @@ In order to avoid any ambiguity between the target design and the present state 
 \centering
 \caption{Implementation status of the principal capabilities, verified against the repository.}
 \label{tab:impl_status}
-\small
-\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{3.9cm} l X@{}}
+\footnotesize
+\renewcommand{\arraystretch}{0.92}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{3.8cm} l X@{}}
 \toprule
 \textbf{Capability} & \textbf{Status} & \textbf{Evidence or outstanding action} \\
 \midrule
 Reproducible environment (Pixi, Just) & implemented & Lock-file driven environments; no virtual environments are created. \\
 Dataset versioning (DVC on DagsHub) & implemented & S3-compatible DagsHub remote; the dataset hash from \texttt{dvc.lock} is logged to MLflow. \\
-Experiment tracking and registry & implemented & MLflow on DagsHub; model \texttt{taxon\_vision\_classifier} with the aliases \texttt{Production}, \texttt{Challenger} and \texttt{Archived}. \\
+Experiment tracking and registry & implemented & MLflow on DagsHub; model \texttt{taxon\_vision\_classifier} with \texttt{Production}, \texttt{Challenger}, and \texttt{Archived} aliases; real validation batch signatures and automated diagnostic artifact logging (confusion matrix, PR curves, energy distribution). \\
 Head training with callbacks & implemented & Best-weight restoration, early stopping (patience~4) and learning-rate decay on plateau (patience~2). \\
-Hyperparameter search & implemented & Optuna TPE with ASHA pruning, dynamic batch-size and feature-jitter sampling, peak PR-AUC objective, and nested MLflow runs (Section~\ref{sec:search_space}). \\
-Inference service and dashboard & implemented & FastAPI with a server-rendered HTMX operator view. \\
-Split conformal prediction and energy-based OOD & implemented & Conformal sets in the serving path; energy score in the uncertainty module. \\
-Prometheus instrumentation & implemented & Metrics endpoint of the serving application. \\
+Hyperparameter search & implemented & Optuna TPE with ASHA pruning, persistent SQLite storage (\nolinkurl{sqlite:///data/optuna_studies.db}) for warm-starting across sweeps, dynamic batch-size and feature-jitter sampling, peak PR-AUC objective, and nested MLflow runs. \\
+Dual-output ONNX and INT8 PTQ & implemented & Compiled ONNX graph emitting logits ($[N, K]$) and penultimate embeddings ($[N, D]$); static QDQ PTQ via \texttt{TaxonCalibrationDataReader} and dynamic quantization preserving logit node sensitivity. \\
+Epistemic safety gating (Dual OOD + Conformal) & implemented & Dual-gate OOD (Helmholtz free energy $\tau_{\text{OOD}} = -2.40$ and predictive Shannon entropy $\tau_{\text{entropy}} = 1.60\text{ nats}$), empirical threshold calibration, conformal prediction sets ($1-\alpha \ge 0.95$), and minimum confidence floor ($\tau_{\text{conf}} = 0.60$). \\
+Inference service and dashboard & implemented & FastAPI REST service with server-rendered Jinja2/HTMX operator dashboard; local disk persistence for flagged ambiguous observations. \\
+Prometheus instrumentation & implemented & Metrics endpoint of the serving application tracking latency histograms, referral gauges, and prediction volume. \\
 Jenkins controller and k3s agents & implemented & Outbound-only Cloudflare Tunnel, ephemeral agent pods, rolling deployment, four-slot time-slicing configuration. \\
 GPU access of the agent pod & implemented & Agent pod in \texttt{Jenkinsfile} configured with an \texttt{nvidia.com/gpu: 1} resource limit and request binding directly to k3s time-slicing slots. \\
 GPU-capable PyTorch build & implemented & Pinned toolchain upgraded to PyTorch 2.7.0 with CUDA~12.8 (\texttt{cu128}), natively supporting Blackwell SM~120 under the host's CUDA~13.4 driver (Section~\ref{sec:host_baseline}). \\
 Git commit tagging of runs & implemented & The Git commit hash and branch identifier are extracted and tagged to MLflow parent and trial runs. \\
 Main-branch training stage & implemented & GPU stage in \texttt{Jenkinsfile} extracts real Vision Transformer embeddings from S3 via \texttt{extract\_features.py} and trains the head on cached features with Optuna Bayesian tuning and VRAM capping. \\
+Package release and distribution & implemented & Two-stage GitHub Actions workflow (\nolinkurl{.github/workflows/release.yaml}) compiling hermetic wheels/sdist in isolated Pixi environments with SHA-256 provenance attestation. \\
 Container publishing (GHCR) & implemented & Multi-stage container build in GitHub Actions CI hydrated with promoted DVC model checkpoints; published to \texttt{ghcr.io/foersben/taxon-vision-mlops} under \texttt{latest} and commit tags. \\
-Cognitive complexity enforcement & implemented & Pre-merge quality gate via \texttt{complexipy} enforcing cognitive complexity $\le 15$ across all modules. \\
+Test harness and cognitive complexity & implemented & 114 automated tests achieving $89\%$ statement coverage; pre-commit gates enforcing zero-warning MyPy, Ruff, OKF, license compliance, and cognitive complexity $\le 15$ via \texttt{complexipy}. \\
 \midrule
 Conformal invariant on the candidate model & partial & The coverage invariant gates the source code, but is not yet applied to the freshly trained candidate before promotion. \\
 Drift detection and active learning & partial & Two-tier drift (live Wasserstein-1 and full-manifold MMD) and BADGE query modules exist; neither is connected to a schedule, an alert or a webhook. \\

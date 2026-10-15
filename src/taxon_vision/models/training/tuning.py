@@ -337,7 +337,14 @@ def tune_hyperparameters(
 
     sampler = optuna.samplers.TPESampler(seed=cfg.seed)
     pruner = optuna.pruners.SuccessiveHalvingPruner(min_resource=2, reduction_factor=2)
-    study = optuna.create_study(direction="maximize", sampler=sampler, pruner=pruner)
+    study = optuna.create_study(
+        study_name=f"tuning_{cfg.extractor_name}",
+        storage=cfg.storage_url,
+        load_if_exists=True,  # Warm-starts from prior runs!
+        direction="maximize",
+        sampler=sampler,
+        pruner=pruner,
+    )
 
     objective = HyperparameterObjective(
         data=data,

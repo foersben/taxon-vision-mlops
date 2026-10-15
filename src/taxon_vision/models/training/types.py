@@ -137,3 +137,5 @@ class TuningConfig:
     seed: int = 42
     tracking_uri: str | None = None
     experiment_name: str = "taxon-vision-hyperparameter-tuning"
+    extractor_name: str = "dinov3"
+    storage_url: str | None = "sqlite:///data/optuna_studies.db"
