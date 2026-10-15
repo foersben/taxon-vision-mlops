@@ -166,6 +166,8 @@ def reset_model_caches() -> None:
     """Invalidate cached model artefacts so the next request reloads them from disk."""
     get_classifier.cache_clear()
     get_onnx_engine.cache_clear()
+    get_conformal_engine.cache_clear()
+    get_ood_detector.cache_clear()
 
 
 def check_readiness() -> tuple[bool, dict[str, str]]:
@@ -221,6 +223,7 @@ def get_conformal_engine() -> ConformalPredictionEngine:
         q_hat=settings.conformal.quantile_threshold,
         alpha=settings.conformal.alpha,
         k_max=settings.conformal.k_max,
+        min_confidence_threshold=settings.conformal.min_confidence_threshold,
     )
 
 
@@ -240,6 +243,7 @@ def get_ood_detector() -> EnergyOODDetector:
     return EnergyOODDetector(
         energy_threshold=settings.ood.energy_threshold,
         temperature=settings.model.temperature,
+        entropy_threshold=settings.ood.entropy_threshold,
     )
 
 
@@ -400,10 +404,12 @@ def run_prediction(image_bytes: bytes) -> dict[str, Any]:
     top1_idx = int(np.argmax(probabilities))
     top1_prob = float(probabilities[top1_idx])
 
-    # Out-of-distribution energy detection
+    # Out-of-distribution energy and entropy detection
     ood_detector = get_ood_detector()
     ood_energy_score = float(ood_detector.compute_energy_score(logits_np))
-    is_ood = ood_detector.is_ood(logits_np)
+    is_energy_ood = ood_detector.is_ood(logits_np)
+    is_entropy_ood = ood_detector.is_high_entropy(probabilities)
+    is_ood = is_energy_ood or is_entropy_ood
 
     # Uncertainty quantification
     conformal_engine = get_conformal_engine()

@@ -24,24 +24,28 @@ class EnergyOODDetector:
     Attributes:
         energy_threshold: Decision boundary threshold above which inputs are classified as OOD.
         temperature: Scaling hyperparameter T modulating the logit sharpness.
+        entropy_threshold: Shannon predictive entropy threshold for uncertainty triage.
     """
 
     def __init__(
         self,
         energy_threshold: float | None = None,
         temperature: float | None = None,
+        entropy_threshold: float | None = None,
     ) -> None:
         """Initialize the energy-based out-of-distribution detector.
 
         Args:
             energy_threshold: Decision boundary threshold above which inputs are classified as OOD. Defaults to settings.model.ood_energy_threshold.
             temperature: Softmax logit scaling temperature for probability calibration. Defaults to settings.model.ood_temperature.
+            entropy_threshold: Shannon entropy threshold for uncertainty triage. Defaults to settings.ood.entropy_threshold.
         """
         settings = get_settings()
         self.energy_threshold = (
             energy_threshold if energy_threshold is not None else settings.model.ood_energy_threshold
         )
         self.temperature = temperature if temperature is not None else settings.model.ood_temperature
+        self.entropy_threshold = entropy_threshold if entropy_threshold is not None else settings.ood.entropy_threshold
 
     def compute_energy(self, logits: np.ndarray, temperature: float | None = None) -> float:
         """Compute the Helmholtz free energy score for a given logit vector.
@@ -77,6 +81,33 @@ class EnergyOODDetector:
         """
         return self.compute_energy(logits, temperature=temperature)
 
+    @staticmethod
+    def compute_entropy(probabilities: np.ndarray) -> float:
+        """Compute Shannon predictive entropy of class probability distribution.
+
+        Args:
+            probabilities: 1D array of class probabilities summing to 1.0.
+
+        Returns:
+            Scalar Shannon entropy in nats.
+        """
+        eps = 1e-12
+        probs = np.clip(probabilities, eps, 1.0)
+        return float(-np.sum(probs * np.log(probs)))
+
+    def is_high_entropy(self, probabilities: np.ndarray, threshold: float | None = None) -> bool:
+        """Evaluate whether predicted probabilities exhibit excessive predictive entropy.
+
+        Args:
+            probabilities: 1D array of class probabilities summing to 1.0.
+            threshold: Optional threshold override (defaults to self.entropy_threshold).
+
+        Returns:
+            True if predictive entropy exceeds the threshold; False otherwise.
+        """
+        thresh = self.entropy_threshold if threshold is None else threshold
+        return self.compute_entropy(probabilities) > thresh
+
     def is_ood(
         self,
         logits: np.ndarray,
@@ -101,3 +132,48 @@ class EnergyOODDetector:
         """
         thresh = self.energy_threshold if threshold is None else threshold
         return self.compute_energy(logits, temperature=temperature) > thresh
+
+    def calibrate_threshold(
+        self,
+        val_logits: np.ndarray,
+        percentile: float = 95.0,
+        temperature: float | None = None,
+    ) -> float:
+        """Calibrate energy threshold empirically from in-distribution validation logits.
+
+        Args:
+            val_logits: 2D array of validation logits with shape (N, num_classes).
+            percentile: Percentile of in-distribution energies (e.g. 95.0 for 5% ID rejection rate).
+            temperature: Optional energy temperature scaling parameter.
+
+        Returns:
+            Calibrated scalar energy threshold.
+        """
+        temp = self.temperature if temperature is None else temperature
+        scaled = val_logits / temp
+        max_val = np.max(scaled, axis=1, keepdims=True)
+        energies = -temp * (max_val.squeeze(1) + np.log(np.sum(np.exp(scaled - max_val), axis=1)))
+        self.energy_threshold = float(np.percentile(energies, percentile))
+        return self.energy_threshold
+
+    @classmethod
+    def calibrate_threshold_from_logits(
+        cls,
+        val_logits: np.ndarray,
+        percentile: float = 95.0,
+        temperature: float = 1.0,
+    ) -> float:
+        """Stateless class method to compute empirical energy threshold from validation logits.
+
+        Args:
+            val_logits: 2D array of validation logits with shape (N, num_classes).
+            percentile: Percentile of in-distribution energies (e.g. 95.0 for 5% ID rejection rate).
+            temperature: Energy temperature scaling parameter.
+
+        Returns:
+            Calibrated scalar energy threshold.
+        """
+        scaled = val_logits / temperature
+        max_val = np.max(scaled, axis=1, keepdims=True)
+        energies = -temperature * (max_val.squeeze(1) + np.log(np.sum(np.exp(scaled - max_val), axis=1)))
+        return float(np.percentile(energies, percentile))

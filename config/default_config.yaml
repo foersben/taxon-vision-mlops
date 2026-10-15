@@ -72,7 +72,8 @@ conformal:
   nominal_coverage: 0.95
   method: "split-conformal"
   empty_set_action: "route_to_human_triage"
+  min_confidence_threshold: 0.60
 
 ood:
   energy_threshold: -2.40
-  entropy_threshold: 2.8
+  entropy_threshold: 1.60

@@ -9,7 +9,9 @@ from unittest.mock import MagicMock
 
 import mlflow
 import mlflow.pytorch
+import numpy as np
 import pytest
+import torch
 import torch.nn as nn
 
 from taxon_vision.models.training.tracking import (
@@ -18,6 +20,7 @@ from taxon_vision.models.training.tracking import (
     _get_dvc_dataset_hash,
     _log_mlflow_metrics,
     _promote_model_if_better,
+    log_training_visualizations,
     mlflow_run_scope,
 )
 
@@ -264,3 +267,64 @@ def test_promote_model_serialization_failure(monkeypatch: pytest.MonkeyPatch) ->
 
     alias = _promote_model_if_better(dummy_model, pr_auc=0.75)
     assert alias is None
+
+
+def test_promote_model_with_real_val_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify real validation embeddings infer model signature and populate version metadata."""
+    dummy_model = nn.Sequential(nn.Linear(32, 5))
+    val_embeddings = torch.randn(10, 32)
+
+    mock_model_info = MagicMock()
+    mock_model_info.registered_model_version = "4"
+    mock_log_model = MagicMock(return_value=mock_model_info)
+    monkeypatch.setattr(mlflow.pytorch, "log_model", mock_log_model)
+    monkeypatch.setattr(mlflow, "log_metric", MagicMock())
+
+    mock_client = MagicMock()
+    mock_client.get_model_version_by_alias.side_effect = Exception("No alias found")
+    monkeypatch.setattr("mlflow.tracking.MlflowClient", lambda: mock_client)
+
+    alias = _promote_model_if_better(
+        dummy_model,
+        pr_auc=0.92,
+        val_embeddings=val_embeddings,
+        extractor="dinov3",
+    )
+    assert alias == "Production"
+
+    # Verify signature and input example were provided
+    mock_log_model.assert_called_once()
+    kwargs = mock_log_model.call_args.kwargs
+    assert kwargs.get("signature") is not None
+    example = kwargs.get("input_example")
+    assert example is not None
+    assert example.shape == (5, 32)
+
+    # Verify model metadata updates
+    mock_client.update_model_version.assert_called_once()
+    mock_client.set_model_version_tag.assert_any_call("taxon_vision_classifier", "4", "extractor", "dinov3")
+    mock_client.set_model_version_tag.assert_any_call("taxon_vision_classifier", "4", "val_pr_auc", "0.9200")
+
+
+def test_log_training_visualizations(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify log_training_visualizations emits confusion matrix, PR curves, and energy distribution."""
+    mock_log_figure = MagicMock()
+    monkeypatch.setattr(mlflow, "log_figure", mock_log_figure)
+    monkeypatch.setattr(mlflow, "active_run", lambda: True)
+
+    val_logits = np.random.randn(20, 5)
+    val_labels = np.random.randint(0, 5, size=20)
+    taxa_catalog = [{"common_name": f"Species {i}", "scientific_name": f"Taxon {i}"} for i in range(5)]
+
+    log_training_visualizations(
+        val_logits=val_logits,
+        val_labels=val_labels,
+        taxa_catalog=taxa_catalog,
+        calibrated_energy_threshold=-3.50,
+    )
+
+    assert mock_log_figure.call_count == 3
+    artifact_paths = [call.args[1] for call in mock_log_figure.call_args_list]
+    assert "visualizations/confusion_matrix.png" in artifact_paths
+    assert "visualizations/precision_recall_curves.png" in artifact_paths
+    assert "visualizations/energy_distribution.png" in artifact_paths

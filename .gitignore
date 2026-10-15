@@ -42,6 +42,7 @@ coverage.xml
 *.db
 *.sqlite
 *.sqlite3
+mlruns/
 
 # Jupyter Notebook & Scratch
 .ipynb_checkpoints/

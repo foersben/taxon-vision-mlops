@@ -23,7 +23,9 @@ def test_default_settings_loading() -> None:
     assert settings.conformal.alpha == 0.05
     assert settings.conformal.k_max == 3
     assert settings.conformal.nominal_coverage == 0.95
+    assert settings.conformal.min_confidence_threshold == 0.60
     assert settings.ood.energy_threshold == -2.40
+    assert settings.ood.entropy_threshold == 1.60
     assert settings.training.epochs == 5
     assert settings.training.batch_size == 32
     assert len(settings.ingestion.taxa_to_fetch) == 10
