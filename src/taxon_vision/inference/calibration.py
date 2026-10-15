@@ -11,6 +11,7 @@ import numpy as np
 import numpy.typing as npt
 from PIL import Image
 
+from taxon_vision.config import get_settings
 from taxon_vision.service.inference import get_image_transform
 
 logger = logging.getLogger(__name__)
@@ -20,8 +21,8 @@ IMAGE_SUFFIXES: frozenset[str] = frozenset({".jpg", ".jpeg", ".png", ".webp"})
 
 
 def load_calibration_tensors(
-    image_dir: Path | str,
-    max_samples: int = 128,
+    image_dir: Path | str | None = None,
+    max_samples: int | None = None,
 ) -> list[npt.NDArray[np.float32]]:
     """Build `(1, 3, H, W)` calibration batches from a directory of representative images.
 
@@ -37,8 +38,8 @@ def load_calibration_tensors(
         and applies the cached serving preprocessing transform to each image.
 
     Args:
-        image_dir: Directory containing calibration images.
-        max_samples: Maximum number of images to use (default 128).
+        image_dir: Directory containing calibration images. Defaults to settings.model.calibration_dir.
+        max_samples: Maximum number of images to use. Defaults to settings.model.calibration_samples.
 
     Returns:
         List of float32 arrays of shape `(1, 3, H, W)`.
@@ -46,7 +47,11 @@ def load_calibration_tensors(
     Raises:
         FileNotFoundError: If the directory does not exist or contains no readable images.
     """
-    root = Path(image_dir)
+    settings = get_settings()
+    resolved_dir = image_dir if image_dir is not None else settings.model.calibration_dir
+    limit = max_samples if max_samples is not None else settings.model.calibration_samples
+
+    root = Path(resolved_dir)
     if not root.is_dir():
         raise FileNotFoundError(f"Calibration directory not found: {root}")
 
@@ -54,8 +59,8 @@ def load_calibration_tensors(
     if not files:
         raise FileNotFoundError(f"No calibration images (*.jpg, *.png, *.webp) found under {root}")
 
-    if len(files) > max_samples:
-        picks = np.linspace(0, len(files) - 1, num=max_samples).round().astype(int)
+    if len(files) > limit:
+        picks = np.linspace(0, len(files) - 1, num=limit).round().astype(int)
         files = [files[i] for i in picks]
 
     transform = get_image_transform()

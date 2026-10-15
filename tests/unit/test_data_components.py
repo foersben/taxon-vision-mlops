@@ -7,7 +7,7 @@ from __future__ import annotations
 import io
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import polars as pl
 import pytest
@@ -187,7 +187,7 @@ def test_s3_image_streamer_balanced_and_concurrent(monkeypatch: pytest.MonkeyPat
 
     fail_res = _fetch_record_image(
         {"observation_uuid": "test-uuid", "taxon_id": 1, "image_url": "https://mock.s3/fail.jpg"},
-        client=FailingClient(),  # type: ignore[arg-type]
+        client=cast(Any, FailingClient()),
     )
     assert fail_res is None
 

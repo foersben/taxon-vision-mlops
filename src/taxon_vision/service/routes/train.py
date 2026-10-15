@@ -9,6 +9,7 @@ from functools import partial
 import anyio
 from fastapi import APIRouter, BackgroundTasks, status
 
+from taxon_vision.config import get_settings
 from taxon_vision.models.training.runner import run_training_pipeline
 from taxon_vision.service.schemas import TrainingRequest, TrainingResponse
 
@@ -61,30 +62,36 @@ async def trigger_training(
         Structured TrainingResponse detailing training execution status and evaluation metrics.
     """
     req = payload or TrainingRequest()
+    settings = get_settings()
+
+    extractor = req.extractor or settings.model.default_extractor
+    epochs = req.epochs if req.epochs is not None else settings.training.epochs
+    batch_size = req.batch_size if req.batch_size is not None else settings.training.batch_size
+    learning_rate = req.learning_rate if req.learning_rate is not None else settings.training.learning_rate
 
     if req.background:
         background_tasks.add_task(
             run_training_pipeline,
-            extractor=req.extractor,
-            epochs=req.epochs,
-            batch_size=req.batch_size,
-            learning_rate=req.learning_rate,
+            extractor=extractor,
+            epochs=epochs,
+            batch_size=batch_size,
+            learning_rate=learning_rate,
         )
         return TrainingResponse(
             status="started",
-            extractor=req.extractor,
+            extractor=extractor,
             epochs_trained=0,
-            checkpoint_path="models/checkpoints/head.pt",
+            checkpoint_path=settings.model.head_checkpoint_path,
             duration_seconds=0.0,
-            message=f"Training job queued in background for {req.epochs} epochs.",
+            message=f"Training job queued in background for {epochs} epochs.",
         )
 
     train_func = partial(
         run_training_pipeline,
-        extractor=req.extractor,
-        epochs=req.epochs,
-        batch_size=req.batch_size,
-        learning_rate=req.learning_rate,
+        extractor=extractor,
+        epochs=epochs,
+        batch_size=batch_size,
+        learning_rate=learning_rate,
     )
     result = await anyio.to_thread.run_sync(train_func)
 

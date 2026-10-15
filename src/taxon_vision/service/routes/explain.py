@@ -14,6 +14,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
 
+from taxon_vision.config import get_settings
 from taxon_vision.inference.cam import generate_heatmap
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,8 @@ def _run_heatmap_generation(image_bytes: bytes | None) -> tuple[str, list[int]]:
             ) from exc
     else:
         # Default probe image for headless health and smoke tests
-        image = Image.new("RGB", (224, 224), color="green")
+        settings = get_settings()
+        image = Image.new("RGB", (settings.model.image_size, settings.model.image_size), color="green")
 
     heatmap = generate_heatmap(image)
     return "generated", list(heatmap.shape)
@@ -83,6 +85,12 @@ async def explain_prediction(
     content: bytes | None = None
     if file is not None:
         content = await file.read()
+        settings = get_settings()
+        if len(content) > settings.service.max_image_upload_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"Image upload exceeds maximum allowed size of {settings.service.max_image_upload_bytes} bytes.",
+            )
 
     status_str, shape = await anyio.to_thread.run_sync(_run_heatmap_generation, content)
     elapsed_ms = (time.perf_counter() - t0) * 1000.0

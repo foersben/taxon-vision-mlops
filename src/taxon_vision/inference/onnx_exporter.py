@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 def export_to_onnx(
     model: nn.Module,
     output_path: Path,
-    input_shape: tuple[int, ...] = (1, 3, 224, 224),
+    input_shape: tuple[int, ...] | None = None,
 ) -> Path:
     """Export model to ONNX graph with dynamic batch sizing.
 
@@ -37,13 +37,16 @@ def export_to_onnx(
     Args:
         model: PyTorch model module to export.
         output_path: Target filesystem path for serialized ONNX graph.
-        input_shape: Expected input tensor shape tuple.
+        input_shape: Expected input tensor shape tuple. Defaults to (1, settings.model.channels, settings.model.image_size, settings.model.image_size).
 
     Returns:
         Resolved Path to the exported ONNX model.
     """
     model.eval()
     model.cpu()
+    if input_shape is None:
+        cfg = get_settings().model
+        input_shape = (1, cfg.channels, cfg.image_size, cfg.image_size)
     # Dummy tensor is strictly used by torch.onnx to trace the computational graph operations
     dummy_input = torch.randn(*input_shape, device="cpu")
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -317,7 +320,10 @@ def export_classifier_cli(argv: list[str] | None = None) -> int:
 
         feat_dim = get_feature_dimension(backbone)
         taxa = load_taxa_catalog()
-        num_classes = len(taxa) if taxa else 10
+        if not taxa:
+            logger.error("Authoritative taxa catalog loaded from %s is empty", settings.model.taxa_catalog_path)
+            return 1
+        num_classes = len(taxa)
 
         classifier = TaxonClassifier(backbone=backbone, feature_dim=feat_dim, num_classes=num_classes)
 

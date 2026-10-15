@@ -10,6 +10,7 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from taxon_vision.config import get_settings
 from taxon_vision.service.inference import InvalidImageError, ModelNotReadyError, run_prediction
 
 router = APIRouter()
@@ -57,6 +58,12 @@ async def predict_htmx(request: Request, file: Annotated[UploadFile, File(...)])
         Rendered HTML partial fragment containing prediction badges and conformal sets.
     """
     image_bytes = await file.read()
+    settings = get_settings()
+    if len(image_bytes) > settings.service.max_image_upload_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Image upload exceeds maximum allowed size of {settings.service.max_image_upload_bytes} bytes.",
+        )
 
     try:
         result = await anyio.to_thread.run_sync(run_prediction, image_bytes)

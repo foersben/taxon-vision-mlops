@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from taxon_vision.config import get_settings
+
 
 class ConformalPredictionEngine:
     """Constructs finite-sample distribution-free prediction sets with error rate alpha.
@@ -22,17 +24,23 @@ class ConformalPredictionEngine:
         k_max: Maximum acceptable set cardinality before triggering active learning triage.
     """
 
-    def __init__(self, q_hat: float = 0.85, alpha: float = 0.05, k_max: int = 3) -> None:
+    def __init__(
+        self,
+        q_hat: float | None = None,
+        alpha: float | None = None,
+        k_max: int | None = None,
+    ) -> None:
         """Initialize the conformal prediction engine.
 
         Args:
-            q_hat: Pre-calibrated non-conformity quantile cutoff.
-            alpha: Desired nominal error rate (e.g. 0.05 for 95% coverage guarantee).
-            k_max: Maximum acceptable set cardinality before flagging for human referral.
+            q_hat: Pre-calibrated non-conformity quantile cutoff. Defaults to settings.conformal.quantile_threshold.
+            alpha: Desired nominal error rate (e.g. 0.05 for 95% coverage guarantee). Defaults to settings.conformal.alpha.
+            k_max: Maximum acceptable set cardinality before flagging for human referral. Defaults to settings.conformal.k_max.
         """
-        self.q_hat = q_hat
-        self.alpha = alpha
-        self.k_max = k_max
+        settings = get_settings()
+        self.q_hat = q_hat if q_hat is not None else settings.conformal.quantile_threshold
+        self.alpha = alpha if alpha is not None else settings.conformal.alpha
+        self.k_max = k_max if k_max is not None else settings.conformal.k_max
 
     def predict_set(self, probabilities: np.ndarray) -> tuple[list[int], bool]:
         """Construct finite-sample distribution-free prediction sets with bounded error rates.

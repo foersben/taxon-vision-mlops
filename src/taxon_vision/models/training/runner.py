@@ -21,12 +21,14 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 import torch
 from torch import nn, optim
 
+from taxon_vision.config import get_settings
 from taxon_vision.models.factory import create_feature_extractor, get_feature_dimension
 from taxon_vision.models.loss import ClassBalancedLoss
 from taxon_vision.models.training.checkpoint import _save_checkpoint
@@ -116,8 +118,9 @@ def _generate_synthetic_embedding_split(dim: int, num_classes: int) -> Embedding
     Returns:
         Deterministic EmbeddingSplit seeded with PRNG seed 42.
     """
-    logger.info("Initializing deterministic synthetic embedding split (seed=42, %d dim)", dim)
-    torch.manual_seed(42)
+    seed = get_settings().training.random_seed
+    logger.info("Initializing deterministic synthetic embedding split (seed=%d, %d dim)", seed, dim)
+    torch.manual_seed(seed)
     num_train = 120
     num_val = 30
     train_z = torch.randn(num_train, dim)
@@ -223,11 +226,96 @@ def configure_cuda_memory_budget(fraction: float | None = None) -> float | None:
     return target_fraction
 
 
+def _build_training_components(
+    dim: int,
+    num_classes: int,
+    samples: Sequence[int],
+    tune: bool,
+    n_trials: int,
+    epochs: int,
+    batch_size: int,
+    learning_rate: float,
+    seed: int,
+    data: EmbeddingSplit,
+    extractor: str,
+    applied_vram_fraction: float | None,
+) -> tuple[nn.Module, nn.Module, optim.Optimizer, HeadTrainingConfig, dict[str, Any]]:
+    """Construct model head, loss, optimizer, and training parameters.
+
+    Why:
+        Decouples parameter resolution, Bayesian tuning with Optuna, and neural network
+        instantiation from execution lifecycle orchestration in run_training_pipeline.
+
+    Args:
+        dim: Dimensionality of feature vectors.
+        num_classes: Total number of classification categories.
+        samples: Class sample distribution counts.
+        tune: Whether to run Optuna Bayesian hyperparameter search.
+        n_trials: Number of trials for tuning.
+        epochs: Number of training epochs.
+        batch_size: Mini-batch size.
+        learning_rate: Base learning rate.
+        seed: Random seed for deterministic reproducibility.
+        data: Split containing train and validation embeddings.
+        extractor: Name of the feature extractor.
+        applied_vram_fraction: Applied GPU memory fraction or None.
+
+    Returns:
+        Tuple containing head module, loss criterion, optimizer, training config, and params dict.
+    """
+    if tune:
+        logger.info("Executing Optuna hyperparameter optimization across %d trials...", n_trials)
+        tuning_cfg = TuningConfig(
+            n_trials=n_trials,
+            epochs_per_trial=epochs,
+            batch_size=batch_size,
+            seed=seed,
+        )
+        best_params, _ = tune_hyperparameters(data=data, num_classes=num_classes, config=tuning_cfg)
+        dropout_p = float(best_params.get("dropout", 0.2))
+        beta = float(best_params.get("beta", 0.99))
+        lr = float(best_params.get("lr", learning_rate))
+        weight_decay = float(best_params.get("weight_decay", 1e-4))
+        resolved_batch_size = int(best_params.get("batch_size", batch_size))
+        noise_std = float(best_params.get("noise_std", 0.0))
+        head = nn.Sequential(nn.Dropout(p=dropout_p), nn.Linear(dim, num_classes))
+        criterion = ClassBalancedLoss(samples_per_class=samples, beta=beta)
+        optimizer = optim.AdamW(head.parameters(), lr=lr, weight_decay=weight_decay)
+    else:
+        dropout_p = 0.2
+        beta = 0.99
+        lr = learning_rate
+        weight_decay = 0.0
+        resolved_batch_size = batch_size
+        noise_std = 0.0
+        head = nn.Sequential(nn.Dropout(p=0.2), nn.Linear(dim, num_classes))
+        criterion = ClassBalancedLoss(samples_per_class=samples, beta=0.99)
+        optimizer = optim.AdamW(head.parameters(), lr=lr)
+
+    config = HeadTrainingConfig(epochs=epochs, batch_size=resolved_batch_size, noise_std=noise_std)
+    params = {
+        "extractor": extractor,
+        "epochs": epochs,
+        "batch_size": resolved_batch_size,
+        "learning_rate": lr,
+        "weight_decay": weight_decay,
+        "dropout": dropout_p,
+        "beta": beta,
+        "noise_std": noise_std,
+        "num_classes": num_classes,
+        "feature_dim": dim,
+        "loss": "ClassBalancedLoss",
+        "optuna_tuned": tune,
+        "cuda_memory_fraction": applied_vram_fraction if applied_vram_fraction is not None else "cpu",
+    }
+    return head, criterion, optimizer, config, params
+
+
 def run_training_pipeline(
-    extractor: str = "mobilenetv4_conv_small",
-    epochs: int = 15,
-    batch_size: int = 64,
-    learning_rate: float = 0.001,
+    extractor: str | None = None,
+    epochs: int | None = None,
+    batch_size: int | None = None,
+    learning_rate: float | None = None,
     checkpoint_path: Path | str | None = None,
     log_file: Path | str | None = None,
     cuda_memory_fraction: float | None = None,
@@ -267,57 +355,45 @@ def run_training_pipeline(
     Returns:
         Dictionary containing training metrics, checkpoint path, duration, and status.
     """
+    settings = get_settings()
+    resolved_extractor = extractor or settings.model.default_extractor
+    resolved_epochs = epochs if epochs is not None else settings.training.epochs
+    resolved_batch_size = batch_size if batch_size is not None else settings.training.batch_size
+    resolved_lr = learning_rate if learning_rate is not None else settings.training.learning_rate
+    resolved_checkpoint = checkpoint_path or settings.model.head_checkpoint_path
+
     applied_vram_fraction = configure_cuda_memory_budget(cuda_memory_fraction)
     t0 = time.perf_counter()
-    logger.info("Initiating head training for extractor '%s' across %d epochs (tune=%s)", extractor, epochs, tune)
+    logger.info(
+        "Initiating head training for extractor '%s' across %d epochs (tune=%s)",
+        resolved_extractor,
+        resolved_epochs,
+        tune,
+    )
 
     catalog = load_taxa_catalog()
-    num_classes = len(catalog) if catalog else 10
-    dim = _resolve_feature_dim(extractor)
+    if not catalog:
+        raise RuntimeError("Authoritative taxa catalog contains 0 taxa.")
+    num_classes = len(catalog)
+    dim = _resolve_feature_dim(resolved_extractor)
     data = _prepare_embedding_split(dim, num_classes, cache_path=cache_path, allow_synthetic=not require_cache)
     samples = data.samples_per_class or [1] * num_classes
 
-    if tune:
-        logger.info("Executing Optuna hyperparameter optimization across %d trials...", n_trials)
-        tuning_cfg = TuningConfig(
-            n_trials=n_trials,
-            epochs_per_trial=epochs,
-            batch_size=batch_size,
-            seed=42,
-        )
-        best_params, _ = tune_hyperparameters(data=data, num_classes=num_classes, config=tuning_cfg)
-        dropout_p = float(best_params.get("dropout", 0.2))
-        beta = float(best_params.get("beta", 0.99))
-        learning_rate = float(best_params.get("lr", learning_rate))
-        weight_decay = float(best_params.get("weight_decay", 1e-4))
-        batch_size = int(best_params.get("batch_size", batch_size))
-        noise_std = float(best_params.get("noise_std", 0.0))
-        head = nn.Sequential(nn.Dropout(p=dropout_p), nn.Linear(dim, num_classes))
-        criterion = ClassBalancedLoss(samples_per_class=samples, beta=beta)
-        optimizer = optim.AdamW(head.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    else:
-        noise_std = 0.0
-        head = nn.Sequential(nn.Dropout(p=0.2), nn.Linear(dim, num_classes))
-        criterion = ClassBalancedLoss(samples_per_class=samples, beta=0.99)
-        optimizer = optim.AdamW(head.parameters(), lr=learning_rate)
+    head, criterion, optimizer, config, params = _build_training_components(
+        dim=dim,
+        num_classes=num_classes,
+        samples=samples,
+        tune=tune,
+        n_trials=n_trials,
+        epochs=resolved_epochs,
+        batch_size=resolved_batch_size,
+        learning_rate=resolved_lr,
+        seed=settings.training.random_seed,
+        data=data,
+        extractor=resolved_extractor,
+        applied_vram_fraction=applied_vram_fraction,
+    )
 
-    config = HeadTrainingConfig(epochs=epochs, batch_size=batch_size, noise_std=noise_std)
-
-    params = {
-        "extractor": extractor,
-        "epochs": epochs,
-        "batch_size": batch_size,
-        "learning_rate": learning_rate,
-        "weight_decay": weight_decay if tune else 0.0,
-        "dropout": dropout_p if tune else 0.2,
-        "beta": beta if tune else 0.99,
-        "noise_std": noise_std,
-        "num_classes": num_classes,
-        "feature_dim": dim,
-        "loss": "ClassBalancedLoss",
-        "optuna_tuned": tune,
-        "cuda_memory_fraction": applied_vram_fraction if applied_vram_fraction is not None else "cpu",
-    }
     run_name = f"train_{extractor}_{int(time.time())}"
     promotion_status: str | None = None
 
@@ -330,7 +406,7 @@ def run_training_pipeline(
             config=config,
         )
 
-        target_path = _save_checkpoint(head, checkpoint_path)
+        target_path = _save_checkpoint(head, resolved_checkpoint)
         duration = time.perf_counter() - t0
 
         if active_run:
@@ -352,8 +428,8 @@ def run_training_pipeline(
 
     return {
         "status": "completed",
-        "extractor": extractor,
-        "epochs_trained": epochs,
+        "extractor": resolved_extractor,
+        "epochs_trained": resolved_epochs,
         "final_train_loss": round(train_loss, 4),
         "final_val_loss": round(val_loss, 4),
         "final_val_accuracy": round(val_acc, 4),
@@ -454,12 +530,38 @@ def train_cli(argv: list[str] | None = None) -> int:
     Returns:
         Exit code (0 for success, 1 for error).
     """
+    settings = get_settings()
     parser = argparse.ArgumentParser(description="TaxonVision Model Head Training CLI")
-    parser.add_argument("--extractor", type=str, default="dinov3", help="Backbone feature extractor")
-    parser.add_argument("--epochs", type=int, default=15, help="Number of training epochs")
-    parser.add_argument("--batch-size", type=int, default=64, help="Mini-batch size")
-    parser.add_argument("--lr", type=float, default=0.001, help="Learning rate")
-    parser.add_argument("--checkpoint-path", type=str, default=None, help="Output checkpoint file path")
+    parser.add_argument(
+        "--extractor",
+        type=str,
+        default=settings.model.default_extractor,
+        help=f"Backbone feature extractor (default: {settings.model.default_extractor})",
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=settings.training.epochs,
+        help=f"Number of training epochs (default: {settings.training.epochs})",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=settings.training.batch_size,
+        help=f"Mini-batch size (default: {settings.training.batch_size})",
+    )
+    parser.add_argument(
+        "--lr",
+        type=float,
+        default=settings.training.learning_rate,
+        help=f"Learning rate (default: {settings.training.learning_rate})",
+    )
+    parser.add_argument(
+        "--checkpoint-path",
+        type=str,
+        default=None,
+        help=f"Output checkpoint file path (defaults to {settings.model.head_checkpoint_path})",
+    )
     parser.add_argument("--api-url", type=str, default=None, help="Optional running API server URL to trigger remotely")
     parser.add_argument("--log-file", type=str, default=None, help="Optional log file destination")
     parser.add_argument(

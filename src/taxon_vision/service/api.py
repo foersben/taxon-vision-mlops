@@ -19,12 +19,15 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from taxon_vision.config import get_settings
 from taxon_vision.service.routes import explain, health, predict, train, views
 
+settings = get_settings()
+
 app = FastAPI(
-    title="TaxonVision Species Identification Service",
+    title=settings.service.name,
     description="Automated MLOps pipeline for species classification with conformal uncertainty guarantees.",
-    version="0.1.0",
+    version=settings.service.version,
 )
 
 static_dir = Path(__file__).parent / "static"

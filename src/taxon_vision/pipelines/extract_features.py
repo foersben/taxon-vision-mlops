@@ -15,6 +15,7 @@ import torch
 from sklearn.model_selection import train_test_split
 from torchvision import transforms
 
+from taxon_vision.config import get_settings
 from taxon_vision.data.s3_streamer import S3ImageStreamer
 from taxon_vision.models.factory import create_feature_extractor, extract_features
 from taxon_vision.models.training.types import EmbeddingSplit
@@ -83,19 +84,41 @@ class FeatureExtractionConfig:
         random_seed: PRNG seed for deterministic stratified train/validation partitioning.
     """
 
-    extractor: str = "mobilenetv4_conv_small"
+    extractor: str = ""
     manifest_path: Path = Path("data/manifests/dataset_manifest.parquet")
     output_path: Path = Path("data/embeddings/cached_features.pt")
-    batch_size: int = 32
-    val_split: float = 0.2
+    batch_size: int = 0
+    val_split: float = 0.0
     device: str | None = None
     limit: int | None = None
-    image_size: int = 224
-    resize_size: int = 256
-    random_seed: int = 42
+    image_size: int = 0
+    resize_size: int = 0
+    random_seed: int = 0
+
+    def __post_init__(self) -> None:
+        """Resolve unspecified hyperparameters dynamically from centralized settings."""
+        settings = get_settings()
+        if not self.extractor:
+            object.__setattr__(self, "extractor", settings.model.default_extractor)
+        if self.batch_size <= 0:
+            object.__setattr__(self, "batch_size", settings.training.batch_size)
+        if self.val_split <= 0.0:
+            object.__setattr__(self, "val_split", settings.training.val_split)
+        if self.image_size <= 0:
+            object.__setattr__(self, "image_size", settings.model.image_size)
+        if self.resize_size <= 0:
+            resolved_size = self.image_size if self.image_size > 0 else settings.model.image_size
+            object.__setattr__(self, "resize_size", round(resolved_size * settings.model.eval_resize_ratio))
+        if self.random_seed == 0:
+            object.__setattr__(self, "random_seed", settings.training.random_seed)
 
 
-def get_evaluation_transform(image_size: int = 224, resize_size: int = 256) -> transforms.Compose:
+def get_evaluation_transform(
+    image_size: int | None = None,
+    resize_size: int | None = None,
+    mean: list[float] | None = None,
+    std: list[float] | None = None,
+) -> transforms.Compose:
     """Construct deterministic image preprocessing transform for vision foundation model evaluation.
 
     Why:
@@ -110,23 +133,32 @@ def get_evaluation_transform(image_size: int = 224, resize_size: int = 256) -> t
         1. Bilinear aspect-ratio preserving resizing of the shorter edge to `resize_size`.
         2. Exact square center cropping to `(image_size, image_size)`.
         3. Conversion from uint8 PIL RGB image buffer to float32 tensor scaled to $[0.0, 1.0]$.
-        4. Standard ImageNet channel-wise mean and variance normalization.
+        4. Channel-wise mean and variance normalization from model configuration.
 
     Args:
-        image_size: Spatial height and width of the output tensor passed to the neural network.
-        resize_size: Interpolation target dimension for the shorter edge before center cropping.
+        image_size: Spatial height and width of the output tensor (defaults to settings.model.image_size).
+        resize_size: Interpolation target dimension for the shorter edge (defaults to round(image_size * eval_resize_ratio)).
+        mean: Normalization channel means (defaults to settings.model.mean).
+        std: Normalization channel standard deviations (defaults to settings.model.std).
 
     Returns:
         Callable torchvision Compose transformation pipeline.
     """
+    cfg = get_settings().model
+    resolved_image_size = image_size if image_size is not None else cfg.image_size
+    resolved_resize_size = (
+        resize_size if resize_size is not None else round(resolved_image_size * cfg.eval_resize_ratio)
+    )
+    resolved_mean = mean if mean is not None else cfg.mean
+    resolved_std = std if std is not None else cfg.std
     return transforms.Compose(
         [
-            transforms.Resize(resize_size, interpolation=transforms.InterpolationMode.BILINEAR),
-            transforms.CenterCrop(image_size),
+            transforms.Resize(resolved_resize_size, interpolation=transforms.InterpolationMode.BILINEAR),
+            transforms.CenterCrop(resolved_image_size),
             transforms.ToTensor(),
             transforms.Normalize(
-                mean=[0.485, 0.456, 0.406],
-                std=[0.229, 0.224, 0.225],
+                mean=resolved_mean,
+                std=resolved_std,
             ),
         ]
     )
@@ -401,7 +433,9 @@ def run_feature_extraction(config: FeatureExtractionConfig) -> Path:
 
     streamer = S3ImageStreamer(manifest_path=config.manifest_path)
     catalog = load_taxa_catalog()
-    num_classes = len(catalog) if catalog else 10
+    if not catalog:
+        raise RuntimeError("Authoritative taxa catalog contains 0 taxa.")
+    num_classes = len(catalog)
     taxon_to_index = build_taxon_index_map(catalog)
 
     logger.info(
@@ -474,14 +508,15 @@ def extract_features_cli(argv: list[str] | None = None) -> int:
     Returns:
         Integer exit code (0 for success, non-zero for fatal execution failure).
     """
+    settings = get_settings()
     parser = argparse.ArgumentParser(
         description="Stream biological images from S3 open data and cache dense backbone feature representations."
     )
     parser.add_argument(
         "--extractor",
         type=str,
-        default="mobilenetv4_conv_small",
-        help="Vision foundation backbone name (default: mobilenetv4_conv_small)",
+        default=settings.model.default_extractor,
+        help=f"Vision foundation backbone name (default: {settings.model.default_extractor})",
     )
     parser.add_argument(
         "--manifest",
@@ -498,14 +533,14 @@ def extract_features_cli(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=32,
-        help="Mini-batch size for forward passes (default: 32)",
+        default=settings.training.batch_size,
+        help=f"Mini-batch size for forward passes (default: {settings.training.batch_size})",
     )
     parser.add_argument(
         "--val-split",
         type=float,
-        default=0.2,
-        help="Validation split ratio (default: 0.2)",
+        default=settings.training.val_split,
+        help=f"Validation split ratio (default: {settings.training.val_split})",
     )
     parser.add_argument(
         "--limit",

@@ -12,10 +12,11 @@ import asyncio
 from pathlib import Path
 
 import polars as pl
-import yaml
 
+from taxon_vision.config import get_settings
 from taxon_vision.data.inat_client import INatAPIClient
 from taxon_vision.data.license_filter import LicenseFilter
+from taxon_vision.service.inference import load_taxa_catalog
 
 MANIFEST_DIR = Path("data/manifests")
 
@@ -60,11 +61,12 @@ async def main() -> None:
 
     This function will fetch metadata for the specified taxa and save it to a Parquet file.
     """
-    with open("config/params.yaml", encoding="utf-8") as f:
-        params = yaml.safe_load(f)["ingestion"]
-
-    taxa_to_fetch = params["taxa_to_fetch"]
-    per_page = params["per_page"]
+    settings = get_settings()
+    taxa_to_fetch = settings.ingestion.taxa_to_fetch
+    if not taxa_to_fetch:
+        catalog = load_taxa_catalog()
+        taxa_to_fetch = [int(t["inat_taxon_id"]) for t in catalog if "inat_taxon_id" in t]
+    per_page = settings.ingestion.per_page
 
     inat = INatAPIClient()
     all_records = []

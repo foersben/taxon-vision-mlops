@@ -65,7 +65,7 @@ def load_taxa_catalog() -> list[dict[str, Any]]:
     Returns:
         List of taxa metadata dictionaries with scientific and common names.
     """
-    catalog_path = Path(__file__).resolve().parent.parent.parent.parent / "config" / "taxa_catalog.yaml"
+    catalog_path = _resolve_artifact(get_settings().model.taxa_catalog_path)
     with open(catalog_path, encoding="utf-8") as f:
         data = yaml.safe_load(f)
     return data.get("taxa", [])
@@ -221,7 +221,10 @@ def get_ood_detector() -> EnergyOODDetector:
         The cached EnergyOODDetector singleton.
     """
     settings = get_settings()
-    return EnergyOODDetector(energy_threshold=settings.ood.energy_threshold)
+    return EnergyOODDetector(
+        energy_threshold=settings.ood.energy_threshold,
+        temperature=settings.model.temperature,
+    )
 
 
 @lru_cache(maxsize=1)
@@ -240,7 +243,7 @@ def get_image_transform() -> T.Compose:
     cfg = get_settings().model
     return T.Compose(
         [
-            T.Resize(round(cfg.image_size * EVAL_RESIZE_RATIO), interpolation=T.InterpolationMode.BILINEAR),
+            T.Resize(round(cfg.image_size * cfg.eval_resize_ratio), interpolation=T.InterpolationMode.BILINEAR),
             T.CenterCrop(cfg.image_size),
             T.ToTensor(),
             T.Normalize(mean=cfg.mean, std=cfg.std),
@@ -328,7 +331,9 @@ def run_prediction(image_bytes: bytes) -> dict[str, Any]:
     tensor = _get_image_tensor(image_bytes)
 
     logits_np = compute_logits(tensor)
-    shifted = np.exp(logits_np - np.max(logits_np))
+    temp = get_settings().model.temperature
+    scaled_logits = logits_np / temp
+    shifted = np.exp(scaled_logits - np.max(scaled_logits))
     probabilities = shifted / shifted.sum()
 
     # Extract top prediction

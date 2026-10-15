@@ -20,14 +20,15 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-import yaml
+
+from taxon_vision.config import get_settings
+from taxon_vision.service.inference import load_taxa_catalog
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-SAMPLE_DIR = Path("data/sample")
+SAMPLE_DIR = Path(get_settings().model.calibration_dir)
 METADATA_FILE = SAMPLE_DIR / "metadata.json"
-TAXA_CATALOG_FILE = Path("config/taxa_catalog.yaml")
 
 
 def _slugify(name: str) -> str:
@@ -37,12 +38,11 @@ def _slugify(name: str) -> str:
 
 def _load_catalog() -> list[dict[str, Any]]:
     """Load taxa definitions from the authoritative catalog."""
-    if not TAXA_CATALOG_FILE.exists():
-        logger.error("Taxa catalog not found at %s", TAXA_CATALOG_FILE)
+    taxa = load_taxa_catalog()
+    if not taxa:
+        logger.error("Taxa catalog loaded from settings contains 0 taxa")
         sys.exit(1)
-    with TAXA_CATALOG_FILE.open("r", encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    return data.get("taxa", [])
+    return taxa
 
 
 def _get_catalog_inat_ids() -> dict[str, int]:

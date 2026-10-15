@@ -144,7 +144,7 @@ def test_stream_and_extract_representations() -> None:
     taxon_to_index = {1: 0}
 
     embs, labels = stream_and_extract_representations(
-        streamer=DummyStreamer(),  # type: ignore[arg-type]
+        streamer=DummyStreamer(),
         backbone=backbone,
         taxon_to_index=taxon_to_index,
         transform=dummy_transform,
@@ -173,7 +173,7 @@ def test_stream_and_extract_representations_empty_raises() -> None:
 
     with pytest.raises(ValueError, match="Feature extraction yielded zero samples"):
         stream_and_extract_representations(
-            streamer=EmptyStreamer(),  # type: ignore[arg-type]
+            streamer=EmptyStreamer(),
             backbone=DummyBackbone(),
             taxon_to_index={1: 0},
             transform=dummy_transform,
@@ -209,10 +209,11 @@ def test_run_feature_extraction_pipeline_and_cli(monkeypatch: pytest.MonkeyPatch
                 yield f"uuid-{i}", tid, Image.new("RGB", (32, 32))
 
     monkeypatch.setattr("taxon_vision.pipelines.extract_features.S3ImageStreamer", MockStreamer)
-    monkeypatch.setattr(
-        "taxon_vision.pipelines.extract_features.create_feature_extractor",
-        lambda *_args, **_kwargs: DummyBackbone(),
-    )
+
+    def _mock_create_extractor(*_args: Any, **_kwargs: Any) -> DummyBackbone:
+        return DummyBackbone()
+
+    monkeypatch.setattr("taxon_vision.pipelines.extract_features.create_feature_extractor", _mock_create_extractor)
     monkeypatch.setattr(
         "taxon_vision.pipelines.extract_features.load_taxa_catalog",
         lambda: [{"id": 1, "scientific_name": "Taxon A"}, {"id": 2, "scientific_name": "Taxon B"}],

@@ -106,6 +106,13 @@ async def predict_species(file: Annotated[UploadFile, File(...)]) -> PredictionR
     """
     t0 = time.perf_counter()
     content = await file.read()
+    settings = get_settings()
+    if len(content) > settings.service.max_image_upload_bytes:
+        PREDICTION_COUNTER.labels(status="invalid_input").inc()
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Image upload exceeds maximum allowed size of {settings.service.max_image_upload_bytes} bytes.",
+        )
     try:
         pred = await anyio.to_thread.run_sync(run_prediction, content)
         latency = (time.perf_counter() - t0) * 1000.0

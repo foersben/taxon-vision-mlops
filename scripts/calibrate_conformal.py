@@ -16,6 +16,8 @@ from pathlib import Path
 
 import numpy as np
 
+from taxon_vision.config import get_settings
+
 
 def compute_conformal_quantile(scores: np.ndarray, alpha: float) -> float:
     """Compute distribution-free split conformal prediction quantile.
@@ -36,13 +38,19 @@ def compute_conformal_quantile(scores: np.ndarray, alpha: float) -> float:
 
 def main() -> None:
     """Main function to calibrate conformal quantile."""
+    settings = get_settings()
     parser = argparse.ArgumentParser(description="Calibrate conformal quantile.")
-    parser.add_argument("--alpha", type=float, default=0.05, help="Significance level (default: 0.05)")
+    parser.add_argument(
+        "--alpha",
+        type=float,
+        default=settings.conformal.alpha,
+        help=f"Significance level (default: {settings.conformal.alpha})",
+    )
     parser.add_argument("--out", type=Path, default=Path("config/conformal_calibration.json"))
     args = parser.parse_args()
 
     # Generate or load calibration non-conformity scores: s_i = 1 - p(y_true)
-    np.random.seed(42)
+    np.random.seed(settings.training.random_seed)
     sample_size = 1000
     mock_true_class_probs = np.random.beta(a=8.0, b=1.0, size=sample_size)
     nonconformity_scores = 1.0 - mock_true_class_probs
