@@ -27,12 +27,10 @@ def compute_conformal_quantile(scores: np.ndarray, alpha: float) -> float:
     """Compute distribution-free split conformal prediction quantile.
 
     Why:
-        Split conformal prediction provides mathematical finite-sample coverage guarantees
-        (1 - alpha) by calibrating on non-conformity scores calculated on holdout data.
+        Split conformal prediction provides mathematical finite-sample coverage guarantees (1 - alpha) by calibrating on non-conformity scores calculated on holdout data.
 
     How:
-        Evaluates the empirical quantile at ceil((n + 1) * (1 - alpha)) / n using the
-        higher order statistic.
+        Evaluates the empirical quantile at ceil((n + 1) * (1 - alpha)) / n using the higher order statistic.
 
     Complexity:
         O(n log n) sorting overhead or O(n) order statistic selection.
@@ -55,13 +53,10 @@ def main() -> None:
     """Calibrate conformal quantile from empirical validation scores or permitted synthetic fallback.
 
     Why:
-        Maintains epistemic guarantees by calibrating non-conformity thresholds from empirical
-        evaluation scores, strictly failing fast when real validation artefacts are missing unless
-        synthetic testing is explicitly authorised.
+        Maintains epistemic guarantees by calibrating non-conformity thresholds from empirical evaluation scores, strictly failing fast when real validation artefacts are missing unless synthetic testing is explicitly authorised.
 
     How:
-        Parses CLI flags, attempts to load real validation scores from disk, conditionally generates
-        synthetic scores only if permitted, computes the conformal quantile, and persists metadata.
+        Parses CLI flags, attempts to load real validation scores from disk, conditionally generates synthetic scores only if permitted, computes the conformal quantile, and persists metadata.
 
     Complexity:
         O(N log N) quantile calibration plus O(1) filesystem persistence.

@@ -60,12 +60,10 @@ def get_canonical_pareto_profiles() -> list[ParetoResult]:
     """Produce candidate backbone architectural and performance profiles.
 
     Why:
-        Provides reference performance baselines derived from canonical literature
-        and empirical evaluations across candidate backbones.
+        Provides reference performance baselines derived from canonical literature and empirical evaluations across candidate backbones.
 
     How:
-        Returns curated ParetoResult dataclasses for BioCLIP-2, DINOv3, DINOv2,
-        MobileNetV4, and EfficientNet-B0.
+        Returns curated ParetoResult dataclasses for BioCLIP-2, DINOv3, DINOv2, MobileNetV4, and EfficientNet-B0.
 
     Complexity:
         O(1) static profile retrieval.
@@ -146,13 +144,10 @@ def main() -> None:
     """Evaluate candidate backbone Pareto frontier.
 
     Why:
-        Outputs trade-off matrices between classification accuracy, p95 latency,
-        and cloud deployment serving costs to guide production architecture selection.
+        Outputs trade-off matrices between classification accuracy, p95 latency, and cloud deployment serving costs to guide production architecture selection.
 
     How:
-        Parses CLI options, verifies data source prerequisites when empirical evaluation
-        is requested, loads candidate performance profiles, displays comparative tabular
-        summaries, and exports structured JSON records.
+        Parses CLI options, verifies data source prerequisites when empirical evaluation is requested, loads candidate performance profiles, displays comparative tabular summaries, and exports structured JSON records.
 
     Complexity:
         O(B) where B is the number of candidate backbone extractors.

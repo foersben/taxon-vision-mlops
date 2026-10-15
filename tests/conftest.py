@@ -17,12 +17,10 @@ def test_environment_isolation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     """Isolate test execution with offline fallbacks and temporary flagged storage directory.
 
     Why:
-        Guarantees that test executions remain 100% offline and deterministic without relying on
-        pre-trained network weights or polluting production data directories with test artifacts.
+        Guarantees that test executions remain 100% offline and deterministic without relying on pre-trained network weights or polluting production data directories with test artifacts.
 
     How:
-        Sets environment variables TAXON_ALLOW_UNTRAINED_FALLBACK and TAXON_FLAGGED_STORAGE_DIR,
-        clearing configuration and model caches before and after test execution.
+        Sets environment variables TAXON_ALLOW_UNTRAINED_FALLBACK and TAXON_FLAGGED_STORAGE_DIR, clearing configuration and model caches before and after test execution.
 
     Args:
         tmp_path: Pytest temporary directory fixture.

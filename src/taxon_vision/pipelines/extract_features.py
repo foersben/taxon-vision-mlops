@@ -28,13 +28,10 @@ def get_catalog_inat_taxon_map(catalog: list[dict[str, Any]] | None = None) -> d
     r"""Dynamically construct authoritative taxon ID to dense class index mapping from the catalog.
 
     Why:
-        Hardcoding taxon IDs and integer maps inside pipeline scripts is an antipattern that causes
-        configuration drift. Deriving mappings directly from `config/taxa_catalog.yaml` guarantees
-        a Single Source of Truth (SSOT).
+        Hardcoding taxon IDs and integer maps inside pipeline scripts is an antipattern that causes configuration drift. Deriving mappings directly from `config/taxa_catalog.yaml` guarantees a Single Source of Truth (SSOT).
 
     How:
-        Iterates over catalog entries, extracting primary `inat_taxon_id`, `id`, and any defined
-        `inat_aliases`, mapping each to the dense ordinal class index in $[0, K-1]$.
+        Iterates over catalog entries, extracting primary `inat_taxon_id`, `id`, and any defined `inat_aliases`, mapping each to the dense ordinal class index in $[0, K-1]$.
 
     Args:
         catalog: Optional list of catalog dictionaries. If None, loads from `config/taxa_catalog.yaml`.
@@ -67,9 +64,7 @@ class FeatureExtractionConfig:
     """Immutable configuration container governing feature extraction and representation caching.
 
     Why:
-        Decouples pipeline execution parameters from command-line parsing or ad-hoc function arguments.
-        Providing a strongly-typed, frozen dataclass guarantees parameter immutability throughout the
-        long-running extraction process, preventing accidental runtime mutation of paths or hyperparameters.
+        Decouples pipeline execution parameters from command-line parsing or ad-hoc function arguments. Providing a strongly-typed, frozen dataclass guarantees parameter immutability throughout the long-running extraction process, preventing accidental runtime mutation of paths or hyperparameters.
 
     Attributes:
         extractor: Name of the vision foundation backbone (e.g. `mobilenetv4_conv_small`, `dinov3_vits14`).
@@ -122,11 +117,7 @@ def get_evaluation_transform(
     """Construct deterministic image preprocessing transform for vision foundation model evaluation.
 
     Why:
-        Linear probing on pre-trained vision representations requires rigorous adherence to the upstream
-        evaluation preprocessing protocol. Stochastic data augmentations (e.g., random affine transformations,
-        color jittering, or horizontal flips) are omitted during representation caching because foundation
-        backbone features must represent the canonical visual signal. Pre-normalizing images against standard
-        ImageNet channel statistics ensures that downstream linear heads receive correctly calibrated vectors.
+        Linear probing on pre-trained vision representations requires rigorous adherence to the upstream evaluation preprocessing protocol. Stochastic data augmentations (e.g., random affine transformations, color jittering, or horizontal flips) are omitted during representation caching because foundation backbone features must represent the canonical visual signal. Pre-normalizing images against standard ImageNet channel statistics ensures that downstream linear heads receive correctly calibrated vectors.
 
     How:
         Composes a sequential torchvision transformation pipeline comprising:
@@ -204,11 +195,7 @@ def build_taxon_index_map(
     r"""Construct an authoritative mapping from external iNaturalist taxon IDs to dense zero-indexed labels.
 
     Why:
-        Biological taxonomies in citizen-science repositories use arbitrary, non-contiguous integer IDs
-        (e.g., Monarch Butterfly is `48662`, Western Honey Bee is `47120`). Deep learning classification
-        heads and loss functions (such as PyTorch `CrossEntropyLoss` or `ClassBalancedLoss`) mathematically
-        require target labels to be dense integers bounded by $0 \le y < K$, where $K$ is the class count.
-        Creating a deterministic mapping guarantees alignment between observation metadata and head logits.
+        Biological taxonomies in citizen-science repositories use arbitrary, non-contiguous integer IDs (e.g., Monarch Butterfly is `48662`, Western Honey Bee is `47120`). Deep learning classification heads and loss functions (such as PyTorch `CrossEntropyLoss` or `ClassBalancedLoss`) mathematically require target labels to be dense integers bounded by $0 \le y < K$, where $K$ is the class count. Creating a deterministic mapping guarantees alignment between observation metadata and head logits.
 
     How:
         Initializes baseline mappings from `DEFAULT_INAT_TAXON_MAP` when `include_defaults` is True.
@@ -238,14 +225,10 @@ def extract_batch_representations(
     """Execute a zero-gradient forward pass over an image batch to extract pooled representation vectors.
 
     Why:
-        Encapsulates tensor batch collation and device dispatch into an isolated, unit-testable function.
-        Enforces `torch.no_grad()` to prevent activation graph construction, drastically bounding VRAM
-        consumption during high-throughput feature caching.
+        Encapsulates tensor batch collation and device dispatch into an isolated, unit-testable function. Enforces `torch.no_grad()` to prevent activation graph construction, drastically bounding VRAM consumption during high-throughput feature caching.
 
     How:
-        Stacks individual 3D image tensors `(3, H, W)` into a contiguous 4D batch tensor `(B, 3, H, W)`,
-        transfers the tensor to the designated accelerator device, invokes `extract_features`, and returns
-        the detached representation matrix `(B, D)` residing in host CPU memory.
+        Stacks individual 3D image tensors `(3, H, W)` into a contiguous 4D batch tensor `(B, 3, H, W)`, transfers the tensor to the designated accelerator device, invokes `extract_features`, and returns the detached representation matrix `(B, D)` residing in host CPU memory.
 
     Args:
         backbone: Frozen vision foundation model in evaluation mode (`eval()`).
@@ -276,15 +259,10 @@ def stream_and_extract_representations(
     r"""Lazily stream remote imagery, apply transformations, and extract representations in mini-batches.
 
     Why:
-        Streaming biodiversity imagery lazily from open cloud object stores (e.g., AWS Open Data iNaturalist S3)
-        avoids pre-allocating hundreds of gigabytes of disk storage on edge workstations. Grouping streamed
-        images into mini-batches maximizes GPU Tensor Core saturation compared to single-image inference.
+        Streaming biodiversity imagery lazily from open cloud object stores (e.g., AWS Open Data iNaturalist S3) avoids pre-allocating hundreds of gigabytes of disk storage on edge workstations. Grouping streamed images into mini-batches maximizes GPU Tensor Core saturation compared to single-image inference.
 
     How:
-        Iterates over the `streamer.stream_images` lazy generator. Validates each observation's taxon identifier
-        against `taxon_to_index`. Preprocesses valid images into tensors, accumulates mini-batches of size
-        `batch_size`, and dispatches them to `extract_batch_representations`. Concatenates all batch tensors
-        into unified feature matrix $X \in \mathbb{R}^{N \times D}$ and label vector $y \in \mathbb{Z}^N$.
+        Iterates over the `streamer.stream_images` lazy generator. Validates each observation's taxon identifier against `taxon_to_index`. Preprocesses valid images into tensors, accumulates mini-batches of size `batch_size`, and dispatches them to `extract_batch_representations`. Concatenates all batch tensors into unified feature matrix $X \in \mathbb{R}^{N \times D}$ and label vector $y \in \mathbb{Z}^N$.
 
     Args:
         streamer: Instantiated S3ImageStreamer pointing to a valid Parquet dataset manifest.
@@ -356,14 +334,10 @@ def create_stratified_embedding_split(
     """Partition extracted representations into stratified training and validation splits.
 
     Why:
-        In severe long-tail biological distributions, unstratified random partitioning risks allocating
-        zero validation instances for rare or endangered species, rendering validation PR-AUC metrics
-        statistically undefined. Stratified splitting preserves class proportions across both subsets.
+        In severe long-tail biological distributions, unstratified random partitioning risks allocating zero validation instances for rare or endangered species, rendering validation PR-AUC metrics statistically undefined. Stratified splitting preserves class proportions across both subsets.
 
     How:
-        Converts labels to NumPy format, executes scikit-learn `train_test_split` with `stratify=labels`,
-        extracts corresponding tensor rows, calculates empirical per-class frequency vectors for
-        effective sample weighting in Class-Balanced Loss, and validates the `EmbeddingSplit` invariant.
+        Converts labels to NumPy format, executes scikit-learn `train_test_split` with `stratify=labels`, extracts corresponding tensor rows, calculates empirical per-class frequency vectors for effective sample weighting in Class-Balanced Loss, and validates the `EmbeddingSplit` invariant.
 
     Args:
         embeddings: Full 2D tensor of representation vectors of shape `(N, D)`.
@@ -403,9 +377,7 @@ def run_feature_extraction(config: FeatureExtractionConfig) -> Path:
     """Execute the end-to-end representation extraction, caching, and serialization workflow.
 
     Why:
-        Provides the primary pipeline entry point for offline feature caching. Automates device
-        selection, manifest parsing, vision backbone factory instantiation, lazy batch extraction,
-        stratified dataset partitioning, and atomic filesystem serialization into a single callable API.
+        Provides the primary pipeline entry point for offline feature caching. Automates device selection, manifest parsing, vision backbone factory instantiation, lazy batch extraction, stratified dataset partitioning, and atomic filesystem serialization into a single callable API.
 
     How:
         1. Resolves execution device (`cuda` if available and not overridden).
@@ -495,12 +467,10 @@ def extract_features_cli(argv: list[str] | None = None) -> int:
     """Command-line interface entry point for representation extraction.
 
     Why:
-        Enables seamless invocation from shell scripts, Makefile automation, Justfile recipes,
-        and automated CI/CD runners without coupling to Python import hierarchies.
+        Enables seamless invocation from shell scripts, Makefile automation, Justfile recipes, and automated CI/CD runners without coupling to Python import hierarchies.
 
     How:
-        Parses CLI flags using `argparse`, constructs a `FeatureExtractionConfig` instance,
-        configures standard output logging, and triggers `run_feature_extraction`.
+        Parses CLI flags using `argparse`, constructs a `FeatureExtractionConfig` instance, configures standard output logging, and triggers `run_feature_extraction`.
 
     Args:
         argv: Optional list of command-line arguments (defaults to `sys.argv[1:]`).

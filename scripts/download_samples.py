@@ -32,12 +32,23 @@ METADATA_FILE = SAMPLE_DIR / "metadata.json"
 
 
 def _slugify(name: str) -> str:
-    """Generate a filename-safe slug from a biological name."""
+    """Generate a filename-safe slug from a biological name.
+
+    Args:
+        name: Biological name.
+
+    Returns:
+        Filename-safe slug.
+    """
     return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
 
 
 def _load_catalog() -> list[dict[str, Any]]:
-    """Load taxa definitions from the authoritative catalog."""
+    """Load taxa definitions from the authoritative catalog.
+
+    Returns:
+        List of taxa definitions.
+    """
     taxa = load_taxa_catalog()
     if not taxa:
         logger.error("Taxa catalog loaded from settings contains 0 taxa")
@@ -46,7 +57,11 @@ def _load_catalog() -> list[dict[str, Any]]:
 
 
 def _get_catalog_inat_ids() -> dict[str, int]:
-    """Dynamically derive scientific_name to inat_taxon_id mapping from config/taxa_catalog.yaml."""
+    """Dynamically derive scientific_name to inat_taxon_id mapping from config/taxa_catalog.yaml.
+
+    Returns:
+        Mapping from scientific_name to inat_taxon_id.
+    """
     taxa = _load_catalog()
     return {str(t["scientific_name"]): int(t["inat_taxon_id"]) for t in taxa if "inat_taxon_id" in t}
 
@@ -60,7 +75,16 @@ def _fetch_observations_for_taxon(
     inat_id: int,
     limit: int,
 ) -> list[dict[str, Any]]:
-    """Query iNaturalist API for research-grade, open-license observations."""
+    """Query iNaturalist API for research-grade, open-license observations.
+
+    Args:
+        client: HTTP client.
+        inat_id: iNaturalist taxon ID.
+        limit: Maximum number of observations to fetch.
+
+    Returns:
+        List of observations.
+    """
     url = "https://api.inaturalist.org/v1/observations"
     params: dict[str, str | int] = {
         "taxon_id": inat_id,
@@ -81,7 +105,16 @@ def _download_and_save_photo(
     photo_url: str,
     target_path: Path,
 ) -> bool:
-    """Download binary image content and save to destination path."""
+    """Download binary image content and save to destination path.
+
+    Args:
+        client: HTTP client.
+        photo_url: URL of the photo to download.
+        target_path: Destination path to save the photo.
+
+    Returns:
+        True if the photo was downloaded successfully, False otherwise.
+    """
     try:
         resp = client.get(photo_url, timeout=20.0)
         resp.raise_for_status()
@@ -97,7 +130,16 @@ def _process_taxon_sample(
     taxon: dict[str, Any],
     per_taxon: int,
 ) -> list[dict[str, Any]]:
-    """Fetch and download sample images for a single catalog taxon."""
+    """Fetch and download sample images for a single catalog taxon.
+
+    Args:
+        client: HTTP client.
+        taxon: Taxon definition.
+        per_taxon: Number of sample images to fetch.
+
+    Returns:
+        List of collected metadata records.
+    """
     sci_name = taxon["scientific_name"]
     common_name = taxon.get("common_name", sci_name)
     inat_id = INAT_TAXON_IDS.get(sci_name)
