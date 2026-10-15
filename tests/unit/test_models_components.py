@@ -165,6 +165,7 @@ def test_tune_hyperparameters_optuna(tmp_path: Path) -> None:
         batch_size=8,
         tracking_uri=local_mlflow_uri,
         experiment_name="test-tuning",
+        storage_url=None,
     )
 
     best_params, study = tune_hyperparameters(
