@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from taxon_vision.config import Settings, get_settings
 
 
@@ -30,6 +32,14 @@ def test_default_settings_loading() -> None:
     assert settings.training.batch_size == 32
     assert len(settings.ingestion.taxa_to_fetch) == 10
     assert settings.ingestion.per_page == 200
+    assert settings.streaming.http_max_retries == 5
+    assert settings.streaming.http_backoff_factor == 0.5
+    assert settings.streaming.http_max_connections == 16
+    assert settings.streaming.http_keepalive_connections == 8
+    assert settings.streaming.http_timeout_seconds == 15.0
+    assert settings.streaming.min_extraction_success_ratio == 0.95
+    assert settings.optuna.optuna_storage_uri == "sqlite:///data/optuna/optuna_studies.db"
+    assert settings.optuna.optuna_study_prefix == "taxon_vision"
 
 
 def test_custom_settings_override(tmp_path: Path) -> None:
@@ -48,3 +58,23 @@ mlflow:
     assert custom_settings.model.image_size == 336
     assert custom_settings.model.default_extractor == "bioclip-2"
     assert custom_settings.mlflow.experiment_name == "custom-experiment"
+
+
+def test_optuna_storage_uri_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify TAXON_OPTUNA_STORAGE_URI overrides the default optuna storage URI.
+
+    Why:
+        Validates unnested environment variable injection for headless Optuna orchestrations.
+
+    How:
+        Sets TAXON_OPTUNA_STORAGE_URI via monkeypatch, clears the settings cache, and asserts the overridden URI is loaded.
+
+    Args:
+        monkeypatch (pytest.MonkeyPatch): Pytest environment isolation fixture.
+    """
+    test_uri = "sqlite:///data/optuna/test_override.db"
+    monkeypatch.setenv("TAXON_OPTUNA_STORAGE_URI", test_uri)
+    get_settings.cache_clear()
+    settings = get_settings()
+    assert settings.optuna.optuna_storage_uri == test_uri
+    get_settings.cache_clear()

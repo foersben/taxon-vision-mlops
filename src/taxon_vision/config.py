@@ -183,6 +183,50 @@ class OODConfig(BaseModel):
     entropy_threshold: float
 
 
+class StreamingConfig(BaseModel):
+    """Configuration schema for streaming observation data ingestion and HTTP pooling.
+
+    Why:
+        Controls connection reuse, concurrency bounds, and retry backoff for network streaming pipelines.
+
+    How:
+        Parsed from declarative YAML and mapped to typed Pydantic fields, enforcing valid retry and timeout limits.
+
+    Attributes:
+        http_max_retries (int): Maximum retry attempts for transient network request failures.
+        http_backoff_factor (float): Multiplicative delay factor for exponential retry backoff.
+        http_max_connections (int): Maximum total HTTP socket connections in the connection pool.
+        http_keepalive_connections (int): Maximum idle HTTP keep-alive connections retained in pool.
+        http_timeout_seconds (float): Timeout duration in seconds before HTTP requests abort.
+        min_extraction_success_ratio (float): Minimum fractional threshold of successful downloads required.
+    """
+
+    http_max_retries: int = Field(default=5, ge=0)
+    http_backoff_factor: float = Field(default=0.5, ge=0.0)
+    http_max_connections: int = Field(default=16, gt=0)
+    http_keepalive_connections: int = Field(default=8, ge=0)
+    http_timeout_seconds: float = Field(default=15.0, gt=0.0)
+    min_extraction_success_ratio: float = Field(default=0.95, ge=0.0, le=1.0)
+
+
+class OptunaConfig(BaseModel):
+    """Configuration schema for Optuna hyperparameter optimization studies.
+
+    Why:
+        Centralizes the Optuna persistence backend storage URI and study naming conventions.
+
+    How:
+        Populated from default YAML configuration and overridable via the TAXON_OPTUNA_STORAGE_URI environment variable.
+
+    Attributes:
+        optuna_storage_uri (str): SQLAlchemy database URI or RDB URL for persisting Optuna study records.
+        optuna_study_prefix (str): Prefix prepended to generated Optuna study names.
+    """
+
+    optuna_storage_uri: str = "sqlite:///data/optuna/optuna_studies.db"
+    optuna_study_prefix: str = "taxon_vision"
+
+
 class Settings(BaseSettings):
     """Global application settings container with strict schema validation.
 
@@ -202,6 +246,8 @@ class Settings(BaseSettings):
     ood: OODConfig
     training: TrainingConfig = Field(default_factory=TrainingConfig)
     ingestion: IngestionConfig = Field(default_factory=IngestionConfig)
+    streaming: StreamingConfig = Field(default_factory=StreamingConfig)
+    optuna: OptunaConfig = Field(default_factory=OptunaConfig)
 
 
 def _load_yaml_dict(path: Path) -> dict[str, Any]:
@@ -288,7 +334,13 @@ def _resolve_custom_override(custom_path_str: str | None, base_path: Path) -> di
 
 
 def _apply_direct_env_overrides(config_data: dict[str, Any]) -> dict[str, Any]:
-    """Apply targeted unnested environment variable overrides for test isolation.
+    """Apply targeted unnested environment variable overrides for test isolation and Optuna storage.
+
+    Why:
+        Enables seamless runtime configuration of test modes and database URIs without nested delimiters.
+
+    How:
+        Checks for TAXON_ALLOW_UNTRAINED_FALLBACK, TAXON_FLAGGED_STORAGE_DIR, and TAXON_OPTUNA_STORAGE_URI, injecting them into the merged dictionary.
 
     Args:
         config_data (dict[str, Any]): Merged configuration dictionary.
@@ -307,6 +359,15 @@ def _apply_direct_env_overrides(config_data: dict[str, Any]) -> dict[str, Any]:
 
     if model_overrides:
         config_data = _deep_merge(config_data, {"model": model_overrides})
+
+    optuna_overrides: dict[str, Any] = {}
+    env_optuna_uri = os.getenv("TAXON_OPTUNA_STORAGE_URI")
+    if env_optuna_uri is not None:
+        optuna_overrides["optuna_storage_uri"] = env_optuna_uri
+
+    if optuna_overrides:
+        config_data = _deep_merge(config_data, {"optuna": optuna_overrides})
+
     return config_data
 
 

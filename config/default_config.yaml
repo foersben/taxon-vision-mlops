@@ -77,3 +77,15 @@ conformal:
 ood:
   energy_threshold: -2.40
   entropy_threshold: 1.60
+
+streaming:
+  http_max_retries: 5
+  http_backoff_factor: 0.5
+  http_max_connections: 16
+  http_keepalive_connections: 8
+  http_timeout_seconds: 15.0
+  min_extraction_success_ratio: 0.95
+
+optuna:
+  optuna_storage_uri: "sqlite:///data/optuna/optuna_studies.db"
+  optuna_study_prefix: "taxon_vision"
