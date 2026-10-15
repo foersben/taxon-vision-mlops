@@ -135,3 +135,29 @@ class TaxonClassifier(nn.Module):
         """
         features = self.forward_features(x)
         return self.forward_head(features)
+
+    def forward_with_embeddings(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Execute forward pass returning both taxonomic class logits and dense feature embeddings.
+
+        Why:
+            Downstream inference consumers (e.g. OOD detection, active learning triage, metric storage)
+            require the penultimate feature representation in addition to discrete classification logits.
+            Emitting both tensors in a unified forward pass eliminates the performance penalty of duplicate
+            backbone feature extractions.
+
+        How:
+            Extracts feature representations via `forward_features(x)` and projects them through `forward_head(features)`.
+
+        Complexity:
+            O(1) forward pass through the frozen backbone followed by O(1) linear head projection.
+
+        Args:
+            x: 4D input image tensor of shape `(batch_size, channels, height, width)`.
+
+        Returns:
+            Tuple of `(logits, embeddings)` where `logits` has shape `(batch_size, num_classes)` and
+            `embeddings` has shape `(batch_size, feature_dim)`.
+        """
+        features = self.forward_features(x)
+        logits = self.forward_head(features)
+        return logits, features

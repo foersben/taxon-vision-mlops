@@ -34,12 +34,14 @@ class EnergyOODDetector:
         """Initialize the energy-based out-of-distribution detector.
 
         Args:
-            energy_threshold: Decision boundary threshold above which inputs are classified as OOD. Defaults to settings.ood.energy_threshold.
-            temperature: Softmax logit scaling temperature for probability calibration. Defaults to settings.model.temperature.
+            energy_threshold: Decision boundary threshold above which inputs are classified as OOD. Defaults to settings.model.ood_energy_threshold.
+            temperature: Softmax logit scaling temperature for probability calibration. Defaults to settings.model.ood_temperature.
         """
         settings = get_settings()
-        self.energy_threshold = energy_threshold if energy_threshold is not None else settings.ood.energy_threshold
-        self.temperature = temperature if temperature is not None else settings.model.temperature
+        self.energy_threshold = (
+            energy_threshold if energy_threshold is not None else settings.model.ood_energy_threshold
+        )
+        self.temperature = temperature if temperature is not None else settings.model.ood_temperature
 
     def compute_energy(self, logits: np.ndarray, temperature: float | None = None) -> float:
         """Compute the Helmholtz free energy score for a given logit vector.
@@ -63,7 +65,24 @@ class EnergyOODDetector:
         energy = -temp * (max_val + np.log(np.sum(np.exp(scaled - max_val))))
         return float(energy)
 
-    def is_ood(self, logits: np.ndarray, temperature: float | None = None) -> bool:
+    def compute_energy_score(self, logits: np.ndarray, temperature: float | None = None) -> float:
+        """Alias for compute_energy to calculate Helmholtz free energy score.
+
+        Args:
+            logits: 1D NumPy array of unnormalized class logits z.
+            temperature: Scaling hyperparameter T modulating the logit sharpness.
+
+        Returns:
+            Scalar float representing the input's Helmholtz free energy score.
+        """
+        return self.compute_energy(logits, temperature=temperature)
+
+    def is_ood(
+        self,
+        logits: np.ndarray,
+        threshold: float | None = None,
+        temperature: float | None = None,
+    ) -> bool:
         """Determine whether the input logits correspond to an out-of-distribution sample.
 
         Why:
@@ -74,9 +93,11 @@ class EnergyOODDetector:
 
         Args:
             logits: 1D array of unnormalized class logits.
+            threshold: Optional energy threshold override (defaults to self.energy_threshold).
             temperature: Optional temperature override.
 
         Returns:
             True if sample energy exceeds the threshold (flagged as OOD); False otherwise.
         """
-        return self.compute_energy(logits, temperature=temperature) > self.energy_threshold
+        thresh = self.energy_threshold if threshold is None else threshold
+        return self.compute_energy(logits, temperature=temperature) > thresh

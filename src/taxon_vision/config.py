@@ -68,6 +68,13 @@ class ModelConfig(BaseModel):
         quantization_mode (str): INT8 mode used by the exporter: 'static' (Conv/ViT graphs), 'dynamic' (linear-only graphs, data-free smoke tests) or 'auto'.
         calibration_dir (str): Directory of representative images used for static PTQ calibration (a subset of the calibration split).
         calibration_samples (int): Maximum number of calibration images fed to static PTQ.
+        allow_untrained_fallback (bool): Whether to permit uninitialized/fallback weights for offline testing.
+        prefer_onnx_runtime (bool): Whether to prioritize ONNX Runtime over PyTorch for inference.
+        onnx_opset_version (int): ONNX target operator set version for graph serialization.
+        cam_numerical_epsilon (float): Small floating point epsilon to prevent division by zero in CAM normalization.
+        ood_temperature (float): Temperature parameter for Helmholtz free energy OOD detection.
+        ood_energy_threshold (float): Energy score threshold for flagging observations as Out-of-Distribution.
+        flagged_storage_dir (str): Filesystem directory for persisting flagged OOD and ambiguous observations.
     """
 
     default_extractor: str
@@ -87,6 +94,13 @@ class ModelConfig(BaseModel):
     quantization_mode: Literal["auto", "static", "dynamic"] = "auto"
     calibration_dir: str = "data/sample"
     calibration_samples: int = Field(default=128, gt=0)
+    allow_untrained_fallback: bool = False
+    prefer_onnx_runtime: bool = True
+    onnx_opset_version: int = Field(default=17, gt=0)
+    cam_numerical_epsilon: float = Field(default=1.0e-8, gt=0.0)
+    ood_temperature: float = Field(default=1.0, gt=0.0)
+    ood_energy_threshold: float = Field(default=-2.40)
+    flagged_storage_dir: str = "data/flagged_observations"
 
 
 class TrainingConfig(BaseModel):
@@ -138,14 +152,16 @@ class ConformalConfig(BaseModel):
 
     Attributes:
         alpha (float): Conformal error rate bound (nominal coverage is $1 - \alpha$).
+        q_hat (float): Calibrated non-conformity scalar quantile threshold.
         k_max (int): Maximum prediction set cardinality before routing to human expert triage.
-        quantile_threshold (float): Pre-calibrated non-conformity scalar quantile threshold.
+        quantile_threshold (float): Pre-calibrated non-conformity scalar quantile threshold (alias for q_hat).
         nominal_coverage (float): Target marginal coverage rate (1.0 - alpha).
         method (str): Conformal prediction method (e.g. 'split-conformal').
         empty_set_action (str): Action taken when conformal set is empty.
     """
 
     alpha: float = Field(default=0.05, gt=0.0, lt=1.0)
+    q_hat: float = Field(default=0.85, gt=0.0, lt=1.0)
     k_max: int = Field(default=3, gt=0)
     quantile_threshold: float = Field(default=0.85, gt=0.0, lt=1.0)
     nominal_coverage: float = Field(default=0.95, gt=0.0, lt=1.0)
@@ -235,12 +251,18 @@ def _load_conformal_override(path: Path) -> dict[str, Any]:
     calib = _load_yaml_dict(path).get("calibration", {})
     mapping = {
         "alpha": "alpha",
+        "q_hat": "q_hat",
         "max_set_size_for_auto_accept": "k_max",
         "nominal_coverage": "nominal_coverage",
         "method": "method",
         "empty_set_action": "empty_set_action",
     }
     override = {target_k: calib[yaml_k] for yaml_k, target_k in mapping.items() if yaml_k in calib}
+    if "q_hat" in override:
+        override["quantile_threshold"] = override["q_hat"]
+    elif "quantile_threshold" in calib:
+        override["quantile_threshold"] = calib["quantile_threshold"]
+        override["q_hat"] = calib["quantile_threshold"]
     return {"conformal": override} if override else {}
 
 
@@ -260,6 +282,29 @@ def _resolve_custom_override(custom_path_str: str | None, base_path: Path) -> di
     if custom_path.resolve() == base_path.resolve() or not custom_path.is_file():
         return {}
     return _load_yaml_dict(custom_path)
+
+
+def _apply_direct_env_overrides(config_data: dict[str, Any]) -> dict[str, Any]:
+    """Apply targeted unnested environment variable overrides for test isolation.
+
+    Args:
+        config_data (dict[str, Any]): Merged configuration dictionary.
+
+    Returns:
+        dict[str, Any]: Updated configuration dictionary with direct environment overrides applied.
+    """
+    model_overrides: dict[str, Any] = {}
+    env_untrained = os.getenv("TAXON_ALLOW_UNTRAINED_FALLBACK")
+    if env_untrained is not None:
+        model_overrides["allow_untrained_fallback"] = env_untrained.strip().lower() in ("true", "1", "yes")
+
+    env_storage = os.getenv("TAXON_FLAGGED_STORAGE_DIR")
+    if env_storage is not None:
+        model_overrides["flagged_storage_dir"] = env_storage
+
+    if model_overrides:
+        config_data = _deep_merge(config_data, {"model": model_overrides})
+    return config_data
 
 
 @lru_cache(maxsize=1)
@@ -303,4 +348,5 @@ def get_settings(config_path: str | Path | None = None) -> Settings:
     if custom_override:
         config_data = _deep_merge(config_data, custom_override)
 
+    config_data = _apply_direct_env_overrides(config_data)
     return Settings(**config_data)

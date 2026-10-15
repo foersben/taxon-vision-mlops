@@ -142,7 +142,7 @@ def _prepare_embedding_split(
     dim: int,
     num_classes: int,
     cache_path: Path | str | None = None,
-    allow_synthetic: bool = True,
+    allow_synthetic: bool = False,
 ) -> EmbeddingSplit:
     """Construct or restore deterministic embedding splits for rapid head training.
 
@@ -150,14 +150,16 @@ def _prepare_embedding_split(
         During rapid iteration, CI verification, and local benchmarking, loading pre-computed
         representations avoids incurring hours of redundant forward passes through the frozen
         vision foundation backbone. Restoring cached representations from disk enables training
-        in seconds. If a pre-computed cache is absent (e.g. in minimal CI environments), gracefully
-        falling back to a deterministic synthetic Gaussian split ensures that ephemeral runners
-        without GPU hardware or S3 access can execute test quality gates deterministically.
+        in seconds. Synthetic data generation is strictly opt-in to avoid masking data pipeline bugs.
 
     How:
         1. Checks whether an embedding cache exists at `cache_path` (or standard `data/embeddings/cached_features.pt`).
         2. If found, deserializes the payload, validates that `split.feature_dim == dim`, and returns the cached split.
-        3. If absent or shape-incompatible, falls back to generating a deterministic synthetic Gaussian split (unless disallowed).
+        3. If absent or shape-incompatible and allow_synthetic is False, logs an error and raises FileNotFoundError.
+        4. If allow_synthetic is True, generates a deterministic synthetic Gaussian split.
+
+    Complexity:
+        O(N * D) where N is the number of samples and D is the feature dimension.
 
     Args:
         dim: Dimensionality of feature vectors.
@@ -182,10 +184,15 @@ def _prepare_embedding_split(
             return loaded
 
     if not allow_synthetic:
+        logger.error(
+            "Embedding cache not found at candidates (%s). Synthetic fallback is disabled.",
+            candidates,
+        )
         raise FileNotFoundError(
             f"Embedding cache not found at candidates ({candidates}). Synthetic fallback is disabled via --require-cache."
         )
 
+    logger.warning("Embedding cache not found; generating synthetic Gaussian split for testing.")
     return _generate_synthetic_embedding_split(dim, num_classes)
 
 
@@ -311,6 +318,95 @@ def _build_training_components(
     return head, criterion, optimizer, config, params
 
 
+def _resolve_training_hyperparameters(
+    extractor: str | None,
+    epochs: int | None,
+    batch_size: int | None,
+    learning_rate: float | None,
+    checkpoint_path: Path | str | None,
+    settings: Any,
+) -> tuple[str, int, int, float, Path | str]:
+    """Resolve hyperparameter defaults from application settings.
+
+    Why:
+        Encapsulates ternary fallback logic to decouple configuration loading from
+        training loop execution, reducing cognitive complexity in the main runner.
+
+    Complexity:
+        O(1) constant time resolution.
+
+    Args:
+        extractor: Optional user-specified feature extractor backbone name.
+        epochs: Optional training epoch count.
+        batch_size: Optional mini-batch size.
+        learning_rate: Optional optimizer learning rate.
+        checkpoint_path: Optional custom destination path for head weights.
+        settings: Application settings container.
+
+    Returns:
+        Tuple of resolved (extractor, epochs, batch_size, learning_rate, checkpoint_path).
+    """
+    resolved_extractor = extractor or settings.model.default_extractor
+    resolved_epochs = epochs if epochs is not None else settings.training.epochs
+    resolved_batch_size = batch_size if batch_size is not None else settings.training.batch_size
+    resolved_lr = learning_rate if learning_rate is not None else settings.training.learning_rate
+    resolved_checkpoint = checkpoint_path or settings.model.head_checkpoint_path
+    return resolved_extractor, resolved_epochs, resolved_batch_size, resolved_lr, resolved_checkpoint
+
+
+def _resolve_synthetic_permission(
+    require_cache: bool,
+    allow_synthetic: bool | None,
+    default_fallback: bool,
+) -> bool:
+    """Determine whether synthetic embedding generation is permitted.
+
+    Why:
+        Ensures strict precedence: explicit --require-cache takes precedence,
+        followed by explicit user flags, falling back to global settings.
+
+    Complexity:
+        O(1) constant time resolution.
+
+    Args:
+        require_cache: Strict requirement for real embedding cache.
+        allow_synthetic: Optional explicit user flag.
+        default_fallback: Global fallback setting.
+
+    Returns:
+        True if synthetic generation is authorized; otherwise False.
+    """
+    if require_cache:
+        return False
+    if allow_synthetic is not None:
+        return allow_synthetic
+    return default_fallback
+
+
+def _extract_metric_last(history: dict[str, list[float]], key: str, default: float = 0.0) -> float:
+    """Safely extract the final floating-point value from a training history metric list.
+
+    Why:
+        Guarantees safe scalar extraction across sparse or empty epoch histories without
+        IndexError exceptions or verbose ternary conditionals.
+
+    Complexity:
+        O(1) constant time indexing.
+
+    Args:
+        history: Dictionary mapping metric names to epoch-indexed floats.
+        key: Target metric key.
+        default: Fallback scalar if history is empty.
+
+    Returns:
+        Final recorded float metric value.
+    """
+    series = history.get(key)
+    if not series:
+        return default
+    return float(series[-1])
+
+
 def run_training_pipeline(
     extractor: str | None = None,
     epochs: int | None = None,
@@ -323,6 +419,7 @@ def run_training_pipeline(
     n_trials: int = 15,
     cache_path: Path | str | None = None,
     require_cache: bool = False,
+    allow_synthetic: bool | None = None,
 ) -> dict[str, Any]:
     """Execute end-to-end classification head training on cached or synthetic embeddings.
 
@@ -351,16 +448,19 @@ def run_training_pipeline(
         n_trials: Number of Optuna evaluation trials when `tune` is enabled.
         cache_path: Optional custom filesystem path to serialized `.pt` embedding cache.
         require_cache: Whether to strictly require real embedding cache and disable synthetic fallback.
+        allow_synthetic: Explicit override to permit synthetic embeddings when cache is absent.
 
     Returns:
         Dictionary containing training metrics, checkpoint path, duration, and status.
     """
     settings = get_settings()
-    resolved_extractor = extractor or settings.model.default_extractor
-    resolved_epochs = epochs if epochs is not None else settings.training.epochs
-    resolved_batch_size = batch_size if batch_size is not None else settings.training.batch_size
-    resolved_lr = learning_rate if learning_rate is not None else settings.training.learning_rate
-    resolved_checkpoint = checkpoint_path or settings.model.head_checkpoint_path
+    (
+        resolved_extractor,
+        resolved_epochs,
+        resolved_batch_size,
+        resolved_lr,
+        resolved_checkpoint,
+    ) = _resolve_training_hyperparameters(extractor, epochs, batch_size, learning_rate, checkpoint_path, settings)
 
     applied_vram_fraction = configure_cuda_memory_budget(cuda_memory_fraction)
     t0 = time.perf_counter()
@@ -376,7 +476,19 @@ def run_training_pipeline(
         raise RuntimeError("Authoritative taxa catalog contains 0 taxa.")
     num_classes = len(catalog)
     dim = _resolve_feature_dim(resolved_extractor)
-    data = _prepare_embedding_split(dim, num_classes, cache_path=cache_path, allow_synthetic=not require_cache)
+
+    resolved_allow_synthetic = _resolve_synthetic_permission(
+        require_cache=require_cache,
+        allow_synthetic=allow_synthetic,
+        default_fallback=settings.model.allow_untrained_fallback,
+    )
+
+    data = _prepare_embedding_split(
+        dim,
+        num_classes,
+        cache_path=cache_path,
+        allow_synthetic=resolved_allow_synthetic,
+    )
     samples = data.samples_per_class or [1] * num_classes
 
     head, criterion, optimizer, config, params = _build_training_components(
@@ -411,12 +523,12 @@ def run_training_pipeline(
 
         if active_run:
             _log_mlflow_metrics(history, duration)
-            val_pr_auc = float(history.get("val_pr_auc", [0.0])[-1]) if history.get("val_pr_auc") else 0.0
+            val_pr_auc = _extract_metric_last(history, "val_pr_auc", 0.0)
             promotion_status = _promote_model_if_better(head, val_pr_auc)
 
-    train_loss = float(history["train_loss"][-1]) if history.get("train_loss") else 0.0
-    val_loss = float(history["val_loss"][-1]) if history.get("val_loss") else 0.0
-    val_acc = float(history["val_accuracy"][-1]) if history.get("val_accuracy") else 0.0
+    train_loss = _extract_metric_last(history, "train_loss", 0.0)
+    val_loss = _extract_metric_last(history, "val_loss", 0.0)
+    val_acc = _extract_metric_last(history, "val_accuracy", 0.0)
 
     logger.info(
         "Training completed in %.3fs: train_loss=%.4f, val_loss=%.4f, val_acc=%.2f%%",
@@ -593,6 +705,12 @@ def train_cli(argv: list[str] | None = None) -> int:
         help="Disallow fallback to synthetic data if embedding cache is absent",
     )
     parser.add_argument(
+        "--allow-synthetic",
+        action="store_true",
+        default=settings.model.allow_untrained_fallback,
+        help="Permit fallback to synthetic Gaussian embeddings if cache is absent",
+    )
+    parser.add_argument(
         "--require-promotion",
         action="store_true",
         help="Exit with non-zero status if trained model is tagged as Archived instead of Challenger/Production",
@@ -625,6 +743,7 @@ def train_cli(argv: list[str] | None = None) -> int:
         n_trials=args.n_trials,
         cache_path=args.cache_path,
         require_cache=args.require_cache,
+        allow_synthetic=args.allow_synthetic,
     )
 
     logger.info("Training Completed Successfully")

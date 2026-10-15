@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 """Server-rendered Jinja2/HTMX web interface."""
 
+import io
 from pathlib import Path
 from typing import Annotated
 
@@ -9,8 +10,10 @@ import anyio
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from PIL import Image
 
 from taxon_vision.config import get_settings
+from taxon_vision.inference.cam import SaliencyExtractionError, generate_heatmap
 from taxon_vision.service.inference import InvalidImageError, ModelNotReadyError, run_prediction
 
 router = APIRouter()
@@ -27,6 +30,9 @@ async def index(request: Request) -> HTMLResponse:
 
     How:
         Binds the incoming HTTP request context to the server-side Jinja2 environment, rendering `index.html` with HTMX attributes (`hx-post`, `hx-target`, `hx-swap`) that enable partial HTML swaps for seamless UI updates.
+
+    Complexity:
+        O(1) template rendering.
 
     Args:
         request: FastAPI HTTP request context for Jinja2 template rendering.
@@ -46,9 +52,14 @@ async def predict_htmx(request: Request, file: Annotated[UploadFile, File(...)])
 
     How:
         1. Asynchronously reads image bytes from the uploaded multipart file stream.
-        2. Offloads synchronous inference execution to an AnyIO threadpool worker via `run_sync`.
-        3. Formats resulting taxonomic classifications, confidence levels, conformal sets, and measured latencies into the template rendering context.
-        4. Renders and returns the HTML partial `partials/prediction_card.html` for targeted DOM insertion.
+        2. Validates payload non-emptiness and size constraints.
+        3. Offloads synchronous inference execution to an AnyIO threadpool worker via `run_sync`.
+        4. Attempts visual saliency generation, cleanly flagging unavailable attributions if hooks fail.
+        5. Formats resulting taxonomic classifications, confidence levels, conformal sets, and measured latencies into the template rendering context.
+        6. Renders and returns the HTML partial `partials/prediction_card.html` for targeted DOM insertion.
+
+    Complexity:
+        O(1) async thread dispatch plus O(K) template formatting.
 
     Args:
         request: FastAPI HTTP request context.
@@ -56,9 +67,19 @@ async def predict_htmx(request: Request, file: Annotated[UploadFile, File(...)])
 
     Returns:
         Rendered HTML partial fragment containing prediction badges and conformal sets.
+
+    Raises:
+        HTTPException: HTTP 413 for oversized payloads, 422 for undecodable images, 503 if model is unavailable.
     """
     image_bytes = await file.read()
     settings = get_settings()
+
+    if len(image_bytes) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid or corrupted image upload.",
+        )
+
     if len(image_bytes) > settings.service.max_image_upload_bytes:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -68,9 +89,19 @@ async def predict_htmx(request: Request, file: Annotated[UploadFile, File(...)])
     try:
         result = await anyio.to_thread.run_sync(run_prediction, image_bytes)
     except InvalidImageError as err:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)) from err
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(err)) from err
     except ModelNotReadyError as err:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(err)) from err
+
+    heatmap_status = "unavailable"
+    try:
+        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        _ = generate_heatmap(image)
+        heatmap_status = "generated"
+    except SaliencyExtractionError:
+        heatmap_status = "unavailable"
+    except Exception:
+        heatmap_status = "unavailable"
 
     context = {
         "filename": file.filename,
@@ -81,5 +112,6 @@ async def predict_htmx(request: Request, file: Annotated[UploadFile, File(...)])
         "is_ood": result["is_ood"],
         "requires_human_review": result["requires_human_review"],
         "latency_ms": result["latency_ms"],
+        "heatmap_status": heatmap_status,
     }
     return templates.TemplateResponse(request=request, name="partials/prediction_card.html", context=context)

@@ -21,18 +21,52 @@ from taxon_vision.service.inference import load_taxa_catalog
 logger = logging.getLogger(__name__)
 
 
+class _ONNXDualOutputModule(nn.Module):
+    """Wrapper module ensuring exported ONNX graphs emit both logits and dense embeddings.
+
+    Why:
+        Standard PyTorch classifiers return only the final projection logits. Exporting an ONNX graph that provides both class logits and dense feature embeddings allows downstream inference systems (OOD detection, drift monitoring, active learning query strategies) to consume embeddings directly without running an additional feature extraction pass.
+
+    How:
+        Delegates forward execution to `classifier.forward_with_embeddings(x)`.
+
+    Complexity:
+        O(1) forward delegation overhead.
+    """
+
+    def __init__(self, classifier: TaxonClassifier) -> None:
+        """Initialize the dual-output wrapper.
+
+        Args:
+            classifier: TaxonClassifier instance to wrap.
+        """
+        super().__init__()
+        self.classifier = classifier
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Execute forward pass returning (logits, embeddings).
+
+        Args:
+            x: Input 4D image tensor of shape (batch_size, channels, height, width).
+
+        Returns:
+            Tuple of (logits, embeddings).
+        """
+        return self.classifier.forward_with_embeddings(x)
+
+
 def export_to_onnx(
     model: nn.Module,
     output_path: Path,
     input_shape: tuple[int, ...] | None = None,
 ) -> Path:
-    """Export model to ONNX graph with dynamic batch sizing.
+    """Export model to ONNX graph with dynamic batch sizing and dual outputs (logits, embeddings).
 
     Why:
-        In production workflows, the ML model must be decoupled from the specific deep learning framework used during training to maximize deployment flexibility. ONNX serves as the interoperability layer, enabling the model to be deployed using high-performance inference engines (e.g., ONNX Runtime, TensorRT) across diverse hardware targets.
+        In production workflows, the ML model must be decoupled from the specific deep learning framework used during training to maximize deployment flexibility. Emitting dual outputs (logits, embeddings) allows inference engines to support both classification and downstream representation retrieval without redundant forward passes.
 
     How:
-        Exports the trained PyTorch model to a self-contained ONNX graph using torch.onnx.export. Traces the graph using a dummy CPU input tensor, enables constant folding, specifies dynamic axes for variable batch sizes, and targets opset version 17.
+        Exports the trained PyTorch model to a self-contained ONNX graph using torch.onnx.export. Traces the graph using a dummy CPU input tensor, enables constant folding, specifies dynamic axes for variable batch sizes, and targets the configured opset version.
 
     Args:
         model: PyTorch model module to export.
@@ -42,26 +76,37 @@ def export_to_onnx(
     Returns:
         Resolved Path to the exported ONNX model.
     """
+    settings = get_settings()
     model.eval()
     model.cpu()
     if input_shape is None:
-        cfg = get_settings().model
+        cfg = settings.model
         input_shape = (1, cfg.channels, cfg.image_size, cfg.image_size)
-    # Dummy tensor is strictly used by torch.onnx to trace the computational graph operations
     dummy_input = torch.randn(*input_shape, device="cpu")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    is_dual = isinstance(model, TaxonClassifier) or isinstance(model, _ONNXDualOutputModule)
+    export_module: nn.Module = _ONNXDualOutputModule(model) if isinstance(model, TaxonClassifier) else model
+
+    output_names = ["logits", "embeddings"] if is_dual else ["logits"]
+    dynamic_axes: dict[str, dict[int, str]] = {
+        "input": {0: "batch_size"},
+        "logits": {0: "batch_size"},
+    }
+    if is_dual:
+        dynamic_axes["embeddings"] = {0: "batch_size"}
+
     with torch.no_grad():
         torch.onnx.export(
-            model,
+            export_module,
             (dummy_input,),
             str(output_path),
             export_params=True,
-            opset_version=17,
+            opset_version=settings.model.onnx_opset_version,
             do_constant_folding=True,
             input_names=["input"],
-            output_names=["logits"],
-            dynamic_axes={"input": {0: "batch_size"}, "logits": {0: "batch_size"}},
+            output_names=output_names,
+            dynamic_axes=dynamic_axes,
         )
     return output_path
 
@@ -193,9 +238,11 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Input image resolution in pixels. Defaults to settings.model.image_size.",
     )
+    settings = get_settings()
     parser.add_argument(
         "--allow-untrained",
         action="store_true",
+        default=settings.model.allow_untrained_fallback,
         help="Allow exporting with uninitialized/offline weights (for unit testing only).",
     )
     parser.add_argument(
@@ -238,9 +285,7 @@ def _quantize_exported_graph(fp32_path: Path, args: argparse.Namespace, settings
     """Quantize the exported FP32 backbone+head graph to INT8 using the operator-appropriate mode.
 
     Why:
-        The exported graph contains the full backbone (convolutions or ViT blocks), so static QDQ PTQ with real
-        calibration images is the correct default. Dynamic quantization remains available explicitly for
-        data-free smoke tests, but is never selected silently for a backbone graph.
+        The exported graph contains the full backbone (convolutions or ViT blocks), so static QDQ PTQ with real calibration images is the correct default. Dynamic quantization remains available explicitly for data-free smoke tests, but is never selected silently for a backbone graph.
 
     Args:
         fp32_path: Path to the exported FP32 ONNX graph.

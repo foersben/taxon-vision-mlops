@@ -10,6 +10,7 @@ from pathlib import Path
 
 import numpy as np
 import onnxruntime
+import pytest
 import torch
 import torch.nn as nn
 
@@ -41,7 +42,7 @@ def test_export_to_onnx_dummy_module(tmp_path: Path) -> None:
 
 
 def test_export_classifier_cli_allow_untrained(tmp_path: Path) -> None:
-    """Test CLI execution of export_classifier_cli with --allow-untrained flag."""
+    """Test CLI execution of export_classifier_cli with --allow-untrained flag and dual outputs."""
     out_file = tmp_path / "cli_model.onnx"
     ret = export_classifier_cli(
         [
@@ -56,9 +57,43 @@ def test_export_classifier_cli_allow_untrained(tmp_path: Path) -> None:
     assert out_file.exists()
     assert out_file.stat().st_size > 0
 
+    session = onnxruntime.InferenceSession(str(out_file), providers=["CPUExecutionProvider"])
+    out_names = [o.name for o in session.get_outputs()]
+    assert "logits" in out_names
+    assert "embeddings" in out_names
 
-def test_export_classifier_cli_strict_failure_on_mismatch(tmp_path: Path) -> None:
+
+def test_export_classifier_cli_fails_when_checkpoint_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that CLI strictly fails (exit code 1) when checkpoint is missing and --allow-untrained is absent."""
+    monkeypatch.setenv("TAXON_ALLOW_UNTRAINED_FALLBACK", "false")
+    from taxon_vision.config import get_settings
+
+    get_settings.cache_clear()
+
+    out_file = tmp_path / "should_not_exist.onnx"
+    missing_ckpt = tmp_path / "nonexistent_head.pt"
+
+    ret = export_classifier_cli(
+        [
+            "--output",
+            str(out_file),
+            "--checkpoint",
+            str(missing_ckpt),
+            "--extractor",
+            "mobilenetv4_conv_small",
+        ]
+    )
+    assert ret == 1
+    assert not out_file.exists()
+
+
+def test_export_classifier_cli_strict_failure_on_mismatch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that CLI strictly fails (exit code 1) when checkpoint is mismatched and --allow-untrained is absent."""
+    monkeypatch.setenv("TAXON_ALLOW_UNTRAINED_FALLBACK", "false")
+    from taxon_vision.config import get_settings
+
+    get_settings.cache_clear()
+
     mismatched_ckpt = tmp_path / "mismatched_head.pt"
     torch.save({"1.weight": torch.randn(10, 64), "1.bias": torch.randn(10)}, mismatched_ckpt)
     out_file = tmp_path / "should_fail.onnx"

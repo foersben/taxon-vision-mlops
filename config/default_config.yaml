@@ -24,6 +24,13 @@ model:
   inference_backend: "auto"
   quantization_mode: "auto"
   temperature: 1.0
+  allow_untrained_fallback: false
+  prefer_onnx_runtime: true
+  onnx_opset_version: 17
+  cam_numerical_epsilon: 1.0e-8
+  ood_temperature: 1.0
+  ood_energy_threshold: -2.40
+  flagged_storage_dir: "data/flagged_observations"
   backbone_registry:
     bioclip-2: "hf-hub:imageomics/bioclip-2"
     dinov3: "vit_small_patch16_dinov3"

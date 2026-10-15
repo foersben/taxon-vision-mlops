@@ -90,6 +90,27 @@ class TaxonCalibrationDataReader(CalibrationDataReader):  # type: ignore[misc]
         self.iterator = iter(self.data_batches)
 
 
+def _find_upstream_matmul(add_node: Any, producers: dict[str, Any]) -> str | None:
+    """Find upstream MatMul producer feeding an Add bias operation.
+
+    Why:
+        Linear heads in PyTorch/ONNX typically decompose into MatMul + Add (bias).
+        Locating the upstream MatMul ensures the entire projection head remains unquantized.
+
+    Args:
+        add_node: ONNX NodeProto representing the bias Add operation.
+        producers: Mapping of output tensor names to producing node protos.
+
+    Returns:
+        Name of the upstream MatMul node if found, otherwise None.
+    """
+    for inp in add_node.input:
+        upstream = producers.get(inp)
+        if upstream is not None and upstream.op_type == "MatMul":
+            return str(upstream.name)
+    return None
+
+
 def find_logit_nodes(model_path: Path) -> list[str]:
     """Locate the nodes that produce the graph outputs (the classification logits).
 
@@ -101,6 +122,9 @@ def find_logit_nodes(model_path: Path) -> list[str]:
     How:
         Collects the producers of every graph output. When a producer is an `Add` (bias added after a `MatMul`),
         the `MatMul` feeding it is included so the whole affine head stays in floating point.
+
+    Complexity:
+        O(N) where N is the number of nodes in the ONNX graph.
 
     Args:
         model_path: Path to the FP32 ONNX model.
@@ -118,10 +142,9 @@ def find_logit_nodes(model_path: Path) -> list[str]:
             continue
         excluded.append(node.name)
         if node.op_type == "Add":
-            for inp in node.input:
-                upstream = producers.get(inp)
-                if upstream is not None and upstream.op_type == "MatMul":
-                    excluded.append(upstream.name)
+            upstream_name = _find_upstream_matmul(node, producers)
+            if upstream_name is not None:
+                excluded.append(upstream_name)
     return excluded
 
 

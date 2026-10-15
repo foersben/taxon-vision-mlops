@@ -15,7 +15,7 @@ from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
 
 from taxon_vision.config import get_settings
-from taxon_vision.inference.cam import generate_heatmap
+from taxon_vision.inference.cam import SaliencyExtractionError, generate_heatmap
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,28 @@ class ExplainResponse(BaseModel):
 
 
 def _run_heatmap_generation(image_bytes: bytes | None) -> tuple[str, list[int]]:
-    """Execute synchronous Class Activation Map generation in worker thread."""
+    """Execute synchronous Class Activation Map generation in worker thread.
+
+    Why:
+        Forward-only CAM executes spatial projection and bilinear resizing synchronously.
+        Offloading execution prevents blocking the asynchronous HTTP event loop thread.
+
+    How:
+        Decodes raw bytes into PIL Image or synthesizes a blank test canvas, invokes
+        `generate_heatmap`, and catches `SaliencyExtractionError` to translate into HTTP 422.
+
+    Complexity:
+        O(1) forward-pass feature extraction plus O(H * W) bilinear interpolation.
+
+    Args:
+        image_bytes: Optional raw image buffer.
+
+    Returns:
+        Tuple of (status_string, spatial_shape).
+
+    Raises:
+        HTTPException: If image cannot be decoded or saliency extraction fails.
+    """
     if image_bytes is not None and len(image_bytes) > 0:
         try:
             image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
@@ -51,8 +72,12 @@ def _run_heatmap_generation(image_bytes: bytes | None) -> tuple[str, list[int]]:
         settings = get_settings()
         image = Image.new("RGB", (settings.model.image_size, settings.model.image_size), color="green")
 
-    heatmap = generate_heatmap(image)
-    return "generated", list(heatmap.shape)
+    try:
+        heatmap = generate_heatmap(image)
+        return "generated", list(heatmap.shape)
+    except SaliencyExtractionError as err:
+        logger.warning("CAM generation failed: %s", err)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(err)) from err
 
 
 @router.post("/explain", response_model=ExplainResponse)
@@ -75,18 +100,24 @@ async def explain_prediction(
         3. Projects terminal spatial activations with the predicted class linear head weights.
         4. Returns attribution status, execution latency, and spatial heatmap dimensions.
 
+    Complexity:
+        O(1) async thread dispatch plus O(H * W) bilinear interpolation.
+
     Args:
         file: Optional multipart uploaded image file.
 
     Returns:
         Explanation response indicating heatmap generation status, latency, and dimensions.
+
+    Raises:
+        HTTPException: HTTP 413 for oversized payloads, 422 for undecodable uploads or CAM failures.
     """
     t0 = time.perf_counter()
     content: bytes | None = None
     if file is not None:
         content = await file.read()
         settings = get_settings()
-        if len(content) > settings.service.max_image_upload_bytes:
+        if content is not None and len(content) > settings.service.max_image_upload_bytes:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                 detail=f"Image upload exceeds maximum allowed size of {settings.service.max_image_upload_bytes} bytes.",

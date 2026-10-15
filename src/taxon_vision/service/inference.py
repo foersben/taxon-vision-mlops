@@ -90,7 +90,21 @@ def get_classifier() -> TaxonClassifier:
     settings = get_settings()
     checkpoint_path = _resolve_artifact(settings.model.head_checkpoint_path)
     if not checkpoint_path.exists():
-        raise ModelNotReadyError(f"Trained head checkpoint not found at {checkpoint_path}. Run training first.")
+        if not settings.model.allow_untrained_fallback:
+            raise ModelNotReadyError(f"Trained head checkpoint not found at {checkpoint_path}. Run training first.")
+        logger.warning(
+            "Head checkpoint %s absent; creating fallback classifier for offline test execution.", checkpoint_path
+        )
+        backbone = create_feature_extractor(
+            settings.model.fallback_extractor,
+            pretrained=False,
+            allow_fallback=True,
+        )
+        dim = get_feature_dimension(backbone)
+        num_classes = len(load_taxa_catalog())
+        classifier = TaxonClassifier(backbone=backbone, feature_dim=dim, num_classes=num_classes)
+        classifier.eval()
+        return classifier
 
     backbone = create_feature_extractor(settings.model.default_extractor, pretrained=True)
     dim = get_feature_dimension(backbone)
@@ -100,10 +114,12 @@ def get_classifier() -> TaxonClassifier:
     try:
         load_head_checkpoint(classifier.head, checkpoint_path)
     except Exception as exc:
-        raise ModelNotReadyError(
-            f"Head checkpoint {checkpoint_path} is incompatible with backbone "
-            f"'{settings.model.default_extractor}' (feature_dim={dim}, classes={num_classes}): {exc}"
-        ) from exc
+        if not settings.model.allow_untrained_fallback:
+            raise ModelNotReadyError(
+                f"Head checkpoint {checkpoint_path} is incompatible with backbone "
+                f"'{settings.model.default_extractor}' (feature_dim={dim}, classes={num_classes}): {exc}"
+            ) from exc
+        logger.warning("Head checkpoint incompatible (%s); serving uninitialized fallback for tests.", exc)
 
     classifier.eval()
     return classifier
@@ -126,7 +142,7 @@ def get_onnx_engine() -> ONNXInferenceEngine | None:
         ModelNotReadyError: If ONNX is required but missing, or if the graph class count mismatches the catalogue.
     """
     cfg = get_settings().model
-    if cfg.inference_backend == "torch":
+    if cfg.inference_backend == "torch" or not cfg.prefer_onnx_runtime:
         return None
 
     onnx_path = _resolve_artifact(cfg.onnx_model_path)
@@ -277,14 +293,62 @@ def _get_image_tensor(image_bytes: bytes) -> torch.Tensor:
     return transform(image).unsqueeze(0)
 
 
+def compute_model_outputs(
+    tensor: torch.Tensor,
+) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.float32] | None]:
+    """Compute raw class logits and optional visual embedding vector for a preprocessed image.
+
+    Why:
+        Energy-based OOD detection, conformal prediction, and flagged observation persistence
+        require both class logits and dense feature representations. Computing both in a
+        single forward execution eliminates redundant feature extractor passes across PyTorch
+        and ONNX Runtime backends.
+
+    How:
+        Probes the cached ONNX Runtime engine. If active and dual outputs are available,
+        extracts logits and embeddings directly from the ONNX session. Otherwise, falls back
+        to the PyTorch TaxonClassifier `forward_with_embeddings` within a zero-grad block.
+
+    Complexity:
+        O(1) forward pass over the backbone and linear head.
+
+    Args:
+        tensor: Preprocessed image tensor of shape (1, 3, H, W).
+
+    Returns:
+        Tuple of (logits, embeddings) where logits has shape (num_classes,) and
+        embeddings has shape (feature_dim,) or None if embeddings are unavailable.
+
+    Raises:
+        ModelNotReadyError: If model artefacts fail to evaluate or are missing.
+    """
+    engine = get_onnx_engine()
+    if engine is not None:
+        outputs = engine.predict_outputs(tensor.numpy())
+        logits: npt.NDArray[np.float32] = outputs.logits[0]
+        embedding: npt.NDArray[np.float32] | None = outputs.embeddings[0] if outputs.embeddings is not None else None
+        return logits, embedding
+
+    with torch.no_grad():
+        classifier = get_classifier()
+        logits_t, embeddings_t = classifier.forward_with_embeddings(tensor)
+        logits_arr: npt.NDArray[np.float32] = np.asarray(logits_t.squeeze(0).cpu().numpy(), dtype=np.float32)
+        embeddings_arr: npt.NDArray[np.float32] = np.asarray(embeddings_t.squeeze(0).cpu().numpy(), dtype=np.float32)
+        return logits_arr, embeddings_arr
+
+
 def compute_logits(tensor: torch.Tensor) -> npt.NDArray[np.float32]:
     """Compute raw class logits for a single preprocessed image using the configured backend.
 
     Why:
-        Energy-based OOD scoring and split-conformal prediction operate on logits and probabilities. Both backends must expose the same FP32 logits so downstream uncertainty logic is backend-agnostic.
+        Energy-based OOD scoring and split-conformal prediction operate on logits and probabilities.
+        Both backends must expose the same FP32 logits so downstream uncertainty logic is backend-agnostic.
 
     How:
-        Uses the ONNX Runtime engine over the exported (INT8) graph when available, otherwise the PyTorch classifier.
+        Delegates to `compute_model_outputs` and extracts the first tuple element.
+
+    Complexity:
+        O(1) model forward evaluation.
 
     Args:
         tensor: Preprocessed image tensor of shape (1, 3, H, W).
@@ -292,13 +356,8 @@ def compute_logits(tensor: torch.Tensor) -> npt.NDArray[np.float32]:
     Returns:
         FP32 logits of shape (num_classes,).
     """
-    engine = get_onnx_engine()
-    if engine is not None:
-        logits: npt.NDArray[np.float32] = engine.predict_logits(tensor.numpy())[0]
-        return logits
-    with torch.no_grad():
-        res: npt.NDArray[np.float32] = np.asarray(get_classifier()(tensor).squeeze(0).cpu().numpy(), dtype=np.float32)
-        return res
+    logits, _ = compute_model_outputs(tensor)
+    return logits
 
 
 def run_prediction(image_bytes: bytes) -> dict[str, Any]:
@@ -309,11 +368,12 @@ def run_prediction(image_bytes: bytes) -> dict[str, Any]:
 
     How:
         1. Preprocesses image bytes into normalized 4D float tensor.
-        2. Evaluates model logits inside a `torch.no_grad()` block.
+        2. Evaluates model logits and embeddings inside a zero-grad block.
         3. Computes softmax probabilities over target classes.
         4. Identifies top-1 argmax prediction and confidence score.
-        5. Evaluates non-conformity scores via ConformalPredictionEngine to construct valid prediction sets and identify ambiguous or unclassifiable cases.
-        6. Maps class indices back to authoritative taxa catalog metadata.
+        5. Computes energy-based OOD score and assesses out-of-distribution status.
+        6. Evaluates non-conformity scores via ConformalPredictionEngine to construct valid prediction sets and identify ambiguous or unclassifiable cases.
+        7. Maps class indices back to authoritative taxa catalog metadata.
 
     Complexity:
         O(1) forward pass over the backbone plus O(K) softmax and conformal set evaluation, where K is the number of taxa in the catalog.
@@ -322,7 +382,7 @@ def run_prediction(image_bytes: bytes) -> dict[str, Any]:
         image_bytes: Raw binary bytes of the input organism image.
 
     Returns:
-        Dictionary containing scientific name, common name, top-1 confidence, conformal set candidate names, human referral flag, and execution latency.
+        Dictionary containing scientific name, common name, top-1 confidence, conformal set candidate names, human referral flag, OOD status, OOD energy score, probabilities, feature embedding, and execution latency.
     """
     start_time = time.perf_counter()
 
@@ -330,7 +390,7 @@ def run_prediction(image_bytes: bytes) -> dict[str, Any]:
 
     tensor = _get_image_tensor(image_bytes)
 
-    logits_np = compute_logits(tensor)
+    logits_np, embedding_np = compute_model_outputs(tensor)
     temp = get_settings().model.temperature
     scaled_logits = logits_np / temp
     shifted = np.exp(scaled_logits - np.max(scaled_logits))
@@ -342,6 +402,7 @@ def run_prediction(image_bytes: bytes) -> dict[str, Any]:
 
     # Out-of-distribution energy detection
     ood_detector = get_ood_detector()
+    ood_energy_score = float(ood_detector.compute_energy_score(logits_np))
     is_ood = ood_detector.is_ood(logits_np)
 
     # Uncertainty quantification
@@ -363,6 +424,9 @@ def run_prediction(image_bytes: bytes) -> dict[str, Any]:
         "confidence": top1_prob,
         "conformal_set": conformal_set_names,
         "is_ood": is_ood,
+        "ood_energy_score": ood_energy_score,
         "requires_human_review": requires_human_review,
+        "probabilities": [float(p) for p in probabilities],
+        "embedding": embedding_np,
         "latency_ms": elapsed_time_ms,
     }
