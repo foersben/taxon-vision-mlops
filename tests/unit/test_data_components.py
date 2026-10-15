@@ -240,3 +240,65 @@ def test_s3_streamer_main_cli(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
     assert out_dir.exists()
     saved_files = list(out_dir.glob("*.jpg"))
     assert len(saved_files) == 2
+
+
+def test_fetch_image_with_retry_success_and_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify fetch_image_with_retry retries transient errors and succeeds when response recovers.
+
+    Why:
+        Confirms network resilience against transient socket drops and rate limiting during bulk streaming.
+
+    How:
+        Simulates an initial RequestError followed by HTTP 503, finally recovering with 200 OK using zero delay backoff.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+    """
+    import httpx
+
+    from taxon_vision.data.s3_streamer import create_streaming_http_client, fetch_image_with_retry
+
+    attempts = 0
+
+    class TransientClient:
+        def get(self, _url: str) -> Any:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise httpx.ConnectError("DNS resolution failed")
+            if attempts == 2:
+
+                class ErrorResponse:
+                    status_code = 503
+                    content = b"Service Unavailable"
+
+                return ErrorResponse()
+
+            class SuccessResponse:
+                status_code = 200
+                content = b"valid_image_bytes"
+
+            return SuccessResponse()
+
+    client = cast(httpx.Client, TransientClient())
+    data = fetch_image_with_retry("https://mock.s3/img.jpg", client=client, max_retries=3, backoff_factor=0.0)
+    assert data == b"valid_image_bytes"
+    assert attempts == 3
+
+    failing_attempts = 0
+
+    class AlwaysFailingClient:
+        def get(self, _url: str) -> Any:
+            nonlocal failing_attempts
+            failing_attempts += 1
+            raise httpx.ReadTimeout("Timeout reading stream")
+
+    fail_client = cast(httpx.Client, AlwaysFailingClient())
+    failed_data = fetch_image_with_retry(
+        "https://mock.s3/fail.jpg", client=fail_client, max_retries=2, backoff_factor=0.0
+    )
+    assert failed_data is None
+    assert failing_attempts == 3
+
+    real_or_mock_client = create_streaming_http_client()
+    assert real_or_mock_client is not None

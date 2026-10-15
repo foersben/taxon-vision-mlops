@@ -239,3 +239,73 @@ def test_run_feature_extraction_pipeline_and_cli(monkeypatch: pytest.MonkeyPatch
         ["--manifest", str(manifest_file), "--out", str(tmp_path / "cli_features.pt"), "--device", "cpu"]
     )
     assert ret == 0
+
+
+def test_extract_features_completeness_gate_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Verify run_feature_extraction raises RuntimeError when completeness falls below threshold and untrained fallback is False.
+
+    Why:
+        Guarantees that silent dataset truncation under network error conditions is intercepted before downstream linear probing.
+
+    How:
+        Configures an 8-sample manifest where the mock streamer only yields 4 samples (50% completeness < 95% threshold). Disables TAXON_ALLOW_UNTRAINED_FALLBACK and asserts RuntimeError is raised.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+        tmp_path: Pytest temporary directory fixture.
+    """
+    from taxon_vision.config import get_settings
+
+    manifest_file = tmp_path / "manifest.parquet"
+    df = pl.DataFrame(
+        {
+            "observation_uuid": [f"uuid-{i}" for i in range(8)],
+            "taxon_id": [1, 1, 1, 1, 2, 2, 2, 2],
+            "image_url": [f"https://mock.s3/img_{i}.jpg" for i in range(8)],
+        }
+    )
+    df.write_parquet(manifest_file)
+    out_file = tmp_path / "truncated_features.pt"
+
+    class IncompleteStreamer:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            self.df = df
+
+        def stream_images(self, **_kwargs: Any) -> Any:
+            # Yield only 4 out of 8 images (50% < 95%)
+            for i in range(4):
+                yield f"uuid-{i}", 1, Image.new("RGB", (32, 32))
+
+    monkeypatch.setattr("taxon_vision.pipelines.extract_features.S3ImageStreamer", IncompleteStreamer)
+
+    def _mock_extractor(*_args: Any, **_kwargs: Any) -> torch.nn.Module:
+        return torch.nn.Linear(3, 16)
+
+    def _mock_catalog() -> list[dict[str, Any]]:
+        return [{"id": 1, "scientific_name": "Taxon A"}, {"id": 2, "scientific_name": "Taxon B"}]
+
+    def _mock_stream_extract(**_kwargs: Any) -> tuple[torch.Tensor, torch.Tensor]:
+        return (torch.zeros((4, 16)), torch.zeros(4, dtype=torch.long))
+
+    monkeypatch.setattr("taxon_vision.pipelines.extract_features.create_feature_extractor", _mock_extractor)
+    monkeypatch.setattr("taxon_vision.pipelines.extract_features.load_taxa_catalog", _mock_catalog)
+    monkeypatch.setattr(
+        "taxon_vision.pipelines.extract_features.stream_and_extract_representations",
+        _mock_stream_extract,
+    )
+
+    monkeypatch.setenv("TAXON_ALLOW_UNTRAINED_FALLBACK", "false")
+    get_settings.cache_clear()
+
+    cfg = FeatureExtractionConfig(
+        extractor="mobilenetv4_conv_small",
+        manifest_path=manifest_file,
+        output_path=out_file,
+        batch_size=4,
+        device="cpu",
+    )
+
+    with pytest.raises(RuntimeError, match="Extraction completeness gate failed"):
+        run_feature_extraction(cfg)
+
+    get_settings.cache_clear()

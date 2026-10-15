@@ -5,8 +5,10 @@
 from __future__ import annotations
 
 import concurrent.futures
+import functools
 import io
 import logging
+import time
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
@@ -14,6 +16,8 @@ from typing import Any
 import httpx
 import polars as pl
 from PIL import Image
+
+from taxon_vision.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -76,30 +80,147 @@ def _prepare_stream_records(
     return df.head(limit).to_dicts() if limit is not None else df.to_dicts()
 
 
+def create_streaming_http_client(
+    max_connections: int | None = None,
+    max_keepalive_connections: int | None = None,
+    retries: int | None = None,
+    timeout_seconds: float | None = None,
+) -> httpx.Client:
+    """Instantiate a persistent HTTP client configured with connection pooling and transport retries.
+
+    Why:
+        Streaming high-volume imagery over remote HTTP endpoints saturates local sockets and triggers DNS lookup exhaustion unless connections are pooled and reused across worker threads.
+
+    How:
+        Loads pooling limits, transport retry bounds, and request timeouts from centralized settings (or arguments) and constructs a thread-safe httpx.Client.
+
+    Args:
+        max_connections: Maximum socket pool connection capacity.
+        max_keepalive_connections: Maximum idle keep-alive sockets to preserve.
+        retries: Transport-level connection retry count.
+        timeout_seconds: Maximum request timeout in seconds.
+
+    Returns:
+        Configured httpx.Client instance.
+    """
+    settings = get_settings()
+    cfg = settings.streaming
+    limits = httpx.Limits(
+        max_connections=max_connections if max_connections is not None else cfg.http_max_connections,
+        max_keepalive_connections=max_keepalive_connections
+        if max_keepalive_connections is not None
+        else cfg.http_keepalive_connections,
+    )
+    transport = httpx.HTTPTransport(retries=retries if retries is not None else cfg.http_max_retries)
+    timeout = httpx.Timeout(timeout_seconds if timeout_seconds is not None else cfg.http_timeout_seconds)
+    return httpx.Client(transport=transport, limits=limits, timeout=timeout)
+
+
+def _is_transient_http_error(status_code: int) -> bool:
+    """Determine whether an HTTP status code represents a transient, retryable failure.
+
+    Why:
+        Rate limiting (429) and server-side errors (5xx) are transient conditions that should be retried with exponential backoff.
+
+    How:
+        Returns True if status_code is 429 or between 500 and 599, otherwise False.
+
+    Args:
+        status_code: HTTP response status integer.
+
+    Returns:
+        Boolean flag indicating retry eligibility.
+    """
+    return status_code == 429 or (500 <= status_code < 600)
+
+
+def fetch_image_with_retry(
+    url: str,
+    client: httpx.Client,
+    max_retries: int | None = None,
+    backoff_factor: float | None = None,
+) -> bytes | None:
+    """Fetch raw image byte content from a remote URL with exponential backoff on transient errors.
+
+    Why:
+        Remote object store endpoints can encounter DNS lookup throttling, socket exhaustion, or rate-limiting during high-concurrency ingestion. Retrying with exponential backoff prevents transient dropouts from corrupting training datasets.
+
+    How:
+        Executes HTTP GET requests up to max_retries times. Catches httpx.RequestError and OSError (encompassing DNS gaierror), and identifies HTTP 429/5xx status codes, sleeping for backoff_factor * (2 ** attempt) seconds before retrying. Returns content bytes on HTTP 200, or None after exhaustion.
+
+    Args:
+        url: Remote image URL to retrieve.
+        client: Persistent httpx.Client to reuse for requests.
+        max_retries: Optional maximum retry attempts. If None, derived from centralized settings.
+        backoff_factor: Optional exponential backoff multiplier. If None, derived from centralized settings.
+
+    Returns:
+        Decoded image bytes if retrieved successfully, or None if retrieval failed.
+    """
+    settings = get_settings()
+    retries = max_retries if max_retries is not None else settings.streaming.http_max_retries
+    factor = backoff_factor if backoff_factor is not None else settings.streaming.http_backoff_factor
+
+    for attempt in range(retries + 1):
+        try:
+            response = client.get(url)
+            status_code = getattr(response, "status_code", 200)
+            if status_code == 200:
+                return response.content
+            if _is_transient_http_error(status_code) and attempt < retries:
+                time.sleep(factor * (2**attempt))
+                continue
+            logger.warning(
+                "HTTP %d when fetching %s (attempt %d/%d)",
+                status_code,
+                url,
+                attempt + 1,
+                retries + 1,
+            )
+            return None
+        except (httpx.RequestError, OSError) as exc:
+            if attempt < retries:
+                time.sleep(factor * (2**attempt))
+                continue
+            logger.warning("Request failed for %s after %d retries: %s", url, retries, exc)
+            return None
+    return None
+
+
 def _fetch_record_image(
     record: dict[str, Any],
     client: httpx.Client | None = None,
 ) -> tuple[str, int, Image.Image] | None:
     """Fetch and decode an image from a single observation record.
 
+    Why:
+        Centralizes the decoding pipeline from observation metadata into in-memory PIL RGB representations.
+
+    How:
+        Extracts observation identifiers and URL, fetches raw bytes via fetch_image_with_retry using a persistent client session, and decodes byte buffers into standardized RGB format.
+
     Args:
-        record: Observation record dictionary.
-        client: Optional existing httpx.Client to reuse.
+        record: Observation record dictionary containing UUID, taxon ID, and image URL.
+        client: Optional existing httpx.Client to reuse across requests.
 
     Returns:
-        Tuple of (observation_uuid, taxon_id, Image) or None if retrieval failed.
+        Tuple of (observation_uuid, taxon_id, Image) or None if retrieval or decoding failed.
     """
     obs_uuid = str(record["observation_uuid"])
     taxon_id = int(record["taxon_id"])
     image_url = str(record["image_url"])
     try:
+        content: bytes | None
         if client is not None:
-            response = client.get(image_url)
+            content = fetch_image_with_retry(image_url, client=client)
         else:
-            with httpx.Client(timeout=15.0) as local_client:
-                response = local_client.get(image_url)
-        response.raise_for_status()
-        raw_img = Image.open(io.BytesIO(response.content))
+            with create_streaming_http_client() as local_client:
+                content = fetch_image_with_retry(image_url, client=local_client)
+
+        if content is None:
+            return None
+
+        raw_img = Image.open(io.BytesIO(content))
         img: Image.Image = raw_img.convert("RGB") if raw_img.mode != "RGB" else raw_img
         return obs_uuid, taxon_id, img
     except Exception as e:
@@ -109,42 +230,61 @@ def _fetch_record_image(
 
 def _stream_sequential(
     records: list[dict[str, Any]],
+    client: httpx.Client | None = None,
 ) -> Generator[tuple[str, int, Image.Image], None, None]:
     """Stream records sequentially using a persistent HTTP client session.
 
     Args:
         records: Observation record dictionaries to stream.
+        client: Optional persistent httpx.Client session.
 
     Yields:
         Tuple of (observation_uuid, taxon_id, Image).
     """
-    with httpx.Client(timeout=15.0) as client:
+    if client is not None:
         for record in records:
             res = _fetch_record_image(record, client=client)
             if res is not None:
                 yield res
+    else:
+        with create_streaming_http_client() as new_client:
+            for record in records:
+                res = _fetch_record_image(record, client=new_client)
+                if res is not None:
+                    yield res
 
 
 def _stream_concurrent(
     records: list[dict[str, Any]],
     max_workers: int,
+    client: httpx.Client | None = None,
 ) -> Generator[tuple[str, int, Image.Image], None, None]:
-    """Stream records concurrently using a ThreadPoolExecutor.
+    """Stream records concurrently using a ThreadPoolExecutor with pooled HTTP connections.
 
     Args:
         records: Observation record dictionaries to stream.
         max_workers: Thread worker pool concurrency limit.
+        client: Optional persistent httpx.Client session to reuse across worker threads.
 
     Yields:
         Tuple of (observation_uuid, taxon_id, Image).
     """
     chunk_size = max(1, min(32, len(records)))
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        for i in range(0, len(records), chunk_size):
-            chunk = records[i : i + chunk_size]
-            for result in executor.map(_fetch_record_image, chunk):
-                if result is not None:
-                    yield result
+
+    def _execute(http_client: httpx.Client) -> Generator[tuple[str, int, Image.Image], None, None]:
+        fetch_fn = functools.partial(_fetch_record_image, client=http_client)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            for i in range(0, len(records), chunk_size):
+                chunk = records[i : i + chunk_size]
+                for result in executor.map(fetch_fn, chunk):
+                    if result is not None:
+                        yield result
+
+    if client is not None:
+        yield from _execute(client)
+    else:
+        with create_streaming_http_client() as new_client:
+            yield from _execute(new_client)
 
 
 class S3ImageStreamer:
@@ -159,19 +299,25 @@ class S3ImageStreamer:
     Attributes:
         manifest_path: Filesystem path to the Parquet manifest containing image URLs.
         df: Polars DataFrame holding observation records.
+        client: Optional shared httpx.Client instance.
     """
 
-    def __init__(self, manifest_path: str | Path = "data/manifests/dataset_manifest.parquet") -> None:
+    def __init__(
+        self,
+        manifest_path: str | Path = "data/manifests/dataset_manifest.parquet",
+        client: httpx.Client | None = None,
+    ) -> None:
         """Initialize the S3 image streaming interface from a Parquet manifest.
 
         Why:
             Reads metadata using columnar Parquet format to enable fast projected queries without parsing uncompressed text or CSV files.
 
         How:
-            Resolves manifest path, asserts file existence, and loads columnar tables via `polars.read_parquet`.
+            Resolves manifest path, asserts file existence, loads columnar tables via polars.read_parquet, and optionally registers a persistent HTTP client.
 
         Args:
             manifest_path: Path to the Parquet manifest file containing image URLs.
+            client: Optional pre-configured httpx.Client for HTTP pooling reuse.
 
         Raises:
             FileNotFoundError: If the manifest file cannot be located on disk.
@@ -181,6 +327,21 @@ class S3ImageStreamer:
             raise FileNotFoundError(f"Manifest not found at {self.manifest_path}. Run ingest_data.py first.")
 
         self.df = pl.read_parquet(self.manifest_path)
+        self._external_client = client is not None
+        self._client = client
+
+    def __enter__(self) -> S3ImageStreamer:
+        """Enter context manager, initializing persistent HTTP client if none exists."""
+        if self._client is None:
+            self._client = create_streaming_http_client()
+        return self
+
+    def __exit__(self, *args: Any) -> None:
+        """Exit context manager, closing owned HTTP client resources."""
+        if self._client is not None and not self._external_client:
+            if hasattr(self._client, "close"):
+                self._client.close()
+            self._client = None
 
     def stream_images(
         self,
@@ -209,10 +370,17 @@ class S3ImageStreamer:
             Tuple of (observation_uuid, taxon_id, PIL.Image.Image) for each streamed record.
         """
         records = _prepare_stream_records(self.df, limit, shuffle, balanced, seed)
-        if max_workers <= 1 or len(records) <= 2:
-            yield from _stream_sequential(records)
+        if self._client is not None:
+            if max_workers <= 1 or len(records) <= 2:
+                yield from _stream_sequential(records, client=self._client)
+            else:
+                yield from _stream_concurrent(records, max_workers, client=self._client)
         else:
-            yield from _stream_concurrent(records, max_workers)
+            with create_streaming_http_client() as local_client:
+                if max_workers <= 1 or len(records) <= 2:
+                    yield from _stream_sequential(records, client=local_client)
+                else:
+                    yield from _stream_concurrent(records, max_workers, client=local_client)
 
 
 def main() -> None:

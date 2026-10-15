@@ -249,6 +249,11 @@ class Settings(BaseSettings):
     streaming: StreamingConfig = Field(default_factory=StreamingConfig)
     optuna: OptunaConfig = Field(default_factory=OptunaConfig)
 
+    @property
+    def data(self) -> StreamingConfig:
+        """Alias for streaming configuration to support data subsystem references."""
+        return self.streaming
+
 
 def _load_yaml_dict(path: Path) -> dict[str, Any]:
     """Safely load and parse YAML configuration dictionary from disk.
