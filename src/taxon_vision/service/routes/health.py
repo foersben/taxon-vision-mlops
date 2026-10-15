@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, status
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from starlette.responses import Response
 
-from taxon_vision.service.inference import check_readiness
+from taxon_vision.service.inference import check_readiness, get_classifier, load_taxa_catalog
 
 router = APIRouter()
 
@@ -53,6 +53,22 @@ def health_ready() -> dict[str, Any]:
     Raises:
         HTTPException: HTTP 503 if the service is not ready.
     """
+    try:
+        taxa = load_taxa_catalog()
+        if not taxa:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Service not ready: taxa catalog is empty",
+            )
+        get_classifier()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Service not ready: {exc}",
+        ) from exc
+
     ready, checks = check_readiness()
     if not ready:
         raise HTTPException(

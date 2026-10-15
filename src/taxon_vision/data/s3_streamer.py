@@ -11,7 +11,7 @@ import logging
 import time
 from collections.abc import Generator
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 import httpx
 import polars as pl
@@ -20,6 +20,22 @@ from PIL import Image
 from taxon_vision.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+
+@runtime_checkable
+class HttpResponseWithStatus(Protocol):
+    """Protocol for HTTP response objects carrying a status code."""
+
+    status_code: int
+
+
+@runtime_checkable
+class ClosableResource(Protocol):
+    """Protocol for resources exposing a close method."""
+
+    def close(self) -> None:
+        """Close open socket and underlying transport resources."""
+        ...
 
 
 def _prepare_balanced_manifest(
@@ -164,7 +180,7 @@ def fetch_image_with_retry(
     for attempt in range(retries + 1):
         try:
             response = client.get(url)
-            status_code = getattr(response, "status_code", 200)
+            status_code = response.status_code if isinstance(response, HttpResponseWithStatus) else 200
             if status_code == 200:
                 return response.content
             if _is_transient_http_error(status_code) and attempt < retries:
@@ -339,7 +355,7 @@ class S3ImageStreamer:
     def __exit__(self, *args: Any) -> None:
         """Exit context manager, closing owned HTTP client resources."""
         if self._client is not None and not self._external_client:
-            if hasattr(self._client, "close"):
+            if isinstance(self._client, ClosableResource):
                 self._client.close()
             self._client = None
 

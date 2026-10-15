@@ -183,16 +183,26 @@ def check_readiness() -> tuple[bool, dict[str, str]]:
     ready = True
 
     try:
-        checks["taxa_catalog"] = f"ok ({len(load_taxa_catalog())} taxa)"
+        catalog = load_taxa_catalog()
+        if not catalog:
+            checks["taxa_catalog"] = "failed: empty catalog"
+            return False, checks
+        checks["taxa_catalog"] = f"ok ({len(catalog)} taxa)"
     except Exception as exc:
         checks["taxa_catalog"] = f"failed: {exc}"
         return False, checks
 
     try:
+        get_classifier()
+        checks["classifier"] = "ok"
+    except Exception as exc:
+        checks["classifier"] = f"failed: {exc}"
+        ready = False
+
+    try:
         if get_onnx_engine() is not None:
             checks["model"] = "ok (onnx)"
         else:
-            get_classifier()
             checks["model"] = "ok (torch)"
     except Exception as exc:
         checks["model"] = f"failed: {exc}"
