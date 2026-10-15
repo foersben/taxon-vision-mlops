@@ -2,135 +2,154 @@
 \chapter{Epistemic Safety \& Active Learning}
 \label{ch:safety}
 
-Deploying deep neural networks in automated ecological workflows introduces a fundamental operational risk: conventional classifiers are notoriously uncalibrated and prone to overconfident misclassifications. Under standard training objectives, a convolutional network or vision transformer produces normalised output vectors via the softmax operator. When presented with blurred imagery, non-biological artefacts, or previously uncatalogued taxa, these models frequently assign high confidence to incorrect categories. In biodiversity monitoring, silent misclassifications corrupt environmental databases and ultimately undermine conservation interventions.
+Deploying deep neural networks within automated ecological monitoring workflows introduces a fundamental operational risk: discriminative classifiers optimised under cross-entropy objectives are systematically uncalibrated and prone to overconfident misclassifications. Because the softmax operator projects arbitrary logit vectors onto the probability simplex, the resulting class assignment is invariant to constant scalar shifts and sensitive only to relative logit differences. When confronted with motion-blurred field imagery, non-biological sensor artefacts, or uncatalogued taxa from outside the training distribution, standard vision architectures frequently concentrate probability mass onto a single erroneous category. In biodiversity informatics, such silent misclassifications corrupt longitudinal occurrence registries and distort downstream conservation models.
 
-In order to establish genuine production reliability, our serving architecture mathematically decouples feature extraction from raw point predictions. The platform combines energy-based density filtering, deterministic spatial-temporal constraint masking, and distribution-free Split Conformal Prediction into an integrated epistemic safety layer. This pipeline guarantees bounded error rates under arbitrary data distributions and programmatically routes ambiguous observations into human-in-the-loop active learning workflows.
+To establish verifiable production reliability, the TaxonVision-MLOps serving architecture decouples representation extraction from raw point predictions. The inference pipeline integrates three sequential mechanisms into a unified epistemic safety layer: pre-softmax Helmholtz free-energy filtering, deterministic spatial-temporal logit masking, and distribution-free Split Conformal Prediction. Together, these stages enforce bounded marginal error rates under arbitrary data distributions and programmatically route statistically ambiguous or novel observations into a human-in-the-loop active learning cycle.
 
 \section{Energy-Based Out-of-Distribution Detection}
 \label{sec:energy_ood}
 
-Field deployments continuously encounter non-biological clutter, corrupt sensor transmissions, and organisms belonging to unmodelled phyla. Evaluating uncertainty sets on such inputs is computationally wasteful and pollutes downstream monitoring metrics. Consequently, the first stage of the safety pipeline intercepts and filters out-of-distribution (OOD) observations directly in the feature space prior to probability normalisation.
+Unconstrained citizen-science data streams continuously introduce non-biological clutter, corrupted image payloads, and organisms belonging to unmodelled phyla. Constructing prediction sets or executing vector retrieval over such inputs wastes computational cycles and contaminates operational telemetry. Consequently, the initial gate of the safety layer intercepts and rejects out-of-distribution (OOD) inputs directly within the unnormalised logit space prior to probability normalisation.
 
-Traditional methods rely on the Maximum Softmax Probability (MSP), $\max_k \hat{\pi}_k(x)$, which suffers from high false-positive rates due to the normalisation constraint forcing probabilities to sum to one regardless of absolute logit magnitudes. Instead, the platform derives an unconstrained free energy score directly from the logit outputs. Conceptually, Helmholtz free energy measures the physical compatibility of an input with the learned statistical parameters of the model. In-distribution samples occupy high-density regions characterised by lower energy states, whereas anomalous samples inhabit low-density regions characterised by elevated free energy.
+Conventional anomaly detectors rely on the Maximum Softmax Probability (MSP), defined as $\max_j \hat{\pi}_j(x)$. However, because the unit-sum constraint $\sum_{j=1}^K \hat{\pi}_j(x) = 1$ forces probability mass to be conserved regardless of absolute activation magnitude, MSP exhibits high false-positive rates on out-of-distribution samples that trigger weak, near-uniform feature responses with a slight random perturbation. To circumvent this normalisation pathology, the platform evaluates the scalar Helmholtz free energy of the logit vector. Borrowed from statistical mechanics, the free energy $E(x; f)$ quantifies the negative log-partition function of the discriminative model, acting as a surrogate for the negative log-density of the input $x \in \mathcal{X}$ under the learned data manifold.
 
-Formally, consider an input image vector $x \in \mathcal{X}$ processed by a backbone feature extractor producing an unnormalised logit vector $f(x) \in \mathbb{R}^K$, where $K$ denotes the total number of modelled taxa. For any logit coordinate $f_j(x)$ corresponding to class index $j \in \{1, \dots, K\}$, the Gibbs-Boltzmann distribution links the class probability to the scalar energy function $E(x; f)$ via temperature scaling parameter $T \in \mathbb{R}^+$:
-\[
+Let $f: \mathcal{X} \to \mathbb{R}^K$ denote the parameterised neural mapping from the normalised visual crop $x$ to the unnormalised logit vector $f(x) = (f_1(x), \dots, f_K(x))^\top$ across $K$ operational taxa. Under the Gibbs-Boltzmann distribution, the categorical likelihood of class $j \in \{1, \dots, K\}$ at temperature $T \in \mathbb{R}^+$ is coupled to the scalar free energy function $E(x; f)$ via:
+\begin{equation}
 E(x; f) = -T \cdot \log \sum_{j=1}^{K} \exp\left(\frac{f_j(x)}{T}\right)
-\]
-In this formulation:
-\begin{itemize}
-    \item $x$ represents the normalised child visual crop passed to the network.
-    \item $f$ denotes the parameterised mapping from pixel space to the logit representation.
-    \item $f_j(x)$ is the scalar logit score assigned by the model to taxon $j$.
-    \item $K$ is the discrete cardinality of the operational taxonomy.
-    \item $T$ is the temperature scaling hyperparameter ($T > 0$) that controls the smoothness of the log-sum-exp surface.
-    \item $E(x; f)$ is the resulting scalar energy score.
-\end{itemize}
+\label{eq:helmholtz_energy}
+\end{equation}
+where $T > 0$ denotes the temperature scaling parameter governing the smoothness of the log-sum-exp aggregation (fixed to $T = 1.0$ during standard inference). Inputs aligned with the learned training manifold elicit strong positive activations on compatible taxonomic classes, driving the partition sum upwards and yielding low (strongly negative) free energy values. Conversely, out-of-distribution anomalies fail to excite class-specific feature detectors, resulting in suppressed logit magnitudes and elevated free energy states.
 
-During inference, the system evaluates $E(x; f)$ against an empirically calibrated decision threshold $\tau_{\text{OOD}} \in \mathbb{R}$. The decision rule $\Phi(x)$ gates subsequent pipeline execution:
-\[
+During real-time serving, $E(x; f)$ is evaluated against a calibrated decision boundary $\tau_{\text{OOD}} \in \mathbb{R}$. The binary gating operator $\Phi(x)$ governs downstream execution:
+\begin{equation}
 \Phi(x) = 
 \begin{cases}
-    1 \quad (\text{In-Distribution: Proceed to Spatial Masking}), & \text{if } E(x; f) \le \tau_{\text{OOD}} \\
-    0 \quad (\text{Out-of-Distribution: Reject Immediately}), & \text{if } E(x; f) > \tau_{\text{OOD}}
+    1 \quad (\text{In-Distribution: Proceed to Spatial-Temporal Masking}), & \text{if } E(x; f) \le \tau_{\text{OOD}} \\
+    0 \quad (\text{Out-of-Distribution: Reject and Divert to Triage}), & \text{if } E(x; f) > \tau_{\text{OOD}}
 \end{cases}
-\]
-The threshold $\tau_{\text{OOD}}$ is strictly tuned on an empirical holdout split to capture $95\%$ of in-distribution validation observations whilst maximising Precision-Recall AUC (PR-AUC) against negative control datasets containing empty foliage and mechanical objects. Observations failing this check bypass classification entirely, thus preventing ungrounded inference.
+\label{eq:ood_gate}
+\end{equation}
+
+\subsection{Analytical Bounds, Threshold Calibration, and Recalibration Dynamics}
+\label{subsec:energy_calibration_math}
+
+Unlike normalised probabilities, which are strictly confined to the unit interval $[0, 1]$, Helmholtz free energy operates on an unconstrained scale whose domain depends directly on the taxonomic cardinality $K$, the temperature $T$, and the $L_2$ weight-decay regularisation $\lambda$ of the classification head. Adopting arbitrary static thresholds from external literature -- such as $\tau_{\text{OOD}} = -12.5$, derived from unregularised $1{,}000$-class ImageNet benchmarks -- violates the mathematical domain of compact linear heads and induces complete rejection of valid observations. Establishing a rigorous decision boundary therefore requires deriving the analytical upper and lower energy asymptotes of the classifier.
+
+\paragraph{Upper Energy Bound (Maximum Entropy and the Noise Floor).}
+Consider an uninformative input $x_{\text{noise}}$ (such as background foliage, sensor blur, or an unmodelled phylum) that shares zero morphological features with the $K$ catalogued taxa. Because the frozen vision backbone embeddings are unit-normalised ($\|z\|_2 = 1$) and the linear head weights are regularised towards the origin, the inner products vanish and the logit vector collapses towards zero-centred uniform indifference, $f_j(x_{\text{noise}}) \to 0$ for all $j \in \{1, \dots, K\}$. Substituting this zero-activation state into Equation~\ref{eq:helmholtz_energy} yields the analytical noise ceiling $E_{\text{noise}}$:
+\begin{equation}
+E_{\text{noise}}(K, T) = -T \cdot \log \left( \sum_{j=1}^{K} \exp(0) \right) = -T \cdot \log(K)
+\label{eq:energy_upper_bound}
+\end{equation}
+For the baseline operational catalogue of $K = 10$ taxa at unit temperature ($T = 1.0$), this upper bound evaluates to $E_{\text{noise}} = -\log(10) \approx -2.3026$. Physically, $E_{\text{noise}}$ represents the state of maximum thermodynamic entropy: any observation yielding $E(x; f) \ge -2.3026$ possesses less total activation mass than uniform random noise and is deterministically classified as out-of-distribution clutter.
+
+\paragraph{Lower Energy Bound (In-Distribution Activation Regime).}
+To determine the lower energy floor $E_{\min}$ attainable by genuine biological specimens, let $f_{\max}(x) = \max_j f_j(x)$ denote the dominant class logit, and let $\hat{\pi}_{\max}(x) = \exp(f_{\max}(x)/T) / \sum_j \exp(f_j(x)/T)$ denote the corresponding maximum softmax probability. Factoring $\exp(f_{\max}(x)/T)$ out of the partition sum in Equation~\ref{eq:helmholtz_energy} yields the exact algebraic identity:
+\begin{equation}
+E(x; f) = -f_{\max}(x) + T \cdot \log \hat{\pi}_{\max}(x)
+\label{eq:energy_identity}
+\end{equation}
+Because $\hat{\pi}_{\max}(x) \in [1/K, 1]$, the logarithmic correction term is strictly bounded within $\log \hat{\pi}_{\max}(x) \in [-\log K, 0]$. For a high-confidence in-distribution specimen where $\hat{\pi}_{\max}(x) \to 1$, the second term vanishes ($\log \hat{\pi}_{\max}(x) \to 0$), and the free energy converges asymptotically to the negative dominant logit, $E(x; f) \approx -f_{\max}(x)$. Under an $L_2$-regularised linear classification head with bounded weight norm $\|W\|_\infty$ operating on unit-hypersphere embeddings, the maximum achievable logit is bounded by the Cauchy-Schwarz inequality, $f_{\max}(x) \le \|w_{\max}\|_2 \|z\|_2 + b_{\max}$. Empirically, across well-converged DINOv3 and BioCLIP-2 heads, prototypical specimens generate dominant logits in the interval $f_{\max}(x) \in [3.5, 4.8]$ with $\hat{\pi}_{\max}(x) \ge 0.85$, confining legitimate in-distribution observations to the energy band $E(x; f) \in [-4.80, -3.50]$. By contrast, an uncalibrated threshold of $\tau = -12.5$ would demand $f_{\max}(x) \ge 12.5$ ($\exp(f_{\max}) \approx 2.68 \times 10^5$), a regime mathematically unreachable under weight-decay regularisation.
+
+\paragraph{Practical Threshold Calibration and Continuous Recalibration.}
+Rather than relying on manual heuristics, $\tau_{\text{OOD}}$ is determined empirically as an automated step at the conclusion of classification head training. Given the holdout in-distribution validation split $\mathcal{D}_{\text{val}} = \{(x_i, y_i)\}_{i=1}^{m}$, the calibration routine computes the empirical energy distribution $\mathcal{E}_{\text{val}} = \{E(x_i; f)\}_{i=1}^{m}$ and sets $\tau_{\text{OOD}}$ to the $(1 - \beta)$-quantile corresponding to a prescribed True Positive Rate (TPR) of $1 - \beta = 0.95$:
+\begin{equation}
+\tau_{\text{OOD}} = \text{Quantile}\left(\mathcal{E}_{\text{val}}; \, 1 - \beta\right) \quad \text{subject to} \quad \tau_{\text{OOD}} < -T \cdot \log(K)
+\label{eq:ood_calibration}
+\end{equation}
+For the $K = 10$ baseline configuration, this protocol yields $\tau_{\text{OOD}} = -2.40$ (persisted in \nolinkurl{config/default_config.yaml}), providing a conservative safety margin below the $-2.3026$ noise floor whilst retaining $95\%$ of valid holdout specimens.
+
+Because the energy scale is intrinsically coupled to the logit geometry of the active model, $\tau_{\text{OOD}}$ is not a static constant and must undergo automated recalibration whenever one of three structural transitions occurs:
+\begin{enumerate}
+    \item \textbf{Taxonomic Cardinality Expansion ($K \to K'$):} The baseline noise ceiling shifts logarithmically according to $\Delta E_{\text{noise}} = -T \cdot \log(K' / K)$. Scaling the catalogue from $K = 10$ to $K' = 2{,}000$ taxa shifts the uniform noise floor from $-2.30$ to $-\log(2000) \approx -7.60$, requiring an immediate recomputation of Equation~\ref{eq:ood_calibration}.
+    \item \textbf{Head Retraining and Hyperparameter Updates:} Modifications to the Optuna-tuned weight-decay penalty $\lambda$, dropout rate $p$, or Class-Balanced Loss factor $\beta_{\text{CB}}$ alter the $L_2$ norm of the linear head weights $\|W\|_2$, rescaling $f_{\max}(x)$ and shifting the empirical energy distribution $\mathcal{E}_{\text{val}}$.
+    \item \textbf{Covariate Shift and Drift-Triggered Recalibration:} When the real-time Prometheus drift monitor detects a statistically significant shift in unit-embedding norms ($W_1(\mathcal{Z}_{\text{base}}, \mathcal{Z}_{\text{prod}}) > \tau_{\text{drift}}$) or an anomalous spike in the OOD rejection rate, the CI/CD pipeline triggers a recalibration pass over the updated DVC validation manifest prior to promoting the next \texttt{Challenger} model.
+\end{enumerate}
 
 \section{Spatial-Temporal Constraint Masking}
 \label{sec:spatial_masking}
 
-Visual similarity search in high-dimensional embedding spaces frequently encounters convergent evolution, where distinct organisms inhabiting disparate continents develop overlapping morphological features. While a purely visual classifier may assign comparable likelihoods to such species, physical geography imposes strict physical boundaries.
+Visual classification in high-dimensional representation spaces is vulnerable to convergent evolution, wherein taxonomically distinct species inhabiting separate biogeographical realms evolve near-identical morphological traits. Whilst a purely visual classifier assigns comparable activation scores to such allopatric sibling taxa, physical geography and seasonal phenology impose strict deterministic constraints.
 
-In order to enforce ecological validity without incurring the computational overhead of additional deep learning models, the serving engine applies deterministic boolean masks directly to the post-OOD logit vector. Every citizen-science observation arrives with DarwinCore spatial-temporal metadata: latitude, longitude, and calendar timestamp. The ingestion pipeline systematically maps the observation coordinates to an Uber H3 hexagonal spatial cell index $h \in \mathcal{H}$ and maps the timestamp to an observation month $m \in \{1, \dots, 12\}$.
+To enforce biogeographical validity without introducing secondary neural network latency, the serving engine applies a deterministic boolean mask directly to the post-OOD logit vector. Incoming citizen-science observations carry DarwinCore spatial-temporal metadata comprising WGS84 coordinates and an acquisition timestamp. During ingestion, the coordinates are projected onto a discrete Uber H3 hexagonal cell index $h \in \mathcal{H}$ (Resolution 4), and the timestamp is mapped to a calendar month $m \in \{1, \dots, 12\}$.
 
-Let $\mathcal{A}(h, m) \subseteq \{1, \dots, K\}$ define the admissible species set, constructed from verified historical GBIF occurrences within a geodesic radius $R$ of spatial cell $h$ during seasonal window $m \pm 1$. The masked logit vector $\tilde{f}(x) \in \mathbb{R}^K$ is defined element-wise for each taxon $j \in \{1, \dots, K\}$ as follows:
-\[
+Let $\mathcal{A}(h, m) \subseteq \{1, \dots, K\}$ denote the admissible taxon subset derived from verified historical GBIF occurrence records within a geodesic radius $R_{\max}$ of cell $h$ during the seasonal window $(m \pm 1) \pmod{12}$. The spatially constrained logit vector $\tilde{f}(x) \in (\mathbb{R} \cup \{-\infty\})^K$ is obtained element-wise for each taxon $j \in \{1, \dots, K\}$:
+\begin{equation}
 \tilde{f}_j(x) = 
 \begin{cases}
     f_j(x), & \text{if } j \in \mathcal{A}(h, m) \\
     -\infty, & \text{if } j \notin \mathcal{A}(h, m)
 \end{cases}
-\]
-Applying the softmax function over $\tilde{f}(x)$ yields the biogeographically constrained probability distribution $\hat{\pi}(x) \in [0, 1]^K$:
-\[
+\label{eq:spatial_mask}
+\end{equation}
+Projecting $\tilde{f}(x)$ onto the probability simplex via the softmax operator yields the biogeographically constrained categorical distribution $\hat{\pi}(x) \in \Delta^{K-1}$:
+\begin{equation}
 \hat{\pi}_j(x) = \frac{\exp(\tilde{f}_j(x))}{\sum_{k=1}^K \exp(\tilde{f}_k(x))}
-\]
-Where $\hat{\pi}_j(x)$ represents the estimated probability that input $x$ belongs to taxon $j$. By forcing $\tilde{f}_j(x) = -\infty$ for biogeographically impossible taxa, $\hat{\pi}_j(x)$ evaluates strictly to zero. This ensures that geographically impossible candidate species are pruned before uncertainty sets are ever constructed.
+\label{eq:constrained_softmax}
+\end{equation}
+Because $\exp(-\infty) = 0$, any taxon absent from the admissible regional and seasonal niche $\mathcal{A}(h, m)$ is assigned strictly zero probability mass ($\hat{\pi}_j(x) = 0$), redistributing the normalised density exclusively across ecologically plausible candidates prior to uncertainty quantification.
 
 \section{Distribution-Free Uncertainty via Split Conformal Prediction}
 \label{sec:conformal_prediction}
 
-Point predictions derived from $\arg\max_j \hat{\pi}_j(x)$ provide no statistical reliability guarantees. In mission-critical biodiversity intelligence, a system must convey not only its best guess, but also the statistical confidence bounded by an explicit error rate. In order to achieve this, the platform implements Split Conformal Prediction \cite{angelopoulos2021gentle}. This converts raw probability distributions into dynamic prediction sets guaranteed to contain the ground-truth taxon under exchangeability assumptions.
+Even after out-of-distribution filtering and biogeographical masking, point predictions derived from $\arg\max_j \hat{\pi}_j(x)$ lack formal statistical validity. To bound the operational error rate without relying on distributional assumptions or asymptotic approximations, the serving architecture wraps the constrained probability estimator in a Split Conformal Prediction layer \cite{angelopoulos2021gentle}. This transformation converts raw point estimates into dynamic prediction sets $\hat{C}(X) \subseteq \{1, \dots, K\}$ accompanied by a rigorous, finite-sample marginal coverage guarantee.
 
-\subsection{Calibration Protocol and Quantile Estimation}
+\subsection{Calibration Protocol and Finite-Sample Quantile Estimation}
+\label{subsec:conformal_calibration}
 
-Let $\mathcal{D}_{\text{cal}} = \{(x_i, y_i)\}_{i=1}^n$ represent an independent calibration dataset containing $n$ exchangeable observations, completely disjoint from the model training and validation splits. For each calibration observation $(x_i, y_i)$, where $x_i$ is the visual crop and $y_i \in \{1, \dots, K\}$ is the ground-truth Linnaean class label, the pipeline computes a scalar non-conformity score $s_i \in [0, 1]$:
-\[
-s_i = 1 - \hat{\pi}_{y_i}(x_i)
-\]
-In this expression:
-\begin{itemize}
-    \item $x_i$ is the $i$-th calibration image.
-    \item $y_i$ is the confirmed ground-truth class label for observation $i$.
-    \item $\hat{\pi}_{y_i}(x_i)$ is the model's constrained softmax probability assigned to the correct class $y_i$.
-    \item $s_i$ denotes the non-conformity score, which increases towards $1$ as model confidence in the true label degrades.
-\end{itemize}
+Let $\mathcal{D}_{\text{cal}} = \{(x_i, y_i)\}_{i=1}^n$ denote an independent calibration split comprising $n$ exchangeable observation pairs, held strictly disjoint from the training and hyperparameter validation partitions. For each calibration instance $(x_i, y_i)$ with ground-truth Linnaean class index $y_i \in \{1, \dots, K\}$, the system evaluates a scalar non-conformity score $s_i \in [0, 1]$ defined as the complement of the constrained softmax probability assigned to the true taxon:
+\begin{equation}
+s_i = s(x_i, y_i) = 1 - \hat{\pi}_{y_i}(x_i)
+\label{eq:nonconformity_score}
+\end{equation}
+The score $s_i$ quantifies the degree of epistemic disagreement between the model prediction and the ground truth: confident, correct classifications yield $s_i \to 0$, whereas severely miscalibrated or ambiguous predictions yield $s_i \to 1$.
 
-Given a user-specified significance level $\alpha \in (0, 1)$ corresponding to a targeted statistical coverage level of $1 - \alpha$ (for example, $\alpha = 0.05$ for $95\%$ coverage), the system computes the empirical quantile threshold $\hat{q}_\alpha$ over the sorted non-conformity scores $s_{(1)} \le s_{(2)} \le \dots \le s_{(n)}$:
-\[
+For a user-prescribed miscoverage significance level $\alpha \in (0, 1)$ (fixed at $\alpha = 0.05$ to enforce a $95\%$ nominal coverage target), the calibration engine sorts the non-conformity scores in non-decreasing order, $s_{(1)} \le s_{(2)} \le \dots \le s_{(n)}$, and computes the finite-sample corrected empirical quantile $\hat{q}_\alpha$:
+\begin{equation}
 \hat{q}_\alpha = \text{Quantile}\left( \{s_1, \dots, s_n\}; \, \frac{\lceil (n + 1)(1 - \alpha) \rceil}{n} \right) = s_{(\lceil (n + 1)(1 - \alpha) \rceil)}
-\]
-Here, $\lceil \cdot \rceil$ represents the ceiling function, thereby ensuring that the empirical quantile conservatively guards the discrete calibration sample distribution against finite-sample bias.
+\label{eq:conformal_quantile}
+\end{equation}
+where the ceiling correction $\lceil (n + 1)(1 - \alpha) \rceil / n$ accounts for the discrete rank granularity of the finite sample size $n$, preventing systematic under-coverage on unseen test distributions.
 
-\subsection{Prediction Set Construction \& Marginal Coverage Guarantee}
+\subsection{Prediction Set Construction and Marginal Coverage Guarantee}
+\label{subsec:conformal_guarantee}
 
-During real-time inference on an unseen query photograph $X_{n+1}$ with unknown true label $Y_{n+1}$, the system evaluates candidate taxa across the taxonomy. The prediction set $\hat{C}(X_{n+1}) \subseteq \{1, \dots, K\}$ is constructed by including all taxa whose non-conformity scores fall below the calibrated threshold $\hat{q}_\alpha$:
-\[
+During live inference on a newly submitted field observation $X_{n+1}$ with unobserved true label $Y_{n+1} \in \{1, \dots, K\}$, the conformal gate constructs the prediction set $\hat{C}(X_{n+1})$ by admitting all candidate taxa whose non-conformity scores do not exceed the calibrated cutoff $\hat{q}_\alpha$:
+\begin{equation}
 \hat{C}(X_{n+1}) = \left\{ y \in \{1, \dots, K\} : 1 - \hat{\pi}_y(X_{n+1}) \le \hat{q}_\alpha \right\} = \left\{ y \in \{1, \dots, K\} : \hat{\pi}_y(X_{n+1}) \ge 1 - \hat{q}_\alpha \right\}
-\]
-In this set definition:
-\begin{itemize}
-    \item $X_{n+1}$ represents the unseen test observation input.
-    \item $Y_{n+1}$ denotes the unobserved ground-truth species identifier for $X_{n+1}$.
-    \item $\hat{C}(X_{n+1})$ is the output prediction set containing zero, one, or multiple candidate taxa.
-    \item $\hat{\pi}_y(X_{n+1})$ is the model's biogeographically filtered probability estimate for candidate species $y$.
-    \item $\hat{q}_\alpha$ is the scalar calibration threshold computed from $\mathcal{D}_{\text{cal}}$.
-\end{itemize}
-
-Because the calibration observations and test observations are mathematically exchangeable, the conformal coverage theorem guarantees finite-sample marginal validity:
-\[
-P\left(Y_{n+1} \in \hat{C}(X_{n+1})\right) \ge 1 - \alpha
-\]
-Crucially, this guarantee is completely distribution-free. It holds without requiring parametric assumptions about the underlying image distributions, visual features, or taxonomic frequencies. The prediction set cardinality dynamically scales with image ambiguity: clean, prototypical observations yield tight, single-element sets, whereas degraded or visually ambiguous observations yield expanded sets that reflect inherent epistemic uncertainty.
+\label{eq:conformal_set}
+\end{equation}
+Under the sole assumption that the calibration tuples $\{(X_i, Y_i)\}_{i=1}^n$ and the test tuple $(X_{n+1}, Y_{n+1})$ are exchangeable, the ranks of the non-conformity scores $\{s_1, \dots, s_{n+1}\}$ are uniformly distributed over the permutations of $\{1, \dots, n+1\}$. Consequently, the constructed set $\hat{C}(X_{n+1})$ satisfies the finite-sample marginal coverage theorem:
+\begin{equation}
+1 - \alpha \le \mathbb{P}\left(Y_{n+1} \in \hat{C}(X_{n+1})\right) \le 1 - \alpha + \frac{1}{n + 1}
+\label{eq:coverage_theorem}
+\end{equation}
+Crucially, Equation~\ref{eq:coverage_theorem} holds across arbitrary visual feature distributions and base classifier architectures. The cardinality $|\hat{C}(X_{n+1})|$ adapts natively to local input difficulty: unambiguous, high-signal photographs collapse to singleton sets ($|\hat{C}| = 1$), whilst partially occluded or morphologically cryptic specimens expand into multi-element sets that faithfully bound the model's epistemic uncertainty.
 
 \section{Conformal Triage Routing \& Active Learning Feedback}
 \label{sec:active_learning_triage}
 
-The cardinality of the conformal prediction set, $|\hat{C}(X_{n+1})|$, provides an automated, mathematically grounded signal for operational triage. The system maps the set size directly to service routing logic:
+The set cardinality $|\hat{C}(X_{n+1})|$ serves as a deterministic control signal at the FastAPI serving boundary, partitioning incoming inference traffic into a four-tier operational execution contract:
 
 \begin{enumerate}
-    \item \textbf{Decisive Prediction ($|\hat{C}| = 1$):} The prediction set contains exactly one species candidate that satisfies the $1 - \alpha$ confidence threshold. The identification is deemed statistically conclusive and is returned to the user via the FastAPI prediction endpoint with sub-25ms latency. No human review or secondary model evaluation is triggered.
-    \item \textbf{Severe Classification Ambiguity ($|\hat{C}| > k_{\max}$):} The model cannot distinguish between multiple sibling taxa within the specified error bound, indicating high visual overlap or extreme environmental noise. When $|\hat{C}|$ exceeds a predefined threshold $k_{\max}$ (typically $k_{\max} = 3$), automated publication halts, and the query is diverted to the expert verification queue.
-    \item \textbf{Novelty and Out-of-Distribution Remnants ($|\hat{C}| = 0$):} No candidate species achieved a non-conformity score below $\hat{q}_\alpha$. This occurs when an input organism diverges significantly from all known calibration distributions, signalling anomalous specimens, unmodelled long-tail taxa, or novel regional invasive species. These empty sets bypass standard workflows and are flagged directly for botanical or zoological taxonomy review.
+    \item \textbf{Decisive Fast-Path Resolution ($|\hat{C}(X_{n+1})| = 1$):} Exactly one taxon satisfies $\hat{\pi}_y(X_{n+1}) \ge 1 - \hat{q}_\alpha$. The classification is statistically conclusive at the $1 - \alpha$ confidence level and is returned immediately by the INT8 ONNX runtime within the sub-$25\text{ ms}$ hot-path SLA, completely bypassing secondary retrieval and operator triage.
+    \item \textbf{Moderate Ambiguity ($1 < |\hat{C}(X_{n+1})| \le k_{\max}$, with $k_{\max} = 3$):} The conformal prediction set contains between two and three closely related sibling taxa. The serving engine lazy-loads Pipeline~2's LanceDB index, executes a single-stage filtered HNSW traversal constrained to the candidate classes and spatio-temporal metadata, and performs Reciprocal Rank Fusion (RRF) over exemplar crops with under $6\text{ ms}$ overhead to deliver a multi-candidate comparative differential to the operator.
+    \item \textbf{Severe Ambiguity ($|\hat{C}(X_{n+1})| > k_{\max}$):} When the set cardinality exceeds the operational ambiguity ceiling $k_{\max}$, automated assignment is halted. The observation is scheduled for asynchronous multimodal resolution via gRPC to the quantised visual language model (\texttt{taxon-vision-vlm}, based on Qwen2-VL-2B) and appended to the Active Learning triage queue (\texttt{triage\_queue.lance}) on the local MinIO lakehouse for expert verification.
+    \item \textbf{Epistemic Abstention and Novelty ($|\hat{C}(X_{n+1})| = 0$):} Every admissible candidate taxon exhibits a softmax probability strictly below $1 - \hat{q}_\alpha$. An empty prediction set indicates a residual anomaly that cleared the scalar energy gate $E(x; f) \le \tau_{\text{OOD}}$ but is rejected by all modelled classes -- characteristic of uncatalogued rare species, morphologically distinct instars, or regional invasive taxa. The system executes complete epistemic abstention, initiates an unconstrained nearest-neighbour search across the global exemplar graph, and flags the specimen for immediate priority taxonomic audit.
 \end{enumerate}
 
-\subsection{Active Learning Query Strategies}
+\subsection{Active Learning Acquisition via Diverse Gradient Embeddings}
+\label{subsec:badge_active_learning}
 
-Observations flagged with $|\hat{C}| > k_{\max}$ or $|\hat{C}| = 0$ are synchronised to a managed DagsHub Label Studio instance for human-in-the-loop review. However, because professional taxonomic annotation is an expensive operational resource, the triage queue prioritises pending samples using active learning algorithms \cite{ren2021deepactive} rather than simple first-in, first-out ordering.
+Observations diverted via $|\hat{C}| > k_{\max}$ or $|\hat{C}| = 0$ are written asynchronously into \texttt{triage\_\allowbreak queue.lance} hosted on the local MinIO lakehouse, capturing the compressed WebP visual crop, the penultimate backbone feature representation $z(x)$, and the unnormalised logit vector $f(x)$. The backlog is subsequently synchronised with the DagsHub Label Studio annotation workspace. Because expert taxonomic review is strictly capacity-constrained, processing the backlog in first-in, first-out order is suboptimal: environmental bursts (such as seasonal insect emergences) frequently flood the queue with hundreds of visually redundant specimens. To maximise the marginal information gain per annotation hour, the triage engine orders pending candidates using Batch Active Learning by Diverse Gradient Embeddings (BADGE) \cite{ash2020deep, ren2021deepactive}.
 
-The pipeline implements Batch Active Learning by Diverse Gradient Embeddings (BADGE) \cite{ash2020deep}. For each unannotated query $x$, BADGE models epistemic uncertainty by calculating the gradient of the cross-entropy loss with respect to the parameters of the final linear classification layer, $\theta_{\text{last}}$, evaluated against the model's current predicted pseudo-label $\hat{y} = \arg\max_j \hat{\pi}_j(x)$:
-\[
-g_x = \nabla_{\theta_{\text{last}}} \mathcal{L}\left(f(x; \theta), \hat{y}\right)
-\]
-Where:
-\begin{itemize}
-    \item $g_x \in \mathbb{R}^{d \times K}$ is the resulting gradient embedding vector for candidate image $x$.
-    \item $d$ is the dimensionality of the penultimate feature embedding vector ($d = 768$ for BioCLIP-2).
-    \item $\mathcal{L}$ represents the empirical loss objective.
-    \item $\hat{y}$ is the model's top-1 pseudo-label.
-\end{itemize}
+For each unlabelled candidate $x$ in the triage pool $\mathcal{U}$ with penultimate backbone feature representation $z(x) \in \mathbb{R}^d$ ($d = 384$ for DINOv3-ViT-S/14; $d = 512$ for BioCLIP-2; $d = 768$ for ViT-B/16 baselines), let $\hat{y} = \arg\max_j \hat{\pi}_j(x)$ denote the model's current hallucinated pseudo-label. BADGE constructs a hypothetical gradient embedding $g_x \in \mathbb{R}^{d \times K}$ by evaluating the gradient of the cross-entropy loss $\mathcal{L}_{\text{CE}}$ with respect to the weights $W = (w_1, \dots, w_K)^\top \in \mathbb{R}^{K \times d}$ of the final linear classification layer. For each class block $j \in \{1, \dots, K\}$, the $d$-dimensional gradient component $g_x^{(j)}$ admits the closed-form expression:
+\begin{equation}
+g_x^{(j)} = \frac{\partial}{\partial w_j} \mathcal{L}_{\text{CE}}\left(f(x), \hat{y}\right) = \left( \hat{\pi}_j(x) - \mathbb{I}(\hat{y} = j) \right) \cdot z(x)
+\label{eq:badge_gradient}
+\end{equation}
+where $\mathbb{I}(\cdot)$ denotes the indicator function. Equation~\ref{eq:badge_gradient} simultaneously encodes both predictive uncertainty and visual representation geometry: when the classifier is uncertain, the scalar residual $(\hat{\pi}_j(x) - \mathbb{I}(\hat{y} = j))$ is large, amplifying the Euclidean norm $\|g_x\|_2$; meanwhile, the outer-product structure with $z(x)$ preserves the directional orientation of the specimen in feature space.
 
-The magnitude of $g_x$ reflects model uncertainty, whilst its directional vector in $\mathbb{R}^{d \times K}$ reflects the nature of parameter adjustments required. The active learning engine applies $k$-means++ seeding over the pool of gradient vectors $\{g_x\}$ in order to select a diverse batch of high-uncertainty observations.
+To assemble an annotation batch $\mathcal{B} \subset \mathcal{U}$ of size $B$, the acquisition module executes $k$-means++ seeding over the set of gradient embeddings $\{g_x : x \in \mathcal{U}\}$, iteratively sampling centroids with probability proportional to their squared Euclidean distance from previously selected points. This procedure guarantees that the resulting batch $\mathcal{B}$ spans high-magnitude gradients (high epistemic uncertainty) that are mutually orthogonal in parameter space (high morphological diversity).
 
-Validated annotations from Label Studio are ingested into the data pipeline on a scheduled cadence. Newly confirmed samples are added to the DVC-versioned dataset registry, expanding the training split for rare long-tail species and updating the holdout calibration split $\mathcal{D}_{\text{cal}}$. This directly drives continuous training workflows, progressively compressing average conformal set sizes across successive model versions whilst maintaining strict coverage invariants.
+Once validated by human taxonomists in Label Studio, confirmed observations are committed back into the DVC-versioned dataset manifests on a scheduled cadence. The newly labelled specimens augment the training split for underrepresented long-tail taxa and refresh the exchangeable calibration holdout $\mathcal{D}_{\text{cal}}$. On subsequent CI/CD training cycles, this closed feedback loop refines the linear decision boundaries and tightens the empirical quantile $\hat{q}_\alpha$, progressively reducing average conformal set cardinality $\mathbb{E}[|\hat{C}(X)|]$ whilst preserving the $1 - \alpha$ marginal coverage invariant.

@@ -31,23 +31,25 @@ def create_feature_extractor(
     model_name: str | None = None,
     pretrained: bool = False,
     config: ModelConfig | None = None,
+    allow_fallback: bool = False,
 ) -> nn.Module:
     """Instantiate a frozen pre-trained feature extractor backbone.
 
     Constructs a convolutional neural network or vision transformer backbone using `timm`. The network's classification head is removed (returning dense pooled feature embeddings), parameters are frozen by setting `requires_grad = False`, and the model is switched to evaluation mode (`eval()`).
 
-    If remote Hugging Face or timm weight downloads fail (e.g., in offline or CI environments), the factory gracefully falls back to an un-pretrained local lightweight architecture defined in `config.fallback_extractor` to ensure deterministic offline execution.
+    A failed load (e.g. unavailable Hugging Face weights) raises by default. Silently substituting an un-pretrained architecture would yield random backbone features and meaningless predictions, so the lightweight un-pretrained model in `config.fallback_extractor` is only used when `allow_fallback=True` (offline unit tests and CI smoke runs).
 
     Args:
         model_name: Identifier for the desired model backbone. Can be a key from `config.backbone_registry` or any valid timm model name. If None, uses `config.default_extractor`.
         pretrained: Whether to download and load pre-trained weights from the remote registry or Hugging Face Hub.
         config: Model subsystem configuration. If None, loaded from global `get_settings().model`.
+        allow_fallback: Whether to fall back to the un-pretrained `config.fallback_extractor` if the requested model cannot be created.
 
     Returns:
         The instantiated PyTorch backbone with frozen parameters and evaluation mode active.
 
     Raises:
-        RuntimeError: If both the requested model and the fallback architecture fail.
+        RuntimeError: If the requested model cannot be created and `allow_fallback` is False, or if both the requested model and the fallback architecture fail.
     """
     model_cfg = config or get_settings().model
     target_name = model_name or model_cfg.default_extractor
@@ -55,8 +57,10 @@ def create_feature_extractor(
 
     try:
         model: nn.Module = timm.create_model(resolved_name, pretrained=pretrained, num_classes=0)
-    except Exception:
-        # Fallback to standard lightweight model if remote weights are unavailable in offline CI
+    except Exception as exc:
+        if not allow_fallback:
+            raise RuntimeError(f"Could not create backbone '{resolved_name}' (pretrained={pretrained}): {exc}") from exc
+        # Explicit opt-in: lightweight un-pretrained model for offline CI and unit tests
         fallback_name = model_cfg.fallback_extractor
         model = timm.create_model(fallback_name, pretrained=False, num_classes=0)
 

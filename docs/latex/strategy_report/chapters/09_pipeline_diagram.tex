@@ -10,7 +10,7 @@
   \scalebox{0.9}{%  <-- You can now scale past textwidth cleanly
     \begin{tikzpicture}[
     x=1cm, y=1cm,
-    %% ---- Parametric node styles ----
+    %% Parametric node styles
     box/.style n args={1}{
         draw=mgrayborder, line width=0.8pt, rounded corners=2.5pt, fill=white,
         drop shadow={shadow xshift=1.2pt, shadow yshift=-1.2pt, opacity=0.14},
@@ -23,10 +23,10 @@
     albox/.style n args={1}{box={#1}, fill=mpurple!12,  draw=mpurpleborder, line width=0.9pt},
     ingestbox/.style n args={1}{box={#1}, fill=morange!8, draw=morangeborder, line width=0.9pt},
     prepbox/.style n args={1}{box={#1}, fill=mblue!8,    draw=mblueborder!80!black, line width=0.9pt},
-    %% ---- Arrow styles ----
+    %% Arrow styles
     arrow/.style={-{Stealth[scale=1.1, length=5pt, width=3.5pt]}, line width=1.0pt, draw=black!75},
     darrow/.style={arrow, dashed},
-    %% ---- Inline label badge ----
+    %% Inline label badge
     lbl/.style={font=\tiny\bfseries, fill=white, draw=black!30, line width=0.4pt, inner sep=1.8pt, rounded corners=1.5pt}
 ]
 
@@ -49,9 +49,9 @@
 %%  Left: DagsHub (-4.7) | Right: CI/CD (+4.7), width = 6.9cm
 %% ======================================================================
 \node[hubbox={6.9cm}] (dagshub) at (-4.7, 12.4) {%
-    \textbf{\footnotesize\color{mblueborder} DagsHub Unified MLOps Hub}\\[0.8mm]
+    \textbf{\footnotesize\color{mblueborder} DagsHub \& MinIO MLOps Hub}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
-    \textbullet\ \textbf{Data Version Control (DVC):} Remote storage, Parquet manifests\\
+    \textbullet\ \textbf{Data Version Control (DVC):} Remote storage, Parquet \& Lance manifests\\
     \textbullet\ \textbf{Experiment Tracking:} MLflow metrics, hyperparameters \& Registry\\
     \textbullet\ \textbf{Annotation Backend:} Integrated Label Studio human triage workspace
 };
@@ -60,7 +60,7 @@
     \textbf{\footnotesize\color{mblueborder} GitHub Actions \& Jenkins CI/CD}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
     \textbullet\ \textbf{Deployment Target:} k3s Pods with GPU Time-Slicing (4 slots)\\
-    \textbullet\ \textbf{Quality Gates:} Ruff linting, MyPy static typing, CC open-license audit\\
+    \textbullet\ \textbf{Quality Gates:} Ruff linting, MyPy static typing, CC open-licence audit\\
     \textbullet\ \textbf{Epistemic Safety Gate:} Empirical coverage $\ge 95\%$ on calibration holdout
 };
 
@@ -76,7 +76,7 @@
     \textbf{\footnotesize\color{morangeborder} 1. Data Ingestion \& Licensing}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
     \textbullet\ \textbf{Zero-Copy Streaming:} Apache Arrow batches from AWS Open Data\\
-    \textbullet\ \textbf{License Whitelist:} CC0, CC-BY, CC-BY-NC open access only\\
+    \textbullet\ \textbf{Licence Whitelist:} CC0, CC-BY, CC-BY-NC open access only\\
     \textbullet\ \textbf{Spatial-Temporal Priors:} GBIF occurrence priors, GPS \& seasonal month\\
     \textbullet\ \textbf{Data Versioning:} DVC Parquet manifests with SHA-256 integrity hashing
 };
@@ -85,7 +85,7 @@
     \textbf{\footnotesize\color{mblueborder!80!black} 2. Multimodal Visual Chunking}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
     \textbullet\ \textbf{Parent-Child Chunking:} Zero-shot isolation $\to 224{\times}224$ child crops\\
-    \textbullet\ \textbf{Frozen Features:} Embeddings $z_{\mathrm{child}} \in \mathbb{R}^{768}$ via backbone\\
+    \textbullet\ \textbf{Frozen Features:} Embeddings $z_{\mathrm{child}} \in \mathbb{R}^{d}$ via backbone\\
     \textbullet\ \textbf{Habitat Context:} Uncropped parent scene preserved for environmental priors\\
     \textbullet\ \textbf{Relational Linking:} Child embeddings mapped to parent DarwinCore IDs
 };
@@ -111,9 +111,9 @@
 \node[pipebox={6.9cm}] (pipe2) at (4.7, 3.3) {%
     \textbf{\footnotesize\color{morangeborder} Pipeline 2: Continuous Taxonomic MMKG \& VLM}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
-    \textbullet\ \textbf{Vector Indexing:} Async I/O streaming writes to HNSW graph\\
+    \textbullet\ \textbf{Vector Indexing:} Async I/O streaming writes to LanceDB (HNSW)\\
     \textbullet\ \textbf{Metadata Filter:} Haversine distance + seasonal month $\pmod{12}$\\
-    \textbullet\ \textbf{Taxonomic Engine:} DuckDB taxon lump/split synchronization\\
+    \textbullet\ \textbf{Taxonomic Engine:} DuckDB taxon lump/split synchronisation\\
     \textbullet\ \textbf{Multimodal Diagnosis:} Qwen2-VL-2B VLM for ambiguous candidates\\
     \textbullet\ \textbf{Zero Retraining:} Exemplars inserted dynamically without weight updates
 };
@@ -123,7 +123,7 @@
 \end{scope}
 
 %% ======================================================================
-%%  ROW 4: PRODUCTION SERVING GATEWAY & MICROSERVICES (Y = -1.4)
+%%  ROW 4: PRODUCTION SERVING GATEWAY \& MICROSERVICES (Y = -1.4)
 %%  Left: FastAPI Serving (-3.35, w=9.8cm) | Right: K8s (+5.65, w=5.1cm)
 %% ======================================================================
 \node[servebox={9.8cm}] (serving) at (-3.35, -1.9) {%
@@ -146,7 +146,7 @@
     \begin{tabular}{|p{2.2cm}|p{2.2cm}|}
     \hline
     \textbf{\tiny taxon-vision-serving} & \textbf{\tiny taxon-vision-vlm} \\
-    \tiny ONNX + Conformal & \tiny HNSW + Qwen2-VL \\
+    \tiny ONNX + Conformal & \tiny LanceDB + Qwen2-VL \\
     \tiny VRAM: $<1.5$\,GB & \tiny VRAM: $>2.2$\,GB \\
     \tiny Scaling: CPU / GPU & \tiny Dedicated GPU RAM \\
     \hline
@@ -167,8 +167,8 @@
     \rule{\linewidth}{0.4pt}\\[0.6mm]
     \begin{minipage}[t]{0.485\linewidth}
     \textbf{Epistemic Triage \& Uncertainty Sampling:}\\
-    \textbullet\ \textbf{Conformal Routing:} Ambiguous sets ($|\hat{C}| > k_{\max}$) and null sets ($|\hat{C}|=0$) automatically routed to human triage queue\\
-    \textbullet\ \textbf{BADGE Strategy:} Diverse gradient embeddings maximize parameter updates
+    \textbullet\ \textbf{Conformal Routing:} Ambiguous sets ($|\hat{C}| > k_{\max}$) and null sets ($|\hat{C}|=0$) routed to MinIO \texttt{triage\_queue.lance}\\
+    \textbullet\ \textbf{BADGE Strategy:} Diverse gradient embeddings maximise parameter updates
     \end{minipage}\hfill
     \begin{minipage}[t]{0.485\linewidth}
     \textbf{Expert Validation \& Dataset Evolution:}\\

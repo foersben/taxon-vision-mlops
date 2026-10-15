@@ -21,12 +21,14 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 import torch
 from torch import nn, optim
 
+from taxon_vision.config import get_settings
 from taxon_vision.models.factory import create_feature_extractor, get_feature_dimension
 from taxon_vision.models.loss import ClassBalancedLoss
 from taxon_vision.models.training.checkpoint import _save_checkpoint
@@ -55,11 +57,11 @@ def _resolve_feature_dim(extractor: str) -> int:
         Integer dimensionality of the extracted representation vectors.
     """
     try:
-        backbone = create_feature_extractor(extractor, pretrained=False)
+        backbone = create_feature_extractor(extractor, pretrained=False, allow_fallback=True)
         return get_feature_dimension(backbone)
     except Exception as err:
-        logger.debug("Could not resolve backbone dim dynamically (%s), falling back to 1280", err)
-        return 1280
+        logger.error("Could not resolve backbone feature dimension for '%s': %s", extractor, err)
+        raise RuntimeError(f"Could not determine feature dimension for backbone '{extractor}': {err}") from err
 
 
 def _try_load_cached_split(candidate: Path, dim: int) -> EmbeddingSplit | None:
@@ -116,8 +118,9 @@ def _generate_synthetic_embedding_split(dim: int, num_classes: int) -> Embedding
     Returns:
         Deterministic EmbeddingSplit seeded with PRNG seed 42.
     """
-    logger.info("Initializing deterministic synthetic embedding split (seed=42, %d dim)", dim)
-    torch.manual_seed(42)
+    seed = get_settings().training.random_seed
+    logger.info("Initializing deterministic synthetic embedding split (seed=%d, %d dim)", seed, dim)
+    torch.manual_seed(seed)
     num_train = 120
     num_val = 30
     train_z = torch.randn(num_train, dim)
@@ -139,7 +142,7 @@ def _prepare_embedding_split(
     dim: int,
     num_classes: int,
     cache_path: Path | str | None = None,
-    allow_synthetic: bool = True,
+    allow_synthetic: bool = False,
 ) -> EmbeddingSplit:
     """Construct or restore deterministic embedding splits for rapid head training.
 
@@ -147,14 +150,16 @@ def _prepare_embedding_split(
         During rapid iteration, CI verification, and local benchmarking, loading pre-computed
         representations avoids incurring hours of redundant forward passes through the frozen
         vision foundation backbone. Restoring cached representations from disk enables training
-        in seconds. If a pre-computed cache is absent (e.g. in minimal CI environments), gracefully
-        falling back to a deterministic synthetic Gaussian split ensures that ephemeral runners
-        without GPU hardware or S3 access can execute test quality gates deterministically.
+        in seconds. Synthetic data generation is strictly opt-in to avoid masking data pipeline bugs.
 
     How:
         1. Checks whether an embedding cache exists at `cache_path` (or standard `data/embeddings/cached_features.pt`).
         2. If found, deserializes the payload, validates that `split.feature_dim == dim`, and returns the cached split.
-        3. If absent or shape-incompatible, falls back to generating a deterministic synthetic Gaussian split (unless disallowed).
+        3. If absent or shape-incompatible and allow_synthetic is False, logs an error and raises FileNotFoundError.
+        4. If allow_synthetic is True, generates a deterministic synthetic Gaussian split.
+
+    Complexity:
+        O(N * D) where N is the number of samples and D is the feature dimension.
 
     Args:
         dim: Dimensionality of feature vectors.
@@ -179,10 +184,15 @@ def _prepare_embedding_split(
             return loaded
 
     if not allow_synthetic:
+        logger.error(
+            "Embedding cache not found at candidates (%s). Synthetic fallback is disabled.",
+            candidates,
+        )
         raise FileNotFoundError(
             f"Embedding cache not found at candidates ({candidates}). Synthetic fallback is disabled via --require-cache."
         )
 
+    logger.warning("Embedding cache not found; generating synthetic Gaussian split for testing.")
     return _generate_synthetic_embedding_split(dim, num_classes)
 
 
@@ -223,11 +233,185 @@ def configure_cuda_memory_budget(fraction: float | None = None) -> float | None:
     return target_fraction
 
 
+def _build_training_components(
+    dim: int,
+    num_classes: int,
+    samples: Sequence[int],
+    tune: bool,
+    n_trials: int,
+    epochs: int,
+    batch_size: int,
+    learning_rate: float,
+    seed: int,
+    data: EmbeddingSplit,
+    extractor: str,
+    applied_vram_fraction: float | None,
+) -> tuple[nn.Module, nn.Module, optim.Optimizer, HeadTrainingConfig, dict[str, Any]]:
+    """Construct model head, loss, optimizer, and training parameters.
+
+    Why:
+        Decouples parameter resolution, Bayesian tuning with Optuna, and neural network
+        instantiation from execution lifecycle orchestration in run_training_pipeline.
+
+    Args:
+        dim: Dimensionality of feature vectors.
+        num_classes: Total number of classification categories.
+        samples: Class sample distribution counts.
+        tune: Whether to run Optuna Bayesian hyperparameter search.
+        n_trials: Number of trials for tuning.
+        epochs: Number of training epochs.
+        batch_size: Mini-batch size.
+        learning_rate: Base learning rate.
+        seed: Random seed for deterministic reproducibility.
+        data: Split containing train and validation embeddings.
+        extractor: Name of the feature extractor.
+        applied_vram_fraction: Applied GPU memory fraction or None.
+
+    Returns:
+        Tuple containing head module, loss criterion, optimizer, training config, and params dict.
+    """
+    if tune:
+        logger.info("Executing Optuna hyperparameter optimization across %d trials...", n_trials)
+        tuning_cfg = TuningConfig(
+            n_trials=n_trials,
+            epochs_per_trial=epochs,
+            batch_size=batch_size,
+            seed=seed,
+        )
+        best_params, _ = tune_hyperparameters(data=data, num_classes=num_classes, config=tuning_cfg)
+        dropout_p = float(best_params.get("dropout", 0.2))
+        beta = float(best_params.get("beta", 0.99))
+        lr = float(best_params.get("lr", learning_rate))
+        weight_decay = float(best_params.get("weight_decay", 1e-4))
+        resolved_batch_size = int(best_params.get("batch_size", batch_size))
+        noise_std = float(best_params.get("noise_std", 0.0))
+        head = nn.Sequential(nn.Dropout(p=dropout_p), nn.Linear(dim, num_classes))
+        criterion = ClassBalancedLoss(samples_per_class=samples, beta=beta)
+        optimizer = optim.AdamW(head.parameters(), lr=lr, weight_decay=weight_decay)
+    else:
+        dropout_p = 0.2
+        beta = 0.99
+        lr = learning_rate
+        weight_decay = 0.0
+        resolved_batch_size = batch_size
+        noise_std = 0.0
+        head = nn.Sequential(nn.Dropout(p=0.2), nn.Linear(dim, num_classes))
+        criterion = ClassBalancedLoss(samples_per_class=samples, beta=0.99)
+        optimizer = optim.AdamW(head.parameters(), lr=lr)
+
+    config = HeadTrainingConfig(epochs=epochs, batch_size=resolved_batch_size, noise_std=noise_std)
+    params = {
+        "extractor": extractor,
+        "epochs": epochs,
+        "batch_size": resolved_batch_size,
+        "learning_rate": lr,
+        "weight_decay": weight_decay,
+        "dropout": dropout_p,
+        "beta": beta,
+        "noise_std": noise_std,
+        "num_classes": num_classes,
+        "feature_dim": dim,
+        "loss": "ClassBalancedLoss",
+        "optuna_tuned": tune,
+        "cuda_memory_fraction": applied_vram_fraction if applied_vram_fraction is not None else "cpu",
+    }
+    return head, criterion, optimizer, config, params
+
+
+def _resolve_training_hyperparameters(
+    extractor: str | None,
+    epochs: int | None,
+    batch_size: int | None,
+    learning_rate: float | None,
+    checkpoint_path: Path | str | None,
+    settings: Any,
+) -> tuple[str, int, int, float, Path | str]:
+    """Resolve hyperparameter defaults from application settings.
+
+    Why:
+        Encapsulates ternary fallback logic to decouple configuration loading from
+        training loop execution, reducing cognitive complexity in the main runner.
+
+    Complexity:
+        O(1) constant time resolution.
+
+    Args:
+        extractor: Optional user-specified feature extractor backbone name.
+        epochs: Optional training epoch count.
+        batch_size: Optional mini-batch size.
+        learning_rate: Optional optimizer learning rate.
+        checkpoint_path: Optional custom destination path for head weights.
+        settings: Application settings container.
+
+    Returns:
+        Tuple of resolved (extractor, epochs, batch_size, learning_rate, checkpoint_path).
+    """
+    resolved_extractor = extractor or settings.model.default_extractor
+    resolved_epochs = epochs if epochs is not None else settings.training.epochs
+    resolved_batch_size = batch_size if batch_size is not None else settings.training.batch_size
+    resolved_lr = learning_rate if learning_rate is not None else settings.training.learning_rate
+    resolved_checkpoint = checkpoint_path or settings.model.head_checkpoint_path
+    return resolved_extractor, resolved_epochs, resolved_batch_size, resolved_lr, resolved_checkpoint
+
+
+def _resolve_synthetic_permission(
+    require_cache: bool,
+    allow_synthetic: bool | None,
+    default_fallback: bool,
+) -> bool:
+    """Determine whether synthetic embedding generation is permitted.
+
+    Why:
+        Ensures strict precedence: explicit --require-cache takes precedence,
+        followed by explicit user flags, falling back to global settings.
+
+    Complexity:
+        O(1) constant time resolution.
+
+    Args:
+        require_cache: Strict requirement for real embedding cache.
+        allow_synthetic: Optional explicit user flag.
+        default_fallback: Global fallback setting.
+
+    Returns:
+        True if synthetic generation is authorized; otherwise False.
+    """
+    if require_cache:
+        return False
+    if allow_synthetic is not None:
+        return allow_synthetic
+    return default_fallback
+
+
+def _extract_metric_last(history: dict[str, list[float]], key: str, default: float = 0.0) -> float:
+    """Safely extract the final floating-point value from a training history metric list.
+
+    Why:
+        Guarantees safe scalar extraction across sparse or empty epoch histories without
+        IndexError exceptions or verbose ternary conditionals.
+
+    Complexity:
+        O(1) constant time indexing.
+
+    Args:
+        history: Dictionary mapping metric names to epoch-indexed floats.
+        key: Target metric key.
+        default: Fallback scalar if history is empty.
+
+    Returns:
+        Final recorded float metric value.
+    """
+    series = history.get(key)
+    if not series:
+        return default
+    return float(series[-1])
+
+
 def run_training_pipeline(
-    extractor: str = "mobilenetv4_conv_small",
-    epochs: int = 15,
-    batch_size: int = 64,
-    learning_rate: float = 0.001,
+    extractor: str | None = None,
+    epochs: int | None = None,
+    batch_size: int | None = None,
+    learning_rate: float | None = None,
     checkpoint_path: Path | str | None = None,
     log_file: Path | str | None = None,
     cuda_memory_fraction: float | None = None,
@@ -235,6 +419,7 @@ def run_training_pipeline(
     n_trials: int = 15,
     cache_path: Path | str | None = None,
     require_cache: bool = False,
+    allow_synthetic: bool | None = None,
 ) -> dict[str, Any]:
     """Execute end-to-end classification head training on cached or synthetic embeddings.
 
@@ -263,61 +448,64 @@ def run_training_pipeline(
         n_trials: Number of Optuna evaluation trials when `tune` is enabled.
         cache_path: Optional custom filesystem path to serialized `.pt` embedding cache.
         require_cache: Whether to strictly require real embedding cache and disable synthetic fallback.
+        allow_synthetic: Explicit override to permit synthetic embeddings when cache is absent.
 
     Returns:
         Dictionary containing training metrics, checkpoint path, duration, and status.
     """
+    settings = get_settings()
+    (
+        resolved_extractor,
+        resolved_epochs,
+        resolved_batch_size,
+        resolved_lr,
+        resolved_checkpoint,
+    ) = _resolve_training_hyperparameters(extractor, epochs, batch_size, learning_rate, checkpoint_path, settings)
+
     applied_vram_fraction = configure_cuda_memory_budget(cuda_memory_fraction)
     t0 = time.perf_counter()
-    logger.info("Initiating head training for extractor '%s' across %d epochs (tune=%s)", extractor, epochs, tune)
+    logger.info(
+        "Initiating head training for extractor '%s' across %d epochs (tune=%s)",
+        resolved_extractor,
+        resolved_epochs,
+        tune,
+    )
 
     catalog = load_taxa_catalog()
-    num_classes = len(catalog) if catalog else 10
-    dim = _resolve_feature_dim(extractor)
-    data = _prepare_embedding_split(dim, num_classes, cache_path=cache_path, allow_synthetic=not require_cache)
+    if not catalog:
+        raise RuntimeError("Authoritative taxa catalog contains 0 taxa.")
+    num_classes = len(catalog)
+    dim = _resolve_feature_dim(resolved_extractor)
+
+    resolved_allow_synthetic = _resolve_synthetic_permission(
+        require_cache=require_cache,
+        allow_synthetic=allow_synthetic,
+        default_fallback=settings.model.allow_untrained_fallback,
+    )
+
+    data = _prepare_embedding_split(
+        dim,
+        num_classes,
+        cache_path=cache_path,
+        allow_synthetic=resolved_allow_synthetic,
+    )
     samples = data.samples_per_class or [1] * num_classes
 
-    if tune:
-        logger.info("Executing Optuna hyperparameter optimization across %d trials...", n_trials)
-        tuning_cfg = TuningConfig(
-            n_trials=n_trials,
-            epochs_per_trial=epochs,
-            batch_size=batch_size,
-            seed=42,
-        )
-        best_params, _ = tune_hyperparameters(data=data, num_classes=num_classes, config=tuning_cfg)
-        dropout_p = float(best_params.get("dropout", 0.2))
-        beta = float(best_params.get("beta", 0.99))
-        learning_rate = float(best_params.get("lr", learning_rate))
-        weight_decay = float(best_params.get("weight_decay", 1e-4))
-        batch_size = int(best_params.get("batch_size", batch_size))
-        noise_std = float(best_params.get("noise_std", 0.0))
-        head = nn.Sequential(nn.Dropout(p=dropout_p), nn.Linear(dim, num_classes))
-        criterion = ClassBalancedLoss(samples_per_class=samples, beta=beta)
-        optimizer = optim.AdamW(head.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    else:
-        noise_std = 0.0
-        head = nn.Sequential(nn.Dropout(p=0.2), nn.Linear(dim, num_classes))
-        criterion = ClassBalancedLoss(samples_per_class=samples, beta=0.99)
-        optimizer = optim.AdamW(head.parameters(), lr=learning_rate)
+    head, criterion, optimizer, config, params = _build_training_components(
+        dim=dim,
+        num_classes=num_classes,
+        samples=samples,
+        tune=tune,
+        n_trials=n_trials,
+        epochs=resolved_epochs,
+        batch_size=resolved_batch_size,
+        learning_rate=resolved_lr,
+        seed=settings.training.random_seed,
+        data=data,
+        extractor=resolved_extractor,
+        applied_vram_fraction=applied_vram_fraction,
+    )
 
-    config = HeadTrainingConfig(epochs=epochs, batch_size=batch_size, noise_std=noise_std)
-
-    params = {
-        "extractor": extractor,
-        "epochs": epochs,
-        "batch_size": batch_size,
-        "learning_rate": learning_rate,
-        "weight_decay": weight_decay if tune else 0.0,
-        "dropout": dropout_p if tune else 0.2,
-        "beta": beta if tune else 0.99,
-        "noise_std": noise_std,
-        "num_classes": num_classes,
-        "feature_dim": dim,
-        "loss": "ClassBalancedLoss",
-        "optuna_tuned": tune,
-        "cuda_memory_fraction": applied_vram_fraction if applied_vram_fraction is not None else "cpu",
-    }
     run_name = f"train_{extractor}_{int(time.time())}"
     promotion_status: str | None = None
 
@@ -330,17 +518,17 @@ def run_training_pipeline(
             config=config,
         )
 
-        target_path = _save_checkpoint(head, checkpoint_path)
+        target_path = _save_checkpoint(head, resolved_checkpoint)
         duration = time.perf_counter() - t0
 
         if active_run:
             _log_mlflow_metrics(history, duration)
-            val_pr_auc = float(history.get("val_pr_auc", [0.0])[-1]) if history.get("val_pr_auc") else 0.0
+            val_pr_auc = _extract_metric_last(history, "val_pr_auc", 0.0)
             promotion_status = _promote_model_if_better(head, val_pr_auc)
 
-    train_loss = float(history["train_loss"][-1]) if history.get("train_loss") else 0.0
-    val_loss = float(history["val_loss"][-1]) if history.get("val_loss") else 0.0
-    val_acc = float(history["val_accuracy"][-1]) if history.get("val_accuracy") else 0.0
+    train_loss = _extract_metric_last(history, "train_loss", 0.0)
+    val_loss = _extract_metric_last(history, "val_loss", 0.0)
+    val_acc = _extract_metric_last(history, "val_accuracy", 0.0)
 
     logger.info(
         "Training completed in %.3fs: train_loss=%.4f, val_loss=%.4f, val_acc=%.2f%%",
@@ -352,8 +540,8 @@ def run_training_pipeline(
 
     return {
         "status": "completed",
-        "extractor": extractor,
-        "epochs_trained": epochs,
+        "extractor": resolved_extractor,
+        "epochs_trained": resolved_epochs,
         "final_train_loss": round(train_loss, 4),
         "final_val_loss": round(val_loss, 4),
         "final_val_accuracy": round(val_acc, 4),
@@ -454,12 +642,38 @@ def train_cli(argv: list[str] | None = None) -> int:
     Returns:
         Exit code (0 for success, 1 for error).
     """
+    settings = get_settings()
     parser = argparse.ArgumentParser(description="TaxonVision Model Head Training CLI")
-    parser.add_argument("--extractor", type=str, default="dinov3", help="Backbone feature extractor")
-    parser.add_argument("--epochs", type=int, default=15, help="Number of training epochs")
-    parser.add_argument("--batch-size", type=int, default=64, help="Mini-batch size")
-    parser.add_argument("--lr", type=float, default=0.001, help="Learning rate")
-    parser.add_argument("--checkpoint-path", type=str, default=None, help="Output checkpoint file path")
+    parser.add_argument(
+        "--extractor",
+        type=str,
+        default=settings.model.default_extractor,
+        help=f"Backbone feature extractor (default: {settings.model.default_extractor})",
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=settings.training.epochs,
+        help=f"Number of training epochs (default: {settings.training.epochs})",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=settings.training.batch_size,
+        help=f"Mini-batch size (default: {settings.training.batch_size})",
+    )
+    parser.add_argument(
+        "--lr",
+        type=float,
+        default=settings.training.learning_rate,
+        help=f"Learning rate (default: {settings.training.learning_rate})",
+    )
+    parser.add_argument(
+        "--checkpoint-path",
+        type=str,
+        default=None,
+        help=f"Output checkpoint file path (defaults to {settings.model.head_checkpoint_path})",
+    )
     parser.add_argument("--api-url", type=str, default=None, help="Optional running API server URL to trigger remotely")
     parser.add_argument("--log-file", type=str, default=None, help="Optional log file destination")
     parser.add_argument(
@@ -489,6 +703,12 @@ def train_cli(argv: list[str] | None = None) -> int:
         "--require-cache",
         action="store_true",
         help="Disallow fallback to synthetic data if embedding cache is absent",
+    )
+    parser.add_argument(
+        "--allow-synthetic",
+        action="store_true",
+        default=settings.model.allow_untrained_fallback,
+        help="Permit fallback to synthetic Gaussian embeddings if cache is absent",
     )
     parser.add_argument(
         "--require-promotion",
@@ -523,6 +743,7 @@ def train_cli(argv: list[str] | None = None) -> int:
         n_trials=args.n_trials,
         cache_path=args.cache_path,
         require_cache=args.require_cache,
+        allow_synthetic=args.allow_synthetic,
     )
 
     logger.info("Training Completed Successfully")

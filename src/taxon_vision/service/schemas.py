@@ -54,14 +54,15 @@ class TrainingRequest(BaseModel):
         underlying server configuration files.
 
     How:
-        Defines default backbone extractor name, epoch budget, batch size, optimizer
+        Defines optional backbone extractor name, epoch budget, batch size, optimizer
         learning rate, and a background dispatch flag (`background=True`) to offload long jobs.
+        Unspecified hyperparameters resolve dynamically from centralized application settings.
     """
 
-    extractor: str = "mobilenetv4_conv_small"
-    epochs: int = 5
-    batch_size: int = 16
-    learning_rate: float = 0.001
+    extractor: str | None = None
+    epochs: int | None = None
+    batch_size: int | None = None
+    learning_rate: float | None = None
     background: bool = False
 
 

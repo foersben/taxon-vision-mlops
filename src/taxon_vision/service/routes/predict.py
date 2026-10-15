@@ -4,16 +4,17 @@
 
 import logging
 import time
+import uuid
 from typing import Annotated, Any
 
 import anyio
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
-from PIL import UnidentifiedImageError
 
 from taxon_vision.config import get_settings
 from taxon_vision.monitoring.telemetry import PREDICTION_COUNTER
-from taxon_vision.service.inference import load_taxa_catalog, run_prediction
+from taxon_vision.service.inference import InvalidImageError, ModelNotReadyError, load_taxa_catalog, run_prediction
 from taxon_vision.service.schemas import PredictionResponse, TaxonPrediction
+from taxon_vision.service.storage import persist_flagged_observation
 
 logger = logging.getLogger(__name__)
 
@@ -24,10 +25,19 @@ def _build_live_prediction(pred: dict[str, Any], latency_ms: float) -> Predictio
     """Construct structured response from successful inference output.
 
     Why:
-        Transforms raw array-based and dictionary inference outputs into strongly-typed, validated Pydantic schemas. Correlates top predictions and conformal set member names against authoritative catalog metadata to provide clients with canonical taxon IDs, scientific names, common names, and triage recommendations.
+        Transforms raw array-based and dictionary inference outputs into strongly-typed,
+        validated Pydantic schemas. Correlates top predictions and conformal set member
+        names against authoritative catalog metadata to provide clients with canonical
+        taxon IDs, scientific names, common names, and triage recommendations.
 
     How:
-        Extracts top-1 predicted taxon, parses confidence score, scans candidate names in the conformal set, distributes uniform candidate likelihood among secondary conformal items, flags conformal ambiguity if the set size exceeds the threshold (|C| > 3), and packages the latency measurement into a PredictionResponse.
+        Extracts top-1 predicted taxon, parses confidence score, scans candidate names
+        in the conformal set, distributes uniform candidate likelihood among secondary
+        conformal items, flags conformal ambiguity if the set size exceeds the threshold
+        (|C| > 3 or |C| == 0), and packages the latency measurement into a PredictionResponse.
+
+    Complexity:
+        O(K) where K is the cardinality of the conformal candidate set.
 
     Args:
         pred: Raw prediction dictionary from the inference engine.
@@ -41,7 +51,7 @@ def _build_live_prediction(pred: dict[str, Any], latency_ms: float) -> Predictio
 
     sci_name = str(pred["scientific_name"])
     matched_taxon = catalog_map.get(sci_name, {})
-    taxon_id = int(matched_taxon.get("id", 1))
+    taxon_id = int(matched_taxon.get("id", 0))
     common_name = str(pred["common_name"])
     confidence = float(str(pred["confidence"]))
 
@@ -80,53 +90,32 @@ def _build_live_prediction(pred: dict[str, Any], latency_ms: float) -> Predictio
     )
 
 
-def _build_fallback_prediction(latency_ms: float) -> PredictionResponse:
-    """Construct deterministic fallback response for non-image test payloads.
-
-    Why:
-        Integration tests, mock clients, and lightweight health probes frequently post synthetic non-image byte strings (e.g. b"fake image bytes") to verify endpoint routing, Pydantic serialization, and header integrity without requiring binary asset fixtures. Providing a deterministic baseline ensures schema validity during integration testing while distinguishing decode fallbacks from runtime execution crashes.
-
-    How:
-        Returns a hardcoded, biologically valid prediction for Monarch Butterfly (*Danaus plexippus*) with high confidence and a singleton conformal set.
-
-    Args:
-        latency_ms: Measured execution latency in milliseconds.
-
-    Returns:
-        Baseline PredictionResponse payload.
-    """
-    top = TaxonPrediction(
-        taxon_id=1, scientific_name="Danaus plexippus", common_name="Monarch Butterfly", confidence=0.92
-    )
-    candidates = [
-        top,
-        TaxonPrediction(taxon_id=2, scientific_name="Apis mellifera", common_name="Western Honey Bee", confidence=0.05),
-    ]
-    return PredictionResponse(
-        top_prediction=top,
-        top_candidates=candidates,
-        conformal_prediction_set=["Danaus plexippus"],
-        is_conformal_ambiguous=False,
-        is_ood_flagged=False,
-        requires_human_review=False,
-        latency_ms=round(latency_ms, 2),
-    )
-
-
 @router.post("/predict", response_model=PredictionResponse)
 @router.post("/api/v1/predict", response_model=PredictionResponse)
 async def predict_species(file: Annotated[UploadFile, File(...)]) -> PredictionResponse:
     """Classify species from an uploaded image with conformal uncertainty guarantees.
 
     Why:
-        Serving visual inference in production requires strict non-blocking concurrency. Executing image decoding, tensor normalization, and PyTorch/ONNX matrix operations directly on the asyncio loop thread blocks all concurrent requests. Furthermore, silently catching all execution exceptions and returning dummy predictions masks critical failures (corrupt model weights, GPU driver crashes, OOM errors). This endpoint offloads synchronous inference to a threadpool worker, measures accurate wall-clock latency, records distinct Prometheus telemetry metrics based on true outcome (success, fallback, error), and surfaces unexpected crashes as HTTP 500 errors.
+        Serving visual inference in production requires strict non-blocking concurrency.
+        Executing image decoding, tensor normalization, and PyTorch/ONNX matrix operations
+        directly on the asyncio loop thread blocks all concurrent requests. Furthermore,
+        silently catching execution exceptions and returning dummy predictions masks critical
+        failures (corrupt model weights, missing artefacts, GPU driver crashes, OOM errors).
+        This endpoint offloads synchronous inference to a threadpool worker, measures accurate
+        wall-clock latency, persists out-of-distribution or ambiguous records for subsequent
+        human review, and reports each failure class with its proper HTTP status.
 
     How:
         1. Reads raw bytes asynchronously from the multipart file upload.
-        2. Dispatches `run_prediction` to AnyIO's threadpool worker via `run_sync`.
-        3. On successful prediction: increments `taxon_predictions_total{status="success"}` and returns structured `PredictionResponse`.
-        4. On image decoding failure (`UnidentifiedImageError`, `OSError`, `ValueError`): logs a warning, increments `taxon_predictions_total{status="fallback"}`, and returns deterministic fallback for non-image test payloads.
-        5. On unexpected runtime exception: logs full stack trace via `logger.exception`, increments `taxon_predictions_total{status="error"}`, and raises HTTP 500.
+        2. Validates payload non-emptiness and size constraints.
+        3. Dispatches `run_prediction` to AnyIO's threadpool worker via `run_sync`.
+        4. If flagged as OOD or requiring human review, persists observation metadata and embeddings.
+        5. On success: increments `taxon_predictions_total{status="success"}` and returns `PredictionResponse`.
+        6. On an undecodable/empty image (`InvalidImageError`): logs a warning, increments `status="invalid_input"` and raises HTTP 422.
+        7. On missing model artefacts or unexpected runtime inference failure: logs exception, increments counter, and raises HTTP 503.
+
+    Complexity:
+        O(1) async dispatch plus O(K) schema serialization.
 
     Args:
         file: Multipart uploaded image file.
@@ -135,29 +124,55 @@ async def predict_species(file: Annotated[UploadFile, File(...)]) -> PredictionR
         Structured prediction response containing top candidates, conformal sets, and triage flags.
 
     Raises:
-        HTTPException: HTTP 500 if inference execution crashes unexpectedly.
+        HTTPException: HTTP 413 for payload too large, 422 for undecodable/empty images, 503 if model inference fails.
     """
     t0 = time.perf_counter()
     content = await file.read()
+    settings = get_settings()
+
+    if len(content) == 0:
+        logger.warning("Rejected empty image upload for %s", file.filename)
+        PREDICTION_COUNTER.labels(status="invalid_input").inc()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid or corrupted image upload.",
+        )
+
+    if len(content) > settings.service.max_image_upload_bytes:
+        PREDICTION_COUNTER.labels(status="invalid_input").inc()
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Image upload exceeds maximum allowed size of {settings.service.max_image_upload_bytes} bytes.",
+        )
+
     try:
         pred = await anyio.to_thread.run_sync(run_prediction, content)
         latency = (time.perf_counter() - t0) * 1000.0
+
+        if pred.get("is_ood") or pred.get("requires_human_review"):
+            obs_id = str(uuid.uuid4())
+            persist_flagged_observation(obs_id, pred, embedding=pred.get("embedding"))
+
         PREDICTION_COUNTER.labels(status="success").inc()
         return _build_live_prediction(pred, latency)
-    except (UnidentifiedImageError, OSError, ValueError) as img_err:
-        latency = (time.perf_counter() - t0) * 1000.0
-        logger.warning(
-            "Payload decode error for uploaded file %s (%s). Serving deterministic fallback.",
-            file.filename,
-            img_err,
-        )
-        PREDICTION_COUNTER.labels(status="fallback").inc()
-        return _build_fallback_prediction(latency)
+    except InvalidImageError as img_err:
+        logger.warning("Rejected undecodable upload %s: %s", file.filename, img_err)
+        PREDICTION_COUNTER.labels(status="invalid_input").inc()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid or corrupted image upload.",
+        ) from img_err
+    except ModelNotReadyError as model_err:
+        logger.exception("Model not ready for %s: %s", file.filename, model_err)
+        PREDICTION_COUNTER.labels(status="unavailable").inc()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Model inference failed.",
+        ) from model_err
     except Exception as exc:
-        latency = (time.perf_counter() - t0) * 1000.0
         PREDICTION_COUNTER.labels(status="error").inc()
         logger.exception("Inference processing crashed unexpectedly for %s: %s", file.filename, exc)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Inference execution failed: {exc}",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Model inference failed.",
         ) from exc

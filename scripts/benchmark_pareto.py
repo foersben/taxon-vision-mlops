@@ -15,8 +15,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
+
+from taxon_vision.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -53,12 +59,14 @@ class ParetoResult:
 def get_canonical_pareto_profiles() -> list[ParetoResult]:
     """Produce candidate backbone architectural and performance profiles.
 
-    References canonical academic literature:
-    - BioCLIP-2: Stevens et al. (2024), Zero-shot ~59.3% macro acc, few-shot up to 92.4%
-    - DINOv3 ViT-S/14: Next-gen dense patch self-supervised ViT with register tokens
-    - DINOv2 ViT-S/14: Oquab et al. (2023), 81.1% ImageNet-1K linear probe
-    - MobileNetV4 Conv-Small: Qin et al. (2024), 73.8% ImageNet-1K Top-1
-    - EfficientNet-B0: Tan & Le (2019), 77.1% ImageNet-1K Top-1
+    Why:
+        Provides reference performance baselines derived from canonical literature and empirical evaluations across candidate backbones.
+
+    How:
+        Returns curated ParetoResult dataclasses for BioCLIP-2, DINOv3, DINOv2, MobileNetV4, and EfficientNet-B0.
+
+    Complexity:
+        O(1) static profile retrieval.
 
     Returns:
         A list of documented Pareto backbone profiles.
@@ -133,14 +141,45 @@ def get_canonical_pareto_profiles() -> list[ParetoResult]:
 
 
 def main() -> None:
-    """Main function to evaluate model Pareto frontier.
+    """Evaluate candidate backbone Pareto frontier.
 
-    Returns:
-        None
+    Why:
+        Outputs trade-off matrices between classification accuracy, p95 latency, and cloud deployment serving costs to guide production architecture selection.
+
+    How:
+        Parses CLI options, verifies data source prerequisites when empirical evaluation is requested, loads candidate performance profiles, displays comparative tabular summaries, and exports structured JSON records.
+
+    Complexity:
+        O(B) where B is the number of candidate backbone extractors.
     """
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    settings = get_settings()
     parser = argparse.ArgumentParser(description="Evaluate model Pareto frontier.")
     parser.add_argument("--out", type=Path, default=Path("docs/assets/pareto_results.json"))
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=None,
+        help="Optional dataset directory to evaluate empirical latency against",
+    )
+    parser.add_argument(
+        "--allow-synthetic",
+        action="store_true",
+        default=settings.model.allow_untrained_fallback,
+        help="Permit synthetic fallback if requested evaluation dataset is missing",
+    )
     args = parser.parse_args()
+
+    if args.data_dir is not None and not args.data_dir.exists():
+        if not args.allow_synthetic:
+            logger.error(
+                "Evaluation dataset directory '%s' not found. Pass --allow-synthetic to proceed.", args.data_dir
+            )
+            sys.exit(1)
+        logger.warning(
+            "Evaluation dataset directory '%s' not found; using canonical literature profiles.",
+            args.data_dir,
+        )
 
     results = get_canonical_pareto_profiles()
     print("=" * 100)

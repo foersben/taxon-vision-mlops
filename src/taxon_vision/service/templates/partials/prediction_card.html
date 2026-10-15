@@ -28,4 +28,9 @@
       ⚠️ High ambiguity or out-of-distribution signal. Flagged for expert taxonomist triage.
     </div>
   {% endif %}
+  {% if heatmap_status == "unavailable" %}
+    <div class="alert info">
+      ℹ️ Visual attribution (saliency heatmap) is unavailable for this backbone architecture.
+    </div>
+  {% endif %}
 </div>

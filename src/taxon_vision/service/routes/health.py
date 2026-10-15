@@ -2,9 +2,13 @@
 # SPDX-License-Identifier: MIT
 """Health and telemetry routes."""
 
-from fastapi import APIRouter
+from typing import Any
+
+from fastapi import APIRouter, HTTPException, status
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from starlette.responses import Response
+
+from taxon_vision.service.inference import check_readiness
 
 router = APIRouter()
 
@@ -19,6 +23,9 @@ def health() -> dict[str, str]:
     How:
         Returns an immediate JSON payload with operational status "healthy" and the service identifier string, bypassing disk access, database lookups, and model inference.
 
+    Complexity:
+        O(1) memory lookup.
+
     Returns:
         Dictionary reporting health status and service identifier.
     """
@@ -26,17 +33,37 @@ def health() -> dict[str, str]:
 
 
 @router.get("/health/ready")
-def health_ready() -> dict[str, str]:
-    """Perform a readiness probe validating service initialization.
+def health_ready() -> dict[str, Any]:
+    """Perform a readiness probe validating that the model can serve predictions.
 
     Why:
-        Kubernetes readiness probes require a dedicated endpoint to ensure
-        traffic is only routed to pods that have completed initialization.
+        Kubernetes readiness probes require a dedicated endpoint to ensure traffic is only routed to pods that can actually answer requests. A probe that unconditionally reports ready would send traffic to instances with a missing or incompatible model artefact.
+
+    How:
+        Loads the taxa catalogue and the serving model via `check_readiness()`.
+        If the catalog is empty or the classifier fails to initialize, raises HTTPException 503.
+        Otherwise returns a dictionary with operational readiness details.
+
+    Complexity:
+        O(1) cached dependency probe.
 
     Returns:
-        Dictionary reporting readiness status and service identifier.
+        Dictionary with readiness status, service identifier, and check results.
+
+    Raises:
+        HTTPException: HTTP 503 if the service is not ready.
     """
-    return {"status": "ready", "service": "taxon-vision-mlops"}
+    ready, checks = check_readiness()
+    if not ready:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service not ready",
+        )
+    return {
+        "status": "ready",
+        "service": "taxon-vision-mlops",
+        "checks": checks,
+    }
 
 
 @router.get("/metrics")
@@ -48,6 +75,9 @@ def metrics() -> Response:
 
     How:
         Invokes Prometheus client registry `generate_latest()`, serializing all registered counters (e.g. `taxon_predictions_total`), histograms (`taxon_inference_latency_seconds`), and gauges (`taxon_human_referrals_active`) into the standard Prometheus exposition format.
+
+    Complexity:
+        O(N) where N is the total number of metric collectors and metric series.
 
     Returns:
         HTTP Response containing formatted metric samples in Prometheus exposition format.

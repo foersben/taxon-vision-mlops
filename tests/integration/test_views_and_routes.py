@@ -33,10 +33,31 @@ def test_predict_htmx_view() -> None:
 
 
 def test_explain_endpoint() -> None:
-    """Verify CAM visual explanation endpoint returns generated heatmap status."""
+    """Verify CAM visual explanation endpoint returns generated heatmap status without file."""
     resp = client.post("/api/v1/explain")
     assert resp.status_code == 200
     assert resp.json()["heatmap_status"] == "generated"
+
+
+def test_explain_endpoint_with_image() -> None:
+    """Verify CAM visual explanation endpoint accepts uploaded image and computes spatial CAM."""
+    buf = io.BytesIO()
+    Image.new("RGB", (32, 32), color="green").save(buf, format="JPEG")
+    buf.seek(0)
+    resp = client.post("/api/v1/explain", files={"file": ("leaf.jpg", buf, "image/jpeg")})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["heatmap_status"] == "generated"
+    assert data["heatmap_shape"] == [32, 32]
+    assert data["latency_ms"] >= 0.0
+
+
+def test_explain_endpoint_invalid_image() -> None:
+    """Verify CAM visual explanation endpoint rejects invalid image bytes with HTTP 400."""
+    dummy_img = io.BytesIO(b"corrupt image bytes")
+    resp = client.post("/api/v1/explain", files={"file": ("corrupt.jpg", dummy_img, "image/jpeg")})
+    assert resp.status_code == 400
+    assert "Cannot decode upload as valid image for CAM" in resp.json()["detail"]
 
 
 def test_metrics_endpoint() -> None:

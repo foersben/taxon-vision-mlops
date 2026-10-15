@@ -40,13 +40,19 @@ Rather than packaging the fast-path ONNX classifier and the multi-gigabyte Visio
     \item \textbf{The Multimodal RAG Service (\texttt{taxon-vision-vlm}):} A specialised, resource-allocated deployment mounting dedicated GPU Tensor Cores to host the quantised 2-billion parameter Vision-Language Model and the in-memory HNSW vector index.
 \end{enumerate}
 
-An ingress controller inspects incoming network payloads and intelligently load-balances observation traffic across the \texttt{taxon-vision-serving} pods. If an observation's conformal prediction set cardinality evaluates to $|C| = 1$, the primary pod returns the classification directly through the ingress to the client. If the conformal layer flags ambiguity ($1 < |C| \le 3$), it triggers a lightweight RAG comparative lookup via HNSW and Reciprocal Rank Fusion. If the ambiguity is severe ($|C| > 3$) or novel ($|C| = 0$), the primary service seamlessly dispatches an asynchronous internal gRPC call to the \texttt{taxon-vision-vlm} service. This service then executes full generative VLM differential diagnosis and routes the query to DagsHub Label Studio for expert human triage.
+An ingress controller inspects incoming network payloads and load-balances observation traffic across the \texttt{taxon-vision-serving} pods. The serving engine executes the 4-tier conformal routing contract:
+\begin{enumerate}
+    \item If the prediction set cardinality evaluates to $|\hat{C}(X)| = 1$, the primary pod returns the classification directly through the ingress to the client within the sub-$25\text{ ms}$ SLA, bypassing secondary retrieval.
+    \item If the conformal layer indicates moderate ambiguity ($1 < |\hat{C}(X)| \le k_{\max}$, with $k_{\max} = 3$), it triggers a single-stage filtered HNSW traversal over LanceDB and Reciprocal Rank Fusion over exemplar crops with under $6\text{ ms}$ latency overhead.
+    \item If the ambiguity is severe ($|\hat{C}(X)| > k_{\max}$), the primary service dispatches an asynchronous internal gRPC call to the \texttt{taxon-vision-vlm} service and persists the sample to \texttt{triage\_queue.lance} on the local MinIO lakehouse for expert review.
+    \item If the prediction set is empty ($|\hat{C}(X)| = 0$), the system executes complete epistemic abstention, initiates an unconstrained nearest-neighbour search across global exemplars, and dispatches an immediate priority triage alert.
+\end{enumerate}
 
 \subsection{Self-Healing and Health Probing}
 In order to prevent cluster degradation caused by deadlocks or memory corruption, K8s enforces dual-tier health probes:
 \begin{itemize}
-    \item \textbf{Liveness Probes:} The kubelet periodically polls a lightweight \texttt{/healthz/liveness} HTTP endpoint. If the FastAPI event loop becomes unresponsive or encounters an unrecoverable worker thread failure, the control plane immediately terminates the failing container and instantiates a clean replica.
-    \item \textbf{Readiness Probes:} A separate \texttt{/healthz/readiness} probe strictly verifies that internal model buffers, CUDA execution providers, and HNSW graph indexes are fully loaded into memory before the ingress controller ever routes live citizen-science observation traffic to the pod.
+    \item \textbf{Liveness Probes:} The kubelet periodically polls the \texttt{/health} HTTP endpoint. If the FastAPI event loop becomes unresponsive or encounters an unrecoverable worker thread failure, the control plane immediately terminates the failing container and instantiates a clean replica.
+    \item \textbf{Readiness Probes:} A separate \texttt{/health/ready} probe strictly verifies that internal model weights, ONNX Runtime inference sessions, and LanceDB index handles are loaded and validated in memory before the ingress controller ever routes live citizen-science observation traffic to the pod.
 \end{itemize}
 
 \subsection{Horizontal Pod Autoscaling on Custom Telemetry}
@@ -64,12 +70,12 @@ The cluster implements Horizontal Pod Autoscaling (HPA) driven by custom Prometh
 Unlike traditional software services that experience deterministic failure modes, machine learning systems are uniquely vulnerable to silent statistical degradation. A model endpoint can report 100\% uptime and sub-millisecond HTTP response times whilst concurrently outputting meaningless ecological predictions due to seasonal distribution shifts, camera sensor variations, or geographic migrations. Thus, the platform embeds comprehensive statistical telemetry deeply into the serving runtime.
 
 \subsection{Prometheus Telemetry Instrumentation}
-The FastAPI application exposes a secure \texttt{/metrics} endpoint scraped at regular intervals by a Prometheus time-series collector. Monitored indicators comprehensively span system infrastructure, computational latency, and model decision distributions:
+The FastAPI application exposes a secure \texttt{/metrics} endpoint scraped at regular intervals by a Prometheus time-series collector. Monitored indicators comprehensively distinguish between active metrics currently wired in the telemetry runtime (\texttt{src/taxon\_vision/monitoring/telemetry.py}) and Phase~3 planned counters:
 \begin{itemize}
-    \item \textbf{Inference Latency Histograms (\texttt{inference\_latency\_seconds\_bucket}):} High-resolution histograms tracking the duration of zero-shot cropping, ONNX backbone execution, and conformal set evaluation, effectively generating empirical p50, p95, and p99 latency distributions.
-    \item \textbf{Conformal Prediction Set Distribution (\texttt{conformal\_set\_size}):} A sliding-window metric tracking the cardinality distribution of $\hat{C}(X)$. Under stationary distribution conditions, the average set size $\mathbb{E}[|\hat{C}|]$ remains fundamentally constant. A measured expansion in set size mathematically indicates rising classification ambiguity.
-    \item \textbf{Energy OOD Rejection Counter (\texttt{ood\_rejections\_total}):} Tracks the cumulative volume and rate of incoming images rejected by the free-energy scoring layer ($E(x; f) > \tau_{\text{OOD}}$).
-    \item \textbf{Tail-Species Classification Gauge (\texttt{tail\_species\_accuracy}):} Monitors real-time identification accuracy on verified long-tail species subsets (configured by policy for taxa possessing few historical training observations, e.g., $N_{\text{tail}} < 20$).
+    \item \textbf{Inference Latency Histograms (\texttt{taxon\_inference\_latency\_seconds}):} High-resolution histograms tracking the duration of preprocessing, ONNX backbone execution, and conformal evaluation, effectively generating empirical p50, p95, and p99 latency distributions.
+    \item \textbf{Inference Counter (\texttt{taxon\_predictions\_total}):} Tracks cumulative prediction volume partitioned by classification outcome status.
+    \item \textbf{Human Referral Gauge (\texttt{taxon\_human\_referrals\_active}):} Monitors the instantaneous volume of ambiguous or anomalous queries currently routed to human expert triage.
+    \item \textbf{Phase~3 Telemetry Counters (Design Target):} Scheduled for Phase~3 deployment, dedicated collectors track the sliding-window conformal set cardinality distribution (\texttt{taxon\_\allowbreak conformal\_\allowbreak set\_\allowbreak size}) and Helmholtz energy OOD rejection rates (\texttt{taxon\_\allowbreak ood\_\allowbreak rejections\_\allowbreak total}).
 \end{itemize}
 
 \subsection{Two-Tier Hybrid Feature Drift Architecture}
@@ -83,7 +89,7 @@ For visual feature drift detection in the TaxonVision architecture, neither a si
 \textbf{Dimension} & \textbf{Maximum Mean Discrepancy (MMD)} & \textbf{Wasserstein-1 Distance (Scalar Norms)} \\
 \midrule
 \textbf{Mathematical Formulation} & 
-Evaluated in a Reproducing Kernel Hilbert Space (RKHS) using a Gaussian RBF kernel $k(z, z') = \exp\left(-\frac{\|z - z'\|^2}{2\sigma^2}\right)$ across the full $D$-dimensional feature embedding manifold ($\mathbb{R}^{512}$ / $\mathbb{R}^{768}$). & 
+Evaluated in a Reproducing Kernel Hilbert Space (RKHS) using a Gaussian RBF kernel $k(z, z') = \exp\left(-\frac{\|z - z'\|^2}{2\sigma^2}\right)$ across the full $D$-dimensional feature embedding manifold ($\mathbb{R}^{384}$ / $\mathbb{R}^{512}$ / $\mathbb{R}^{768}$). & 
 Evaluates the 1D Earth Mover's Distance by projecting $D$-dimensional vectors onto scalar $L_2$ Euclidean norms $\|z\|_2 = \sqrt{\sum_{j=1}^D z_j^2}$, computing $W_1(P_{\text{ref}}, P_{\text{curr}}) \approx \left| \mathbb{E}[\|z_{\text{ref}}\|_2] - \mathbb{E}[\|z_{\text{curr}}\|_2] \right|$. \\
 \addlinespace
 \textbf{Computational Complexity} & 
@@ -145,19 +151,11 @@ The test setup intelligently instantiates an in-memory, ephemeral AWS S3 service
 \subsection{Tier 3: Mathematical Invariant Testing}
 Standard software testing relies heavily on binary assertions (for example, verifying an output equals a known constant). Machine learning models, however, are inherently probabilistic. The pipeline introduces robust mathematical invariant tests that evaluate statistical coverage guarantees well before model serialisation.
 
-The test runner dutifully loads the newly trained ONNX candidate model and evaluates it against an unseen holdout test split $\mathcal{D}_{\text{test}} = \{(x_i, y_i)\}_{i=1}^{n_{\text{test}}}$. The test formally asserts that the empirical coverage mathematically satisfies the statistical bound:
+The test runner loads the newly trained ONNX candidate model and evaluates it against an unseen holdout test split $\mathcal{D}_{\text{test}} = \{(x_i, y_i)\}_{i=1}^{n_{\text{test}}}$. The test formally asserts that the empirical coverage mathematically satisfies the statistical bound:
 \[
-\text{Empirical Coverage} = \frac{1}{n_{\text{test}}} \sum_{i=1}^{n_{\text{test}}} \mathbb{I}\left(y_i \in \hat{C}(x_i)\right) \ge 1 - \alpha
+\text{Empirical Coverage} = \frac{1}{n_{\text{test}}} \sum_{i=1}^{n_{\text{test}}} \mathbb{I}\left(y_i \in \hat{C}(x_i)\right) \ge 1 - \alpha,
 \]
-Where:
-\begin{itemize}
-    \item $n_{\text{test}}$ is the total number of evaluation observations in the holdout split.
-    \item $(x_i, y_i)$ denotes the $i$-th test image and its corresponding ground-truth Linnaean label.
-    \item $\hat{C}(x_i)$ is the prediction set output by the conformal engine evaluated at threshold $\hat{q}_\alpha$.
-    \item $\mathbb{I}(\cdot)$ is the indicator function, evaluating to $1$ if the true label $y_i$ is safely contained within $\hat{C}(x_i)$, and $0$ otherwise.
-    \item $\alpha$ is the nominal significance error rate ($\alpha = 0.05$).
-\end{itemize}
-If the empirical coverage drops below $0.95$, the test fails with a fatal error. This mathematically prevents an under-covered, uncalibrated model from ever being packaged into a release artefact.
+where $n_{\text{test}}$ denotes the cardinality of the holdout split, $(x_i, y_i)$ is the $i$-th test observation with ground-truth Linnaean label, $\hat{C}(x_i)$ is the conformal prediction set calibrated at nominal significance level $\alpha = 0.05$, and $\mathbb{I}(\cdot)$ is the indicator function. If the empirical coverage drops below $0.95$, the test fails with a fatal error, mathematically preventing an under-covered, uncalibrated model from ever being packaged into a release artefact.
 
 \subsection{Tier 4: Statistical Metric Selection and Anomaly Verification}
 In traditional computer vision benchmarking, the Area Under the Receiver Operating Characteristic curve (AUROC) is widely utilised to quantify model discrimination. In biological species monitoring and ecological anomaly detection, however, \textbf{AUROC is fundamentally flawed and actively deceptive}.
@@ -169,7 +167,7 @@ The AUROC metric mathematically evaluates the trade-off between the True Positiv
 \[
 TPR = \frac{TP}{TP + FN}, \quad FPR = \frac{FP}{FP + TN}
 \]
-Where $TP$, $FP$, $TN$, and $FN$ denote the counts of true positives, false positives, true negatives, and false negatives, respectively.
+where $TP$, $FP$, $TN$, and $FN$ denote the counts of true positives, false positives, true negatives, and false negatives, respectively.
 
 Because the negative class (normal, common organisms or background pixels) vastly outnumbers the anomalous class, the denominator of the False Positive Rate ($FP + TN$) is aggressively dominated by $TN$. Consequently, an algorithm can easily generate thousands of false positive alarms ($FP$), yet the calculated $FPR$ remains near zero due to the massive $TN$ divisor. A model exhibiting an apparently stellar AUROC score of $0.98$ can simultaneously suffer a catastrophic precision collapse in production, inundating human experts with hundreds of useless false alerts.
 
@@ -178,19 +176,14 @@ In order to permanently prevent misleading verification gates, the testing suite
 
 For classification and global Out-of-Distribution anomaly detection, the pipeline robustly evaluates PR-AUC:
 \[
-\text{PR-AUC} = \int_{0}^{1} \text{Precision}(R) \, dR
+\text{PR-AUC} = \int_{0}^{1} \text{Precision}(R) \, dR,
 \]
-Where Precision is formally defined as $\frac{TP}{TP + FP}$ and Recall ($R$) is defined as $\frac{TP}{TP + FN}$. Because PR-AUC mathematically excludes True Negatives ($TN$) from its formulation entirely, it directly reflects the true proportion of genuine biological anomalies amongst all flagged alerts, thus providing an honest measure of real-world efficacy.
+where $\text{Precision} = \frac{TP}{TP + FP}$ and $\text{Recall} (R) = \frac{TP}{TP + FN}$. Because PR-AUC mathematically excludes True Negatives ($TN$) from its formulation entirely, it directly reflects the true proportion of genuine biological anomalies amongst all flagged alerts, thus providing an honest measure of real-world efficacy.
 
 For zero-shot visual cropping, bounding-box isolation, and spatial anomaly segmentation, the test harness enforces the Area Under the Per-Image Overlap (AUPIMO) metric. Unlike global pixel-level metrics that carelessly allow large contiguous background areas to distort evaluation scores, AUPIMO computes the intersection-over-union metric independently across each individual image's bounding box over varying threshold levels:
 \[
-\text{AUPIMO} = \frac{1}{N_{\text{images}}} \sum_{k=1}^{N_{\text{images}}} \int_{0}^{\tau_{\max}} \Omega_k(\tau) \, d\tau
+\text{AUPIMO} = \frac{1}{N_{\text{images}}} \sum_{k=1}^{N_{\text{images}}} \int_{0}^{\tau_{\max}} \Omega_k(\tau) \, d\tau,
 \]
-Where:
-\begin{itemize}
-    \item $N_{\text{images}}$ is the total number of test photographs carefully evaluated in the spatial verification suite.
-    \item $\tau$ denotes the detection threshold, integrated from $0$ to an upper operational bound $\tau_{\max}$.
-    \item $\Omega_k(\tau)$ represents the per-image overlap rate for photograph $k$ evaluated at threshold $\tau$, defined precisely as the ratio of correctly identified anomaly pixels within the ground-truth organism mask relative to the total organism area.
-\end{itemize}
+where $N_{\text{images}}$ is the total number of test photographs evaluated in the spatial verification suite, $\tau$ denotes the detection threshold integrated up to operational bound $\tau_{\max}$, and $\Omega_k(\tau)$ represents the per-image overlap rate for photograph $k$ at threshold $\tau$, evaluated as the ratio of correctly identified anomaly pixels within the ground-truth organism mask relative to the total organism area.
 
-By thoughtfully evaluating overlap per image rather than across the pooled pixel space, AUPIMO ensures that the zero-shot visual entity linking module isolates small organisms (for example, small insects or solitary flowers) just as reliably as large organisms (such as large mammals or mature trees). This mathematical guarantee ensures that upstream cropping logic introduces zero systematic taxonomic bias into downstream retrieval.
+By evaluating overlap per image rather than across the pooled pixel space, AUPIMO ensures that the zero-shot visual entity linking module isolates small organisms (for example, small insects or solitary flowers) just as reliably as large organisms (such as large mammals or mature trees). This mathematical guarantee ensures that upstream cropping logic introduces zero systematic taxonomic bias into downstream retrieval.

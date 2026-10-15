@@ -12,20 +12,35 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
+import sys
 from pathlib import Path
 
 import numpy as np
+
+from taxon_vision.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 def compute_conformal_quantile(scores: np.ndarray, alpha: float) -> float:
     """Compute distribution-free split conformal prediction quantile.
 
+    Why:
+        Split conformal prediction provides mathematical finite-sample coverage guarantees (1 - alpha) by calibrating on non-conformity scores calculated on holdout data.
+
+    How:
+        Evaluates the empirical quantile at ceil((n + 1) * (1 - alpha)) / n using the higher order statistic.
+
+    Complexity:
+        O(n log n) sorting overhead or O(n) order statistic selection.
+
     Args:
-        scores: The non-conformity scores.
-        alpha: The significance level.
+        scores: The non-conformity scores array of shape (N,).
+        alpha: The user-specified significance error tolerance.
 
     Returns:
-        The conformal quantile.
+        The calibrated conformal quantile threshold q_hat.
     """
     n = len(scores)
     level = np.ceil((n + 1) * (1.0 - alpha)) / n
@@ -35,17 +50,59 @@ def compute_conformal_quantile(scores: np.ndarray, alpha: float) -> float:
 
 
 def main() -> None:
-    """Main function to calibrate conformal quantile."""
+    """Calibrate conformal quantile from empirical validation scores or permitted synthetic fallback.
+
+    Why:
+        Maintains epistemic guarantees by calibrating non-conformity thresholds from empirical evaluation scores, strictly failing fast when real validation artefacts are missing unless synthetic testing is explicitly authorised.
+
+    How:
+        Parses CLI flags, attempts to load real validation scores from disk, conditionally generates synthetic scores only if permitted, computes the conformal quantile, and persists metadata.
+
+    Complexity:
+        O(N log N) quantile calibration plus O(1) filesystem persistence.
+    """
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    settings = get_settings()
     parser = argparse.ArgumentParser(description="Calibrate conformal quantile.")
-    parser.add_argument("--alpha", type=float, default=0.05, help="Significance level (default: 0.05)")
+    parser.add_argument(
+        "--alpha",
+        type=float,
+        default=settings.conformal.alpha,
+        help=f"Significance level (default: {settings.conformal.alpha})",
+    )
     parser.add_argument("--out", type=Path, default=Path("config/conformal_calibration.json"))
+    parser.add_argument(
+        "--scores-path",
+        type=Path,
+        default=Path("data/conformal/calibration_scores.npy"),
+        help="Path to calibration non-conformity scores or probabilities",
+    )
+    parser.add_argument(
+        "--allow-synthetic",
+        action="store_true",
+        default=settings.model.allow_untrained_fallback,
+        help="Allow synthetic score generation when calibration scores file is absent",
+    )
     args = parser.parse_args()
 
-    # Generate or load calibration non-conformity scores: s_i = 1 - p(y_true)
-    np.random.seed(42)
-    sample_size = 1000
-    mock_true_class_probs = np.random.beta(a=8.0, b=1.0, size=sample_size)
-    nonconformity_scores = 1.0 - mock_true_class_probs
+    if args.scores_path.exists():
+        nonconformity_scores = np.load(str(args.scores_path))
+        sample_size = len(nonconformity_scores)
+    else:
+        if not args.allow_synthetic:
+            logger.error(
+                "Calibration scores file not found at '%s'. Pass --allow-synthetic to permit synthetic scores.",
+                args.scores_path,
+            )
+            sys.exit(1)
+        logger.warning(
+            "Calibration scores file not found at '%s'; generating synthetic non-conformity scores for testing.",
+            args.scores_path,
+        )
+        np.random.seed(settings.training.random_seed)
+        sample_size = 1000
+        mock_true_class_probs = np.random.beta(a=8.0, b=1.0, size=sample_size)
+        nonconformity_scores = 1.0 - mock_true_class_probs
 
     q_hat = compute_conformal_quantile(nonconformity_scores, args.alpha)
     print(f"Calibrated Split Conformal Quantile for alpha={args.alpha} (Nominal Coverage {1 - args.alpha:.0%}):")

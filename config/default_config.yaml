@@ -17,7 +17,20 @@ model:
   std: [0.229, 0.224, 0.225]
   onnx_model_path: "models/checkpoints/taxon_vision_quantized.onnx"
   head_checkpoint_path: "models/checkpoints/head.pt"
+  taxa_catalog_path: "config/taxa_catalog.yaml"
+  eval_resize_ratio: 1.1428571428571428
+  calibration_dir: "data/sample"
+  calibration_samples: 128
+  inference_backend: "auto"
+  quantization_mode: "auto"
   temperature: 1.0
+  allow_untrained_fallback: false
+  prefer_onnx_runtime: true
+  onnx_opset_version: 17
+  cam_numerical_epsilon: 1.0e-8
+  ood_temperature: 1.0
+  ood_energy_threshold: -2.40
+  flagged_storage_dir: "data/flagged_observations"
   backbone_registry:
     bioclip-2: "hf-hub:imageomics/bioclip-2"
     dinov3: "vit_small_patch16_dinov3"
@@ -25,6 +38,28 @@ model:
     dinov2_vits14: "vit_small_patch14_dinov2.lvd142m"
     mobilenetv4_conv_small: "mobilenetv4_conv_small.e2400_r224_in1k"
     efficientnet_b0: "efficientnet_b0.ra_in1k"
+
+training:
+  epochs: 5
+  batch_size: 32
+  learning_rate: 0.001
+  val_split: 0.2
+  random_seed: 42
+  extractor: "dinov3"
+
+ingestion:
+  taxa_to_fetch:
+    - 48662
+    - 47219
+    - 12727
+    - 8229
+    - 47602
+    - 57983
+    - 47144
+    - 42069
+    - 48715
+    - 48701
+  per_page: 200
 
 mlflow:
   tracking_uri: "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
@@ -34,7 +69,10 @@ conformal:
   alpha: 0.05
   k_max: 3
   quantile_threshold: 0.85
+  nominal_coverage: 0.95
+  method: "split-conformal"
+  empty_set_action: "route_to_human_triage"
 
 ood:
-  energy_threshold: -12.5
+  energy_threshold: -2.40
   entropy_threshold: 2.8

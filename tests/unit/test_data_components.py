@@ -5,15 +5,17 @@
 from __future__ import annotations
 
 import io
+import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import polars as pl
 import pytest
 from PIL import Image
 
 from taxon_vision.data.inat_client import INatAPIClient
-from taxon_vision.data.s3_streamer import S3ImageStreamer
+from taxon_vision.data.s3_streamer import S3ImageStreamer, _fetch_record_image
+from taxon_vision.data.s3_streamer import main as streamer_main
 from taxon_vision.domain.license import AttributionRecord, OpenLicense
 from taxon_vision.domain.observation import ObservationRecord
 from taxon_vision.domain.taxonomy import TaxonNode
@@ -126,3 +128,115 @@ def test_observation_record() -> None:
         observation_id="obs_100", taxon=taxon, attribution=attribution, image_url="http://example.com/img.jpg"
     )
     assert obs.observation_id == "obs_100"
+
+
+def test_s3_image_streamer_balanced_and_concurrent(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Verify S3ImageStreamer handles balanced taxon sampling and multithreaded fetching."""
+    manifest_file = tmp_path / "balanced_manifest.parquet"
+    df = pl.DataFrame(
+        {
+            "observation_uuid": [f"uuid-{i}" for i in range(6)],
+            "taxon_id": [1, 1, 1, 2, 2, 2],
+            "image_url": [f"https://mock.s3/img_{i}.jpg" for i in range(6)],
+        }
+    )
+    df.write_parquet(manifest_file)
+
+    img_bytes = io.BytesIO()
+    Image.new("RGB", (32, 32), color="blue").save(img_bytes, format="JPEG")
+    fake_content = img_bytes.getvalue()
+
+    class MockResponse:
+        def __init__(self, content: bytes) -> None:
+            self.content = content
+
+        def raise_for_status(self) -> None:
+            pass
+
+    class MockClient:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def __enter__(self) -> MockClient:
+            return self
+
+        def __exit__(self, *args: Any) -> None:
+            pass
+
+        def get(self, _url: str) -> MockResponse:
+            return MockResponse(fake_content)
+
+    monkeypatch.setattr("httpx.Client", MockClient)
+
+    streamer = S3ImageStreamer(manifest_path=manifest_file)
+    items = list(streamer.stream_images(limit=4, max_workers=2, balanced=True, shuffle=True))
+    assert len(items) == 4
+
+    # Test _fetch_record_image fallback with client=None
+    res = _fetch_record_image(
+        {"observation_uuid": "test-uuid", "taxon_id": 1, "image_url": "https://mock.s3/test.jpg"},
+        client=None,
+    )
+    assert res is not None
+    assert res[0] == "test-uuid"
+
+    # Test _fetch_record_image on exception returns None
+    class FailingClient:
+        def get(self, _url: str) -> Any:
+            raise RuntimeError("Connection dropped")
+
+    fail_res = _fetch_record_image(
+        {"observation_uuid": "test-uuid", "taxon_id": 1, "image_url": "https://mock.s3/fail.jpg"},
+        client=cast(Any, FailingClient()),
+    )
+    assert fail_res is None
+
+
+def test_s3_streamer_main_cli(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Verify S3 streamer CLI main() executes and writes downloaded images to output directory."""
+    manifest_file = tmp_path / "cli_manifest.parquet"
+    df = pl.DataFrame(
+        {
+            "observation_uuid": ["obs-a", "obs-b"],
+            "taxon_id": [10, 20],
+            "image_url": ["https://mock.s3/a.jpg", "https://mock.s3/b.jpg"],
+        }
+    )
+    df.write_parquet(manifest_file)
+    out_dir = tmp_path / "streamed_images"
+
+    img_bytes = io.BytesIO()
+    Image.new("RGB", (16, 16), color="yellow").save(img_bytes, format="JPEG")
+    fake_content = img_bytes.getvalue()
+
+    class MockResponse:
+        def __init__(self, content: bytes) -> None:
+            self.content = content
+
+        def raise_for_status(self) -> None:
+            pass
+
+    class MockClient:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def __enter__(self) -> MockClient:
+            return self
+
+        def __exit__(self, *args: Any) -> None:
+            pass
+
+        def get(self, _url: str) -> MockResponse:
+            return MockResponse(fake_content)
+
+    monkeypatch.setattr("httpx.Client", MockClient)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["s3_streamer", "--manifest", str(manifest_file), "--limit", "2", "--out", str(out_dir)],
+    )
+
+    streamer_main()
+    assert out_dir.exists()
+    saved_files = list(out_dir.glob("*.jpg"))
+    assert len(saved_files) == 2

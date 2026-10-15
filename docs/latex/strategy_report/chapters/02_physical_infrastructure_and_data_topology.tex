@@ -25,7 +25,7 @@ Consumer GPUs do not support hardware Multi-Instance GPU (MIG) partitioning. Wit
 \[
 M_{\text{train}} = f \cdot M_{\text{VRAM}} = 0.7 \times 16\text{ GB} = 11.2\text{ GB},
 \]
-which leaves $M_{\text{VRAM}} - M_{\text{train}} = 4.8\text{ GB}$ for the INT8 ONNX serving process and the display server. The latter reserve is comfortably larger than the serving footprint of $\le 1.6\text{ GB}$ derived in Table~\ref{tab:rag_latency}.
+which leaves $M_{\text{VRAM}} - M_{\text{train}} = 4.8\text{ GB}$ for the INT8 ONNX serving process and the display server. The latter reserve is comfortably larger than the serving footprint of $\le 1.6\text{ GB}$ derived in Table~\ref{tab:rag_latency}. To guarantee that heavier secondary models do not violate this envelope, the auxiliary visual language model (\texttt{taxon-vision-vlm}) either scales to zero during active Jenkins GPU training windows or executes quantised VLM synthesis directly on the 16 host P-cores and 128~GB DDR5 system memory, maintaining the active GPU serving footprint strictly $\le 1.6\text{ GB}$ VRAM.
 
 \section{Access Topology and Edge Security}
 \label{sec:access_topology}
@@ -56,5 +56,11 @@ Under these illustrative assumptions:
 \end{align*}
 This 8.3 GB peak allocation (or 9.8 GB under peak 60 KB compression ceiling) operates well within the DagsHub 20 GB free-tier allowance, leaving ample headroom for active learning annotations.
 
-\subsection{External Remote Fallback Topology}
-If the catalogue scales towards an illustrative upper horizon of 10,000 global taxa, exemplar storage requirements would scale linearly to approximately 30 GB, thereby exceeding native free quotas. In this scenario, the DVC remote backend is retargeted to an external, zero-egress S3-compatible bucket (such as Cloudflare R2 or a localized MinIO cluster). DagsHub then continues to render Directed Acyclic Graphs (DAGs) and track Git-to-DVC commit diffs, decoupling the management interface from the physical storage layer.
+\subsection{Local Intermediate Lakehouse and External Remote Topology}
+Whilst DagsHub acts as the external Git and DVC synchronisation mirror, high-throughput training and inference loops cannot endure public internet round-trip latencies for ephemeral or high-volume intermediate data. Consequently, the single-host k3s cluster hosts a localized MinIO object store instance (\texttt{s3://taxon-lakehouse/}) backed by a \texttt{NOCOW} (\texttt{chattr +C}) BTRFS subvolume on the FireCuda NVMe drive. This instance provides a local, high-bandwidth S3 object tier dedicated to three distinct workload classes:
+\begin{enumerate}
+    \item \textbf{High-Volume Feature Tables and Embeddings:} Intermediate LanceDB dataset tables (\texttt{.lance} format) and pre-computed backbone embeddings streamed during classification head retraining.
+    \item \textbf{Active Learning Triage Records:} Bounded image crops, feature representations, and predictive distributions routed to the operator review queue (\texttt{triage\_queue.lance}).
+    \item \textbf{Local Run Artefacts:} Intermediate MLflow run artefacts -- including checkpoint heads (\texttt{head.pt}), compiled ONNX graphs (\texttt{model.onnx}), and calibrated Conformal Prediction thresholds (\texttt{conformal\_config.yaml}) -- before external promotion.
+\end{enumerate}
+When the catalogue scales towards an illustrative upper horizon of 10,000 global taxa, exemplar storage requirements would scale linearly to approximately 30~GB, thereby exceeding public free-tier quotas. In this scenario, the DVC remote backend is configured to synchronise with the local MinIO lakehouse or an external zero-egress S3-compatible bucket (such as Cloudflare R2), whilst DagsHub continues to render Directed Acyclic Graphs (DAGs) and track Git-to-DVC commit diffs, cleanly decoupling the metadata management interface from the physical storage layer.

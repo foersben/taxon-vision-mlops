@@ -17,8 +17,10 @@ env:
 jobs:
   quality-gate:
     name: Code, Security & Type Quality
-    runs-on: [k3s-pod, gpu, taxon-vision]
+    runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      TAXON_ALLOW_UNTRAINED_FALLBACK: "true"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -29,6 +31,23 @@ jobs:
         uses: prefix-dev/setup-pixi@v0.10.2
         with:
           environments: ci-dev
+
+      - name: Hydrate Model Checkpoints from DVC
+        env:
+          DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+        run: |
+          mkdir -p models/checkpoints
+
+          if [ -n "$DAGSHUB_TOKEN" ]; then
+            echo ">>> Fetching latest model checkpoints from DagsHub DVC..."
+            AWS_ACCESS_KEY_ID="$DAGSHUB_TOKEN" \
+            AWS_SECRET_ACCESS_KEY="$DAGSHUB_TOKEN" \
+            pixi run --frozen -e ci-dev dvc pull \
+              models/checkpoints/head.pt \
+              models/checkpoints/model.onnx || true
+          else
+            echo "::notice::DAGSHUB_TOKEN not set in GitHub Actions; running tests with offline fixtures."
+          fi
 
       - name: Pre-Commit Quality Checks
         run: SKIP=enforce-author-identity pixi run --frozen -e ci-dev pre-commit run --all-files

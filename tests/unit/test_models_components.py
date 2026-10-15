@@ -71,7 +71,9 @@ def test_feature_extractor_device_and_fallback(monkeypatch: pytest.MonkeyPatch) 
         return nn.Linear(10, 10)
 
     monkeypatch.setattr(timm, "create_model", mock_create)
-    extractor = create_feature_extractor("dinov3_offline_fallback")
+    with pytest.raises(RuntimeError, match="Could not create backbone"):
+        create_feature_extractor("dinov3_offline_fallback", allow_fallback=False)
+    extractor = create_feature_extractor("dinov3_offline_fallback", allow_fallback=True)
     assert extractor is not None
 
 
@@ -198,6 +200,16 @@ def test_embedding_split_validation() -> None:
         )
 
 
+def test_forward_with_embeddings() -> None:
+    """Verify TaxonClassifier.forward_with_embeddings returns both class logits and dense embeddings."""
+    backbone = nn.Sequential(nn.Flatten(), nn.Linear(3 * 32 * 32, 16))
+    classifier = TaxonClassifier(backbone=backbone, feature_dim=16, num_classes=4)
+    dummy_input = torch.randn(2, 3, 32, 32)
+    logits, embeddings = classifier.forward_with_embeddings(dummy_input)
+    assert logits.shape == (2, 4)
+    assert embeddings.shape == (2, 16)
+
+
 def test_cam_heatmap() -> None:
     """Verify Class Activation Mapping saliency matrix generation and bounds."""
     img = Image.new("RGB", (100, 100))
@@ -205,6 +217,32 @@ def test_cam_heatmap() -> None:
     assert heatmap.shape == (100, 100)
     assert heatmap.min() >= 0.0
     assert heatmap.max() <= 1.0
+
+
+def test_cam_saliency_extraction_error_on_invalid_backbone() -> None:
+    """Verify that cam.py raises SaliencyExtractionError when given invalid non-spatial activations."""
+    from taxon_vision.inference.cam import SaliencyExtractionError
+
+    class InvalidBackbone(nn.Module):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.forward_features(x)
+
+        def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+            return torch.randn(x.shape[0], 16)  # 2D tensor, not 3D or 4D
+
+    model = TaxonClassifier(backbone=InvalidBackbone(), feature_dim=16, num_classes=3)
+    img = Image.new("RGB", (64, 64))
+    with pytest.raises(SaliencyExtractionError, match="Target layer failed to emit valid spatial activations"):
+        generate_heatmap(img, classifier=model)
+
+
+def test_cam_saliency_extraction_error_on_unsupported_model() -> None:
+    """Verify that cam.py raises SaliencyExtractionError when model does not implement protocol."""
+    from taxon_vision.inference.cam import SaliencyExtractionError
+
+    img = Image.new("RGB", (64, 64))
+    with pytest.raises(SaliencyExtractionError, match="does not expose backbone and head"):
+        generate_heatmap(img, classifier=nn.Linear(10, 2))
 
 
 def test_save_head_checkpoint_explicit_path(tmp_path: Path) -> None:

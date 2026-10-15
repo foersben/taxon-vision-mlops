@@ -15,6 +15,7 @@ import pytest
 from taxon_vision.inference.quantizer import (
     TaxonCalibrationDataReader,
     quantize_onnx_dynamic,
+    quantize_onnx_model,
     quantize_onnx_static,
 )
 
@@ -131,16 +132,32 @@ def test_quantize_onnx_static(dummy_onnx_model: Path, tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(not HAS_DEPS, reason="Requires torch, onnx, onnxruntime")
-def test_quantize_onnx_dynamic_fallback(
+@pytest.mark.skipif(not HAS_DEPS, reason="Requires torch, onnx, onnxruntime")
+def test_quantize_onnx_dynamic_fallback_raises(
     dummy_onnx_model: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Verify that quantize_onnx_dynamic falls back to copying source model when quantization fails."""
+    """Verify that quantize_onnx_dynamic raises RuntimeError instead of silently copying source model."""
 
     def mock_quantize(*args: object, **kwargs: object) -> None:
         raise RuntimeError("Simulated quantization failure")
 
     monkeypatch.setattr(onnxruntime.quantization, "quantize_dynamic", mock_quantize)
     output_path = tmp_path / "fallback_quant.onnx"
-    result = quantize_onnx_dynamic(dummy_onnx_model, output_path)
-    assert result.exists()
-    assert result.read_bytes() == dummy_onnx_model.read_bytes()
+    with pytest.raises(RuntimeError, match=r"Dynamic INT8 quantization of .* failed"):
+        quantize_onnx_dynamic(dummy_onnx_model, output_path)
+
+
+@pytest.mark.skipif(not HAS_DEPS, reason="Requires torch, onnx, onnxruntime")
+def test_quantize_onnx_model_auto_mode(dummy_onnx_model: Path, tmp_path: Path) -> None:
+    """Verify that quantize_onnx_model selects dynamic when no calibration data is passed."""
+    out_dynamic = tmp_path / "auto_dynamic.onnx"
+    res = quantize_onnx_model(dummy_onnx_model, out_dynamic, calibration_tensors=None, mode="auto")
+    assert res.exists()
+    assert res.stat().st_size > 0
+
+    # Also verify static selection when calibration data is provided
+    cal_data = [np.random.randn(1, 3, 4, 4).astype(np.float32) for _ in range(3)]
+    out_static = tmp_path / "auto_static.onnx"
+    res_static = quantize_onnx_model(dummy_onnx_model, out_static, calibration_tensors=cal_data, mode="auto")
+    assert res_static.exists()
+    assert res_static.stat().st_size > 0

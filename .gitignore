@@ -39,6 +39,9 @@ coverage.xml
 .complexipy_cache/
 .mypy_cache/
 .ruff_cache/
+*.db
+*.sqlite
+*.sqlite3
 
 # Jupyter Notebook & Scratch
 .ipynb_checkpoints/

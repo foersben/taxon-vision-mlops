@@ -4,81 +4,215 @@
 
 from __future__ import annotations
 
+import argparse
+import logging
+import sys
 from pathlib import Path
 
 import torch
 import torch.nn as nn
 
+from taxon_vision.config import Settings, get_settings
+from taxon_vision.inference.calibration import load_calibration_tensors
+from taxon_vision.models.factory import create_feature_extractor, get_feature_dimension
+from taxon_vision.models.head import TaxonClassifier, load_head_checkpoint
+from taxon_vision.service.inference import load_taxa_catalog
 
-def export_to_onnx(model: nn.Module, output_path: Path, input_shape: tuple[int, ...] = (1, 3, 224, 224)) -> Path:
-    """Export model to ONNX graph with dynamic batch sizing.
+logger = logging.getLogger(__name__)
+
+
+class _ONNXDualOutputModule(nn.Module):
+    """Wrapper module ensuring exported ONNX graphs emit both logits and dense embeddings.
 
     Why:
-        In production workflows, the ML model must be decoupled from the specific deep learning framework used during training to maximize deployment flexibility. ONNX (Open Neural Network Exchange) serves as the de facto open-standard interoperability layer, enabling the model to be deployed using high-performance inference engines (e.g., ONNX Runtime, TensorRT) across diverse hardware targets (CPUs, GPUs, edge accelerators) without requiring the original training framework. This separation ensures the inference infrastructure can be optimized independently of the research and development environment.
+        Standard PyTorch classifiers return only the final projection logits. Exporting an ONNX graph that provides both class logits and dense feature embeddings allows downstream inference systems (OOD detection, drift monitoring, active learning query strategies) to consume embeddings directly without running an additional feature extraction pass.
 
     How:
-        Exports the trained PyTorch model to a self-contained ONNX graph using torch.onnx.export. The export process traces the computational graph using a dummy input tensor, generating a serialized graph representation. Key optimization arguments include enabling constant folding to fuse operations (e.g., scaling, bias addition) into single nodes, specifying dynamic axes to permit variable batch sizes during inference, and selecting an opset version (e.g., 17) that balances feature availability with broad runtime compatibility.
+        Delegates forward execution to `classifier.forward_with_embeddings(x)`.
 
     Complexity:
-        - time complexity: O(M), where M is the number of layers in the model. The export process traces the computational graph once, performing constant folding and other optimizations that scale linearly with model size.
-        - space complexity: O(M), due to the storage requirements for the ONNX graph representation and intermediate symbolic tensors during tracing.
+        O(1) forward delegation overhead.
+    """
+
+    def __init__(self, classifier: TaxonClassifier) -> None:
+        """Initialize the dual-output wrapper.
+
+        Args:
+            classifier: TaxonClassifier instance to wrap.
+        """
+        super().__init__()
+        self.classifier = classifier
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Execute forward pass returning (logits, embeddings).
+
+        Args:
+            x: Input 4D image tensor of shape (batch_size, channels, height, width).
+
+        Returns:
+            Tuple of (logits, embeddings).
+        """
+        return self.classifier.forward_with_embeddings(x)
+
+
+def export_to_onnx(
+    model: nn.Module,
+    output_path: Path,
+    input_shape: tuple[int, ...] | None = None,
+) -> Path:
+    """Export model to ONNX graph with dynamic batch sizing and dual outputs (logits, embeddings).
+
+    Why:
+        In production workflows, the ML model must be decoupled from the specific deep learning framework used during training to maximize deployment flexibility. Emitting dual outputs (logits, embeddings) allows inference engines to support both classification and downstream representation retrieval without redundant forward passes.
+
+    How:
+        Exports the trained PyTorch model to a self-contained ONNX graph using torch.onnx.export. Traces the graph using a dummy CPU input tensor, enables constant folding, specifies dynamic axes for variable batch sizes, and targets the configured opset version.
 
     Args:
-        model: The model to export.
-        output_path: The path to export the model to.
-        input_shape: The shape of the input to the model.
+        model: PyTorch model module to export.
+        output_path: Target filesystem path for serialized ONNX graph.
+        input_shape: Expected input tensor shape tuple. Defaults to (1, settings.model.channels, settings.model.image_size, settings.model.image_size).
 
     Returns:
-        The path to the exported model.
+        Resolved Path to the exported ONNX model.
     """
+    settings = get_settings()
     model.eval()
-    dummy_input = torch.randn(*input_shape)
+    model.cpu()
+    if input_shape is None:
+        cfg = settings.model
+        input_shape = (1, cfg.channels, cfg.image_size, cfg.image_size)
+    dummy_input = torch.randn(*input_shape, device="cpu")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    torch.onnx.export(
-        model,
-        (dummy_input,),
-        str(output_path),
-        export_params=True,
-        opset_version=17,
-        do_constant_folding=True,
-        input_names=["input"],
-        output_names=["logits"],
-        dynamic_axes={"input": {0: "batch_size"}, "logits": {0: "batch_size"}},
-    )
+    is_dual = isinstance(model, TaxonClassifier) or isinstance(model, _ONNXDualOutputModule)
+    export_module: nn.Module = _ONNXDualOutputModule(model) if isinstance(model, TaxonClassifier) else model
+
+    output_names = ["logits", "embeddings"] if is_dual else ["logits"]
+    dynamic_axes: dict[str, dict[int, str]] = {
+        "input": {0: "batch_size"},
+        "logits": {0: "batch_size"},
+    }
+    if is_dual:
+        dynamic_axes["embeddings"] = {0: "batch_size"}
+
+    with torch.no_grad():
+        torch.onnx.export(
+            export_module,
+            (dummy_input,),
+            str(output_path),
+            export_params=True,
+            opset_version=settings.model.onnx_opset_version,
+            do_constant_folding=True,
+            input_names=["input"],
+            output_names=output_names,
+            dynamic_axes=dynamic_axes,
+        )
     return output_path
 
 
-def export_classifier_cli(argv: list[str] | None = None) -> int:
-    """CLI entrypoint for exporting the trained TaxonClassifier to ONNX format.
+def _load_head_checkpoint(classifier: nn.Module, checkpoint_file: Path) -> None:
+    """Safely load trained classification head weights onto CPU.
 
     Why:
-        Automation pipelines (e.g., Jenkins CI/CD) and developers need a command-line interface
-        to trace and serialize PyTorch checkpoints into high-performance ONNX computational graphs
-        without writing bespoke Python scripts.
+        Checkpoints may be saved from GPU devices (e.g. cuda:0) or wrapped inside dictionary structures. Deserializing strictly to CPU and normalizing keys ensures robust loading across heterogeneous training and deployment environments.
 
     How:
-        1. Parses command-line flags (--checkpoint, --output, --extractor, --image-size).
-        2. Resolves configuration defaults from application settings.
-        3. Instantiates the TaxonClassifier using the specified backbone and restores weights from checkpoint.
-        4. Invokes export_to_onnx with the requested input dimensions.
-        5. Validates that the artifact was generated and logs confirmation.
+        Delegates to `load_head_checkpoint`, which loads with weights_only=True and map_location='cpu', unwraps nested checkpoint dictionaries, strips any leading 'head.' prefixes, and enforces strict state_dict restoration into classifier.head.
 
     Args:
-        argv: Optional list of command-line argument strings.
+        classifier: TaxonClassifier instance containing the target classification head.
+        checkpoint_file: Path to the serialized PyTorch head checkpoint.
+    """
+    load_head_checkpoint(classifier.head, checkpoint_file)
+
+
+def _resolve_backbone(
+    extractor_name: str,
+    fallback_extractor: str,
+    allow_untrained: bool,
+) -> nn.Module | None:
+    """Instantiate the backbone feature extractor, respecting the untrained flag.
+
+    Args:
+        extractor_name: Name of the backbone feature extractor.
+        fallback_extractor: Name of the fallback feature extractor.
+        allow_untrained: Whether to allow untrained backbone.
 
     Returns:
-        Exit code: 0 for success, 1 on failure.
+        Backbone feature extractor.
     """
-    import argparse
-    import logging
-    import sys
+    use_pretrained = not allow_untrained
+    logger.info("Initializing backbone feature extractor: %s (pretrained=%s)", extractor_name, use_pretrained)
+    try:
+        return create_feature_extractor(
+            extractor_name,
+            pretrained=use_pretrained,
+            allow_fallback=allow_untrained,
+        )
+    except Exception as exc:
+        logger.error(
+            "Failed to create backbone '%s' (fallback '%s' not usable): %s", extractor_name, fallback_extractor, exc
+        )
+        return None
 
-    from taxon_vision.config import get_settings
-    from taxon_vision.models.factory import create_feature_extractor, get_feature_dimension
-    from taxon_vision.models.head import TaxonClassifier
-    from taxon_vision.service.inference import load_taxa_catalog
 
+def _restore_head(
+    classifier: TaxonClassifier,
+    checkpoint_file: Path,
+    allow_untrained: bool,
+    extractor_name: str,
+    feat_dim: int,
+    num_classes: int,
+) -> bool:
+    """Restore checkpoint weights or validate fallback behavior.
+
+    Args:
+        classifier: Classifier module to load weights into.
+        checkpoint_file: Path to checkpoint file.
+        allow_untrained: Whether to allow untrained backbone.
+        extractor_name: Name of the feature extractor.
+        feat_dim: Feature dimension.
+        num_classes: Number of classes.
+
+    Returns:
+        True if head was restored or fallback is allowed, False otherwise.
+    """
+    if not checkpoint_file.exists():
+        if not allow_untrained:
+            logger.error(
+                "Trained checkpoint not found at %s. Run training first or pass --allow-untrained for tests.",
+                checkpoint_file,
+            )
+            return False
+        logger.warning("No checkpoint at %s; exporting initialized weights (--allow-untrained)", checkpoint_file)
+        return True
+
+    try:
+        _load_head_checkpoint(classifier, checkpoint_file)
+        logger.info("Restored trained head weights from %s", checkpoint_file)
+        return True
+    except Exception as load_err:
+        if not allow_untrained:
+            logger.error(
+                "Checkpoint %s is incompatible with backbone '%s' (feat_dim=%d, classes=%d): %s",
+                checkpoint_file,
+                extractor_name,
+                feat_dim,
+                num_classes,
+                load_err,
+            )
+            return False
+        logger.warning("Checkpoint shape mismatch (%s); exporting untrained weights (--allow-untrained)", load_err)
+        return True
+
+
+def _build_arg_parser() -> argparse.ArgumentParser:
+    """Construct argument parser for the ONNX exporter CLI.
+
+    Returns:
+        ArgumentParser instance.
+    """
     parser = argparse.ArgumentParser(description="TaxonVision ONNX Graph Exporter CLI")
     parser.add_argument(
         "--checkpoint",
@@ -104,7 +238,111 @@ def export_classifier_cli(argv: list[str] | None = None) -> int:
         default=None,
         help="Input image resolution in pixels. Defaults to settings.model.image_size.",
     )
+    settings = get_settings()
+    parser.add_argument(
+        "--allow-untrained",
+        action="store_true",
+        default=settings.model.allow_untrained_fallback,
+        help="Allow exporting with uninitialized/offline weights (for unit testing only).",
+    )
+    parser.add_argument(
+        "--quantize-int8",
+        action="store_true",
+        help="Apply INT8 quantization after ONNX export (mode selected via --quantize-mode).",
+    )
+    parser.add_argument(
+        "--quantize-mode",
+        choices=["auto", "static", "dynamic"],
+        default=None,
+        help=(
+            "static: QDQ PTQ with calibration images (required for Conv/ViT backbone graphs). "
+            "dynamic: MatMul/Gemm only, no data (linear-only graphs, CI smoke tests). "
+            "auto: static for the full backbone graph. Defaults to settings.model.quantization_mode."
+        ),
+    )
+    parser.add_argument(
+        "--quantized-output",
+        type=str,
+        default=None,
+        help="Destination of the INT8 graph. Defaults to settings.model.onnx_model_path.",
+    )
+    parser.add_argument(
+        "--calibration-dir",
+        type=str,
+        default=None,
+        help="Directory of representative images for static PTQ. Defaults to settings.model.calibration_dir.",
+    )
+    parser.add_argument(
+        "--calibration-samples",
+        type=int,
+        default=None,
+        help="Maximum calibration images for static PTQ. Defaults to settings.model.calibration_samples.",
+    )
+    return parser
 
+
+def _quantize_exported_graph(fp32_path: Path, args: argparse.Namespace, settings: Settings) -> Path:
+    """Quantize the exported FP32 backbone+head graph to INT8 using the operator-appropriate mode.
+
+    Why:
+        The exported graph contains the full backbone (convolutions or ViT blocks), so static QDQ PTQ with real calibration images is the correct default. Dynamic quantization remains available explicitly for data-free smoke tests, but is never selected silently for a backbone graph.
+
+    Args:
+        fp32_path: Path to the exported FP32 ONNX graph.
+        args: Parsed CLI arguments.
+        settings: Application settings providing defaults.
+
+    Returns:
+        Path to the quantized INT8 graph.
+
+    Raises:
+        FileNotFoundError: If static calibration is selected and no calibration images are available.
+    """
+    from taxon_vision.inference.quantizer import quantize_onnx_model
+
+    model_cfg = settings.model
+    requested = args.quantize_mode or model_cfg.quantization_mode
+    mode = "static" if requested == "auto" else requested
+    default_quantized = (
+        fp32_path.with_name(f"{fp32_path.stem}.int8.onnx")
+        if args.output != "models/checkpoints/model.onnx"
+        else Path(model_cfg.onnx_model_path)
+    )
+    quantized_path = Path(args.quantized_output or default_quantized)
+
+    calibration = None
+    if mode == "static":
+        calibration = load_calibration_tensors(
+            args.calibration_dir or model_cfg.calibration_dir,
+            args.calibration_samples or model_cfg.calibration_samples,
+        )
+
+    quantize_onnx_model(fp32_path, quantized_path, calibration_tensors=calibration, mode=mode)
+    logger.info("Quantized INT8 ONNX graph (%s) saved to %s", mode, quantized_path)
+    return quantized_path
+
+
+def export_classifier_cli(argv: list[str] | None = None) -> int:
+    """CLI entrypoint for exporting the trained TaxonClassifier to ONNX format.
+
+    Why:
+        Automation pipelines (e.g., Jenkins CI/CD, DVC) require a deterministic CLI tool to trace and serialize PyTorch checkpoints into high-performance ONNX computational graphs with optional INT8 quantization.
+
+    How:
+        1. Parses command-line flags (--checkpoint, --output, --extractor, --image-size, --allow-untrained, --quantize-int8, --quantize-mode, --quantized-output, --calibration-dir, --calibration-samples).
+        2. Resolves configuration defaults from application settings.
+        3. Instantiates the TaxonClassifier using the pretrained backbone (unless --allow-untrained is set).
+        4. Restores trained weights from checkpoint using _load_head_checkpoint (failing if missing unless --allow-untrained).
+        5. Traces and exports the model to ONNX via export_to_onnx.
+        6. Optionally applies dynamic INT8 quantization via quantize_onnx_model.
+
+    Args:
+        argv: Optional list of command-line argument strings.
+
+    Returns:
+        Exit code: 0 for success, 1 on failure.
+    """
+    parser = _build_arg_parser()
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -113,7 +351,6 @@ def export_classifier_cli(argv: list[str] | None = None) -> int:
         datefmt="%H:%M:%S",
         stream=sys.stdout,
     )
-    logger = logging.getLogger(__name__)
 
     try:
         settings = get_settings()
@@ -122,33 +359,28 @@ def export_classifier_cli(argv: list[str] | None = None) -> int:
         output_file = Path(args.output)
         checkpoint_file = Path(args.checkpoint or settings.model.head_checkpoint_path)
 
-        logger.info("Initializing backbone feature extractor: %s", extractor_name)
-        try:
-            backbone = create_feature_extractor(extractor_name, pretrained=False)
-        except Exception as exc:
-            logger.warning(
-                "Could not create backbone %s (%s); attempting fallback %s",
-                extractor_name,
-                exc,
-                settings.model.fallback_extractor,
-            )
-            backbone = create_feature_extractor(settings.model.fallback_extractor, pretrained=False)
+        backbone = _resolve_backbone(extractor_name, settings.model.fallback_extractor, args.allow_untrained)
+        if backbone is None:
+            return 1
 
         feat_dim = get_feature_dimension(backbone)
         taxa = load_taxa_catalog()
-        num_classes = len(taxa) if taxa else 10
+        if not taxa:
+            logger.error("Authoritative taxa catalog loaded from %s is empty", settings.model.taxa_catalog_path)
+            return 1
+        num_classes = len(taxa)
 
         classifier = TaxonClassifier(backbone=backbone, feature_dim=feat_dim, num_classes=num_classes)
 
-        if checkpoint_file.exists():
-            state_dict = torch.load(checkpoint_file, weights_only=True)
-            if "1.weight" in state_dict and state_dict["1.weight"].shape == classifier.head[1].weight.shape:
-                classifier.head.load_state_dict(state_dict)
-                logger.info("Restored checkpoint weights from %s", checkpoint_file)
-            else:
-                logger.warning("Checkpoint %s shape mismatch; exporting with default weights", checkpoint_file)
-        else:
-            logger.info("No checkpoint found at %s; exporting model with initialized weights", checkpoint_file)
+        if not _restore_head(
+            classifier,
+            checkpoint_file,
+            args.allow_untrained,
+            extractor_name,
+            feat_dim,
+            num_classes,
+        ):
+            return 1
 
         logger.info(
             "Exporting computational graph to ONNX (%s) with input shape (1, 3, %d, %d)...",
@@ -157,6 +389,9 @@ def export_classifier_cli(argv: list[str] | None = None) -> int:
             image_dim,
         )
         export_to_onnx(classifier, output_file, input_shape=(1, 3, image_dim, image_dim))
+
+        if args.quantize_int8:
+            _quantize_exported_graph(output_file, args, settings)
 
         if output_file.exists():
             logger.info("ONNX export succeeded: %s (%d bytes)", output_file, output_file.stat().st_size)
@@ -171,6 +406,4 @@ def export_classifier_cli(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    import sys
-
     sys.exit(export_classifier_cli())
