@@ -38,6 +38,20 @@ class ONNXInferenceEngine:
         self.session = ort.InferenceSession(model_path, opts, providers=["CPUExecutionProvider"])
         self.input_name = self.session.get_inputs()[0].name
         self.output_name = self.session.get_outputs()[0].name
+        out_dim = self.session.get_outputs()[0].shape[-1]
+        self.num_classes: int | None = out_dim if isinstance(out_dim, int) else None
+
+    def predict_logits(self, input_array: np.ndarray) -> np.ndarray:
+        """Run inference returning raw FP32 class logits.
+
+        Args:
+            input_array: Float32 input batch of shape (N, 3, H, W).
+
+        Returns:
+            Logits array of shape (N, num_classes).
+        """
+        logits: np.ndarray = self.session.run([self.output_name], {self.input_name: input_array})[0]
+        return logits
 
     def predict(self, input_array: np.ndarray) -> np.ndarray:
         """Run inference returning softmax probabilities.
@@ -48,7 +62,7 @@ class ONNXInferenceEngine:
         Returns:
             A numpy array representing the softmax probabilities.
         """
-        raw_outputs = self.session.run([self.output_name], {self.input_name: input_array})[0]
+        raw_outputs = self.predict_logits(input_array)
         # Softmax
         exp = np.exp(raw_outputs - np.max(raw_outputs, axis=-1, keepdims=True))
         probs: np.ndarray = exp / np.sum(exp, axis=-1, keepdims=True)

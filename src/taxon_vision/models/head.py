@@ -15,8 +15,39 @@ Typical usage example:
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import torch
 import torch.nn as nn
+
+
+def load_head_checkpoint(head: nn.Module, checkpoint_file: Path | str) -> None:
+    """Strictly restore trained classification-head weights from disk onto CPU.
+
+    Why:
+        Checkpoints may be written from GPU devices or wrapped in dictionaries, and a head restored with mismatched
+        shapes or missing keys would silently produce random-noise predictions. Loading with `strict=True` makes any
+        incompatibility (wrong backbone width, wrong class count) fail loudly instead.
+
+    How:
+        Deserialises with `weights_only=True` and `map_location="cpu"`, unwraps `state_dict` / `model_state_dict`
+        containers, strips a leading `head.` prefix produced by saving a whole `TaxonClassifier`, and applies the
+        state dict strictly.
+
+    Args:
+        head: The classification head module (e.g. `TaxonClassifier.head`) to populate.
+        checkpoint_file: Path to the serialised checkpoint.
+
+    Raises:
+        RuntimeError: If keys or tensor shapes do not match the head.
+    """
+    raw_state = torch.load(checkpoint_file, map_location="cpu", weights_only=True)
+    state_dict = raw_state.get("state_dict", raw_state.get("model_state_dict", raw_state))
+
+    if any(k.startswith("head.") for k in state_dict):
+        state_dict = {k.removeprefix("head."): v for k, v in state_dict.items() if k.startswith("head.")}
+
+    head.load_state_dict(state_dict, strict=True)
 
 
 class TaxonClassifier(nn.Module):

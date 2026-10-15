@@ -55,11 +55,11 @@ def _resolve_feature_dim(extractor: str) -> int:
         Integer dimensionality of the extracted representation vectors.
     """
     try:
-        backbone = create_feature_extractor(extractor, pretrained=False)
+        backbone = create_feature_extractor(extractor, pretrained=False, allow_fallback=True)
         return get_feature_dimension(backbone)
     except Exception as err:
-        logger.debug("Could not resolve backbone dim dynamically (%s), falling back to 1280", err)
-        return 1280
+        logger.error("Could not resolve backbone feature dimension for '%s': %s", extractor, err)
+        raise RuntimeError(f"Could not determine feature dimension for backbone '{extractor}': {err}") from err
 
 
 def _try_load_cached_split(candidate: Path, dim: int) -> EmbeddingSplit | None:

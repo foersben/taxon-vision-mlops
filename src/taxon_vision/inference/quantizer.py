@@ -1,33 +1,53 @@
 # SPDX-FileCopyrightText: 2026 Benjamin Förster
 # SPDX-License-Identifier: MIT
-"""Static and dynamic ONNX quantization routines for CPU edge deployment."""
+"""Static (QDQ) and dynamic INT8 ONNX quantization with explicit operator-aware mode selection.
+
+Mode selection rule (Strategy Report Section 8.1):
+
+* **Static PTQ** (`quantize_static`, `QuantFormat.QDQ`, MinMax calibration) is mandatory for graphs that contain
+  convolutions or vision-transformer blocks (MobileNetV4, EfficientNet, DINOv3, BioCLIP-2, YOLO-World). Activation
+  scales and zero points are calibrated offline on representative images, so no runtime min/max reduction is needed
+  and `Conv` becomes a true INT8 kernel. `quantize_dynamic` does not quantize `Conv` usefully.
+* **Dynamic quantization** (`quantize_dynamic`) is reserved for purely linear graphs (a standalone classification
+  head, VLM linear projections) and for data-free CI smoke tests. Only `MatMul` and `Gemm` are quantized.
+
+In both modes the node(s) producing the graph outputs (the logits) are excluded from quantization. Energy-based
+OOD scoring and split-conformal non-conformity scores consume the logits directly; an 8-bit logit grid would
+introduce staircase artefacts into both. Conformal quantiles and OOD thresholds must be re-calibrated on the
+quantized graph.
+"""
 
 from __future__ import annotations
 
 import logging
+import tempfile
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+
+import onnx
+import onnxruntime.quantization as ort_quant
+from onnxruntime.quantization import (
+    CalibrationDataReader,
+    CalibrationMethod,
+    QuantFormat,
+    QuantType,
+)
+from onnxruntime.quantization.shape_inference import quant_pre_process
 
 logger = logging.getLogger(__name__)
 
-try:
-    from onnxruntime.quantization import CalibrationDataReader
-except ImportError:
-    # Dummy fallback if onnxruntime is absent
-    class CalibrationDataReader:  # type: ignore
-        """Dummy fallback if onnxruntime is absent."""
+QuantMode = Literal["auto", "static", "dynamic"]
+"""Quantization mode: `auto` selects static when calibration data is provided, otherwise dynamic."""
 
-        def get_next(self) -> None:
-            """Get the next batch of calibration data."""
-            return None
+STATIC_OP_TYPES: tuple[str, ...] = ("Conv", "MatMul", "Gemm")
+"""Operators quantized by static PTQ. Normalisation, softmax and activations stay in FP32 for ViT accuracy."""
 
-        def rewind(self) -> None:
-            """Rewind the iterator to the beginning of the calibration data batches."""
-            pass
+DYNAMIC_OP_TYPES: tuple[str, ...] = ("MatMul", "Gemm")
+"""Operators quantized by dynamic quantization. `Conv` is deliberately excluded (no useful INT8 kernel)."""
 
 
-class TaxonCalibrationDataReader(CalibrationDataReader):  # type: ignore
+class TaxonCalibrationDataReader(CalibrationDataReader):  # type: ignore[misc]
     """Provides representative calibration data for Static Post-Training Quantization.
 
     Why:
@@ -70,79 +90,203 @@ class TaxonCalibrationDataReader(CalibrationDataReader):  # type: ignore
         self.iterator = iter(self.data_batches)
 
 
-def quantize_onnx_static(input_onnx: Path, output_onnx: Path, calibration_reader: TaxonCalibrationDataReader) -> Path:
-    """Applies static INT8 Post-Training Quantization (PTQ) to a vision backbone.
+def find_logit_nodes(model_path: Path) -> list[str]:
+    """Locate the nodes that produce the graph outputs (the classification logits).
 
     Why:
-        Static PTQ precomputes quantization scales for activations, enabling zero-allocation
-        INT8 inference. This is strictly required for Conv2D and ViT layers to achieve sub-25ms latency budgets on edge CPUs without runtime calculation overhead.
+        Quantizing the final linear layer discretises the logits onto an 8-bit grid. Both the Helmholtz free
+        energy score and the conformal non-conformity scores are smooth functions of the logits, so a staircase
+        logit distribution biases OOD thresholds and conformal quantiles.
 
     How:
-        Uses ONNX Runtime's `quantize_static` to convert floating-point weights and activations into QDQ (QuantizeLinear/DequantizeLinear) formatted 8-bit integers using the provided calibration data ranges.
+        Collects the producers of every graph output. When a producer is an `Add` (bias added after a `MatMul`),
+        the `MatMul` feeding it is included so the whole affine head stays in floating point.
+
+    Args:
+        model_path: Path to the FP32 ONNX model.
+
+    Returns:
+        Names of the nodes to exclude from quantization.
+    """
+    graph = onnx.load(str(model_path), load_external_data=False).graph
+    producers = {out: node for node in graph.node for out in node.output}
+    excluded: list[str] = []
+
+    for graph_output in graph.output:
+        node = producers.get(graph_output.name)
+        if node is None:
+            continue
+        excluded.append(node.name)
+        if node.op_type == "Add":
+            for inp in node.input:
+                upstream = producers.get(inp)
+                if upstream is not None and upstream.op_type == "MatMul":
+                    excluded.append(upstream.name)
+    return excluded
+
+
+def _preprocess(input_onnx: Path, workdir: Path) -> Path:
+    """Run ORT's quantization pre-processing (shape inference, constant folding) and return the model path.
+
+    Args:
+        input_onnx: FP32 model to prepare.
+        workdir: Temporary directory for the pre-processed model.
+
+    Returns:
+        Path to the pre-processed model, or the original path if pre-processing is not applicable.
+    """
+    prepared = workdir / "preprocessed.onnx"
+    try:
+        quant_pre_process(str(input_onnx), str(prepared), skip_symbolic_shape=True)
+    except Exception as exc:
+        # Pre-processing is an optimisation only; the numerical result is unaffected when it is skipped.
+        logger.warning("Quantization pre-processing skipped (%s); quantizing the model as exported.", exc)
+        return input_onnx
+    return prepared
+
+
+def quantize_onnx_static(
+    input_onnx: Path,
+    output_onnx: Path,
+    calibration_reader: CalibrationDataReader,
+    per_channel: bool = True,
+    nodes_to_exclude: list[str] | None = None,
+) -> Path:
+    """Apply static INT8 Post-Training Quantization (QDQ, MinMax) to a convolutional or ViT graph.
+
+    Why:
+        Static PTQ precomputes quantization scales for activations, enabling INT8 execution without runtime min/max scanning. This is required for Conv2D and ViT layers to meet sub-25ms latency budgets, and keeps the activation scales tied to the exact data distribution used for conformal calibration.
+
+    How:
+        Runs ONNX Runtime's `quantize_static` with `QuantFormat.QDQ`, unsigned 8-bit activations and signed 8-bit per-channel weights, MinMax calibration, and only `Conv`/`MatMul`/`Gemm` quantized. The logit-producing nodes are excluded automatically so the output stays FP32.
 
     Args:
         input_onnx: The input FP32 ONNX model to quantize.
         output_onnx: The path to output the quantized model to.
         calibration_reader: Reader yielding representative batches for scaling.
+        per_channel: Whether to use per-channel weight scales.
+        nodes_to_exclude: Additional node names to keep in FP32 (the logit nodes are always excluded).
 
     Returns:
         The path to the statically quantized model.
-    """
-    try:
-        from onnxruntime.quantization import QuantFormat, QuantType, quantize_static
 
-        output_onnx.parent.mkdir(parents=True, exist_ok=True)
-        quantize_static(
-            model_input=input_onnx,
-            model_output=output_onnx,
-            calibration_data_reader=calibration_reader,
-            quant_format=QuantFormat.QDQ,
-            activation_type=QuantType.QInt8,
-            weight_type=QuantType.QInt8,
-            calibrate_method=0,  # MinMax
-        )
-    except Exception as e:
-        logger.warning("Static quantization failed: %s. Copying source model.", e)
-        output_onnx.parent.mkdir(parents=True, exist_ok=True)
-        output_onnx.write_bytes(input_onnx.read_bytes())
+    Raises:
+        RuntimeError: If ONNX Runtime fails to quantize the model. The FP32 source is never copied silently.
+    """
+    output_onnx.parent.mkdir(parents=True, exist_ok=True)
+    excluded = sorted(set(find_logit_nodes(input_onnx)) | set(nodes_to_exclude or []))
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            prepared = _preprocess(input_onnx, Path(tmp))
+            ort_quant.quantize_static(
+                model_input=str(prepared),
+                model_output=str(output_onnx),
+                calibration_data_reader=calibration_reader,
+                quant_format=QuantFormat.QDQ,
+                activation_type=QuantType.QUInt8,
+                weight_type=QuantType.QInt8,
+                per_channel=per_channel,
+                calibrate_method=CalibrationMethod.MinMax,
+                op_types_to_quantize=list(STATIC_OP_TYPES),
+                nodes_to_exclude=excluded,
+            )
+    except Exception as exc:
+        raise RuntimeError(f"Static INT8 quantization of {input_onnx} failed: {exc}") from exc
+    logger.info("Static INT8 (QDQ, MinMax) model written to %s (FP32 nodes kept: %s)", output_onnx, excluded)
     return output_onnx
 
 
-def quantize_onnx_dynamic(input_onnx: Path, output_onnx: Path) -> Path:
-    """Applies dynamic INT8 quantization to reduce memory footprint and latency.
+def quantize_onnx_dynamic(
+    input_onnx: Path,
+    output_onnx: Path,
+    per_channel: bool = True,
+    nodes_to_exclude: list[str] | None = None,
+) -> Path:
+    """Apply dynamic INT8 quantization to the linear layers of an ONNX graph.
 
     Why:
-        In production workflows, the ML model must be decoupled from the specific deep learning framework used during training to maximize deployment flexibility. ONNX (Open Neural Network Exchange) serves as the de facto open-standard interoperability layer, enabling the model to be deployed using high-performance inference engines (e.g., ONNX Runtime, TensorRT) across diverse hardware targets (CPUs, GPUs, edge accelerators) without requiring the original training framework. This separation ensures the inference infrastructure can be optimized independently of the research and development environment.
+        Dynamic quantization needs no calibration data. It suits purely linear graphs (standalone head, VLM projections) whose activation ranges vary per token or per input, and data-free CI smoke tests. It does not quantize `Conv` operators, so it must not be used to accelerate convolutional backbones.
 
     How:
-        Applies dynamic integer-8 (INT8) quantization to the ONNX model weights and activations. This process reduces the model's precision from 32-bit floating-point (FP32) to 8-bit integers, decreasing memory bandwidth requirements, increasing cache efficiency, and accelerating inference speed, especially on CPU-based edge devices. The quantization is performed "dynamically" in that the scaling factors for activations are computed at runtime based on the observed data ranges during inference, allowing the model to adapt to varying input distributions while maintaining improved performance characteristics.
+        Runs ONNX Runtime's `quantize_dynamic` with signed 8-bit weights restricted to `MatMul` and `Gemm`. Activation scales are computed at runtime by `DynamicQuantizeLinear`. The logit-producing nodes are excluded so the output head stays FP32.
 
     Complexity:
-        - time complexity: O(M), where M is the number of layers in the model. The export process traces the computational graph once, performing constant folding and other optimizations that scale linearly with model size.
-        - space complexity: O(M), due to the storage requirements for the ONNX graph representation and intermediate symbolic tensors during tracing.
+        - time complexity: O(M), where M is the number of nodes in the graph.
+        - space complexity: O(M), for the in-memory ONNX graph representation.
 
     Args:
-        input_onnx: The input ONNX model to quantize.
+        input_onnx: The input FP32 ONNX model to quantize.
         output_onnx: The path to output the quantized model to.
+        per_channel: Whether to use per-channel weight scales.
+        nodes_to_exclude: Additional node names to keep in FP32 (the logit nodes are always excluded).
 
     Returns:
-        The path to the quantized model.
-    """
-    try:
-        from onnxruntime.quantization import QuantType, quantize_dynamic
+        The path to the dynamically quantized model.
 
-        output_onnx.parent.mkdir(parents=True, exist_ok=True)
-        quantize_dynamic(
+    Raises:
+        RuntimeError: If ONNX Runtime fails to quantize the model. The FP32 source is never copied silently.
+    """
+    output_onnx.parent.mkdir(parents=True, exist_ok=True)
+    excluded = sorted(set(find_logit_nodes(input_onnx)) | set(nodes_to_exclude or []))
+    try:
+        ort_quant.quantize_dynamic(
             model_input=input_onnx,
             model_output=output_onnx,
             weight_type=QuantType.QInt8,
+            per_channel=per_channel,
+            op_types_to_quantize=list(DYNAMIC_OP_TYPES),
+            nodes_to_exclude=excluded,
         )
-    except Exception as e:
-        logger.warning("Dynamic quantization failed: %s. Copying source model.", e)
-        output_onnx.parent.mkdir(parents=True, exist_ok=True)
-        output_onnx.write_bytes(input_onnx.read_bytes())
+    except Exception as exc:
+        raise RuntimeError(f"Dynamic INT8 quantization of {input_onnx} failed: {exc}") from exc
+    logger.info("Dynamic INT8 model written to %s (FP32 nodes kept: %s)", output_onnx, excluded)
     return output_onnx
 
 
-# Convenience alias for dynamic INT8 quantization
-quantize_onnx_model = quantize_onnx_dynamic
+def quantize_onnx_model(
+    input_onnx: Path,
+    output_onnx: Path,
+    calibration_tensors: Iterable[Any] | None = None,
+    mode: QuantMode = "auto",
+    per_channel: bool = True,
+    input_name: str = "input",
+) -> Path:
+    """Quantize an ONNX model, choosing static or dynamic INT8 explicitly.
+
+    Why:
+        Static and dynamic quantization are not interchangeable: static is needed for Conv and ViT graphs, dynamic only suits linear graphs and data-free smoke tests. A single entry point with an explicit mode makes the choice auditable and prevents silently producing a poorly accelerated model.
+
+    How:
+        `auto` resolves to static when calibration tensors are supplied and to dynamic otherwise. `static` requires calibration tensors. `dynamic` ignores them.
+
+    Args:
+        input_onnx: The input FP32 ONNX model.
+        output_onnx: Destination of the quantized model.
+        calibration_tensors: Pre-processed `(1, 3, H, W)` float32 arrays for static calibration.
+        mode: One of `auto`, `static` or `dynamic`.
+        per_channel: Whether to use per-channel weight scales.
+        input_name: Name of the ONNX input node used to key calibration batches.
+
+    Returns:
+        Path to the quantized model.
+
+    Raises:
+        ValueError: If `static` is requested without calibration data, or the mode is unknown.
+    """
+    if mode not in ("auto", "static", "dynamic"):
+        raise ValueError(f"Unknown quantization mode '{mode}'. Expected 'auto', 'static' or 'dynamic'.")
+
+    batches: list[Any] = list(calibration_tensors) if calibration_tensors is not None else []
+    resolved: Literal["static", "dynamic"]
+    if mode == "auto":
+        resolved = "static" if batches else "dynamic"
+    else:
+        resolved = mode
+
+    if resolved == "static":
+        if not batches:
+            raise ValueError("Static quantization requires calibration tensors; pass data or use mode='dynamic'.")
+        reader = TaxonCalibrationDataReader(batches, input_name=input_name)
+        return quantize_onnx_static(input_onnx, output_onnx, reader, per_channel=per_channel)
+
+    return quantize_onnx_dynamic(input_onnx, output_onnx, per_channel=per_channel)

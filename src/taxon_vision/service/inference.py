@@ -10,18 +10,46 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 import torch
 import torchvision.transforms as T
 import yaml
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 from taxon_vision.config import get_settings
+from taxon_vision.inference.onnx_engine import ONNXInferenceEngine
 from taxon_vision.models.factory import create_feature_extractor, get_feature_dimension
-from taxon_vision.models.head import TaxonClassifier
+from taxon_vision.models.head import TaxonClassifier, load_head_checkpoint
 from taxon_vision.uncertainty.conformal import ConformalPredictionEngine
 from taxon_vision.uncertainty.ood_detector import EnergyOODDetector
 
 logger = logging.getLogger(__name__)
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+
+EVAL_RESIZE_RATIO = 256 / 224
+"""Shorter-edge resize factor preceding the centre crop; identical to the feature-extraction transform."""
+
+
+class InvalidImageError(ValueError):
+    """Raised when uploaded bytes cannot be decoded into an RGB image."""
+
+
+class ModelNotReadyError(RuntimeError):
+    """Raised when a required model artefact is missing, incompatible or cannot be loaded."""
+
+
+def _resolve_artifact(relative_or_absolute: str) -> Path:
+    """Resolve a configured artefact path against the repository root.
+
+    Args:
+        relative_or_absolute: Path as given in application settings.
+
+    Returns:
+        Absolute filesystem path.
+    """
+    path = Path(relative_or_absolute)
+    return path if path.is_absolute() else _REPO_ROOT / path
 
 
 @lru_cache(maxsize=1)
@@ -48,36 +76,111 @@ def get_classifier() -> TaxonClassifier:
     """Instantiate, restore checkpoint weights, and cache the vision classifier model.
 
     Why:
-        Deep neural network models (e.g. DINOv3, MobileNetV4) require tens or hundreds of megabytes of memory and non-trivial weight initialization time. Instantiating a new model per request would exhaust process memory and cause hundred-millisecond cold starts. Caches a single eval-mode TaxonClassifier instance in process memory.
+        Deep neural network models (e.g. DINOv3, MobileNetV4) require tens or hundreds of megabytes of memory and non-trivial weight initialization time. Instantiating a new model per request would exhaust process memory and cause hundred-millisecond cold starts. Caches a single eval-mode TaxonClassifier instance in process memory. A classifier whose head was never trained produces random predictions, so loading is strict and fails fast.
 
     How:
-        Loads backbone architecture configured in project settings with pre-trained weights (`pretrained=True`), retrieves feature projection dimension, instantiates a TaxonClassifier with the corresponding linear classification head, restores checkpoint weights from disk if available and shape-compatible, and locks the model in evaluation mode (`eval()`).
+        Loads the backbone architecture configured in project settings with pre-trained weights, retrieves the feature dimension, instantiates a TaxonClassifier, strictly restores the trained head checkpoint (missing file, wrong keys or wrong shapes raise `ModelNotReadyError`), and locks the model in evaluation mode (`eval()`).
 
     Returns:
         Cached TaxonClassifier ready for zero-gradient evaluation.
+
+    Raises:
+        ModelNotReadyError: If the head checkpoint is absent or incompatible with the backbone and catalogue.
     """
     settings = get_settings()
+    checkpoint_path = _resolve_artifact(settings.model.head_checkpoint_path)
+    if not checkpoint_path.exists():
+        raise ModelNotReadyError(f"Trained head checkpoint not found at {checkpoint_path}. Run training first.")
+
     backbone = create_feature_extractor(settings.model.default_extractor, pretrained=True)
     dim = get_feature_dimension(backbone)
     num_classes = len(load_taxa_catalog())
-
     classifier = TaxonClassifier(backbone=backbone, feature_dim=dim, num_classes=num_classes)
 
-    checkpoint_path = Path(__file__).resolve().parent.parent.parent.parent / settings.model.head_checkpoint_path
-
-    if checkpoint_path.exists():
-        state_dict = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
-        if "1.weight" in state_dict and state_dict["1.weight"].shape == classifier.head[1].weight.shape:
-            classifier.head.load_state_dict(state_dict)
-        else:
-            logger.warning(
-                "Head checkpoint shape mismatch (%s vs %s); using initialized head",
-                state_dict.get("1.weight", torch.tensor([])).shape,
-                classifier.head[1].weight.shape,
-            )
+    try:
+        load_head_checkpoint(classifier.head, checkpoint_path)
+    except Exception as exc:
+        raise ModelNotReadyError(
+            f"Head checkpoint {checkpoint_path} is incompatible with backbone "
+            f"'{settings.model.default_extractor}' (feature_dim={dim}, classes={num_classes}): {exc}"
+        ) from exc
 
     classifier.eval()
     return classifier
+
+
+@lru_cache(maxsize=1)
+def get_onnx_engine() -> ONNXInferenceEngine | None:
+    """Create and cache the ONNX Runtime engine over the (quantized) exported graph.
+
+    Why:
+        The exported INT8 graph is the production serving artefact: it avoids the PyTorch runtime on the hot path and executes the statically quantized Conv/MatMul kernels. The PyTorch classifier remains as an explicit fallback only when the configured backend is `auto`.
+
+    How:
+        Honours `settings.model.inference_backend`: `torch` returns None, `onnx` requires the artefact (raises if absent), `auto` returns None with a warning when the artefact is missing. A loaded graph is validated against the taxa catalogue size.
+
+    Returns:
+        The cached ONNXInferenceEngine, or None when PyTorch serving is selected.
+
+    Raises:
+        ModelNotReadyError: If ONNX is required but missing, or if the graph class count mismatches the catalogue.
+    """
+    cfg = get_settings().model
+    if cfg.inference_backend == "torch":
+        return None
+
+    onnx_path = _resolve_artifact(cfg.onnx_model_path)
+    if not onnx_path.exists():
+        if cfg.inference_backend == "onnx":
+            raise ModelNotReadyError(f"ONNX model not found at {onnx_path}. Run the export_onnx stage first.")
+        logger.warning("ONNX artefact %s not found; serving with the PyTorch classifier.", onnx_path)
+        return None
+
+    engine = ONNXInferenceEngine(str(onnx_path))
+    expected = len(load_taxa_catalog())
+    if engine.num_classes is not None and engine.num_classes != expected:
+        raise ModelNotReadyError(
+            f"ONNX model {onnx_path} outputs {engine.num_classes} classes; catalogue has {expected}."
+        )
+    logger.info("Serving predictions from ONNX graph %s", onnx_path)
+    return engine
+
+
+def reset_model_caches() -> None:
+    """Invalidate cached model artefacts so the next request reloads them from disk."""
+    get_classifier.cache_clear()
+    get_onnx_engine.cache_clear()
+
+
+def check_readiness() -> tuple[bool, dict[str, str]]:
+    """Probe every dependency required to serve predictions.
+
+    Why:
+        A readiness probe that always reports healthy routes traffic to pods that cannot answer. This probe loads the catalogue and the serving model (ONNX graph or PyTorch classifier), so a missing or incompatible artefact surfaces as not-ready.
+
+    Returns:
+        Tuple of overall readiness and a mapping of check name to a human-readable status.
+    """
+    checks: dict[str, str] = {}
+    ready = True
+
+    try:
+        checks["taxa_catalog"] = f"ok ({len(load_taxa_catalog())} taxa)"
+    except Exception as exc:
+        checks["taxa_catalog"] = f"failed: {exc}"
+        return False, checks
+
+    try:
+        if get_onnx_engine() is not None:
+            checks["model"] = "ok (onnx)"
+        else:
+            get_classifier()
+            checks["model"] = "ok (torch)"
+    except Exception as exc:
+        checks["model"] = f"failed: {exc}"
+        ready = False
+
+    return ready, checks
 
 
 @lru_cache(maxsize=1)
@@ -129,7 +232,7 @@ def get_image_transform() -> T.Compose:
         In high-throughput biological inference, re-instantiating torchvision transform pipelines on every request introduces significant memory allocation overhead, triggering garbage collection cycles on the hot inference path. Pre-instantiating and caching an immutable composition preserves the zero-allocation hot-path invariant required for sub-25ms p95 latency SLAs.
 
     How:
-        Retrieves global model configurations (target spatial resolution, per-channel normalization mean and standard deviation) and bundles Resize, ToTensor, and Normalize operations into a single cached torchvision.transforms.Compose instance.
+        Retrieves global model configurations (target spatial resolution, per-channel normalization mean and standard deviation) and bundles Resize (shorter edge to 256/224 of the target), CenterCrop, ToTensor, and Normalize into a single cached torchvision.transforms.Compose instance. This is the same geometry as the feature-extraction transform used to produce the head's training embeddings, so training and serving see identical inputs.
 
     Returns:
         Cached Compose pipeline transforming PIL Images into normalized 3xHxW float tensors.
@@ -137,7 +240,8 @@ def get_image_transform() -> T.Compose:
     cfg = get_settings().model
     return T.Compose(
         [
-            T.Resize((cfg.image_size, cfg.image_size)),
+            T.Resize(round(cfg.image_size * EVAL_RESIZE_RATIO), interpolation=T.InterpolationMode.BILINEAR),
+            T.CenterCrop(cfg.image_size),
             T.ToTensor(),
             T.Normalize(mean=cfg.mean, std=cfg.std),
         ]
@@ -158,10 +262,40 @@ def _get_image_tensor(image_bytes: bytes) -> torch.Tensor:
 
     Returns:
         Torch tensor of shape (1, 3, H, W) ready for backbone consumption.
+
+    Raises:
+        InvalidImageError: If the bytes cannot be decoded as an image.
     """
-    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    try:
+        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise InvalidImageError(f"Uploaded payload is not a decodable image: {exc}") from exc
     transform = get_image_transform()
     return transform(image).unsqueeze(0)
+
+
+def compute_logits(tensor: torch.Tensor) -> npt.NDArray[np.float32]:
+    """Compute raw class logits for a single preprocessed image using the configured backend.
+
+    Why:
+        Energy-based OOD scoring and split-conformal prediction operate on logits and probabilities. Both backends must expose the same FP32 logits so downstream uncertainty logic is backend-agnostic.
+
+    How:
+        Uses the ONNX Runtime engine over the exported (INT8) graph when available, otherwise the PyTorch classifier.
+
+    Args:
+        tensor: Preprocessed image tensor of shape (1, 3, H, W).
+
+    Returns:
+        FP32 logits of shape (num_classes,).
+    """
+    engine = get_onnx_engine()
+    if engine is not None:
+        logits: npt.NDArray[np.float32] = engine.predict_logits(tensor.numpy())[0]
+        return logits
+    with torch.no_grad():
+        res: npt.NDArray[np.float32] = np.asarray(get_classifier()(tensor).squeeze(0).cpu().numpy(), dtype=np.float32)
+        return res
 
 
 def run_prediction(image_bytes: bytes) -> dict[str, Any]:
@@ -193,11 +327,9 @@ def run_prediction(image_bytes: bytes) -> dict[str, Any]:
 
     tensor = _get_image_tensor(image_bytes)
 
-    classifier = get_classifier()
-    with torch.no_grad():
-        logits = classifier(tensor)  # Shape: (1, num_classes)
-        logits_np = logits.squeeze(0).cpu().numpy()
-        probabilities = torch.softmax(logits, dim=1).cpu().numpy()[0]
+    logits_np = compute_logits(tensor)
+    shifted = np.exp(logits_np - np.max(logits_np))
+    probabilities = shifted / shifted.sum()
 
     # Extract top prediction
     top1_idx = int(np.argmax(probabilities))

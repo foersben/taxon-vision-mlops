@@ -71,7 +71,9 @@ def test_feature_extractor_device_and_fallback(monkeypatch: pytest.MonkeyPatch) 
         return nn.Linear(10, 10)
 
     monkeypatch.setattr(timm, "create_model", mock_create)
-    extractor = create_feature_extractor("dinov3_offline_fallback")
+    with pytest.raises(RuntimeError, match="Could not create backbone"):
+        create_feature_extractor("dinov3_offline_fallback", allow_fallback=False)
+    extractor = create_feature_extractor("dinov3_offline_fallback", allow_fallback=True)
     assert extractor is not None
 
 

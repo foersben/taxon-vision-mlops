@@ -22,7 +22,7 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field
@@ -64,6 +64,10 @@ class ModelConfig(BaseModel):
         temperature (float): Softmax logit scaling temperature for probability calibration.
         backbone_registry (dict[str, str]): Mapping of canonical model identifiers to Hugging Face Hub or timm model definitions.
         head_checkpoint_path (str): Relative or absolute path to the trained classification head checkpoint.
+        inference_backend (str): Serving backend: 'onnx' (require the ONNX artefact), 'torch' (PyTorch only) or 'auto' (ONNX when the artefact exists, otherwise PyTorch).
+        quantization_mode (str): INT8 mode used by the exporter: 'static' (Conv/ViT graphs), 'dynamic' (linear-only graphs, data-free smoke tests) or 'auto'.
+        calibration_dir (str): Directory of representative images used for static PTQ calibration (a subset of the calibration split).
+        calibration_samples (int): Maximum number of calibration images fed to static PTQ.
     """
 
     default_extractor: str
@@ -77,6 +81,10 @@ class ModelConfig(BaseModel):
     temperature: float = Field(gt=0.0)
     backbone_registry: dict[str, str]
     head_checkpoint_path: str
+    inference_backend: Literal["auto", "onnx", "torch"] = "auto"
+    quantization_mode: Literal["auto", "static", "dynamic"] = "auto"
+    calibration_dir: str = "data/sample"
+    calibration_samples: int = Field(default=128, gt=0)
 
 
 class MLflowConfig(BaseModel):

@@ -6,11 +6,11 @@ from pathlib import Path
 from typing import Annotated
 
 import anyio
-from fastapi import APIRouter, File, Request, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from taxon_vision.service.inference import run_prediction
+from taxon_vision.service.inference import InvalidImageError, ModelNotReadyError, run_prediction
 
 router = APIRouter()
 templates_dir = Path(__file__).parent.parent / "templates"
@@ -58,7 +58,12 @@ async def predict_htmx(request: Request, file: Annotated[UploadFile, File(...)])
     """
     image_bytes = await file.read()
 
-    result = await anyio.to_thread.run_sync(run_prediction, image_bytes)
+    try:
+        result = await anyio.to_thread.run_sync(run_prediction, image_bytes)
+    except InvalidImageError as err:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)) from err
+    except ModelNotReadyError as err:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(err)) from err
 
     context = {
         "filename": file.filename,

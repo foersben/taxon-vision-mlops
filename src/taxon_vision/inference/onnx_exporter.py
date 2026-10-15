@@ -12,9 +12,10 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
-from taxon_vision.config import get_settings
+from taxon_vision.config import Settings, get_settings
+from taxon_vision.inference.calibration import load_calibration_tensors
 from taxon_vision.models.factory import create_feature_extractor, get_feature_dimension
-from taxon_vision.models.head import TaxonClassifier
+from taxon_vision.models.head import TaxonClassifier, load_head_checkpoint
 from taxon_vision.service.inference import load_taxa_catalog
 
 logger = logging.getLogger(__name__)
@@ -28,15 +29,10 @@ def export_to_onnx(
     """Export model to ONNX graph with dynamic batch sizing.
 
     Why:
-        In production workflows, the ML model must be decoupled from the specific deep learning
-        framework used during training to maximize deployment flexibility. ONNX serves as the
-        interoperability layer, enabling the model to be deployed using high-performance inference
-        engines (e.g., ONNX Runtime, TensorRT) across diverse hardware targets.
+        In production workflows, the ML model must be decoupled from the specific deep learning framework used during training to maximize deployment flexibility. ONNX serves as the interoperability layer, enabling the model to be deployed using high-performance inference engines (e.g., ONNX Runtime, TensorRT) across diverse hardware targets.
 
     How:
-        Exports the trained PyTorch model to a self-contained ONNX graph using torch.onnx.export.
-        Traces the graph using a dummy CPU input tensor, enables constant folding, specifies
-        dynamic axes for variable batch sizes, and targets opset version 17.
+        Exports the trained PyTorch model to a self-contained ONNX graph using torch.onnx.export. Traces the graph using a dummy CPU input tensor, enables constant folding, specifies dynamic axes for variable batch sizes, and targets opset version 17.
 
     Args:
         model: PyTorch model module to export.
@@ -71,33 +67,16 @@ def _load_head_checkpoint(classifier: nn.Module, checkpoint_file: Path) -> None:
     """Safely load trained classification head weights onto CPU.
 
     Why:
-        Checkpoints may be saved from GPU devices (e.g. cuda:0) or wrapped inside dictionary
-        structures. Deserializing strictly to CPU and normalizing keys ensures robust loading
-        across heterogeneous training and deployment environments.
+        Checkpoints may be saved from GPU devices (e.g. cuda:0) or wrapped inside dictionary structures. Deserializing strictly to CPU and normalizing keys ensures robust loading across heterogeneous training and deployment environments.
 
     How:
-        Loads raw state dict with weights_only=True and map_location='cpu', unwraps nested
-        checkpoint dictionaries, strips any leading 'head.' prefixes, and enforces strict
-        state_dict restoration into classifier.head.
+        Delegates to `load_head_checkpoint`, which loads with weights_only=True and map_location='cpu', unwraps nested checkpoint dictionaries, strips any leading 'head.' prefixes, and enforces strict state_dict restoration into classifier.head.
 
     Args:
         classifier: TaxonClassifier instance containing the target classification head.
         checkpoint_file: Path to the serialized PyTorch head checkpoint.
     """
-    raw_state = torch.load(checkpoint_file, map_location="cpu", weights_only=True)
-
-    # Support both raw state_dict and wrapped checkpoint dicts
-    state_dict = raw_state.get("state_dict", raw_state.get("model_state_dict", raw_state))
-
-    # Strip 'head.' prefix if full TaxonClassifier state_dict was saved
-    if any(k.startswith("head.") for k in state_dict):
-        state_dict = {k.removeprefix("head."): v for k, v in state_dict.items() if k.startswith("head.")}
-
-    head = getattr(classifier, "head", None)
-    if isinstance(head, nn.Module):
-        head.load_state_dict(state_dict, strict=True)
-    else:
-        raise AttributeError("Classifier module does not possess a valid 'head' submodule.")
+    load_head_checkpoint(classifier.head, checkpoint_file)
 
 
 def _resolve_backbone(
@@ -118,18 +97,16 @@ def _resolve_backbone(
     use_pretrained = not allow_untrained
     logger.info("Initializing backbone feature extractor: %s (pretrained=%s)", extractor_name, use_pretrained)
     try:
-        return create_feature_extractor(extractor_name, pretrained=use_pretrained)
-    except Exception as exc:
-        if not allow_untrained:
-            logger.error("Failed to load pretrained backbone '%s': %s", extractor_name, exc)
-            return None
-        logger.warning(
-            "Could not create backbone %s (%s); attempting fallback %s",
+        return create_feature_extractor(
             extractor_name,
-            exc,
-            fallback_extractor,
+            pretrained=use_pretrained,
+            allow_fallback=allow_untrained,
         )
-        return create_feature_extractor(fallback_extractor, pretrained=False)
+    except Exception as exc:
+        logger.error(
+            "Failed to create backbone '%s' (fallback '%s' not usable): %s", extractor_name, fallback_extractor, exc
+        )
+        return None
 
 
 def _restore_head(
@@ -221,21 +198,90 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--quantize-int8",
         action="store_true",
-        help="Apply dynamic INT8 quantization after ONNX export.",
+        help="Apply INT8 quantization after ONNX export (mode selected via --quantize-mode).",
+    )
+    parser.add_argument(
+        "--quantize-mode",
+        choices=["auto", "static", "dynamic"],
+        default=None,
+        help=(
+            "static: QDQ PTQ with calibration images (required for Conv/ViT backbone graphs). "
+            "dynamic: MatMul/Gemm only, no data (linear-only graphs, CI smoke tests). "
+            "auto: static for the full backbone graph. Defaults to settings.model.quantization_mode."
+        ),
+    )
+    parser.add_argument(
+        "--quantized-output",
+        type=str,
+        default=None,
+        help="Destination of the INT8 graph. Defaults to settings.model.onnx_model_path.",
+    )
+    parser.add_argument(
+        "--calibration-dir",
+        type=str,
+        default=None,
+        help="Directory of representative images for static PTQ. Defaults to settings.model.calibration_dir.",
+    )
+    parser.add_argument(
+        "--calibration-samples",
+        type=int,
+        default=None,
+        help="Maximum calibration images for static PTQ. Defaults to settings.model.calibration_samples.",
     )
     return parser
+
+
+def _quantize_exported_graph(fp32_path: Path, args: argparse.Namespace, settings: Settings) -> Path:
+    """Quantize the exported FP32 backbone+head graph to INT8 using the operator-appropriate mode.
+
+    Why:
+        The exported graph contains the full backbone (convolutions or ViT blocks), so static QDQ PTQ with real
+        calibration images is the correct default. Dynamic quantization remains available explicitly for
+        data-free smoke tests, but is never selected silently for a backbone graph.
+
+    Args:
+        fp32_path: Path to the exported FP32 ONNX graph.
+        args: Parsed CLI arguments.
+        settings: Application settings providing defaults.
+
+    Returns:
+        Path to the quantized INT8 graph.
+
+    Raises:
+        FileNotFoundError: If static calibration is selected and no calibration images are available.
+    """
+    from taxon_vision.inference.quantizer import quantize_onnx_model
+
+    model_cfg = settings.model
+    requested = args.quantize_mode or model_cfg.quantization_mode
+    mode = "static" if requested == "auto" else requested
+    default_quantized = (
+        fp32_path.with_name(f"{fp32_path.stem}.int8.onnx")
+        if args.output != "models/checkpoints/model.onnx"
+        else Path(model_cfg.onnx_model_path)
+    )
+    quantized_path = Path(args.quantized_output or default_quantized)
+
+    calibration = None
+    if mode == "static":
+        calibration = load_calibration_tensors(
+            args.calibration_dir or model_cfg.calibration_dir,
+            args.calibration_samples or model_cfg.calibration_samples,
+        )
+
+    quantize_onnx_model(fp32_path, quantized_path, calibration_tensors=calibration, mode=mode)
+    logger.info("Quantized INT8 ONNX graph (%s) saved to %s", mode, quantized_path)
+    return quantized_path
 
 
 def export_classifier_cli(argv: list[str] | None = None) -> int:
     """CLI entrypoint for exporting the trained TaxonClassifier to ONNX format.
 
     Why:
-        Automation pipelines (e.g., Jenkins CI/CD, DVC) require a deterministic CLI tool
-        to trace and serialize PyTorch checkpoints into high-performance ONNX computational graphs
-        with optional INT8 quantization.
+        Automation pipelines (e.g., Jenkins CI/CD, DVC) require a deterministic CLI tool to trace and serialize PyTorch checkpoints into high-performance ONNX computational graphs with optional INT8 quantization.
 
     How:
-        1. Parses command-line flags (--checkpoint, --output, --extractor, --image-size, --allow-untrained, --quantize-int8).
+        1. Parses command-line flags (--checkpoint, --output, --extractor, --image-size, --allow-untrained, --quantize-int8, --quantize-mode, --quantized-output, --calibration-dir, --calibration-samples).
         2. Resolves configuration defaults from application settings.
         3. Instantiates the TaxonClassifier using the pretrained backbone (unless --allow-untrained is set).
         4. Restores trained weights from checkpoint using _load_head_checkpoint (failing if missing unless --allow-untrained).
@@ -294,11 +340,7 @@ def export_classifier_cli(argv: list[str] | None = None) -> int:
         export_to_onnx(classifier, output_file, input_shape=(1, 3, image_dim, image_dim))
 
         if args.quantize_int8:
-            from taxon_vision.inference.quantizer import quantize_onnx_model
-
-            quantized_path = output_file.with_name(f"{output_file.stem}.int8.onnx")
-            quantize_onnx_model(output_file, quantized_path)
-            logger.info("Quantized INT8 ONNX graph saved to %s", quantized_path)
+            _quantize_exported_graph(output_file, args, settings)
 
         if output_file.exists():
             logger.info("ONNX export succeeded: %s (%d bytes)", output_file, output_file.stat().st_size)

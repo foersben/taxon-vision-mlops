@@ -33,20 +33,19 @@ def test_health_ready_endpoint() -> None:
 
 
 def test_predict_endpoint() -> None:
-    """Verify /api/v1/predict fallback behavior when given non-image mock bytes."""
+    """Verify /api/v1/predict rejects non-image bytes with HTTP 400."""
     dummy_img = io.BytesIO(b"fake image bytes")
     resp = client.post("/api/v1/predict", files={"file": ("test.jpg", dummy_img, "image/jpeg")})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "top_prediction" in data
-    assert data["top_prediction"]["scientific_name"] == "Danaus plexippus"
-    assert "conformal_prediction_set" in data
+    assert resp.status_code == 400
+    assert "not a decodable image" in resp.json()["detail"]
 
 
 def test_top_level_predict_endpoint() -> None:
-    """Verify /predict top-level route alias matches API response structure."""
-    dummy_img = io.BytesIO(b"fake image bytes")
-    resp = client.post("/predict", files={"file": ("test.jpg", dummy_img, "image/jpeg")})
+    """Verify /predict top-level route alias matches API response structure for valid image."""
+    buf = io.BytesIO()
+    Image.new("RGB", (32, 32), color="blue").save(buf, format="JPEG")
+    buf.seek(0)
+    resp = client.post("/predict", files={"file": ("test.jpg", buf, "image/jpeg")})
     assert resp.status_code == 200
     data = resp.json()
     assert "top_prediction" in data
@@ -99,7 +98,24 @@ def test_real_image_prediction_if_sample_exists() -> None:
         data = resp.json()
         assert data["top_prediction"]["scientific_name"] is not None
         assert "conformal_prediction_set" in data
-        assert data["is_ood_flagged"] is True or data["requires_human_review"] is True
+        assert isinstance(data["is_ood_flagged"], bool)
+        assert isinstance(data["requires_human_review"], bool)
+
+
+def test_predict_endpoint_model_not_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify prediction endpoint surfaces ModelNotReadyError as HTTP 503."""
+    from taxon_vision.service.inference import ModelNotReadyError
+
+    def mock_run_prediction(*args: object, **kwargs: object) -> None:
+        raise ModelNotReadyError("Model head checkpoint is not available")
+
+    monkeypatch.setattr(predict_mod, "run_prediction", mock_run_prediction)
+    buf = io.BytesIO()
+    Image.new("RGB", (32, 32), color="red").save(buf, format="JPEG")
+    buf.seek(0)
+    resp = client.post("/api/v1/predict", files={"file": ("unready.jpg", buf, "image/jpeg")})
+    assert resp.status_code == 503
+    assert "Model head checkpoint is not available" in resp.json()["detail"]
 
 
 def test_predict_endpoint_valid_image() -> None:

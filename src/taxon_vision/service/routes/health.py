@@ -2,9 +2,14 @@
 # SPDX-License-Identifier: MIT
 """Health and telemetry routes."""
 
+from typing import Any
+
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from starlette.responses import Response
+
+from taxon_vision.service.inference import check_readiness
 
 router = APIRouter()
 
@@ -26,17 +31,25 @@ def health() -> dict[str, str]:
 
 
 @router.get("/health/ready")
-def health_ready() -> dict[str, str]:
-    """Perform a readiness probe validating service initialization.
+def health_ready() -> JSONResponse:
+    """Perform a readiness probe validating that the model can serve predictions.
 
     Why:
-        Kubernetes readiness probes require a dedicated endpoint to ensure
-        traffic is only routed to pods that have completed initialization.
+        Kubernetes readiness probes require a dedicated endpoint to ensure traffic is only routed to pods that can actually answer requests. A probe that unconditionally reports ready would send traffic to instances with a missing or incompatible model artefact.
+
+    How:
+        Loads the taxa catalogue and the serving model (ONNX graph or PyTorch classifier, cached after first use) via `check_readiness`. Responds HTTP 200 when every check passes and HTTP 503 otherwise, with per-check detail.
 
     Returns:
-        Dictionary reporting readiness status and service identifier.
+        JSON response with readiness status, service identifier and individual check results.
     """
-    return {"status": "ready", "service": "taxon-vision-mlops"}
+    ready, checks = check_readiness()
+    body: dict[str, Any] = {
+        "status": "ready" if ready else "not_ready",
+        "service": "taxon-vision-mlops",
+        "checks": checks,
+    }
+    return JSONResponse(content=body, status_code=200 if ready else 503)
 
 
 @router.get("/metrics")
