@@ -33,10 +33,16 @@ from taxon_vision.models.factory import create_feature_extractor, get_feature_di
 from taxon_vision.models.loss import ClassBalancedLoss
 from taxon_vision.models.training.checkpoint import _save_checkpoint
 from taxon_vision.models.training.embeddings import train_head_on_cached_embeddings
-from taxon_vision.models.training.tracking import _log_mlflow_metrics, _promote_model_if_better, mlflow_run_scope
+from taxon_vision.models.training.tracking import (
+    _log_mlflow_metrics,
+    _promote_model_if_better,
+    log_training_visualizations,
+    mlflow_run_scope,
+)
 from taxon_vision.models.training.tuning import tune_hyperparameters
 from taxon_vision.models.training.types import EmbeddingSplit, HeadTrainingConfig, TuningConfig
 from taxon_vision.service.inference import load_taxa_catalog
+from taxon_vision.uncertainty.ood_detector import EnergyOODDetector
 
 logger = logging.getLogger(__name__)
 
@@ -83,8 +89,27 @@ def _try_load_cached_split(candidate: Path, dim: int) -> EmbeddingSplit | None:
 
     try:
         payload = torch.load(candidate, map_location="cpu", weights_only=False)
-        split = payload.get("split") if isinstance(payload, dict) else payload
-        if isinstance(split, EmbeddingSplit) and split.feature_dim == dim:
+        split: EmbeddingSplit | None = None
+        if isinstance(payload, EmbeddingSplit):
+            split = payload
+        elif isinstance(payload, dict) and isinstance(payload.get("split"), EmbeddingSplit):
+            split = payload["split"]
+        elif (
+            isinstance(payload, dict)
+            and "train_embeddings" in payload
+            and "val_embeddings" in payload
+            and "train_labels" in payload
+            and "val_labels" in payload
+        ):
+            split = EmbeddingSplit(
+                train_embeddings=payload["train_embeddings"],
+                train_labels=payload["train_labels"],
+                val_embeddings=payload["val_embeddings"],
+                val_labels=payload["val_labels"],
+                samples_per_class=payload.get("samples_per_class"),
+            )
+
+        if split is not None and split.feature_dim == dim:
             logger.info(
                 "Loaded pre-computed feature embeddings from '%s' (%d train, %d val samples, dim=%d)",
                 candidate,
@@ -93,11 +118,13 @@ def _try_load_cached_split(candidate: Path, dim: int) -> EmbeddingSplit | None:
                 split.feature_dim,
             )
             return split
-        logger.warning(
-            "Candidate cache '%s' has incompatible feature dimension (expected %d); skipping",
-            candidate,
-            dim,
-        )
+        if split is not None:
+            logger.warning(
+                "Candidate cache '%s' has incompatible feature dimension (expected %d, got %d); skipping",
+                candidate,
+                dim,
+                split.feature_dim,
+            )
     except Exception as err:
         logger.warning("Could not deserialize cache '%s' (%s); falling back", candidate, err)
 
@@ -173,10 +200,9 @@ def _prepare_embedding_split(
     Raises:
         FileNotFoundError: If cache is absent and allow_synthetic is False.
     """
-    candidates: list[Path] = []
-    if cache_path is not None:
-        candidates.append(Path(cache_path))
-    candidates.append(Path("data/embeddings/cached_features.pt"))
+    candidates: list[Path] = (
+        [Path(cache_path)] if cache_path is not None else [Path("data/embeddings/cached_features.pt")]
+    )
 
     for candidate in candidates:
         loaded = _try_load_cached_split(candidate, dim)
@@ -524,7 +550,32 @@ def run_training_pipeline(
         if active_run:
             _log_mlflow_metrics(history, duration)
             val_pr_auc = _extract_metric_last(history, "val_pr_auc", 0.0)
-            promotion_status = _promote_model_if_better(head, val_pr_auc)
+
+            head.eval()
+            with torch.no_grad():
+                val_logits_np = head(data.val_embeddings).cpu().numpy()
+
+            calibrated_threshold = EnergyOODDetector.calibrate_threshold_from_logits(val_logits_np, percentile=95.0)
+            try:
+                import mlflow
+
+                mlflow.log_metric("calibrated_ood_energy_threshold", calibrated_threshold)
+            except Exception as metric_err:
+                logger.debug("Failed to log calibrated energy threshold: %s", metric_err)
+
+            log_training_visualizations(
+                val_logits=val_logits_np,
+                val_labels=data.val_labels.cpu().numpy(),
+                taxa_catalog=load_taxa_catalog(),
+                calibrated_energy_threshold=calibrated_threshold,
+            )
+
+            promotion_status = _promote_model_if_better(
+                model=head,
+                pr_auc=val_pr_auc,
+                val_embeddings=data.val_embeddings,
+                extractor=resolved_extractor,
+            )
 
     train_loss = _extract_metric_last(history, "train_loss", 0.0)
     val_loss = _extract_metric_last(history, "val_loss", 0.0)

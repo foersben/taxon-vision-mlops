@@ -23,3 +23,9 @@ def test_conformal_prediction_set() -> None:
     pred_set, refer = engine.predict_set(probs_ambiguous)
     assert len(pred_set) == 3
     assert refer  # len > k_max (2)
+
+    # Low-confidence singleton prediction set (e.g. 48.2% < 60% threshold, other classes < 20%)
+    probs_low_conf = np.array([0.482, 0.18, 0.18, 0.158])
+    pred_set_low, refer_low = engine.predict_set(probs_low_conf)
+    assert pred_set_low == [0]
+    assert refer_low  # Flagged for human review due to min_confidence_threshold

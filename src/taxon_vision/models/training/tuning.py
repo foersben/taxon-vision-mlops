@@ -238,13 +238,19 @@ def _setup_mlflow(cfg: TuningConfig) -> bool:
         return False
 
 
-def _log_best_run(best_params: dict[str, Any], best_value: float, active: bool) -> None:
-    """Log the best overall Optuna configuration to MLflow.
+def _log_best_run(
+    best_params: dict[str, Any],
+    best_value: float,
+    active: bool,
+    study: optuna.Study | None = None,
+) -> None:
+    """Log the best overall Optuna configuration and diagnostic plots to MLflow.
 
     Args:
         best_params: Best hyperparameter configuration.
         best_value: Best macro PR-AUC achieved.
         active: Whether MLflow is available.
+        study: Optional Optuna study instance for logging optimization plots.
     """
     if not active:
         return
@@ -270,6 +276,28 @@ def _log_best_run(best_params: dict[str, Any], best_value: float, active: bool) 
                 mlflow.set_tag("git.branch", git_branch)
             except Exception:
                 pass
+
+            if study is not None and len(study.trials) > 0:
+                import matplotlib
+
+                matplotlib.use("Agg")
+                import matplotlib.pyplot as plt
+                import optuna.visualization.matplotlib as optuna_plt
+
+                try:
+                    ax_hist = optuna_plt.plot_optimization_history(study)
+                    mlflow.log_figure(ax_hist.figure, "visualizations/optuna_optimization_history.png")
+                    plt.close()
+                except Exception as err:
+                    logger.debug("Failed to log Optuna optimization history plot: %s", err)
+
+                try:
+                    if len(study.trials) > 1:
+                        ax_imp = optuna_plt.plot_param_importances(study)
+                        mlflow.log_figure(ax_imp.figure, "visualizations/optuna_param_importances.png")
+                        plt.close()
+                except Exception as err:
+                    logger.debug("Failed to log Optuna parameter importance plot: %s", err)
     except Exception as err:
         logger.debug("Failed to log best run to MLflow: %s", err)
 
@@ -323,5 +351,5 @@ def tune_hyperparameters(
     best_params = study.best_params
     logger.info("Hyperparameter search complete. Best parameters: %s, Best value: %.4f", best_params, study.best_value)
 
-    _log_best_run(best_params, study.best_value, mlflow_available)
+    _log_best_run(best_params, study.best_value, mlflow_available, study=study)
     return best_params, study

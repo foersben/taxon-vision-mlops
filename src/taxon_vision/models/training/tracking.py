@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any
 
 import mlflow
+import numpy as np
+import torch
 from torch import nn
 
 from taxon_vision.config import get_settings
@@ -180,7 +182,340 @@ def _log_mlflow_metrics(history: dict[str, list[float]], duration: float) -> Non
         logger.debug("Failed to log MLflow metrics: %s", err)
 
 
-def _promote_model_if_better(model: nn.Module, pr_auc: float) -> str | None:
+def _plot_confusion_matrix(
+    val_labels: np.ndarray,
+    pred_labels: np.ndarray,
+    class_names: list[str],
+) -> Any:
+    """Render class-normalized confusion matrix figure.
+
+    Args:
+        val_labels: 1D array of ground truth label indices.
+        pred_labels: 1D array of predicted class indices.
+        class_names: List of human-readable class names.
+
+    Returns:
+        Matplotlib figure instance.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from sklearn.metrics import confusion_matrix
+
+    cm = confusion_matrix(val_labels, pred_labels)
+    cm_norm = cm.astype(float) / (cm.sum(axis=1, keepdims=True) + 1e-12)
+
+    fig, ax = plt.subplots(figsize=(8, 6), dpi=100)
+    cax = ax.imshow(cm_norm, interpolation="nearest", cmap="Blues")
+    fig.colorbar(cax)
+
+    n_classes = len(class_names)
+    ax.set_xticks(range(n_classes))
+    ax.set_xticklabels(class_names, rotation=45, ha="right", fontsize=8)
+    ax.set_yticks(range(n_classes))
+    ax.set_yticklabels(class_names, fontsize=8)
+    ax.set_xlabel("Predicted Label")
+    ax.set_ylabel("True Label")
+    ax.set_title("Validation Confusion Matrix (Normalized)")
+
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            val = cm[i, j]
+            color = "white" if cm_norm[i, j] > 0.5 else "black"
+            ax.text(j, i, str(val), ha="center", va="center", color=color, fontsize=8)
+
+    fig.tight_layout()
+    return fig
+
+
+def _plot_precision_recall_curves(
+    val_labels: np.ndarray,
+    val_probs: np.ndarray,
+    class_names: list[str],
+) -> Any:
+    """Render multiclass Precision-Recall curves figure.
+
+    Args:
+        val_labels: 1D array of ground truth label indices.
+        val_probs: 2D array of class probabilities of shape (N, num_classes).
+        class_names: List of human-readable class names.
+
+    Returns:
+        Matplotlib figure instance.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from sklearn.metrics import average_precision_score, precision_recall_curve
+
+    fig, ax = plt.subplots(figsize=(8, 6), dpi=100)
+    n_classes = val_probs.shape[1]
+
+    for k in range(n_classes):
+        y_true = (val_labels == k).astype(int)
+        if np.sum(y_true) == 0:
+            continue
+        precision, recall, _ = precision_recall_curve(y_true, val_probs[:, k])
+        ap = average_precision_score(y_true, val_probs[:, k])
+        label = f"{class_names[k]} (AP={ap:.2f})" if k < len(class_names) else f"Class {k} (AP={ap:.2f})"
+        ax.plot(recall, precision, lw=1.5, label=label)
+
+    ax.set_xlabel("Recall")
+    ax.set_ylabel("Precision")
+    ax.set_ylim(0.0, 1.05)
+    ax.set_xlim(0.0, 1.0)
+    ax.set_title("Per-Class Precision-Recall Curves")
+    ax.grid(True, linestyle="--", alpha=0.5)
+    ax.legend(loc="lower left", fontsize=7)
+    fig.tight_layout()
+    return fig
+
+
+def _plot_energy_distribution(
+    val_logits: np.ndarray,
+    calibrated_threshold: float | None = None,
+) -> Any:
+    """Render Helmholtz free energy distribution and epistemic decision boundary.
+
+    Args:
+        val_logits: 2D array of validation logits with shape (N, num_classes).
+        calibrated_threshold: Optional calibrated scalar energy threshold.
+
+    Returns:
+        Matplotlib figure instance.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    from taxon_vision.uncertainty.ood_detector import EnergyOODDetector
+
+    detector = EnergyOODDetector()
+    energies = np.array([detector.compute_energy(logit) for logit in val_logits])
+
+    fig, ax = plt.subplots(figsize=(8, 5), dpi=100)
+    ax.hist(energies, bins=25, alpha=0.75, color="#1f77b4", edgecolor="black", label="In-Distribution (Val)")
+
+    if calibrated_threshold is not None:
+        ax.axvline(
+            calibrated_threshold,
+            color="#d62728",
+            linestyle="--",
+            linewidth=2,
+            label=f"Calibrated OOD Threshold ({calibrated_threshold:.2f})",
+        )
+
+    ax.set_xlabel("Helmholtz Free Energy E(x)")
+    ax.set_ylabel("Observation Count")
+    ax.set_title("Validation Free Energy Distribution & Epistemic Boundary")
+    ax.grid(True, linestyle="--", alpha=0.5)
+    ax.legend(loc="upper right", fontsize=8)
+    fig.tight_layout()
+    return fig
+
+
+def log_training_visualizations(
+    val_logits: np.ndarray,
+    val_labels: np.ndarray,
+    taxa_catalog: list[dict[str, Any]] | None = None,
+    calibrated_energy_threshold: float | None = None,
+) -> None:
+    """Render and log publication-grade performance evaluation figures to MLflow.
+
+    Args:
+        val_logits: 2D NumPy array of validation logits with shape (N, num_classes).
+        val_labels: 1D NumPy array of ground truth labels with shape (N,).
+        taxa_catalog: Optional catalog containing taxa metadata dictionaries.
+        calibrated_energy_threshold: Calibrated energy threshold boundary to annotate.
+    """
+    if not mlflow.active_run():
+        return
+
+    import matplotlib.pyplot as plt
+
+    try:
+        class_names = [
+            str(t.get("common_name", t.get("scientific_name", f"Class {i}"))) for i, t in enumerate(taxa_catalog or [])
+        ]
+        num_classes = val_logits.shape[1]
+        if len(class_names) < num_classes:
+            class_names.extend([f"Class {i}" for i in range(len(class_names), num_classes)])
+
+        # 1. Confusion Matrix
+        pred_labels = np.argmax(val_logits, axis=1)
+        fig_cm = _plot_confusion_matrix(val_labels, pred_labels, class_names)
+        mlflow.log_figure(fig_cm, "visualizations/confusion_matrix.png")
+        plt.close(fig_cm)
+
+        # 2. Precision-Recall Curves
+        shifted = val_logits - np.max(val_logits, axis=1, keepdims=True)
+        exp_logits = np.exp(shifted)
+        probs = exp_logits / (np.sum(exp_logits, axis=1, keepdims=True) + 1e-12)
+        fig_pr = _plot_precision_recall_curves(val_labels, probs, class_names)
+        mlflow.log_figure(fig_pr, "visualizations/precision_recall_curves.png")
+        plt.close(fig_pr)
+
+        # 3. Energy Distribution
+        fig_energy = _plot_energy_distribution(val_logits, calibrated_energy_threshold)
+        mlflow.log_figure(fig_energy, "visualizations/energy_distribution.png")
+        plt.close(fig_energy)
+    except Exception as err:
+        logger.warning("Failed to render and log training visualizations to MLflow: %s", err)
+
+
+def _prepare_model_signature_and_example(
+    model: nn.Module,
+    val_embeddings: torch.Tensor | None,
+) -> tuple[Any, Any]:
+    """Infer model signature and input example from real validation data or module geometry.
+
+    Args:
+        model: Trained PyTorch classification head.
+        val_embeddings: Optional real validation embeddings.
+
+    Returns:
+        Tuple of (signature, input_example).
+    """
+    if val_embeddings is not None and val_embeddings.shape[0] > 0:
+        sample_size = min(5, val_embeddings.shape[0])
+        sample_input = val_embeddings[:sample_size]
+        model.eval()
+        with torch.no_grad():
+            sample_output = model(sample_input)
+        input_example = sample_input.cpu().numpy()
+        output_example = sample_output.cpu().numpy()
+        try:
+            from mlflow.models.signature import infer_signature
+
+            return infer_signature(input_example, output_example), input_example
+        except Exception as sig_err:
+            logger.debug("Could not infer model signature from validation batch: %s", sig_err)
+            return None, input_example
+
+    input_dim = 1280
+    for module in model.modules():
+        if isinstance(module, nn.Linear):
+            input_dim = module.in_features
+            break
+    return None, torch.zeros(1, input_dim).numpy()
+
+
+def _log_model_artifact(
+    model: nn.Module,
+    model_name: str,
+    signature: Any,
+    input_example: Any,
+) -> Any:
+    """Log PyTorch model to MLflow registry with signature and serialization fallback.
+
+    Args:
+        model: PyTorch model module.
+        model_name: Target registered model name.
+        signature: Inferred model signature.
+        input_example: Real or zero-padded input example array.
+
+    Returns:
+        ModelInfo instance on success, or None on failure.
+    """
+    try:
+        return mlflow.pytorch.log_model(
+            model,
+            name="model",
+            registered_model_name=model_name,
+            signature=signature,
+            input_example=input_example,
+        )
+    except Exception:
+        try:
+            return mlflow.pytorch.log_model(
+                model,
+                name="model",
+                registered_model_name=model_name,
+                signature=signature,
+                input_example=input_example,
+                serialization_format="pickle",
+            )
+        except Exception as err:
+            logger.warning("Failed to log model to registry: %s", err)
+            return None
+
+
+def _apply_model_version_metadata(
+    client: Any,
+    model_name: str,
+    version: str,
+    extractor: str | None,
+    pr_auc: float,
+) -> None:
+    """Attach human-readable description and audit tags to registered model version.
+
+    Args:
+        client: MlflowClient instance.
+        model_name: Registered model name.
+        version: Model version identifier string.
+        extractor: Vision foundation backbone name.
+        pr_auc: Validation Macro PR-AUC score.
+    """
+    try:
+        desc = f"TaxonVision classifier head ({extractor or 'backbone'}). Validation Macro PR-AUC: {pr_auc:.4f}."
+        client.update_model_version(
+            name=model_name,
+            version=version,
+            description=desc,
+        )
+        if extractor:
+            client.set_model_version_tag(model_name, version, "extractor", extractor)
+        client.set_model_version_tag(model_name, version, "val_pr_auc", f"{pr_auc:.4f}")
+    except Exception as meta_err:
+        logger.debug("Failed to set model version metadata: %s", meta_err)
+
+
+def _determine_promotion_alias(
+    client: Any,
+    model_name: str,
+    version: str,
+    pr_auc: float,
+) -> str:
+    """Compare performance against current production alias and tag candidate accordingly.
+
+    Args:
+        client: MlflowClient instance.
+        model_name: Registered model name.
+        version: Model version identifier string.
+        pr_auc: Validation Macro PR-AUC score.
+
+    Returns:
+        Applied alias string ('Challenger', 'Archived', or 'Production').
+    """
+    try:
+        prod_version = client.get_model_version_by_alias(model_name, "Production")
+        if not prod_version.run_id:
+            raise ValueError("Production model missing run_id")
+        prod_run = client.get_run(prod_version.run_id)
+        prod_score = prod_run.data.metrics.get("val_promotion_score", 0.0)
+
+        if pr_auc > prod_score:
+            logger.info("New model outperforms production (%.4f > %.4f). Tagging as Challenger.", pr_auc, prod_score)
+            client.set_registered_model_alias(model_name, "Challenger", version)
+            return "Challenger"
+        logger.info("New model is worse than production (%.4f <= %.4f). Tagging as Archived.", pr_auc, prod_score)
+        client.set_registered_model_alias(model_name, "Archived", version)
+        return "Archived"
+    except Exception:
+        logger.info("No production alias found. Tagging initial model as Production.")
+        client.set_registered_model_alias(model_name, "Production", version)
+        return "Production"
+
+
+def _promote_model_if_better(
+    model: nn.Module,
+    pr_auc: float,
+    val_embeddings: torch.Tensor | None = None,
+    extractor: str | None = None,
+) -> str | None:
     """Evaluate performance and conditionally promote the model via MLflow Model Registry.
 
     Why:
@@ -192,6 +527,8 @@ def _promote_model_if_better(model: nn.Module, pr_auc: float) -> str | None:
     Args:
         model: The trained PyTorch classification head.
         pr_auc: The final validation Macro PR-AUC score.
+        val_embeddings: Optional real validation embeddings used for signature inference.
+        extractor: Optional backbone feature extractor identifier.
 
     Returns:
         The applied promotion alias string ('Challenger', 'Archived', 'Production'), or None.
@@ -199,55 +536,14 @@ def _promote_model_if_better(model: nn.Module, pr_auc: float) -> str | None:
     from mlflow.tracking import MlflowClient
 
     mlflow.log_metric("val_promotion_score", pr_auc)
-
     model_name = "taxon_vision_classifier"
-    input_dim = 1280
-    for module in model.modules():
-        if isinstance(module, nn.Linear):
-            input_dim = module.in_features
-            break
 
-    import torch
-
-    dummy_input = torch.randn(1, input_dim).numpy()
-
-    try:
-        model_info = mlflow.pytorch.log_model(
-            model,
-            name="model",
-            registered_model_name=model_name,
-            input_example=dummy_input,
-        )
-    except Exception:
-        try:
-            model_info = mlflow.pytorch.log_model(
-                model,
-                name="model",
-                registered_model_name=model_name,
-                input_example=dummy_input,
-                serialization_format="pickle",
-            )
-        except Exception as err:
-            logger.warning("Failed to log model to registry: %s", err)
-            return None
+    signature, input_example = _prepare_model_signature_and_example(model, val_embeddings)
+    model_info = _log_model_artifact(model, model_name, signature, input_example)
+    if model_info is None:
+        return None
 
     client = MlflowClient()
-    try:
-        prod_version = client.get_model_version_by_alias(model_name, "Production")
-        if not prod_version.run_id:
-            raise ValueError("Production model missing run_id")
-        prod_run = client.get_run(prod_version.run_id)
-        prod_score = prod_run.data.metrics.get("val_promotion_score", 0.0)
-
-        if pr_auc > prod_score:
-            logger.info("New model outperforms production (%.4f > %.4f). Tagging as Challenger.", pr_auc, prod_score)
-            client.set_registered_model_alias(model_name, "Challenger", model_info.registered_model_version)
-            return "Challenger"
-        else:
-            logger.info("New model is worse than production (%.4f <= %.4f). Tagging as Archived.", pr_auc, prod_score)
-            client.set_registered_model_alias(model_name, "Archived", model_info.registered_model_version)
-            return "Archived"
-    except Exception:
-        logger.info("No production alias found. Tagging initial model as Production.")
-        client.set_registered_model_alias(model_name, "Production", model_info.registered_model_version)
-        return "Production"
+    version = str(model_info.registered_model_version)
+    _apply_model_version_metadata(client, model_name, version, extractor, pr_auc)
+    return _determine_promotion_alias(client, model_name, version, pr_auc)

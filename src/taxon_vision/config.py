@@ -158,6 +158,7 @@ class ConformalConfig(BaseModel):
         nominal_coverage (float): Target marginal coverage rate (1.0 - alpha).
         method (str): Conformal prediction method (e.g. 'split-conformal').
         empty_set_action (str): Action taken when conformal set is empty.
+        min_confidence_threshold (float): Minimum acceptable top-1 class confidence to bypass human review.
     """
 
     alpha: float = Field(default=0.05, gt=0.0, lt=1.0)
@@ -167,6 +168,7 @@ class ConformalConfig(BaseModel):
     nominal_coverage: float = Field(default=0.95, gt=0.0, lt=1.0)
     method: str = "split-conformal"
     empty_set_action: str = "route_to_human_triage"
+    min_confidence_threshold: float = Field(default=0.60, ge=0.0, le=1.0)
 
 
 class OODConfig(BaseModel):
@@ -256,6 +258,7 @@ def _load_conformal_override(path: Path) -> dict[str, Any]:
         "nominal_coverage": "nominal_coverage",
         "method": "method",
         "empty_set_action": "empty_set_action",
+        "min_confidence_threshold": "min_confidence_threshold",
     }
     override = {target_k: calib[yaml_k] for yaml_k, target_k in mapping.items() if yaml_k in calib}
     if "q_hat" in override:
