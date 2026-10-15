@@ -59,7 +59,7 @@ packages = ["src/taxon_vision"]
 target-version = "py312"
 line-length = 120
 force-exclude = true
-extend-exclude = [".pixi", "scratch", "notebooks", "site"]
+extend-exclude = [".pixi", "scratch", "notebooks", "site", "openwiki"]
 cache-dir = ".cache/ruff_cache"
 
 [tool.ruff.lint]

@@ -49,6 +49,8 @@ run_quality() {
   fi
   echo ">>> Enforcing Markdown Rule 04"
   pixi run --frozen -e dev python scripts/verify_markdown_rules.py
+  echo ">>> Validating OKF Frontmatter and Links"
+  pixi run --frozen -e dev python scripts/validate_okf.py
   echo ">>> Running Ruff lint"
   pixi run --frozen -e dev ruff check .
   echo ">>> Running Ruff format check"

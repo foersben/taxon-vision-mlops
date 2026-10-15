@@ -123,7 +123,7 @@ def test_tune_hyperparameters_fast(synthetic_split: EmbeddingSplit, monkeypatch:
     monkeypatch.setattr("taxon_vision.models.training.tuning._setup_mlflow", lambda _cfg=None: False)
     monkeypatch.setattr("taxon_vision.models.training.tuning._log_best_run", MagicMock())
 
-    cfg = TuningConfig(n_trials=1, epochs_per_trial=1, batch_size=16, seed=42)
+    cfg = TuningConfig(n_trials=1, epochs_per_trial=1, batch_size=16, seed=42, storage_url=None)
     best_params, study = tune_hyperparameters(
         data=synthetic_split,
         num_classes=2,

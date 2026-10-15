@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:ce8d2b83b9be336380ab2b814a83f11de1dd6cb5a68952cd3d146d0c83d05ae7",
+  "claims": [
+    {
+      "id": "claim_ad0b2b29297149abb9e64624314cf76f",
+      "statement": "The taxon-vision-api Deployment runs two replicas with non-root security UID 10001, a zero-downtime rolling update strategy (maxSurge 1, maxUnavailable 0), and mounts model checkpoints from the host filesystem as read-only at /app/models/checkpoints.",
+      "evidence": [
+        {
+          "resource": "repo://deploy/k8s/api-deployment.yaml#L9-L75",
+          "version": "repo-lines-v1:sha256:c41e3de5db650a03ce196d71f6c485e4cfe68986d236c104532beea8562f70c6:eyJzZWxlY3RlZExpbmVDb3VudCI6NjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVlOTFlNTFjZTUzOGVmMTIwZWUyMGNiZGY5NDE1OGJhY2UxY2MxMTc5MDZmODY0ZmVkMmQ5NGUzNzExMGNiMjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY1MmQ3MTExMDNkNTBhNDM3ODMwYzZmYmNkMDRmYjRiYWI0OWEwZjgyZjZkMjZkMWM3OTFjNmU4NDg4ZGQwOTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYyMWQ0ZDg3OGZhNThhY2I3YzQ4YTJmYzIzZDMwNGFiOWY2MmMxMjg3MmNjMTBjZDNkMjkzNjY4N2YzYjJkNDkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQwZmM0ODk2NTdjODVjOTQ3ZTQ0MmM1YTk1NmNmMTI5NGY1OGQxNTNkNmZiNGI4NDc0NzE1ZjcwOTk4MzUxNTcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_649fc2693ec64d729ec150385a729496",
+      "statement": "The taxon-vision-api Service routes external NodePort 30080 traffic to port 8000, while container health is governed by decoupled liveness probing on /health and readiness probing on /health/ready, which checks taxa catalog loading and model initialization before admitting traffic.",
+      "evidence": [
+        {
+          "resource": "repo://deploy/k8s/api-deployment.yaml#L54-L93",
+          "version": "repo-lines-v1:sha256:31d9b6778f43a2f31db4d977f30168467d5ac617bec1f3c85accab47922d9d14:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg4MjI4OWMzNGU3ZWRjMWFmZjJmY2U0YzhhMmM1NDg1ZjkwYTA0MzllMWZmZDkwMWU5ZmZkZTI1MzdlNWY2NjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA1NjI3ZmMzZjE3MDE2ODhmNWRhZmM4ZjBmYWY2MjQwNGU2NmI5YTczYTBjNWM0YjNlM2FmZGE5NmE1MWU1MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE0YmY2ZDFiZWRhNWY2N2ZlMmFiZTgzNTRmNWUxMjhjZTg2ZDQyZmZhMDBkM2M2MzhkOWUxZTIyMzYzMWM0MjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/service/routes/health.py#L16-L67",
+          "version": "repo-lines-v1:sha256:4129143be446b048de1227680de21b1169ef768a312ac59293e15d53cc5a21f7:eyJzZWxlY3RlZExpbmVDb3VudCI6NTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY4YzA3NThmZmY3MTI3OWIzODBjMzIwOTE5ZGNkM2VhYzkzMzA4ZjY5MzgyZTY0NWQ3Zjg4ODliOTkzMzk5YTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA0OGY4ZTBmZjEyYWE3ZTAyNmIyYWJlZjllMzJmZmU2MmZlNTE4OThkMDlhNjRlODZmNzk5NDNiOTZhY2QyMmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM5OWEwNWU2M2UzMDI4ZDMyYTAxYmViNzQxZTliOWJhZTI4OTFlMzljOTc0NTg4MWNkYzQzMGE4N2IxODMxODEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_266479130ba84329984a7fe93dec2e53",
+      "statement": "Kubernetes RBAC grants the jenkins-agent ServiceAccount in namespace jenkins-ci execution privileges in jenkins-ci and deployment management capabilities over deployments and services in namespace taxon-vision via jenkins-deployer-role.",
+      "evidence": [
+        {
+          "resource": "repo://deploy/k8s/jenkins-agent-rbac.yaml#L6-L78",
+          "version": "repo-lines-v1:sha256:93f611389583665e418778345cd85efccd7fdb0fb067ab837f1ee290e7d48eaa:eyJzZWxlY3RlZExpbmVDb3VudCI6NzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc3NmFlMTQyNDI4ZTc1NGI2N2Q3ZDZlM2RmZGJlMWI0NDhmMGJhYzM1NWQ4ZmEyNGVjOTQ3MWUyMWQ5MGI0MzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImViMzcyM2MyMDBmOGU3ZjZjY2EzOGMxMzRhZWI5OWNmNWY4YzIyMTU3M2IzMzllMDdiMTRkMDdhOTNiMTg3N2YiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA2YTI1N2FmOGNlZTY3Yjc1ZTIzNjg0MjhiNjIzMGUwYzQyM2RhZDU1MDU3NzYxYThlNjgwOTJiMjQzNmU0OWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2ee70ef62f864640a9f40e1ca1f325dd",
+      "statement": "The NVIDIA device plugin ConfigMap configures compute time-slicing to expose 4 virtual nvidia.com/gpu slices on an RTX 5070 Ti, requiring software-level memory clamping such as PyTorch memory fraction settings because time-slicing lacks hardware VRAM isolation.",
+      "evidence": [
+        {
+          "resource": "repo://deploy/k8s/nvidia-time-slicing-config.yaml#L1-L36",
+          "version": "repo-lines-v1:sha256:928fac476bcfe36390aef39c6a10e70ea2e2b614f5f789aa0e6dc6787ffe2904:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNhNmJlZmE5NGY1YzQxYzc3YWI5NDY4Nzg0MDM1NDgwOTkxNTMwYjU3MjE1Y2UwYWIyMDQ1OWYyMjcyMTAzNTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFiYzE3YjBhMWNkMWMyMjFmMWFmMzg3OWYzNmFlZTNkZDQ5ODlmYTY4MmZjMzk3ZjM2MThiNmNiM2I5YjYwMzYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2a921623cca54c6fb527c61e791f681e",
+      "statement": "Production telemetry exposes taxon_predictions_total, taxon_inference_latency_seconds, and taxon_human_referrals_active via a GET /metrics endpoint scraped by Prometheus at 5-second intervals.",
+      "evidence": [
+        {
+          "resource": "repo://config/prometheus.yaml#L1-L8",
+          "version": "repo-lines-v1:sha256:8f291c4b11a85e7ba8f728481ad42ce329f4a410807b7dc4d44b6ea0dc0a8396:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODRlM2VlOTQwYWFmZmUzODFjODQ2ZmNmMjI3YjIyMzMyZmNhOGJjYzYyMTk3Yzc5ODliNWJjYWM4ZDkxZTQyZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZDdlODRiODQzOGMyNjM1YTI4YWE3NzhmNDAzYWJiNTllMzM5M2FhZWFjZjJlNmNiNjMxZjA3YWU1MmE3NWM3ZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        },
+        {
+          "resource": "repo://src/taxon_vision/monitoring/telemetry.py#L41-L45",
+          "version": "repo-lines-v1:sha256:2edf25a5cfd46193eb403e3e02ec33d44510419c536e59eb98879be79d96eae9:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZGNmZTYyZWVjYTYzMWJjYTlhZGFjM2Y4NjQyMjkyNDEwOTIxMzVhN2FjNzc1ZWExNTRmZmQ1OTQwNjRiZTYzZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDcwOWI3NWVjMzNhZmI1NGFhOTdhZTUyMjgxNjQ2OTM0ZTQ0NjA4NzI1NTRjY2I2M2MxNDI5ZmFiMTc1ZWY4NCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNTViNmU4NzA2YjQzMDQ3ZjJhNmRiNjdmMTMyNjM4NTk1NjA0ZTY3ZjM2OTY2ODc2Y2UwMTU4ZjAwNTNlNmJkMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        },
+        {
+          "resource": "repo://src/taxon_vision/service/routes/health.py#L69-L85",
+          "version": "repo-lines-v1:sha256:2b13db2a3753e787c69c5bd031b4f8ac1d4368d813f46ba3795434c131fc61e4:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJmMThkMjcyODlmMGZmNWM4NzVlNWYxZTIxNGExNzQ0YmFmOTFkNTYwYzQ1MDRkNGE3NmY4M2IxNjNmZWY3YzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4ODMzOTYxMzIyNzE4OWRlNDY5MTc1Y2RjZGM5MDJkNGJjYjIyYWY2MWU5NzJkNmQ3MzBiMjg2YmNmYTVjYzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRmYmQwMDkzMTRiYzI3MDg0MTY3MzRhMDJhZTVmZjM5YTFlNDhhMDUwYmU5MWY0M2IyZmFhOTIwMDJjNjJiZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2e844c80bd244c4889abc618bbcd472e",
+      "statement": "The /predict endpoint records execution latency in taxon_inference_latency_seconds, increments taxon_predictions_total labelled by routing outcome (success, invalid_input, unavailable, or error), and stages flagged out-of-distribution or ambiguous observations for human review.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/service/routes/predict.py#L129-L178",
+          "version": "repo-lines-v1:sha256:5a690f3f6962a760aa3b1457228c56da54103ee7b75307425a7e014b40ac9c12:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImExZjhhZGE2NTI2MDIyOTBhOGQ4NjQxN2YxOTY4NmM2YmNjMjljNGRlNzI4YzEwNTU2N2M1MDE4YjcwYWExOGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNlNjU3ZmFhOTA3MWRhMGZjNWZjOTE1N2EyMWI1NDYyZmEwNTNmY2FhYjM4NjRjMTAwZThlMmRkN2FlZWQ1NmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE4ZDNmYTk5YWY1OTMwYmZiOWQ1YzgzNThhMTY4YmRhOGUwYTgwZjdkNjRkYzFmYjE5MTEyNTM3NmZjZDFkYzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_26e26c46ef6d41c3adafd13c27be2db5",
+      "statement": "Representation drift is computed in O(N * D) time by projecting embedding vectors onto their L2 Euclidean norms and evaluating the 1D Wasserstein-1 earth mover distance approximation as the absolute difference between reference and production mean norms.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/monitoring/drift.py#L10-L34",
+          "version": "repo-lines-v1:sha256:d557151d12b232c2503abd3169916044ef9177589465b64bc25f4635e759ef80:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNhZmRkNjM4MjE4ZjQzOGE5Mjc3OTg0MDczYjAwYTFmOWM5MDFjMzFmYzFkODEzMWM1MTNjNTRlMmE1NGZjNDEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA1NThlMzM0ZTQwZjkxNWU0MjhlZWEyMTg3YzFkNzRiY2M5MDFhN2Y3N2NjMzJkMjdhNDBjYmY0MGI4YmZlNTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY1ODI1MzliN2FjMDg3ZDhkMDY3NGEzMzNjOWZkNGZkMDUzMjIyNWE3N2NiNjRkYTViZGUwYzZhMTkwZTg2ODIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_00f3cdc1ee634a9da43ce2e8549b0086",
+      "statement": "The verify_deployment.sh script deterministically validates deployments through a 5-step gate checking rollout completion, pod inspection, Service ClusterIP resolution, HTTP 200 liveness and readiness probe responses, and live multipart inference with Prometheus metric confirmation.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/verify_deployment.sh#L16-L54",
+          "version": "repo-lines-v1:sha256:c14d5a915de0d1e3872284d7ae8589e21aad54e7bd4707844da9e05f96b24626:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIyZWRjM2U3OWVhYjA3NWM0ODlmNDE5NTQ5OTY0MDdmOWNjMjE4YzViMGNkNzUyZmU1ZjBjNzRmYWRiMjc1OWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdhNGU3YTY0N2M1Yjc4ZTJkMmNkMWM3ZjQ1NmYxMTg2OGJmMDY1ZThiYWMxNzA3YTY2ZTA5NDE5YTRkY2FkMDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZlYjk5MWNjODY0MDc0OGZjZGU1ZmJhMTI3NzY0MjZkZWRmZDJkMjE3ZGMwYzNjNjAzMDY0NjgyMzI4MTJmNzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-15T19:46:36.219Z"
+  }
+}

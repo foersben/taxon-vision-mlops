@@ -16,7 +16,7 @@ sources:
 
 # Validate Open Knowledge Format
 
-Skill to verify that markdown files contain correct frontmatter.
+Skill to verify that markdown files across `.agents/`, `docs/`, and `openwiki/` conform to Google OKF v0.2.
 
 ## Execution
 
@@ -24,4 +24,10 @@ Run using:
 
 ```bash
 pixi run -e dev python scripts/validate_okf.py
+```
+
+Optionally pass target files or directories:
+
+```bash
+pixi run -e dev python scripts/validate_okf.py openwiki/
 ```

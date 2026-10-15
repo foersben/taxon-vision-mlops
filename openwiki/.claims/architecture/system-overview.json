@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:c0ec6a0b55b6a2ff1e0d2c2faad04bf3c1439995b5ff4e944301b885b3907bd0",
+  "claims": [
+    {
+      "id": "claim_70e3c54cb2c74bdbadbc6abd719f5a9f",
+      "statement": "TaxonVision establishes a Single Source of Truth configuration hierarchy where base settings in config/default_config.yaml are layered sequentially with config/params.yaml, config/conformal_config.yaml, optional custom YAML overrides, direct environment flags (TAXON_ALLOW_UNTRAINED_FALLBACK and TAXON_FLAGGED_STORAGE_DIR), and dynamic double-underscore delimited TAXON_ environment variables.",
+      "evidence": [
+        {
+          "resource": "repo://config/default_config.yaml#L1-L79",
+          "version": "repo-lines-v1:sha256:3b789372010863b6d6d8fe3c8b1533cdf7875293a7060c7d809ba362697bd125:eyJzZWxlY3RlZExpbmVDb3VudCI6NzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQzZmY0OTYyMmE0OWY3NzEyMDgyYzliZGRiNTkxZGMxNzg4NTA2MDY2NzQxODUyYzk1OWYwZjUxZDE5MjcwZDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgwM2ZlODA2ZGY5Mzg1NWE5M2RhMTIyYjBlYTdjOWJjNTM2MGFjZjM1OGI5NGM3YjYxMDNjYzFmNmI3YTA5MmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/config.py#L313-L355",
+          "version": "repo-lines-v1:sha256:0e1aa15bd9a86f3462eaa0aac33ee4ef51c2fa8f00b604bf0e6d5cf5efef33dc:eyJzZWxlY3RlZExpbmVDb3VudCI6NDMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkNmYxOWY4ZTlkMGU5YmQwYjI5MDkxNzU0Mzc5OGZhMTUwNzhmMDY5OWEyYTk5NGUzNDY5NjUwYjZmODk5NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMzZGRiMTQ4YmIyMmIyYzQ3MjgzNTMyMDRjMWJkZDMxN2M2NDQ1MzhiNDc4N2UwNWI3YjJkZmEyZDZjMDM2ZTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFhYTU5YWRmZTZiMzk3ZTIzOWI0MzgwMDFmMDcxOTBkZGY0ZDAyZmY5MjkwYTQxNWJiMTA2Y2VmODk4NGNjOTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/config.py#L7-L11",
+          "version": "repo-lines-v1:sha256:e9643d91b56d16e5daf7d9f5b57792eba3d3f14754cc566d8633b7f4334960d4:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZjAwM2MxNmY0ODIyZDFkYTE0ZjU1ZDYxYmUzOWEyNjdhNDE1NzlhMWEzMzE2ODg3YzdhMWNiYjI4ZDQ1YmUyMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYWFhODUyY2QwZGFlMDViOWMwYzQxNmYyODQ1NjA5YTIyOGYzZDRlNWVkODkxNzczZDdiOTc5Y2Y3NmZjMDdhYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDgyYTM5OTRjMjZhNTcwZDBjZTllMzdjMWM3MGU2ZDIwZGVhOGQ2Yjk2MWZhYWIzNjRjMDBhY2M5MjFhYTBlZCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_d17630eba9cf42ceb77dd765e44e63bc",
+      "statement": "Global application settings are validated against strongly typed Pydantic v2 schemas—including ServiceConfig, ModelConfig, TrainingConfig, IngestionConfig, MLflowConfig, ConformalConfig, and OODConfig—and cached in-memory via an LRU cache to prevent redundant disk I/O and validation overhead.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/config.py#L313-L328",
+          "version": "repo-lines-v1:sha256:626ec3e531c7faf4a82a558404fd6ae3703caaa057ca638fdcf7ec51401bcfab:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkNmYxOWY4ZTlkMGU5YmQwYjI5MDkxNzU0Mzc5OGZhMTUwNzhmMDY5OWEyYTk5NGUzNDY5NjUwYjZmODk5NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE2YTcxNTI1NzJlZTg0ZjEwOTA2Yzc0YjlmMmE5MjQzNGRkYWIwZTNjNDI4MTNiMDRlNTk3ZWZjZWM5NTFiMjYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFhYTU5YWRmZTZiMzk3ZTIzOWI0MzgwMDFmMDcxOTBkZGY0ZDAyZmY5MjkwYTQxNWJiMTA2Y2VmODk4NGNjOTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFhMmJjNDViODFiNzk2MWMzYzdmZjE2YTBjZjU2N2E1ZDBjNzE5ZmVhY2JkMmY2N2Q3ODJkYjNiM2RiYjFjMTYifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/config.py#L32-L205",
+          "version": "repo-lines-v1:sha256:361c611564233bf5cfee925dad52e0bcc01c0aad4ff944a7bf9ef5e117dbe551:eyJzZWxlY3RlZExpbmVDb3VudCI6MTc0LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJmY2U3MzI5ODIxNzRiMDE3MTdmNDk1OTVkMWVkZDg4NGQyMDhiYmY2MjYwNTNiNzQ4MzMxYTZmOTBjMDdkN2M0IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIwMWJhNDcxOWM4MGI2ZmU5MTFiMDkxYTdjMDUxMjRiNjRlZWVjZTk2NGUwOWMwNThlZjhmOTgwNWRhY2E1NDZiIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI2ZGMxMTYyNjk0ZGZmYTcwNDY1OTAwNjExMTUwYmMxODk1ZjllZjRkYjVkMTIzYzJhZTM5MjEyMzRhNWNhNjY4IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI2MDFmNjU1NGVmNjA0YjhmNjE1MmFiNDk1MTBjODdhZTE1NTM5MzA1MjQ2ZWEyMmY5OWMyYzU0OGM4NDM0MjgyIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_e1fe622d2b674d868a026d288ffe3711",
+      "statement": "The taxonomic perimeter defined in config/taxa_catalog.yaml serves as the single source of truth for species metadata and alias resolution, with pipeline components deriving dense class index mappings dynamically via get_catalog_inat_taxon_map() to eliminate hardcoded label drifts.",
+      "evidence": [
+        {
+          "resource": "repo://config/taxa_catalog.yaml#L1-L74",
+          "version": "repo-lines-v1:sha256:9c2dc154e6a53904b0e78c955e8e422181b2d233f18dd8719c32af4457dc69e8:eyJzZWxlY3RlZExpbmVDb3VudCI6NzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUwNjg0OTZmZDhlMTUwYWJmYjMwMjcyMWY4MWMyNzUyOTM2YTNiYmFiYmIyMDU3Y2E5MzkxNjJlMDY0ODJlMTkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc4ZDJjMDk4OTI3NWVjMjVjMThkNWQ1YzI4NzFiOTY5YTc0NjE0NGY2NDVhYmNiNWM5NzNiNzM4OWU5YzE1YWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/pipelines/extract_features.py#L27-L60",
+          "version": "repo-lines-v1:sha256:0376760631ceda4b1dfab241f040674fbd5f4adc98d24dd98fb707ffa855dd7a:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhlMGUwNTUyZTcyMTExMWYzNjViMDA5ZjQ2YmE2MmQ2ZGMwMTZiY2MzOTkzZDUzMWIwODQ4ZDBjZWUwMWQwMDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYyMDA5N2U0YWE1MDA2OGJhMTU3ZjlhMjczOWZhZDg2OTk1ZTFlMGNkY2NkYWRjNTg5N2MyMDM0Yzc0ZDNlZmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFlNjBiOGM3MzM4MDkxMzNjYzNiZjdlZGVjZjE0MDg1MmY1NDU5YzU4MzY3ZDI4Yjk2MGEzY2I2OWY0NTY0ZjQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_98fae87753b84918b05d77f1cfcfb599",
+      "statement": "The system implements a dual-pipeline pattern where the feature extraction pipeline feeds observation batches through a frozen vision backbone using deterministic evaluation transforms, partitioning the resulting dense representations into stratified train and validation splits persisted as an EmbeddingSplit container on disk.",
+      "evidence": [
+        {
+          "resource": "repo://dvc.yaml#L1-L24",
+          "version": "repo-lines-v1:sha256:a73de34d371106c494f14b005174614ae28b98b23e46935af6590304dee65de0:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU0YTVlZmRiMzZlMDAzYWY3NTQzNGQzOWZiNmRiYWY0ZGNjZjFkZTA5YTVmODc0ZTFmYzQ0NzA4Njc2ZWQyZmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY5Y2Q0MWQwOThmN2I5NGUyYWU0ZDE5MzljZDk3NjM5MWRkNWFiOTQwZDkxNDczOTcyNDM1NGZmN2RmMDI0ZDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA3NjRkMWYwODhjMzk5ODFiNDMzNTQwZTA5ZjRkODMzNjNiM2M0Yjg3YzFiYWJkZWM5NzJiOTI5ZWQzMzY2NGUifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/pipelines/extract_features.py#L250-L281",
+          "version": "repo-lines-v1:sha256:a14d27b3742d8f23abece368b594712081ba3b80bf4c50da918b3664d8fa0b4a:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUwYzQzNWM4NjYxODc3Y2MxMTA3ZmU0OWIzODFmMWM0NjNhYTE4ZTE0ZDYyOThlMjAyMTM4YTM5ZmQyNzkxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE2YTcxNTI1NzJlZTg0ZjEwOTA2Yzc0YjlmMmE5MjQzNGRkYWIwZTNjNDI4MTNiMDRlNTk3ZWZjZWM5NTFiMjYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjUyZDZhZTA4ZjcxYThkMjE2YmM1NzM4YjgxZTljMmVmZjBhMDMzMzY1Yjk4NzczZTI1MTEzMmNmODdlYjkyNTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVkZTVhZGQ1MGQzZTc4YWI0MjAwMzk5ZWUxMGM2ZDFiY2I1YmY0ZGY0NzQ2NWY3ZmE1M2ViZTQwMTk5ODMyNjgifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/pipelines/extract_features.py#L62-L140",
+          "version": "repo-lines-v1:sha256:67d6d5e06b08f1c46be3ccda7c919d40f64243059424db5c6d7e3c6e728f0cf5:eyJzZWxlY3RlZExpbmVDb3VudCI6NzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY2OWExMzk3NWMyNTZlYzgzMjBlMjAxNjA4M2M5NmRmNjM3Y2EzZDM1YmViZGUyMzE0YmVlM2E0NzExYjU2Y2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY1YmM0ZWUzMDkxODk4OGE2OTk5ZDkwMjUyM2U5Mjk0ZWE1NTdmM2E5OWI0MDQzOGM4N2U0MGE1Mzg2ZjBlNzAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc3Y2NhODVjZDhhZTMyODNhMGYxYWEzMGE5YzAzM2M1YWM2MTk2ZWUzMjZlNzc0MzEwODhmZDhmN2U3ZmQyNDQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA3Njk5YTg5ZmExMjZhNzAyNzYxNDQ0NWFiNmE2ZmEwZmMzYjM3MDRkNmU3ZWVlYjFlYTYxNWM3Yjk5MTg1OWIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c60dd8106bf04c87ad3282de596bb31a",
+      "statement": "The classification head training pipeline loads pre-extracted representation tensors to train a lightweight linear head in memory, employing ClassBalancedLoss to mitigate biodiversity class imbalance, Optuna for automated hyperparameter tuning, and MLflow for experiment tracking and conditional checkpoint promotion.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/models/training/embeddings.py#L70-L120",
+          "version": "repo-lines-v1:sha256:59e2bfdd18fa402b8f637007b6d86840981460c75584c6d404ee8f36a7539822:eyJzZWxlY3RlZExpbmVDb3VudCI6NTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRlNTJmMjVkZjA1YzA0NGMwNWYwYjUwMTdjZDFlZGM2MjJkYzBmZmFkY2U3M2NlZWMzMTAyNzg4MWI3NTJjMTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNkZTFkYTJhOGEwMjQzNjVhMzAwNzgwYmNkNTI0YmM5NTdjNmZhZTc3N2ExNzcxNWUyNjE0ZDkzNDcyOWI4ODkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI5ZTkxNTYxYTY5YzVlNzc5ZTBiNzAzYzE1N2VkMjAzOGVkMWEwNWI0M2MxZjdkYmNkMjU2MjI4ZDIzMzQ1NWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1NGNmMjA1Y2M4MzYxYzY4Nzg3NTJhNDlkMDRmNjk4MzVkOGM2MjU3MWFjMTMwOTBhMjA2YmY0ZWIzMmYwMzUifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/models/training/runner.py#L1-L47",
+          "version": "repo-lines-v1:sha256:e9c1916f6f288d03926cf42ce9653b711c05de1747eaaba6db9fe9e285fe2357:eyJzZWxlY3RlZExpbmVDb3VudCI6NDcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlkYmVmZjA0NTU4OGE1ZjMzZDhkZjBiODYwYTg1OWIwZTE4MDFiZWY1NjczNjMxMjAwZTU3NmQ2ZTQyZTQ5ZjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRiNDNmZDkzMzRjZGQ4YTkwNGIzMDA5MzQ4NDAxOTVhZmY0YjUxYmExOWY5YzJlNTQxNDI0OTk0OThiMmY0YTIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFkZTE4OWRmOWRlNWQxYWEwZjAyZDVmM2NhZTkxYjc2ZGJkZDgyNzJlNzYxMzA5YjkyMTQ4N2ZjNzllZmQ3MjQifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/pipelines/train.py#L1-L29",
+          "version": "repo-lines-v1:sha256:2fec05fc8f5b50f7b808e6c2752337c47101c9bf2d751b037c5df086e3a635bb:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlkYmVmZjA0NTU4OGE1ZjMzZDhkZjBiODYwYTg1OWIwZTE4MDFiZWY1NjczNjMxMjAwZTU3NmQ2ZTQyZTQ5ZjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk2MzcyNmIwNWQzODllYjA5NzM5NTBhMDk0OWMzZTA4YjA5YWNmZjRiNjg4NzExYzA1YzIyMjMyMDg0YjJjNGUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_be436f8856ca4ec796fab8f2a06da20f",
+      "statement": "Trained models are exported to ONNX via an ONNXDualOutputModule wrapper that emits both class logits and dense representation embeddings for downstream OOD and drift detection, followed by static INT8 post-training quantization against calibration images.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/inference/onnx_exporter.py#L24-L56",
+          "version": "repo-lines-v1:sha256:f70c33f471cb81f280dc6aa01474301ba8b070f218faa3f7f3d3028aa06d0ed5:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRmZjdkNDgzY2RhZDVkMWU5N2Y4YmUzNDAwM2E4YjYzOGJhNmQ0MGZjZTNkMjFjYjAzNTg4NDhjMTdlYjBlOWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYyMDA5N2U0YWE1MDA2OGJhMTU3ZjlhMjczOWZhZDg2OTk1ZTFlMGNkY2NkYWRjNTg5N2MyMDM0Yzc0ZDNlZmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFmN2ZlMDIzZmVkY2Y3Mjk3ZmRjNDA0ZjI1MGY5MmRmNTNiNzBiMzJmZjc4N2MzNDM5OWYzZjc3MWQwNjI2YjQifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/inference/onnx_exporter.py#L58-L80",
+          "version": "repo-lines-v1:sha256:2ba8bc22fa3a177eeb4c0338512242c035fffce3619be2b76e1cce7e9413589f:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg5NzZlNWZmMjEwZjUzMTE5ZTcxNjcyOWUwYWM3Zjk3YjJhYjBjODk4ZTdhOWI4NGVjMjI3ZjU4Yzc5MDJlNWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjMDJjMzBhNTUzZGJhODliMzYzYzY3ZGQ1NTJlODU0ZWRlNWY1MzJhMjM3ZmZjZDYwYzkwYjhiODdlYmZmYWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNmZGY0ZDA4OTJlNDc5YjA1MTUwMTFkNWY5YTkwZWYxMWRiZGU4MDI0ZjFjYzZkNWQzOWI4NTRiNTAzYzZlNzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFkZjdmMzMwNWVmZjk5ZDI2ODU3ODNmMzIzNWIzZDUyYzIxNmYzNDkxNjQ0ZDI0YTFlOWJhOTU4Njg1OTllNTUifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/inference/quantizer.py#L40-L70",
+          "version": "repo-lines-v1:sha256:a5ae4530e846ae4a636b835f3466889f591e84d5c658a6adc99432e4e8c108c9:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE3NzBmMTM4NjJlMDk0ZjdhNjY0NWU4N2MxNjkyZWMzOTY0ZDMxNWNlOTcxODJjZDc5MjFhODc4MmE4MTU5OWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQzNzQwYmY5NmI0MWE4N2U3YjZjYTljMTE3NzUzMTFlMGZlMjBhOGZjZjkzZGJhMGI2ZGZiZGE3NzBkNjlmZDkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU1YzFjNDYyZTJhMzlkNzQ3NTlmNWUxYjEyNmY3NjgzYTJiNzMwMTE4ZTE4ZjUxMjJiMDhjZWRlZWI2NTBlMjMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkzNmMwMTBiMGI5NmVmYWY4OTQzOTA1NzA4YmRhY2I0YjkwYTUxNTBjMDg4ZjQ5ZjU4ZDJlOTc4OTAyNGY3NzMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ff27c79971a040fb849ac000910bab86",
+      "statement": "The TaxonVision microservice unifies REST endpoints, explainability routes, Prometheus metrics, and HTMX triage dashboards within a single FastAPI application, serving inference via an optimized ONNX Runtime engine with fallback to PyTorch TaxonClassifier when configured or in fallback mode.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/service/api.py#L1-L41",
+          "version": "repo-lines-v1:sha256:cf5d6473df599c6fce34adfcf3d03e096ee0b27c8cafcee9af22d2d6909bb307:eyJzZWxlY3RlZExpbmVDb3VudCI6NDEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlkYmVmZjA0NTU4OGE1ZjMzZDhkZjBiODYwYTg1OWIwZTE4MDFiZWY1NjczNjMxMjAwZTU3NmQ2ZTQyZTQ5ZjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM2MmNiOTkzOTU0MWU1MGU1ZDA1ZDY4MGZkMzM5YTdjOTlhNWU3YTYxOTFhNzY4ZTc4ZDhiZjc1ODJmNzU1ZDQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/service/inference.py#L74-L160",
+          "version": "repo-lines-v1:sha256:c6dce620e543f384aca6ae0fa202fb32498253f7113945521917402acc359da3:eyJzZWxlY3RlZExpbmVDb3VudCI6ODcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkNmYxOWY4ZTlkMGU5YmQwYjI5MDkxNzU0Mzc5OGZhMTUwNzhmMDY5OWEyYTk5NGUzNDY5NjUwYjZmODk5NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU5MDlhNTNhNjE4ZDAyOGUxZDMwMDBjMGE3YWJjZWVjYmU1ZmIzN2Y0ZTUxMWVmZTQ2NjQzZmFkNmU2Njg3MmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkxOTE0ZTIzNWQ5ODViYzFlNTFlZDY4MmIwYzkzNGJlOTA5MDE0NjE3YjUzYzcyMDU0NWY1MjBmZmJlZjg2YjUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE5MTVkYmMxNGY4ODc5YjY1YmE1Zjg1MjgwZTc4MjYzMmFjZjJkZWFjYTQyNTY3N2QzMzM1NDMzNTZmNzk4MzAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f6ea50c24c5548288be65373876c8163",
+      "statement": "The serving workload is deployed to Kubernetes in the taxon-vision namespace across two replicas with rolling updates, running under an unprivileged non-root user (UID/GID 10001), with read-only hostPath mounts for checkpoints and liveness/readiness health probes.",
+      "evidence": [
+        {
+          "resource": "repo://deploy/k8s/api-deployment.yaml#L1-L93",
+          "version": "repo-lines-v1:sha256:929299b1fcd4d082e5f06902ad7f0862b537cc1326680368d57e42c39475d266:eyJzZWxlY3RlZExpbmVDb3VudCI6OTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc3ZGQ4MGQzMjFmNTQwN2NmNTYxNWYzOGY4ZjU4MjJhMDVmOWY3MDI3M2JlYjQ4NGUxYmUyMDg0NWZlMTAzMTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA1NjI3ZmMzZjE3MDE2ODhmNWRhZmM4ZjBmYWY2MjQwNGU2NmI5YTczYTBjNWM0YjNlM2FmZGE5NmE1MWU1MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_7641d832f65e4274a396bf183bbe5da8",
+      "statement": "On nodes with single consumer or prosumer GPUs lacking hardware MIG, a Kubernetes ConfigMap configures the NVIDIA Device Plugin to expose 4 virtual GPU slices, enabling concurrent execution of serving pods, CI runner jobs, and batch training.",
+      "evidence": [
+        {
+          "resource": "repo://deploy/k8s/nvidia-time-slicing-config.yaml#L1-L36",
+          "version": "repo-lines-v1:sha256:928fac476bcfe36390aef39c6a10e70ea2e2b614f5f789aa0e6dc6787ffe2904:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNhNmJlZmE5NGY1YzQxYzc3YWI5NDY4Nzg0MDM1NDgwOTkxNTMwYjU3MjE1Y2UwYWIyMDQ1OWYyMjcyMTAzNTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFiYzE3YjBhMWNkMWMyMjFmMWFmMzg3OWYzNmFlZTNkZDQ5ODlmYTY4MmZjMzk3ZjM2MThiNmNiM2I5YjYwMzYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c297f67f90cd47f09cffe444cf6593e0",
+      "statement": "Model and data lifecycle automation is governed by DVC stages for ingestion, training, and ONNX export, while remote test execution is supported by Jenkins agent pods restricted by scoped Kubernetes Role and RoleBinding permissions in the jenkins-ci namespace.",
+      "evidence": [
+        {
+          "resource": "repo://deploy/k8s/jenkins-agent-rbac.yaml#L1-L47",
+          "version": "repo-lines-v1:sha256:e99c34e6b243facb19a9bc52d2c729d3d2eb988d67323256654f7999df0fe587:eyJzZWxlY3RlZExpbmVDb3VudCI6NDcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc3NmFlMTQyNDI4ZTc1NGI2N2Q3ZDZlM2RmZGJlMWI0NDhmMGJhYzM1NWQ4ZmEyNGVjOTQ3MWUyMWQ5MGI0MzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY1MmQ3MTExMDNkNTBhNDM3ODMwYzZmYmNkMDRmYjRiYWI0OWEwZjgyZjZkMjZkMWM3OTFjNmU4NDg4ZGQwOTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIzZDBmNzE1YTk4MjM4YWU4MTAwYjE4ZjlkMjNlZTFkZjBkNTBhNmU1MWE2NDdlMjFlZmY2YzNlOTc2N2ZkY2EifQ"
+        },
+        {
+          "resource": "repo://dvc.yaml#L1-L31",
+          "version": "repo-lines-v1:sha256:f3fe72372f14ac5ac06f4fcd8964e69fb6e6ae965f99f12f620cf861ebbf1a6d:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU0YTVlZmRiMzZlMDAzYWY3NTQzNGQzOWZiNmRiYWY0ZGNjZjFkZTA5YTVmODc0ZTFmYzQ0NzA4Njc2ZWQyZmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNhYTMxZjlkYzg4NmY3MzFjZDc3OTJkYWMzYTNiNzY5Yjg1MGEyOTRhMzZhODc1ODczOGE3Y2EwYzBhMjVhMzgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-15T19:46:36.219Z"
+  }
+}

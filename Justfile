@@ -182,8 +182,8 @@ calibrate:
 dvc-push:
 	@TOKEN=$(secret-tool lookup Title DagsHub 2>/dev/null || secret-tool lookup service dagshub 2>/dev/null); \
 	if [ -z "$TOKEN" ]; then \
-	    echo "❌ Error: KeePassXC is locked or DagsHub token not found in Secret Service." >&2; \
-	    exit 1; \
+		echo "❌ Error: KeePassXC is locked or DagsHub token not found in Secret Service." >&2; \
+		exit 1; \
 	fi; \
 	AWS_ACCESS_KEY_ID="$TOKEN" AWS_SECRET_ACCESS_KEY="$TOKEN" \
 	pixi run --frozen -e dev dvc push
@@ -193,8 +193,8 @@ dvc-push:
 dvc-pull:
 	@TOKEN=$(secret-tool lookup Title DagsHub 2>/dev/null || secret-tool lookup service dagshub 2>/dev/null); \
 	if [ -z "$TOKEN" ]; then \
-	    echo "❌ Error: KeePassXC is locked or DagsHub token not found in Secret Service." >&2; \
-	    exit 1; \
+		echo "❌ Error: KeePassXC is locked or DagsHub token not found in Secret Service." >&2; \
+		exit 1; \
 	fi; \
 	AWS_ACCESS_KEY_ID="$TOKEN" AWS_SECRET_ACCESS_KEY="$TOKEN" \
 	pixi run --frozen -e dev dvc pull
@@ -233,6 +233,21 @@ serve:
 [group("docs")]
 visualize-okf:
 	pixi run --frozen -e dev python scripts/visualize_okf.py
+
+# Update OpenWiki documentation and reconcile grounded claims
+[group("docs")]
+wiki-update:
+	openwiki code --update
+
+# Validate OKF v0.2 structural integrity for .agents/ and openwiki/
+[group("docs")]
+wiki-validate:
+	pixi run python scripts/validate_okf.py
+
+# Launch local interactive visualizer for the OKF knowledge graph
+[group("docs")]
+wiki-viz:
+	pixi run python scripts/visualize_okf.py
 
 # ── Utilities ───────────────────────────────────────────────────────────────
 
