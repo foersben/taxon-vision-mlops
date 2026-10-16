@@ -92,6 +92,53 @@ def test_create_stratified_embedding_split() -> None:
     assert sum(split.samples_per_class) == 30
 
 
+def test_create_stratified_embedding_split_4way() -> None:
+    """Verify 4-way stratified splitting partitions data into train, val, cal, and test sets."""
+    torch.manual_seed(42)
+    num_samples = 100
+    dim = 16
+    num_classes = 5
+
+    embeddings = torch.randn(num_samples, dim)
+    labels = torch.tensor([i % num_classes for i in range(num_samples)])
+
+    split = create_stratified_embedding_split(
+        embeddings=embeddings,
+        labels=labels,
+        num_classes=num_classes,
+        val_split=0.10,
+        cal_split=0.10,
+        test_split=0.10,
+        random_seed=42,
+    )
+
+    assert split.feature_dim == dim
+    assert split.train_embeddings.shape == (70, dim)
+    assert split.val_embeddings.shape == (10, dim)
+    assert split.cal_embeddings is not None and split.cal_embeddings.shape == (10, dim)
+    assert split.test_embeddings is not None and split.test_embeddings.shape == (10, dim)
+    assert split.train_labels.shape == (70,)
+    assert split.val_labels.shape == (10,)
+    assert split.cal_labels is not None and split.cal_labels.shape == (10,)
+    assert split.test_labels is not None and split.test_labels.shape == (10,)
+    assert split.samples_per_class is not None
+    assert sum(split.samples_per_class) == 70
+
+
+def test_create_stratified_embedding_split_cardinality_guard() -> None:
+    """Verify cardinality guard raises RuntimeError on single-class degenerate dataset (E2)."""
+    embeddings = torch.randn(30, 8)
+    labels = torch.zeros(30, dtype=torch.long)  # All class 0
+
+    with pytest.raises(RuntimeError, match="Cardinality collapse detected"):
+        create_stratified_embedding_split(
+            embeddings=embeddings,
+            labels=labels,
+            num_classes=5,
+            val_split=0.2,
+        )
+
+
 def test_extract_batch_representations_mock_backbone() -> None:
     """Verify extract_batch_representations executes forward pass and returns 2D tensor on CPU."""
 

@@ -43,7 +43,9 @@ training:
   epochs: 5
   batch_size: 32
   learning_rate: 0.001
-  val_split: 0.2
+  val_split: 0.10
+  cal_split: 0.10
+  test_split: 0.10
   random_seed: 42
   extractor: "dinov3"
 

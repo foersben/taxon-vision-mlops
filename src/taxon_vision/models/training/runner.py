@@ -106,6 +106,10 @@ def _try_load_cached_split(candidate: Path, dim: int) -> EmbeddingSplit | None:
                 train_labels=payload["train_labels"],
                 val_embeddings=payload["val_embeddings"],
                 val_labels=payload["val_labels"],
+                cal_embeddings=payload.get("cal_embeddings"),
+                cal_labels=payload.get("cal_labels"),
+                test_embeddings=payload.get("test_embeddings"),
+                test_labels=payload.get("test_labels"),
                 samples_per_class=payload.get("samples_per_class"),
             )
 
@@ -150,10 +154,16 @@ def _generate_synthetic_embedding_split(dim: int, num_classes: int) -> Embedding
     torch.manual_seed(seed)
     num_train = 120
     num_val = 30
+    num_cal = 20
+    num_test = 20
     train_z = torch.randn(num_train, dim)
     train_y = torch.randint(0, num_classes, (num_train,))
     val_z = torch.randn(num_val, dim)
     val_y = torch.randint(0, num_classes, (num_val,))
+    cal_z = torch.randn(num_cal, dim)
+    cal_y = torch.randint(0, num_classes, (num_cal,))
+    test_z = torch.randn(num_test, dim)
+    test_y = torch.randint(0, num_classes, (num_test,))
     samples_per_class = [max(1, int((train_y == c).sum().item())) for c in range(num_classes)]
 
     return EmbeddingSplit(
@@ -161,6 +171,10 @@ def _generate_synthetic_embedding_split(dim: int, num_classes: int) -> Embedding
         train_labels=train_y,
         val_embeddings=val_z,
         val_labels=val_y,
+        cal_embeddings=cal_z,
+        cal_labels=cal_y,
+        test_embeddings=test_z,
+        test_labels=test_y,
         samples_per_class=samples_per_class,
     )
 

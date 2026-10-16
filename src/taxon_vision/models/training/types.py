@@ -12,15 +12,20 @@ import torch
 
 @dataclass(frozen=True)
 class EmbeddingSplit:
-    """Pre-computed feature representations and labels for training and validation.
+    """Pre-computed feature representations and labels for training, validation, calibration, and test.
 
-    Groups training and validation tensors together to eliminate parameter clumps and guarantee consistent feature dimensions across splits.
+    Groups training, validation, calibration, and holdout test tensors together to eliminate parameter
+    clumps and guarantee consistent feature dimensions across splits.
 
     Attributes:
         train_embeddings: Pre-computed representations of shape `(N_train, feature_dim)`.
         train_labels: Ground-truth class labels of shape `(N_train,)`.
         val_embeddings: Validation embeddings of shape `(N_val, feature_dim)`.
         val_labels: Validation class labels of shape `(N_val,)`.
+        cal_embeddings: Optional calibration embeddings of shape `(N_cal, feature_dim)`.
+        cal_labels: Optional calibration class labels of shape `(N_cal,)`.
+        test_embeddings: Optional holdout test embeddings of shape `(N_test, feature_dim)`.
+        test_labels: Optional holdout test class labels of shape `(N_test,)`.
         samples_per_class: Optional pre-computed class sample counts for loss weighting.
     """
 
@@ -28,13 +33,17 @@ class EmbeddingSplit:
     train_labels: torch.Tensor
     val_embeddings: torch.Tensor
     val_labels: torch.Tensor
+    cal_embeddings: torch.Tensor | None = None
+    cal_labels: torch.Tensor | None = None
+    test_embeddings: torch.Tensor | None = None
+    test_labels: torch.Tensor | None = None
     samples_per_class: Sequence[int] | None = None
 
     def __post_init__(self) -> None:
-        """Validate tensor shapes and consistency across training and validation splits.
+        """Validate tensor shapes and consistency across training, validation, calibration, and test splits.
 
         Raises:
-            ValueError: If feature dimensions differ between train and validation tensors, or if label counts do not match sample counts.
+            ValueError: If feature dimensions differ across splits, or if label counts do not match sample counts.
         """
         if self.train_embeddings.ndim != 2 or self.val_embeddings.ndim != 2:
             raise ValueError(
@@ -56,6 +65,31 @@ class EmbeddingSplit:
                 f"Feature dimension mismatch: train is {self.train_embeddings.shape[1]}, "
                 f"val is {self.val_embeddings.shape[1]}."
             )
+        dim = self.train_embeddings.shape[1]
+        self._validate_optional_split("cal", self.cal_embeddings, self.cal_labels, dim)
+        self._validate_optional_split("test", self.test_embeddings, self.test_labels, dim)
+
+    @staticmethod
+    def _validate_optional_split(
+        name: str,
+        embeddings: torch.Tensor | None,
+        labels: torch.Tensor | None,
+        expected_dim: int,
+    ) -> None:
+        """Validate an optional auxiliary split tensor pair."""
+        if embeddings is None and labels is None:
+            return
+        if embeddings is None or labels is None:
+            raise ValueError(f"Both {name}_embeddings and {name}_labels must be provided together.")
+        if embeddings.ndim != 2:
+            raise ValueError(f"{name.capitalize()} embeddings must be a 2D tensor, got {embeddings.shape}.")
+        if embeddings.shape[0] != labels.shape[0]:
+            raise ValueError(
+                f"{name.capitalize()} embeddings count ({embeddings.shape[0]}) does not match "
+                f"{name} labels count ({labels.shape[0]})."
+            )
+        if embeddings.shape[1] != expected_dim:
+            raise ValueError(f"Feature dimension mismatch: train is {expected_dim}, {name} is {embeddings.shape[1]}.")
 
     @property
     def feature_dim(self) -> int:

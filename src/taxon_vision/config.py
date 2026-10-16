@@ -118,7 +118,9 @@ class TrainingConfig(BaseModel):
     epochs: int = Field(default=5, gt=0)
     batch_size: int = Field(default=32, gt=0)
     learning_rate: float = Field(default=0.001, gt=0.0)
-    val_split: float = Field(default=0.2, ge=0.0, lt=1.0)
+    val_split: float = Field(default=0.10, ge=0.0, lt=1.0)
+    cal_split: float = Field(default=0.10, ge=0.0, lt=1.0)
+    test_split: float = Field(default=0.10, ge=0.0, lt=1.0)
     random_seed: int = Field(default=42)
     extractor: str = "dinov3"
 
