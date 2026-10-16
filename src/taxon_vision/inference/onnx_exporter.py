@@ -7,10 +7,12 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+import warnings
 from pathlib import Path
 
 import torch
 import torch.nn as nn
+from torch.jit._trace import TracerWarning
 
 from taxon_vision.config import Settings, get_settings
 from taxon_vision.inference.calibration import load_calibration_tensors
@@ -96,7 +98,8 @@ def export_to_onnx(
     if is_dual:
         dynamic_axes["embeddings"] = {0: "batch_size"}
 
-    with torch.no_grad():
+    with torch.no_grad(), warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=TracerWarning)
         torch.onnx.export(
             export_module,
             (dummy_input,),
@@ -111,7 +114,7 @@ def export_to_onnx(
     return output_path
 
 
-def _load_head_checkpoint(classifier: nn.Module, checkpoint_file: Path) -> None:
+def _load_head_checkpoint(classifier: TaxonClassifier, checkpoint_file: Path) -> None:
     """Safely load trained classification head weights onto CPU.
 
     Why:

@@ -1,0 +1,14 @@
+{
+  "p95_latency_ms": 9.5,
+  "throughput_fps": 105.0,
+  "cost_per_million_usd": 2.6,
+  "test_sample_count": 120,
+  "test_accuracy": 0.725,
+  "nominal_coverage": 0.95,
+  "test_empirical_coverage": 0.9583,
+  "coverage_guarantee_satisfied": true,
+  "mean_set_size": 2.5,
+  "referral_rate": 1.0,
+  "q_hat": 0.8879,
+  "alpha": 0.05
+}

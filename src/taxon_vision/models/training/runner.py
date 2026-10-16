@@ -780,6 +780,12 @@ def train_cli(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Exit with non-zero status if trained model is tagged as Archived instead of Challenger/Production",
     )
+    parser.add_argument(
+        "--metrics-out",
+        type=str,
+        default=None,
+        help="Optional destination path to serialize training summary metrics as JSON",
+    )
     args = parser.parse_args(argv)
 
     setup_logging(level=logging.INFO, log_file=args.log_file)
@@ -818,8 +824,36 @@ def train_cli(argv: list[str] | None = None) -> int:
     logger.info("  Final Val Acc:    %.1f%%", result["final_val_accuracy"] * 100)
     logger.info("  Saved Checkpoint: %s", result["checkpoint_path"])
 
+    _save_metrics_json(args.metrics_out, result)
+
     if args.require_promotion and result.get("promotion_status") == "Archived":
         logger.error("Model did not outperform production baseline (status: Archived). Failing promotion gate.")
         return 1
 
     return 0
+
+
+def _save_metrics_json(metrics_out: str | None, result: dict[str, Any]) -> None:
+    """Save execution summary metrics to target JSON destination if requested.
+
+    Args:
+        metrics_out: Optional filesystem path string.
+        result: Dictionary of pipeline training execution metrics.
+    """
+    if not metrics_out:
+        return
+    metrics_file = Path(metrics_out)
+    metrics_file.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "status": result.get("status"),
+        "extractor": result.get("extractor"),
+        "epochs_trained": result.get("epochs_trained"),
+        "final_train_loss": result.get("final_train_loss"),
+        "final_val_loss": result.get("final_val_loss"),
+        "final_val_accuracy": result.get("final_val_accuracy"),
+        "duration_seconds": result.get("duration_seconds"),
+        "promotion_status": result.get("promotion_status"),
+    }
+    with metrics_file.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+    logger.info("Saved training summary metrics to %s", metrics_file)

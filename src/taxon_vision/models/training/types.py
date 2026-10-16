@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 import torch
 
@@ -90,6 +91,42 @@ class EmbeddingSplit:
             )
         if embeddings.shape[1] != expected_dim:
             raise ValueError(f"Feature dimension mismatch: train is {expected_dim}, {name} is {embeddings.shape[1]}.")
+
+    @classmethod
+    def from_cache(cls, candidate: Path | str) -> EmbeddingSplit:
+        """Load and deserialize EmbeddingSplit from serialized cache file.
+
+        Args:
+            candidate: Filesystem path to cache .pt file.
+
+        Returns:
+            Validated EmbeddingSplit instance.
+
+        Raises:
+            FileNotFoundError: If cache file does not exist.
+            ValueError: If file payload cannot be parsed into an EmbeddingSplit.
+        """
+        candidate_path = Path(candidate)
+        if not candidate_path.exists():
+            raise FileNotFoundError(f"Embedding cache not found: {candidate_path}")
+        payload = torch.load(candidate_path, map_location="cpu", weights_only=False)
+        if isinstance(payload, EmbeddingSplit):
+            return payload
+        if isinstance(payload, dict) and isinstance(payload.get("split"), EmbeddingSplit):
+            return payload["split"]
+        if isinstance(payload, dict) and "train_embeddings" in payload and "val_embeddings" in payload:
+            return cls(
+                train_embeddings=payload["train_embeddings"],
+                train_labels=payload["train_labels"],
+                val_embeddings=payload["val_embeddings"],
+                val_labels=payload["val_labels"],
+                cal_embeddings=payload.get("cal_embeddings"),
+                cal_labels=payload.get("cal_labels"),
+                test_embeddings=payload.get("test_embeddings"),
+                test_labels=payload.get("test_labels"),
+                samples_per_class=payload.get("samples_per_class"),
+            )
+        raise ValueError(f"Unsupported payload format in embedding cache: {candidate_path}")
 
     @property
     def feature_dim(self) -> int:

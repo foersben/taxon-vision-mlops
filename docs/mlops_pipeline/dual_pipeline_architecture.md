@@ -100,13 +100,16 @@ mlflow.set_tag("git.commit", os.environ.get("GITHUB_SHA"))
 
 This guarantees absolute cryptographic lineage connecting source code, DVC data hashes, and compiled ONNX model weights.
 
-### The Conformal Safety Gate
+### The Conformal Safety Gate and Pareto Test Verification
 
-Before any candidate model enters the production registry, an automated evaluation verifies the candidate ONNX graph against a holdout calibration dataset $\mathcal{D}_{\text{cal}}$. The gate formally asserts that the empirical marginal coverage of the Split Conformal Prediction set satisfies the mathematical bound:
+Before any candidate model enters the production registry, an automated evaluation pipeline executes two sequential epistemic verification gates:
 
-$$\text{Coverage}_{\text{empirical}} = \frac{1}{n} \sum_{i=1}^{n} \mathbb{I}\left(y_i \in \hat{C}(x_i)\right) \ge 1 - \alpha$$
+* **Post-Quantization Calibration (`scripts/calibrate_conformal.py`):** Calibrates the exact non-conformity threshold $\hat{q}_\alpha$ and Helmholtz OOD energy threshold $\tau_{\text{OOD}}$ on the holdout calibration partition $\mathcal{D}_{\text{cal}}$ ($10\%$ split) using the exported INT8 ONNX model.
+* **Holdout Coverage Verification (`scripts/benchmark_pareto.py`):** Formally asserts that the empirical marginal coverage on the holdout test partition $\mathcal{D}_{\text{test}}$ ($10\%$ split) mathematically satisfies the nominal guarantee:
 
-If empirical coverage falls below $1 - \alpha$ (e.g., $95\%$ when $\alpha = 0.05$), the assertion fails, terminating the runner and preventing the uncalibrated model from reaching production.
+$$\text{Coverage}_{\text{empirical}} = \frac{1}{n_{\text{test}}} \sum_{i=1}^{n_{\text{test}}} \mathbb{I}\left(y_i \in \hat{C}(x_i)\right) \ge 1 - \alpha$$
+
+If empirical test coverage falls below $1 - \alpha$ (e.g., $95\%$ when $\alpha = 0.05$), the assertion fails, terminating the runner and preventing the uncalibrated model from reaching production.
 
 ---
 

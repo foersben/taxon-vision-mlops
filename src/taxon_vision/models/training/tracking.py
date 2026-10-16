@@ -129,10 +129,15 @@ def mlflow_run_scope(
             mlflow.log_param("dvc_dataset_hash", dataset_hash)
 
         try:
+            import os
             import subprocess
 
-            git_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-            git_branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
+            git_sha = os.environ.get("GIT_COMMIT")
+            if not git_sha:
+                git_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+            git_branch = os.environ.get("GIT_BRANCH")
+            if not git_branch:
+                git_branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
             mlflow.set_tag("git.commit_sha", git_sha)
             mlflow.set_tag("git.branch", git_branch)
         except Exception as git_err:
@@ -203,14 +208,14 @@ def _plot_confusion_matrix(
     import matplotlib.pyplot as plt
     from sklearn.metrics import confusion_matrix
 
-    cm = confusion_matrix(val_labels, pred_labels)
+    n_classes = len(class_names)
+    cm = confusion_matrix(val_labels, pred_labels, labels=list(range(n_classes)))
     cm_norm = cm.astype(float) / (cm.sum(axis=1, keepdims=True) + 1e-12)
 
     fig, ax = plt.subplots(figsize=(8, 6), dpi=100)
     cax = ax.imshow(cm_norm, interpolation="nearest", cmap="Blues")
     fig.colorbar(cax)
 
-    n_classes = len(class_names)
     ax.set_xticks(range(n_classes))
     ax.set_xticklabels(class_names, rotation=45, ha="right", fontsize=8)
     ax.set_yticks(range(n_classes))
@@ -379,14 +384,16 @@ def _prepare_model_signature_and_example(
     Returns:
         Tuple of (signature, input_example).
     """
+    import copy
+
+    cpu_model = copy.deepcopy(model).cpu().eval()
     if val_embeddings is not None and val_embeddings.shape[0] > 0:
         sample_size = min(5, val_embeddings.shape[0])
-        sample_input = val_embeddings[:sample_size]
-        model.eval()
+        sample_input = val_embeddings[:sample_size].detach().cpu()
         with torch.no_grad():
-            sample_output = model(sample_input)
-        input_example = sample_input.cpu().numpy()
-        output_example = sample_output.cpu().numpy()
+            sample_output = cpu_model(sample_input)
+        input_example = sample_input.numpy()
+        output_example = sample_output.numpy()
         try:
             from mlflow.models.signature import infer_signature
 
@@ -396,7 +403,7 @@ def _prepare_model_signature_and_example(
             return None, input_example
 
     input_dim = 1280
-    for module in model.modules():
+    for module in cpu_model.modules():
         if isinstance(module, nn.Linear):
             input_dim = module.in_features
             break
@@ -420,23 +427,29 @@ def _log_model_artifact(
     Returns:
         ModelInfo instance on success, or None on failure.
     """
+    import copy
+
+    cpu_model = copy.deepcopy(model).cpu().eval()
+    pip_reqs = ["torch", "numpy", "cloudpickle"]
     try:
         return mlflow.pytorch.log_model(
-            model,
+            cpu_model,
             name="model",
             registered_model_name=model_name,
             signature=signature,
             input_example=input_example,
+            pip_requirements=pip_reqs,
         )
     except Exception:
         try:
             return mlflow.pytorch.log_model(
-                model,
+                cpu_model,
                 name="model",
                 registered_model_name=model_name,
                 signature=signature,
                 input_example=input_example,
                 serialization_format="pickle",
+                pip_requirements=pip_reqs,
             )
         except Exception as err:
             logger.warning("Failed to log model to registry: %s", err)

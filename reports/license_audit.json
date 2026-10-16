@@ -1,0 +1,15 @@
+{
+  "status": "PASSED",
+  "manifest": "data/manifests/dataset_manifest.parquet",
+  "verified_observations": 1740,
+  "violations": 0,
+  "allowed_licenses": [
+    "CC-BY",
+    "CC-BY-NC",
+    "CC-BY-NC-ND",
+    "CC-BY-NC-SA",
+    "CC-BY-ND",
+    "CC-BY-SA",
+    "CC0"
+  ]
+}
