@@ -23,6 +23,7 @@ from typing import Any
 import numpy as np
 import torch
 import torch.nn as nn
+import yaml
 
 from taxon_vision.config import get_settings
 from taxon_vision.models.training.types import EmbeddingSplit
@@ -145,6 +146,49 @@ def get_canonical_pareto_profiles() -> list[ParetoResult]:
     ]
 
 
+def _load_conformal_params(conformal_config_path: Path) -> tuple[float, float, float]:
+    """Parse q_hat, alpha, and nominal_coverage from conformal config."""
+    conf_data: dict[str, Any]
+    if conformal_config_path.suffix in (".yaml", ".yml"):
+        with conformal_config_path.open("r", encoding="utf-8") as f:
+            raw_conf = yaml.safe_load(f)
+        if isinstance(raw_conf, dict) and "calibration" in raw_conf and isinstance(raw_conf["calibration"], dict):
+            conf_data = raw_conf["calibration"]
+        elif isinstance(raw_conf, dict):
+            conf_data = raw_conf
+        else:
+            conf_data = {}
+    else:
+        with conformal_config_path.open("r", encoding="utf-8") as f:
+            loaded_json = json.load(f)
+        conf_data = loaded_json if isinstance(loaded_json, dict) else {}
+
+    q_hat = float(conf_data.get("q_hat", 0.30))
+    alpha = float(conf_data.get("alpha", 0.05))
+    nominal_cov = float(conf_data.get("nominal_coverage", 1.0 - alpha))
+    return q_hat, alpha, nominal_cov
+
+
+def _evaluate_checkpoint_logits(checkpoint_path: Path, embeddings: torch.Tensor) -> np.ndarray:
+    """Compute forward logits from classification head checkpoint."""
+    raw_state = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+    state_dict = raw_state.get("state_dict", raw_state.get("model_state_dict", raw_state))
+    if any(k.startswith("head.") for k in state_dict):
+        state_dict = {k.removeprefix("head."): v for k, v in state_dict.items() if k.startswith("head.")}
+
+    weight_key = "1.weight" if "1.weight" in state_dict else "weight"
+    weight_tensor = state_dict[weight_key]
+    num_classes, feat_dim = weight_tensor.shape[0], weight_tensor.shape[1]
+
+    head = nn.Sequential(nn.Dropout(0.0), nn.Linear(feat_dim, num_classes))
+    head.load_state_dict(state_dict, strict=False)
+    head.eval()
+
+    with torch.no_grad():
+        logits_arr: np.ndarray = head(embeddings).numpy()
+    return logits_arr
+
+
 def _evaluate_holdout_test_set(
     cache_path: Path,
     checkpoint_path: Path,
@@ -156,7 +200,7 @@ def _evaluate_holdout_test_set(
     Args:
         cache_path: Path to cached_features.pt.
         checkpoint_path: Path to trained head checkpoint (.pt).
-        conformal_config_path: Path to conformal_calibration.json.
+        conformal_config_path: Path to conformal configuration YAML or JSON.
         split_name: Target split name ('test' or 'val').
 
     Returns:
@@ -173,27 +217,8 @@ def _evaluate_holdout_test_set(
         embeddings = split.val_embeddings
         labels = split.val_labels
 
-    with conformal_config_path.open("r", encoding="utf-8") as f:
-        conf_data = json.load(f)
-    q_hat = float(conf_data.get("q_hat", 0.30))
-    alpha = float(conf_data.get("alpha", 0.05))
-    nominal_cov = float(conf_data.get("nominal_coverage", 1.0 - alpha))
-
-    raw_state = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
-    state_dict = raw_state.get("state_dict", raw_state.get("model_state_dict", raw_state))
-    if any(k.startswith("head.") for k in state_dict):
-        state_dict = {k.removeprefix("head."): v for k, v in state_dict.items() if k.startswith("head.")}
-
-    weight_key = "1.weight" if "1.weight" in state_dict else "weight"
-    weight_tensor = state_dict[weight_key]
-    num_classes, feat_dim = weight_tensor.shape[0], weight_tensor.shape[1]
-
-    head = nn.Sequential(nn.Dropout(0.0), nn.Linear(feat_dim, num_classes))
-    head.load_state_dict(state_dict, strict=False)
-    head.eval()
-
-    with torch.no_grad():
-        logits = head(embeddings).numpy()
+    q_hat, alpha, nominal_cov = _load_conformal_params(conformal_config_path)
+    logits = _evaluate_checkpoint_logits(checkpoint_path, embeddings)
 
     shifted = logits - np.max(logits, axis=1, keepdims=True)
     exp_logits = np.exp(shifted)
@@ -254,8 +279,8 @@ def main() -> None:
     parser.add_argument(
         "--conformal-config",
         type=Path,
-        default=Path("config/conformal_calibration.json"),
-        help="Path to calibrated conformal configuration JSON",
+        default=Path("config/conformal_config.yaml"),
+        help="Path to calibrated conformal configuration YAML",
     )
     parser.add_argument(
         "--split",

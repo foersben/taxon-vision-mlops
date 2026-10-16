@@ -8,6 +8,7 @@ Usage:
     pixi run --frozen -e dev python scripts/ingest_data.py
 """
 
+import argparse
 import asyncio
 from pathlib import Path
 
@@ -62,11 +63,33 @@ async def main() -> None:
     This function will fetch metadata for the specified taxa and save it to a Parquet file.
     """
     settings = get_settings()
-    taxa_to_fetch = settings.ingestion.taxa_to_fetch
+    parser = argparse.ArgumentParser(description="Ingest observation metadata from iNaturalist into Parquet manifest.")
+    parser.add_argument(
+        "--taxa",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Taxon IDs to fetch observations for (defaults to configured taxa in params.yaml / taxa_catalog.yaml)",
+    )
+    parser.add_argument(
+        "--per-page",
+        type=int,
+        default=settings.ingestion.per_page,
+        help=f"Observations per taxon to retrieve (default: {settings.ingestion.per_page})",
+    )
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=MANIFEST_DIR / "dataset_manifest.parquet",
+        help="Target output Parquet file path",
+    )
+    args = parser.parse_args()
+
+    taxa_to_fetch = args.taxa if args.taxa is not None else settings.ingestion.taxa_to_fetch
     if not taxa_to_fetch:
         catalog = load_taxa_catalog()
         taxa_to_fetch = [int(t["inat_taxon_id"]) for t in catalog if "inat_taxon_id" in t]
-    per_page = settings.ingestion.per_page
+    per_page = args.per_page
 
     inat = INatAPIClient()
     all_records = []
@@ -76,8 +99,8 @@ async def main() -> None:
         all_records.extend(records)
         print(f"Ingested {len(records)} compliant metadata records for taxon {taxon_id}.")
 
-    MANIFEST_DIR.mkdir(parents=True, exist_ok=True)
-    manifest_path = MANIFEST_DIR / "dataset_manifest.parquet"
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path = args.out
 
     # Save directly to high-performance Parquet using Polars
     df = pl.DataFrame(all_records)

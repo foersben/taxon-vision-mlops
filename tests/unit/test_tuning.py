@@ -16,6 +16,7 @@ import torch
 from taxon_vision.models.training.tuning import (
     HyperparameterObjective,
     _log_best_run,
+    _log_optuna_diagnostic_plots,
     _resolve_optuna_storage,
     _setup_mlflow,
     tune_hyperparameters,
@@ -162,3 +163,54 @@ def test_resolve_optuna_storage(tmp_path: Path) -> None:
         assert journal_mode.lower() == "wal"
     finally:
         conn.close()
+
+
+def test_log_optuna_diagnostic_plots_zero_variance(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify _log_optuna_diagnostic_plots safely suppresses param importance on zero variance."""
+    mock_log_figure = MagicMock()
+    monkeypatch.setattr(mlflow, "log_figure", mock_log_figure)
+
+    # Empty study or None study returns cleanly
+    _log_optuna_diagnostic_plots(None)
+    empty_study = optuna.create_study()
+    _log_optuna_diagnostic_plots(empty_study)
+    assert mock_log_figure.call_count == 0
+
+    # Study with identical values (zero variance: all trials 1.0)
+    study = optuna.create_study(direction="maximize")
+    for _ in range(3):
+        trial = study.ask()
+        study.tell(trial, 1.0)
+
+    _log_optuna_diagnostic_plots(study)
+    # plot_optimization_history is called, but plot_param_importances is skipped because len(set) == 1
+    assert mock_log_figure.call_count == 1
+    call_args = mock_log_figure.call_args_list[0]
+    assert "visualizations/optuna_optimization_history.png" in call_args.args[1]
+
+
+def test_tune_hyperparameters_custom_study_and_reset(
+    synthetic_split: EmbeddingSplit,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify tune_hyperparameters honors study_name and reset_study flags."""
+    monkeypatch.setattr("taxon_vision.models.training.tuning._setup_mlflow", lambda _cfg=None: False)
+    monkeypatch.setattr("taxon_vision.models.training.tuning._log_best_run", MagicMock())
+    monkeypatch.setattr("taxon_vision.models.training.tuning._log_optuna_diagnostic_plots", MagicMock())
+
+    cfg = TuningConfig(
+        n_trials=1,
+        epochs_per_trial=1,
+        batch_size=16,
+        seed=42,
+        storage_url=None,
+        study_name="custom_test_study",
+        reset_study=True,
+    )
+    _, study = tune_hyperparameters(
+        data=synthetic_split,
+        num_classes=2,
+        config=cfg,
+    )
+    assert study.study_name == "custom_test_study"
+    assert len(study.trials) == 1

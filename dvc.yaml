@@ -90,23 +90,23 @@ stages:
           remote: origin
 
   calibrate:
-    cmd: python scripts/calibrate_conformal.py --cache-path data/embeddings/cached_features.pt --checkpoint models/checkpoints/head.pt --split cal --out config/conformal_calibration.json --metrics-out reports/conformal_metrics.json
+    cmd: python scripts/calibrate_conformal.py --cache-path data/embeddings/cached_features.pt --checkpoint models/checkpoints/head.pt --split cal --out config/conformal_config.yaml --metrics-out reports/conformal_metrics.json
     deps:
       - data/embeddings/cal_embeddings.pt
       - models/checkpoints/head.pt
       - models/model_int8.onnx
       - scripts/calibrate_conformal.py
     outs:
-      - config/conformal_calibration.json:
+      - config/conformal_config.yaml:
           cache: false
     metrics:
       - reports/conformal_metrics.json:
           cache: false
 
   eval:
-    cmd: python scripts/benchmark_pareto.py --cache-path data/embeddings/cached_features.pt --checkpoint models/checkpoints/head.pt --conformal-config config/conformal_calibration.json --split test --out docs/assets/pareto_results.json --metrics-out reports/pareto_evaluation.json
+    cmd: python scripts/benchmark_pareto.py --cache-path data/embeddings/cached_features.pt --checkpoint models/checkpoints/head.pt --conformal-config config/conformal_config.yaml --split test --out docs/assets/pareto_results.json --metrics-out reports/pareto_evaluation.json
     deps:
-      - config/conformal_calibration.json
+      - config/conformal_config.yaml
       - data/embeddings/test_embeddings.pt
       - models/checkpoints/head.pt
       - scripts/benchmark_pareto.py

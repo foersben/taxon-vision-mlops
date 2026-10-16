@@ -20,6 +20,7 @@ from typing import Any
 import numpy as np
 import torch
 import torch.nn as nn
+import yaml
 
 from taxon_vision.config import get_settings
 from taxon_vision.models.training.types import EmbeddingSplit
@@ -162,7 +163,7 @@ def _save_calibration_artifacts(
     """Save calibration configuration and optional DVC summary metrics to disk.
 
     Args:
-        out_path: Path to target configuration JSON file.
+        out_path: Path to target configuration YAML or JSON file.
         metrics_path: Optional path to target summary metrics JSON file.
         alpha: Error significance parameter.
         q_hat: Calibrated non-conformity quantile.
@@ -171,15 +172,32 @@ def _save_calibration_artifacts(
         empirical_coverage: Empirical coverage rate achieved on calibration samples.
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    calibration_meta: dict[str, Any] = {
-        "alpha": alpha,
-        "nominal_coverage": round(1.0 - alpha, 4),
-        "q_hat": round(q_hat, 4),
-        "tau_ood": round(tau_ood, 4) if tau_ood is not None else None,
-        "num_calibration_samples": sample_size,
-    }
-    with out_path.open("w", encoding="utf-8") as f:
-        json.dump(calibration_meta, f, indent=2)
+    if out_path.suffix in (".yaml", ".yml"):
+        yaml_payload = {
+            "calibration": {
+                "method": "split-conformal",
+                "nominal_coverage": round(1.0 - alpha, 4),
+                "alpha": round(alpha, 4),
+                "q_hat": round(q_hat, 4),
+                "tau_ood": round(tau_ood, 4) if tau_ood is not None else None,
+                "max_set_size_for_auto_accept": 3,
+                "empty_set_action": "route_to_human_triage",
+                "min_confidence_threshold": 0.60,
+                "num_calibration_samples": sample_size,
+            }
+        }
+        with out_path.open("w", encoding="utf-8") as f:
+            yaml.safe_dump(yaml_payload, f, sort_keys=False)
+    else:
+        calibration_meta: dict[str, Any] = {
+            "alpha": alpha,
+            "nominal_coverage": round(1.0 - alpha, 4),
+            "q_hat": round(q_hat, 4),
+            "tau_ood": round(tau_ood, 4) if tau_ood is not None else None,
+            "num_calibration_samples": sample_size,
+        }
+        with out_path.open("w", encoding="utf-8") as f:
+            json.dump(calibration_meta, f, indent=2)
     logger.info("Saved calibration configuration to %s", out_path)
 
     if metrics_path is not None:
@@ -211,8 +229,8 @@ def main() -> None:
     parser.add_argument(
         "--out",
         type=Path,
-        default=Path("config/conformal_calibration.json"),
-        help="Destination path for calibrated conformal configuration JSON",
+        default=Path("config/conformal_config.yaml"),
+        help="Destination path for calibrated conformal configuration YAML",
     )
     parser.add_argument(
         "--metrics-out",

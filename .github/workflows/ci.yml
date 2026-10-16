@@ -44,7 +44,8 @@ jobs:
             AWS_SECRET_ACCESS_KEY="$DAGSHUB_TOKEN" \
             pixi run --frozen -e ci-dev dvc pull \
               models/checkpoints/head.pt \
-              models/checkpoints/model.onnx || true
+              models/checkpoints/model.onnx \
+              models/model_int8.onnx || true
           else
             echo "::notice::DAGSHUB_TOKEN not set in GitHub Actions; running tests with offline fixtures."
           fi
@@ -157,7 +158,10 @@ jobs:
             echo ">>> Fetching latest model checkpoints from DagsHub DVC..."
             AWS_ACCESS_KEY_ID="$DAGSHUB_TOKEN" \
             AWS_SECRET_ACCESS_KEY="$DAGSHUB_TOKEN" \
-            pixi run --frozen -e ci-dev dvc pull models/checkpoints/head.pt models/checkpoints/model.onnx || true
+            pixi run --frozen -e ci-dev dvc pull \
+              models/checkpoints/head.pt \
+              models/checkpoints/model.onnx \
+              models/model_int8.onnx || true
           fi
 
       - name: Set up Docker Buildx

@@ -276,23 +276,25 @@ def _log_optuna_diagnostic_plots(study: optuna.Study | None) -> None:
     import matplotlib.pyplot as plt
     import optuna.visualization.matplotlib as optuna_plt
 
-    try:
-        ax_hist = optuna_plt.plot_optimization_history(study)
-        mlflow.log_figure(ax_hist.figure, "visualizations/optuna_optimization_history.png")
-        plt.close()
-    except Exception as err:
-        logger.debug("Failed to log Optuna optimization history plot: %s", err)
-
-    try:
-        completed_values = [
-            t.value for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE and t.value is not None
-        ]
-        if len(set(completed_values)) > 1:
-            ax_imp = optuna_plt.plot_param_importances(study)
-            mlflow.log_figure(ax_imp.figure, "visualizations/optuna_param_importances.png")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            ax_hist = optuna_plt.plot_optimization_history(study)
+            mlflow.log_figure(ax_hist.figure, "visualizations/optuna_optimization_history.png")
             plt.close()
-    except Exception as err:
-        logger.debug("Failed to log Optuna parameter importance plot: %s", err)
+        except Exception as err:
+            logger.debug("Failed to log Optuna optimization history plot: %s", err)
+
+        try:
+            completed_values = [
+                t.value for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE and t.value is not None
+            ]
+            if len(set(completed_values)) > 1:
+                ax_imp = optuna_plt.plot_param_importances(study)
+                mlflow.log_figure(ax_imp.figure, "visualizations/optuna_param_importances.png")
+                plt.close()
+        except Exception as err:
+            logger.debug("Failed to log Optuna parameter importance plot: %s", err)
 
 
 def _log_best_run(

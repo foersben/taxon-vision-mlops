@@ -199,6 +199,16 @@ dvc-pull:
 	AWS_ACCESS_KEY_ID="$TOKEN" AWS_SECRET_ACCESS_KEY="$TOKEN" \
 	pixi run --frozen -e dev dvc pull
 
+# Display DVC pipeline Directed Acyclic Graph
+[group("mlops")]
+dvc-dag:
+	PAGER=cat pixi run --frozen -e dev dvc dag
+
+# Reproduce DVC pipeline Directed Acyclic Graph
+[group("mlops")]
+dvc-repro:
+	pixi run --frozen -e dev dvc repro
+
 # ── Serving & Web UI ────────────────────────────────────────────────────────
 
 # Start FastAPI inference and HTMX dashboard server with live reload

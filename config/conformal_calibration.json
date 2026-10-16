@@ -1,7 +1,0 @@
-{
-  "alpha": 0.05,
-  "nominal_coverage": 0.95,
-  "q_hat": 0.8879,
-  "tau_ood": -2.0689,
-  "num_calibration_samples": 120
-}

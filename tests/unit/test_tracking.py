@@ -16,9 +16,12 @@ import torch.nn as nn
 
 from taxon_vision.models.training.tracking import (
     _attach_mlflow_artifact_safely,
+    _determine_promotion_alias,
     _end_mlflow_run_safely,
     _get_dvc_dataset_hash,
     _log_mlflow_metrics,
+    _plot_confusion_matrix,
+    _prepare_model_signature_and_example,
     _promote_model_if_better,
     log_training_visualizations,
     mlflow_run_scope,
@@ -328,3 +331,53 @@ def test_log_training_visualizations(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "visualizations/confusion_matrix.png" in artifact_paths
     assert "visualizations/precision_recall_curves.png" in artifact_paths
     assert "visualizations/energy_distribution.png" in artifact_paths
+
+
+def test_determine_promotion_alias_tie_break() -> None:
+    """Verify promotion tie-breaking logic favors replacement on equal or better metrics."""
+    mock_client = MagicMock()
+
+    # Scenario 1: Initial model when no production exists -> Production
+    mock_client.get_model_version_by_alias.side_effect = Exception("No alias")
+    alias = _determine_promotion_alias(mock_client, "taxon_vision_classifier", version="1", pr_auc=0.8500)
+    assert alias == "Production"
+
+    # Scenario 2: Production exists at 0.85. Candidate achieves 0.85 (exact tie) -> Challenger
+    prod_mv = MagicMock()
+    prod_mv.run_id = "run_1"
+    prod_run = MagicMock()
+    prod_run.data.metrics = {"val_promotion_score": 0.8500}
+
+    mock_client.get_model_version_by_alias.side_effect = None
+    mock_client.get_model_version_by_alias.return_value = prod_mv
+    mock_client.get_run.return_value = prod_run
+
+    alias = _determine_promotion_alias(mock_client, "taxon_vision_classifier", version="2", pr_auc=0.8500)
+    assert alias == "Challenger"
+
+    # Scenario 3: Candidate below production (0.75 < 0.85) -> Archived
+    alias = _determine_promotion_alias(mock_client, "taxon_vision_classifier", version="3", pr_auc=0.7500)
+    assert alias == "Archived"
+
+
+def test_prepare_model_signature_and_example_cpu_isolation() -> None:
+    """Verify model is isolated on CPU and input example is NumPy array to prevent PT2 CUDA errors."""
+    model = nn.Sequential(nn.Linear(16, 4))
+    val_embeddings = torch.randn(20, 16)
+
+    signature, example = _prepare_model_signature_and_example(model, val_embeddings)
+
+    # Example must be numpy array with at most 5 rows
+    assert isinstance(example, np.ndarray)
+    assert example.shape == (5, 16)
+    assert signature is not None
+
+
+def test_plot_confusion_matrix_explicit_labels() -> None:
+    """Verify _plot_confusion_matrix builds K x K matrix even when validation split has single label."""
+    y_true = np.zeros(10, dtype=int)
+    y_pred = np.zeros(10, dtype=int)
+    class_names = ["Species 0", "Species 1", "Species 2"]
+
+    fig = _plot_confusion_matrix(y_true, y_pred, class_names)
+    assert fig is not None

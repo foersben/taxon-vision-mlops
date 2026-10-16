@@ -7,6 +7,7 @@ from __future__ import annotations
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import onnxruntime
@@ -143,7 +144,7 @@ def test_export_classifier_cli_with_valid_checkpoint_and_quantization(tmp_path: 
 
 def test_load_head_checkpoint_formats(tmp_path: Path) -> None:
     """Test _load_head_checkpoint with raw, wrapped, and prefixed state dictionaries."""
-    dummy_classifier = nn.Module()
+    dummy_classifier: Any = nn.Module()
     dummy_classifier.head = nn.Sequential(nn.Dropout(0.2), nn.Linear(32, 5))
 
     weight = torch.randn(5, 32)
@@ -202,3 +203,29 @@ def test_onnx_inference_engine(tmp_path: Path) -> None:
     probs = engine.predict(inputs)
     assert probs.shape == (2, 3)
     assert np.allclose(probs.sum(axis=-1), 1.0)
+
+
+def test_export_classifier_cli_quantize_int8(tmp_path: Path) -> None:
+    """Test CLI execution with dynamic INT8 quantization enabled."""
+    out_file = tmp_path / "model.onnx"
+    int8_file = tmp_path / "model_int8.onnx"
+    ret = export_classifier_cli(
+        [
+            "--output",
+            str(out_file),
+            "--quantize-int8",
+            "--quantized-output",
+            str(int8_file),
+            "--extractor",
+            "mobilenetv4_conv_small",
+            "--allow-untrained",
+        ]
+    )
+    assert ret == 0
+    assert out_file.exists()
+    assert int8_file.exists()
+    assert int8_file.stat().st_size > 0
+
+    session = onnxruntime.InferenceSession(str(int8_file), providers=["CPUExecutionProvider"])
+    assert len(session.get_inputs()) == 1
+    assert len(session.get_outputs()) == 2
