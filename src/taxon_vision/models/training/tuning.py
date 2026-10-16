@@ -7,6 +7,8 @@ from __future__ import annotations
 import contextlib
 import logging
 import os
+import sqlite3
+from pathlib import Path
 from typing import Any
 
 import mlflow
@@ -302,6 +304,48 @@ def _log_best_run(
         logger.debug("Failed to log best run to MLflow: %s", err)
 
 
+def _resolve_optuna_storage(storage_uri: str | None) -> str | None:
+    """Resolve and configure Optuna storage backend with SQLite WAL mode.
+
+    Why:
+        Concurrent access between ephemeral Jenkins training pods and the Optuna
+        dashboard on SQLite requires Write-Ahead Logging (WAL) to prevent database
+        locks and corruption. Pre-initializing the SQLite database with WAL mode and
+        normal synchronization enables high-throughput concurrent reads and writes.
+
+    How:
+        1. Returns None if storage_uri is None, empty, or "memory".
+        2. If starting with "sqlite:///", extracts the filesystem path and creates
+           parent directories.
+        3. Opens an SQLite connection with 30s timeout and executes WAL PRAGMAs.
+        4. Returns the storage URI string ready for Optuna study creation.
+
+    Complexity:
+        - time complexity: O(1) file metadata check and database PRAGMA execution.
+        - space complexity: O(1) in-memory connection handle.
+
+    Args:
+        storage_uri: Target database URI or None.
+
+    Returns:
+        Configured database URI or None for in-memory studies.
+    """
+    if not storage_uri or storage_uri == "memory":
+        return None
+    if storage_uri.startswith("sqlite:///"):
+        db_path = storage_uri[len("sqlite:///") :]
+        target_path = Path(db_path).resolve()
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(target_path), timeout=30.0)
+        try:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA synchronous=NORMAL;")
+        finally:
+            conn.close()
+        return storage_uri
+    return storage_uri
+
+
 def tune_hyperparameters(
     data: EmbeddingSplit,
     num_classes: int,
@@ -333,13 +377,17 @@ def tune_hyperparameters(
         A tuple `(best_params, study)` of the best configuration and the Optuna study.
     """
     cfg = config or TuningConfig()
+    settings = get_settings()
     mlflow_available = _setup_mlflow(cfg)
+
+    storage_uri = _resolve_optuna_storage(cfg.storage_url or settings.optuna.optuna_storage_uri)
+    study_prefix = settings.optuna.optuna_study_prefix
 
     sampler = optuna.samplers.TPESampler(seed=cfg.seed)
     pruner = optuna.pruners.SuccessiveHalvingPruner(min_resource=2, reduction_factor=2)
     study = optuna.create_study(
-        study_name=f"tuning_{cfg.extractor_name}",
-        storage=cfg.storage_url,
+        study_name=f"{study_prefix}_{cfg.extractor_name}",
+        storage=storage_uri,
         load_if_exists=True,  # Warm-starts from prior runs!
         direction="maximize",
         sampler=sampler,

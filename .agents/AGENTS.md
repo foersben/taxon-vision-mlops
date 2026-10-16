@@ -10,7 +10,7 @@ generated: {by: process:okf-updater, at: "2026-10-02T10:00:00Z"}
 verified: {by: process:okf-updater, at: "2026-10-02T10:00:00Z"}
 ---
 
-Primary routing table for AI IDEs defining roles in `.agents/roles/` and core constraints.
+Primary routing table for AI IDEs defining roles in `.agents/roles/` and core constraints. See root `AGENTS.md` for the fast module-to-test routing matrix and token-optimal execution protocol.
 
 ## Core Architecture Constraints
 

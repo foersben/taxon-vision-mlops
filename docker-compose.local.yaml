@@ -12,7 +12,16 @@ services:
       MINIO_ROOT_PASSWORD: minioadmin
     command: server /data --console-address ":9001"
     volumes:
-      - minio_data:/data
+      - ./data/minio:/data
+
+  optuna-dashboard:
+    image: ghcr.io/optuna/optuna-dashboard:latest
+    container_name: taxon_optuna_dashboard
+    ports:
+      - "8080:8080"
+    command: ["sqlite:////optuna/optuna_studies.db", "--port", "8080", "--host", "0.0.0.0"]
+    volumes:
+      - ./data/optuna:/optuna
 
   prometheus:
     image: prom/prometheus:latest
@@ -39,6 +48,5 @@ services:
       - prometheus
 
 volumes:
-  minio_data:
   prometheus_data:
   grafana_data:

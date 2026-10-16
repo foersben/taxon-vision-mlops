@@ -237,7 +237,14 @@ visualize-okf:
 # Update OpenWiki documentation and reconcile grounded claims
 [group("docs")]
 wiki-update:
-	openwiki code --update
+    @echo "Fetching credentials from KeePassXC via Secret Service..."
+    OPENWIKI_PROVIDER="gemini" \
+    OPENWIKI_MODEL_ID="gemini-3.8-flash" \
+    GOOGLE_API_KEY=$(secret-tool lookup service openwiki key google_api_key) \
+    LANGCHAIN_API_KEY=$(secret-tool lookup service openwiki key langsmith_api_key) \
+    LANGSMITH_API_KEY=$(secret-tool lookup service openwiki key langsmith_api_key) \
+    LANGCHAIN_TRACING_V2="true" \
+    openwiki code --update
 
 # Validate OKF v0.2 structural integrity for .agents/ and openwiki/
 [group("docs")]
@@ -248,6 +255,8 @@ wiki-validate:
 [group("docs")]
 wiki-viz:
 	pixi run python scripts/visualize_okf.py
+
+
 
 # ── Utilities ───────────────────────────────────────────────────────────────
 

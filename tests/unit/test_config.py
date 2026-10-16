@@ -11,8 +11,10 @@ import pytest
 from taxon_vision.config import Settings, get_settings
 
 
-def test_default_settings_loading() -> None:
+def test_default_settings_loading(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify default system settings are populated from configuration YAML."""
+    monkeypatch.delenv("TAXON_OPTUNA_STORAGE_URI", raising=False)
+    get_settings.cache_clear()
     settings = get_settings()
     assert isinstance(settings, Settings)
     assert settings.model.image_size == 224

@@ -1,0 +1,5 @@
+openwiki/.claims/
+docs/latex/**/*.pdf
+pixi.lock
+dvc.lock
+src/taxon_vision/service/static/js/htmx.min.js
