@@ -25,12 +25,14 @@ This document tracks the current implementation status of the project against th
 ### Phase 2 (Microservices, Tracking & Versioning): 100% Done
 
 * ✅ S3 streaming feature extraction pipeline (`extract_features.py`) and cached representation training.
-* ✅ DVC pipeline foundation (`dvc.yaml` & `dvc.lock`) with DagsHub S3 remote (`s3://dvc`).
+* ✅ DVC pipeline foundation: unified 7-stage DAG (`dvc.yaml` & `dvc.lock`) with dual remotes (`local-seaweedfs` and `origin`).
+* ✅ In-Cluster High-Throughput Storage: SeaweedFS (Apache 2.0) object store with sub-2ms Haystack needle lookups and dynamic bucket provisioning.
 * ✅ Ephemeral in-memory secret retrieval via KeePassXC and Linux Secret Service (`just dvc-push`).
 * ✅ MLflow integration on DagsHub (logging run metrics, compound PR-AUC scores, and registry promotion).
+* ✅ Persistent Bayesian Telemetry: Optuna SQLite WAL backend with real-time web dashboard on NodePort `30081`.
 * ✅ Containerization & Publishing: Multi-stage non-root `Dockerfile` with automated GHCR publication (`ghcr.io/foersben/taxon-vision-mlops:latest`).
 * ✅ Kubernetes Deployment: `k3s` manifests with 4-replica NVIDIA GPU time-slicing and live ingress at `https://taxon.benjamin-foerster.eu/`.
-* ✅ Automated Continuous Delivery: Jenkins pipeline on `hive-mind` with ephemeral k3s agent pods, GPU time-slicing slot, NVMe Rattler caching, and rolling rollout.
+* ✅ Automated Continuous Delivery: Jenkins pipeline on `hive-mind` with ephemeral k3s agent pods, GPU time-slicing slot, NVMe Rattler caching, rolling rollout, and post-deployment smoke test.
 
 ### Phase 3 (Monitoring & Maintenance): ~60% Done
 

@@ -16,7 +16,7 @@ verified: {by: process:agent-jules, at: "2026-10-10T17:30:00Z"}
 
 The local development environment requires initialization of the dependent infrastructure and application services.
 
-Start the local infrastructure stack (MinIO, Prometheus, Grafana) via Docker Compose:
+Start the local infrastructure stack (SeaweedFS, Prometheus, Grafana) via Docker Compose:
 
 ```bash
 docker compose -f docker-compose.local.yaml up -d
@@ -88,7 +88,7 @@ The architectural breakdown details how TaxonVision-MLOps scales across data hor
 | --- | --- | --- | --- |
 | Dev Baseline (Current) | 518 observations, 10 taxa | Local SQLite & disk cache | Rapid offline unit/conformal testing |
 | Horizon 1 (Pilot Perimeter) | ~5,000 observations, 10 curated target taxa | Single GPU training, DVC versioning on DagsHub | Strict CC-BY/CC0 verification |
-| Horizon 2 (Regional Production) | ~50,000 observations, 100 taxa | Multi-GPU Distributed Data Parallel (DDP), S3/MinIO bucket versioning | Automated concept drift detection |
+| Horizon 2 (Regional Production) | ~50,000 observations, 100 taxa | Multi-GPU Distributed Data Parallel (DDP), S3/SeaweedFS bucket versioning | Automated concept drift detection |
 | Horizon 3 (Global Scale) | 100,000+ exemplars, ~50 TB raw imagery | Distributed zero-copy streaming with Ray Data and PyTorch WebDataset, fine-tuning foundation vision backbones (DINOv2, BioCLIP-2) | Conformal calibration on stratified holdouts |
 
 ## Section 6: Cluster Bootstrapping vs. Continuous Delivery Lifecycle
@@ -100,6 +100,7 @@ The deployment infrastructure separates Day-0 cluster prerequisites from Day-2 c
     * Applied once by cluster administrators using `kubectl apply`:
         * [deploy/k8s/jenkins-agent-rbac.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/jenkins-agent-rbac.yaml): Provisions `jenkins-ci` and `taxon-vision` namespaces, machine ServiceAccount `jenkins-agent`, and RBAC bindings.
         * [deploy/k8s/nvidia-time-slicing-config.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/nvidia-time-slicing-config.yaml): Partitions the physical RTX 5070 Ti into 4 virtual GPU slices in `kube-system`.
+        * [deploy/k8s/mlops-storage-and-optuna.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/mlops-storage-and-optuna.yaml): Provisions the in-cluster SeaweedFS object store (ports 8333 S3, 8888 Filer, 9333 Master, 8080 Volume) and the persistent Optuna SQLite telemetry dashboard (`NodePort 30081`).
     * Storing these manifests in Git provides Infrastructure as Code (IaC) without requiring repetitive manual execution.
 * **Day-2 Continuous Delivery (Automated via Jenkins):**
     * Operates entirely within the CI/CD pipeline triggered by Git commits and PR events.
@@ -193,3 +194,61 @@ When commits merge to `main`, GitHub Actions (`.github/workflows/ci.yml`) execut
     * `ghcr.io/foersben/taxon-vision-mlops:latest` (stable production tracking tag)
     * `ghcr.io/foersben/taxon-vision-mlops:sha-<short_sha>` (immutable commit-bound tag)
 * **Kubernetes Consumption:** The Kubernetes deployment manifest ([deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml)) specifies `ghcr.io/foersben/taxon-vision-mlops:latest` with `imagePullPolicy: Always`, ensuring that pod rollout restarts immediately pull and activate the newly published release.
+
+## Section 10: In-Cluster Storage & Optuna Telemetry Administration
+
+Operating a self-contained bare-metal MLOps cluster requires ongoing management of persistent storage volumes and Bayesian optimization state.
+
+### SeaweedFS Operational Management
+
+The in-cluster SeaweedFS service (`chrislusf/seaweedfs:latest`) manages the high-throughput DVC cache and triage queue on the host NVMe filesystem:
+
+* **Topology and Status Inspection:** Operators can verify cluster master status and volume allocation via HTTP API:
+
+    ```bash
+    curl -s http://192.168.178.30:9333/dir/status | jq .
+    ```
+
+* **Filer Directory Cataloging:** Inspect declarative bucket roots directly through the Filer gateway:
+
+    ```bash
+    curl -s http://192.168.178.30:8888/buckets/ | jq .
+    ```
+
+* **Dynamic Bucket Provisioning:** If new storage tiers are required, buckets are created instantaneously via idempotent HTTP POST requests without container reboots:
+
+    ```bash
+    wget -q -O - --post-data="" "http://192.168.178.30:8888/buckets/new-bucket-name/?op=mkdir"
+    ```
+
+* **Volume Garbage Collection & Vacuuming:** Over prolonged retraining iterations, deleted or superseded intermediate embeddings create fragmented volume space. SeaweedFS allows online compaction:
+
+    ```bash
+    curl -s "http://192.168.178.30:9333/vol/vacuum?garbageThreshold=0.3"
+    ```
+
+* **S3 Endpoint Verification:** The S3 gateway listens on port `8333` in the cluster (`http://seaweedfs.taxon-vision.svc.cluster.local:8333`). Verification from adjacent pods or the host is executed via standard AWS CLI tools:
+
+    ```bash
+    AWS_ACCESS_KEY_ID=taxonadmin AWS_SECRET_ACCESS_KEY=taxonpassword \
+      aws --endpoint-url=http://192.168.178.30:8333 s3 ls
+    ```
+
+### Optuna Telemetry Dashboard Administration
+
+Hyperparameter optimization telemetry is persisted across pipeline runs to prevent search space loss:
+
+* **Web UI Access:** The Optuna dashboard is accessible on the local network at:
+
+    ```text
+    http://192.168.178.30:30081/
+    ```
+
+* **Database Verification on Host:** The database resides on the host at `/var/lib/taxon-vision/optuna/optuna_studies.db`. Operators can verify that Write-Ahead Logging (`WAL`) is active:
+
+    ```bash
+    sqlite3 /var/lib/taxon-vision/optuna/optuna_studies.db "PRAGMA journal_mode;"
+    # Output: wal
+    ```
+
+* **Concurrent Access Integrity:** WAL mode guarantees that the web dashboard process (reading historical trials) does not acquire exclusive database locks that could stall active training jobs on the GPU.
