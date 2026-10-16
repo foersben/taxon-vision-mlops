@@ -1,0 +1,10 @@
+{
+  "status": "completed",
+  "extractor": "dinov3",
+  "epochs_trained": 1,
+  "final_train_loss": 2.1921,
+  "final_val_loss": 1.9875,
+  "final_val_accuracy": 0.5083,
+  "duration_seconds": 1.391,
+  "promotion_status": null
+}

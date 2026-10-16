@@ -1,40 +1,102 @@
 stages:
   ingestion:
-    cmd: pixi run --frozen -e dev python scripts/ingest_data.py
+    cmd: python scripts/ingest_data.py
     deps:
       - scripts/ingest_data.py
       - src/taxon_vision/data/inat_client.py
       - src/taxon_vision/data/license_filter.py
     params:
-      - config/params.yaml:
-        - ingestion.taxa_to_fetch
-        - ingestion.per_page
+      - ingestion.taxa_to_fetch
+      - ingestion.per_page
     outs:
       - data/manifests
+
+  audit_license:
+    cmd: python scripts/audit_license_compliance.py --manifest data/manifests/dataset_manifest.parquet --out reports/license_audit.json
+    deps:
+      - data/manifests
+      - scripts/audit_license_compliance.py
+    metrics:
+      - reports/license_audit.json:
+          cache: false
+
   extract_features:
-    cmd: pixi run --frozen -e dev python -m taxon_vision.pipelines.extract_features --extractor dinov3 --manifest data/manifests/dataset_manifest.parquet --out data/embeddings/cached_features.pt
+    cmd: python -m taxon_vision.pipelines.extract_features --extractor ${model.extractor} --image-size ${model.image_size} --batch-size ${feature_extraction.batch_size} --val-split ${feature_extraction.val_split} --cal-split ${feature_extraction.cal_split} --test-split ${feature_extraction.test_split} --manifest data/manifests/dataset_manifest.parquet --out data/embeddings/cached_features.pt
     deps:
       - data/manifests
       - src/taxon_vision/pipelines/extract_features.py
+    params:
+      - model.extractor
+      - model.image_size
+      - feature_extraction.batch_size
+      - feature_extraction.val_split
+      - feature_extraction.cal_split
+      - feature_extraction.test_split
     outs:
       - data/embeddings/cached_features.pt:
           remote: local-minio
-          push: false
+          push: true
+
   train:
-    cmd: pixi run --frozen -e dev python -m taxon_vision.models.trainer --epochs 5 --extractor dinov3
+    cmd: python -m taxon_vision.models.training.runner --extractor ${model.extractor} --epochs ${training.epochs} --batch-size ${training.batch_size} --lr ${training.learning_rate} --cache-path data/embeddings/cached_features.pt --checkpoint-path models/checkpoints/head.pt --require-cache --metrics-out reports/train_metrics.json
     deps:
-      - data/manifests
-      - src/taxon_vision/models/
+      - data/embeddings/cached_features.pt
+      - src/taxon_vision/models/training/
+      - src/taxon_vision/models/loss.py
     params:
-      - config/params.yaml:
-        - training.epochs
-        - training.extractor
+      - model.extractor
+      - training.epochs
+      - training.batch_size
+      - training.learning_rate
+      - training.weight_decay
+      - training.cb_beta
     outs:
-      - models/checkpoints/head.pt
-  export_onnx:
-    cmd: pixi run --frozen -e dev python -m taxon_vision.inference.onnx_exporter
+      - models/checkpoints/head.pt:
+          remote: origin
+    metrics:
+      - reports/train_metrics.json:
+          cache: false
+
+  export:
+    cmd: python -m taxon_vision.inference.onnx_exporter --extractor ${model.extractor} --image-size ${model.image_size} --checkpoint models/checkpoints/head.pt --output models/checkpoints/model.onnx --quantize-int8 --quantize-mode dynamic --quantized-output models/model_int8.onnx
     deps:
       - models/checkpoints/head.pt
       - src/taxon_vision/inference/onnx_exporter.py
+      - src/taxon_vision/inference/quantizer.py
+    params:
+      - model.extractor
+      - model.image_size
+      - export.quantize_int8
     outs:
-      - models/checkpoints/model.onnx
+      - models/checkpoints/model.onnx:
+          remote: origin
+      - models/model_int8.onnx:
+          remote: origin
+
+  calibrate:
+    cmd: python scripts/calibrate_conformal.py --cache-path data/embeddings/cached_features.pt --checkpoint models/checkpoints/head.pt --split cal --out config/conformal_calibration.json --metrics-out reports/conformal_metrics.json
+    deps:
+      - data/embeddings/cached_features.pt
+      - models/checkpoints/head.pt
+      - models/model_int8.onnx
+      - scripts/calibrate_conformal.py
+    outs:
+      - config/conformal_calibration.json:
+          cache: false
+    metrics:
+      - reports/conformal_metrics.json:
+          cache: false
+
+  eval:
+    cmd: python scripts/benchmark_pareto.py --cache-path data/embeddings/cached_features.pt --checkpoint models/checkpoints/head.pt --conformal-config config/conformal_calibration.json --split test --out docs/assets/pareto_results.json --metrics-out reports/pareto_evaluation.json
+    deps:
+      - data/embeddings/cached_features.pt
+      - models/checkpoints/head.pt
+      - config/conformal_calibration.json
+      - scripts/benchmark_pareto.py
+    outs:
+      - docs/assets/pareto_results.json:
+          cache: false
+    metrics:
+      - reports/pareto_evaluation.json:
+          cache: false

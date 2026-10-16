@@ -115,61 +115,121 @@ DagsHub provisions a unified cloud control plane that mirrors the primary GitHub
 
 ### 4.2 Pipeline DAG Specification (`dvc.yaml` & `dvc.lock`)
 
-Rather than relying on isolated shell scripts, data processing workflows are structured as a formal Directed Acyclic Graph (DAG) declared in [dvc.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/dvc.yaml):
+Rather than relying on isolated shell scripts or fragmented workflows, TaxonVision coordinates its end-to-end training and calibration lifecycle as an unbroken, 7-stage Directed Acyclic Graph (DAG) declared in [dvc.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/dvc.yaml):
 
 ```yaml
 stages:
   ingestion:
-    cmd: pixi run --frozen -e dev python scripts/ingest_data.py
+    cmd: python scripts/ingest_data.py
     deps:
       - scripts/ingest_data.py
       - src/taxon_vision/data/inat_client.py
       - src/taxon_vision/data/license_filter.py
     params:
-      - config/params.yaml:
-        - ingestion.taxa_to_fetch
-        - ingestion.per_page
+      - ingestion.taxa_to_fetch
+      - ingestion.per_page
     outs:
       - data/manifests
+
+  audit_license:
+    cmd: python scripts/audit_license_compliance.py --manifest data/manifests/dataset_manifest.parquet --out reports/license_audit.json
+    deps:
+      - data/manifests
+      - scripts/audit_license_compliance.py
+    metrics:
+      - reports/license_audit.json:
+          cache: false
+
+  extract_features:
+    cmd: python -m taxon_vision.pipelines.extract_features --extractor ${model.extractor} --image-size ${model.image_size} --batch-size ${feature_extraction.batch_size} --val-split ${feature_extraction.val_split} --cal-split ${feature_extraction.cal_split} --test-split ${feature_extraction.test_split} --manifest data/manifests/dataset_manifest.parquet --out data/embeddings/cached_features.pt
+    deps:
+      - data/manifests
+      - src/taxon_vision/pipelines/extract_features.py
+    params:
+      - model.extractor
+      - model.image_size
+      - feature_extraction.batch_size
+      - feature_extraction.val_split
+      - feature_extraction.cal_split
+      - feature_extraction.test_split
+    outs:
+      - data/embeddings/cached_features.pt:
+          remote: local-minio
+          push: true
+
+  train:
+    cmd: python -m taxon_vision.models.training.runner --extractor ${model.extractor} --epochs ${training.epochs} --batch-size ${training.batch_size} --lr ${training.learning_rate} --cache-path data/embeddings/cached_features.pt --checkpoint-path models/checkpoints/head.pt --require-cache --metrics-out reports/train_metrics.json
+    deps:
+      - data/embeddings/cached_features.pt
+      - src/taxon_vision/models/training/
+      - src/taxon_vision/models/loss.py
+    params:
+      - model.extractor
+      - training.epochs
+      - training.batch_size
+      - training.learning_rate
+      - training.weight_decay
+      - training.cb_beta
+    outs:
+      - models/checkpoints/head.pt:
+          remote: origin
+    metrics:
+      - reports/train_metrics.json:
+          cache: false
+
+  export:
+    cmd: python -m taxon_vision.inference.onnx_exporter --extractor ${model.extractor} --image-size ${model.image_size} --checkpoint models/checkpoints/head.pt --output models/checkpoints/model.onnx --quantize-int8 --quantize-mode dynamic --quantized-output models/model_int8.onnx
+    deps:
+      - models/checkpoints/head.pt
+      - src/taxon_vision/inference/onnx_exporter.py
+      - src/taxon_vision/inference/quantizer.py
+    params:
+      - model.extractor
+      - model.image_size
+      - export.quantize_int8
+    outs:
+      - models/checkpoints/model.onnx:
+          remote: origin
+      - models/model_int8.onnx:
+          remote: origin
+
+  calibrate:
+    cmd: python scripts/calibrate_conformal.py --cache-path data/embeddings/cached_features.pt --checkpoint models/checkpoints/head.pt --split cal --out config/conformal_calibration.json --metrics-out reports/conformal_metrics.json
+    deps:
+      - data/embeddings/cached_features.pt
+      - models/checkpoints/head.pt
+      - models/model_int8.onnx
+      - scripts/calibrate_conformal.py
+    outs:
+      - config/conformal_calibration.json:
+          cache: false
+    metrics:
+      - reports/conformal_metrics.json:
+          cache: false
+
+  eval:
+    cmd: python scripts/benchmark_pareto.py --cache-path data/embeddings/cached_features.pt --checkpoint models/checkpoints/head.pt --conformal-config config/conformal_calibration.json --split test --out docs/assets/pareto_results.json --metrics-out reports/pareto_evaluation.json
+    deps:
+      - data/embeddings/cached_features.pt
+      - models/checkpoints/head.pt
+      - config/conformal_calibration.json
+      - scripts/benchmark_pareto.py
+    outs:
+      - docs/assets/pareto_results.json:
+          cache: false
+    metrics:
+      - reports/pareto_evaluation.json:
+          cache: false
 ```
 
-The pipeline topology enforces cryptographic lineage across three elements:
+### 4.3 Multi-Remote Routing & Lineage Guarantees
 
-* **Inputs and Dependencies (`deps`):** DVC DAG execution requires detailed dependency tracking for source scripts, configuration, and data artifacts. Source scripts and library modules responsible for observation retrieval and validation must be declared.
-* **Configuration Parameters (`params`):** Parameter subsets in `config/params.yaml` defining target taxon IDs and ingestion volume.
-* **Outputs (`outs`):** Destination directories containing generated dataset manifests (`data/manifests`), tracked by content hashes in [dvc.lock](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/dvc.lock).
+The unified pipeline topology establishes a strict dual-remote distribution strategy:
 
-### 4.3 Why DVC Tracks Code Dependencies
-
-A primary design principle of DVC is that it does not duplicate Git's responsibilities, but extends them to maintain mathematical data-to-code lineage:
-
-* **Separation of Responsibilities:**
-    * Git manages source code revision history, file diffs, branches, and author identity.
-    * DVC does not version or store source code copies. Instead, it computes and records cryptographic MD5 checksums over designated source files inside `dvc.lock`.
-* **Code-to-Data Lineage Guarantee:**
-    * A dataset manifest (`data/manifests/dataset_manifest.parquet`) is the deterministic mathematical output of the ingestion code executed against external API inputs.
-    * If the HTTP query logic in `inat_client.py` changes, or if the license acceptance rules in `license_filter.py` are altered, the downstream dataset is no longer valid for that pipeline state.
-    * Tracking code modules as stage dependencies guarantees that modifications to transformation logic immediately invalidate the cached stage output.
-
-### 4.4 Status Evaluation & Lifecycle Semantics
-
-When developers modify source files declared in the `deps` block, DVC detects hash discrepancies between the active filesystem and the recorded state in `dvc.lock`:
-
-```text
-ingestion:
-    changed deps:
-        modified: src/taxon_vision/data/inat_client.py
-        modified: src/taxon_vision/data/license_filter.py
-```
-
-This diagnostic indicates that the pipeline DAG has entered an unverified state:
-
-* **Stage Reproduction (`dvc repro`):**
-    * Re-executes the ingestion command, runs the updated client and filter logic, produces a fresh `data/manifests` directory, and writes updated dependency and output hashes into `dvc.lock`.
-    * Utilized when code changes intentionally modify data ingestion semantics or filtering rules.
-* **Checksum Synchronization (`dvc commit`):**
-    * Updates the MD5 checksums of the modified source files in `dvc.lock` without re-running the ingestion command or overwriting existing manifests.
-    * Utilized when source modifications are cosmetic or structural (such as type annotations, docstrings, or logging tweaks) that do not alter the underlying data output.
+* **Ephemeral High-Throughput Cache (`local-minio`):** Intermediate representations (`data/embeddings/cached_features.pt`) are routed to the in-cluster MinIO pod deployed in `namespace: taxon-vision` on the bare-metal `hive-mind` host (`http://minio.taxon-vision.svc.cluster.local:9000`). This ensures zero cloud egress costs, multi-gigabyte local NVMe throughput, and eliminates re-streaming images across Optuna HPO trials.
+* **Cryptographic Release Remote (`origin` DagsHub S3):** Serialized checkpoints (`models/checkpoints/head.pt`), base ONNX graphs (`models/checkpoints/model.onnx`), and quantized runtime artifacts (`models/model_int8.onnx`) are pushed to DagsHub S3 for immutable version tracking and team distribution.
+* **Native DVC Metrics Integration:** Evaluation reports (`reports/train_metrics.json`, `reports/conformal_metrics.json`, `reports/pareto_evaluation.json`, `reports/license_audit.json`) are tagged as uncached DVC metrics, enabling direct comparison, visualization, and diffing in both CLI (`dvc metrics diff`) and web dashboards (DagsHub Magenta nodes).
+* **Code-to-Data Lineage Guarantee:** Tracking source code modules, scripts, and `params.yaml` directly in `deps` ensures that any modification to preprocessing, model architecture, or calibration logic immediately invalidates downstream stages upon running `dvc repro`.
 
 ---
 

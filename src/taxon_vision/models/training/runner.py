@@ -857,3 +857,7 @@ def _save_metrics_json(metrics_out: str | None, result: dict[str, Any]) -> None:
     with metrics_file.open("w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
     logger.info("Saved training summary metrics to %s", metrics_file)
+
+
+if __name__ == "__main__":
+    sys.exit(train_cli())

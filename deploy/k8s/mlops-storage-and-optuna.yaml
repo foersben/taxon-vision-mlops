@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: minio
-  namespace: default
+  namespace: taxon-vision
   labels:
     app.kubernetes.io/name: minio
     app.kubernetes.io/part-of: taxon-vision-mlops
@@ -37,6 +37,17 @@ spec:
         volumeMounts:
         - name: minio-storage
           mountPath: /data
+      - name: create-buckets
+        image: minio/mc:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          until (/usr/bin/mc alias set local http://localhost:9000 minioadmin minioadmin); do echo 'Waiting for MinIO...'; sleep 1; done;
+          /usr/bin/mc mb --ignore-existing local/taxon-dvc-cache;
+          /usr/bin/mc mb --ignore-existing local/triage-queue;
+          echo 'Buckets created successfully';
+          sleep infinity;
       volumes:
       - name: minio-storage
         hostPath:
@@ -47,7 +58,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: minio
-  namespace: default
+  namespace: taxon-vision
   labels:
     app.kubernetes.io/name: minio
     app.kubernetes.io/part-of: taxon-vision-mlops
@@ -67,7 +78,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: optuna-dashboard
-  namespace: default
+  namespace: taxon-vision
   labels:
     app.kubernetes.io/name: optuna-dashboard
     app.kubernetes.io/part-of: taxon-vision-mlops
@@ -106,7 +117,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: optuna-dashboard
-  namespace: default
+  namespace: taxon-vision
   labels:
     app.kubernetes.io/name: optuna-dashboard
     app.kubernetes.io/part-of: taxon-vision-mlops

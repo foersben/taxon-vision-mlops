@@ -5,4 +5,4 @@
     endpointurl = https://dagshub.com/foersben/taxon-vision-mlops.s3
 ['remote "local-minio"']
     url = s3://taxon-dvc-cache
-    endpointurl = http://minio.default.svc.cluster.local:9000
+    endpointurl = http://minio.taxon-vision.svc.cluster.local:9000

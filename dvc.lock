@@ -1,12 +1,12 @@
 schema: '2.0'
 stages:
   ingestion:
-    cmd: pixi run --frozen -e dev python scripts/ingest_data.py
+    cmd: python scripts/ingest_data.py
     deps:
     - path: scripts/ingest_data.py
       hash: md5
-      md5: 252699c9b9439376ffff4c510e27a1fe
-      size: 2833
+      md5: c6b4b0738ad55c0479fdf15d69d2cefc
+      size: 3021
     - path: src/taxon_vision/data/inat_client.py
       hash: md5
       md5: 6f925d7c31fd3d16da8bc5640ca4c470
@@ -16,41 +16,62 @@ stages:
       md5: 9d53e65484b212283079875587a0dca3
       size: 5367
     params:
-      config/params.yaml:
+      params.yaml:
         ingestion.per_page: 200
         ingestion.taxa_to_fetch:
-        - 47120
-        - 47119
-        - 47114
+        - 48662
+        - 47219
+        - 12727
+        - 8229
+        - 47602
+        - 57983
+        - 47144
+        - 42069
+        - 48715
+        - 48701
     outs:
     - path: data/manifests
       hash: md5
-      md5: e1ead79bbe4bac3b0b80cf0d11a68d6b.dir
-      size: 10745
+      md5: 627a1552646c5234c8b8dea0ea3be31b.dir
+      size: 35187
       nfiles: 1
   train:
-    cmd: pixi run --frozen -e dev python -m taxon_vision.models.trainer --epochs
-      5 --extractor mobilenetv4_conv_small
+    cmd: python -m taxon_vision.models.training.runner --extractor dinov3
+      --epochs 5 --batch-size 32 --lr 0.001 --cache-path
+      data/embeddings/cached_features.pt --checkpoint-path
+      models/checkpoints/head.pt --require-cache --metrics-out
+      reports/train_metrics.json
     deps:
-    - path: data/manifests
+    - path: data/embeddings/cached_features.pt
       hash: md5
-      md5: e1ead79bbe4bac3b0b80cf0d11a68d6b.dir
-      size: 10745
-      nfiles: 1
-    - path: src/taxon_vision/models/
+      md5: 6e0144f2e715942a1a992e4faffc88a8
+      size: 927405
+    - path: src/taxon_vision/models/loss.py
       hash: md5
-      md5: e31797a4f470fae574f0d89bb6bde411.dir
-      size: 198939
-      nfiles: 31
+      md5: 4dd8752c1fddcc6b7018a84c781216bd
+      size: 4953
+    - path: src/taxon_vision/models/training/
+      hash: md5
+      md5: bfa2518ddb833760d7b55f6f6ba6a49d.dir
+      size: 227219
+      nfiles: 16
     params:
-      config/params.yaml:
+      params.yaml:
+        model.extractor: dinov3
+        training.batch_size: 32
+        training.cb_beta: 0.9999
         training.epochs: 5
-        training.extractor: dinov3
+        training.learning_rate: 0.001
+        training.weight_decay: 0.0001
     outs:
     - path: models/checkpoints/head.pt
       hash: md5
-      md5: df3cd9c31a7b7ced889df2b078daea6f
-      size: 17229
+      md5: adade9481a11fe931bcf3d377acbc335
+      size: 17101
+    - path: reports/train_metrics.json
+      hash: md5
+      md5: b575c13d6a7a5d87b516da32a389e2f3
+      size: 222
   export_onnx:
     cmd: pixi run --frozen -e dev python -m taxon_vision.inference.onnx_exporter
     deps:
@@ -67,3 +88,144 @@ stages:
       hash: md5
       md5: ed951135700c0f5966b9d8caa1c983d0
       size: 9966524
+  audit_license:
+    cmd: python scripts/audit_license_compliance.py --manifest
+      data/manifests/dataset_manifest.parquet --out reports/license_audit.json
+    deps:
+    - path: data/manifests
+      hash: md5
+      md5: 627a1552646c5234c8b8dea0ea3be31b.dir
+      size: 35187
+      nfiles: 1
+    - path: scripts/audit_license_compliance.py
+      hash: md5
+      md5: 51dbe3eb673a9c2d41096989c874667e
+      size: 5278
+    outs:
+    - path: reports/license_audit.json
+      hash: md5
+      md5: dee6e8f4b5e4a1d8ee052aec3bb8904d
+      size: 272
+  extract_features:
+    cmd: python -m taxon_vision.pipelines.extract_features --extractor dinov3
+      --image-size 224 --batch-size 32 --val-split 0.1 --cal-split 0.1
+      --test-split 0.1 --manifest data/manifests/dataset_manifest.parquet --out
+      data/embeddings/cached_features.pt
+    deps:
+    - path: data/manifests
+      hash: md5
+      md5: 627a1552646c5234c8b8dea0ea3be31b.dir
+      size: 35187
+      nfiles: 1
+    - path: src/taxon_vision/pipelines/extract_features.py
+      hash: md5
+      md5: 65d8fc3ad2f1164d4d9d2bc00ca3b3ab
+      size: 30532
+    params:
+      params.yaml:
+        feature_extraction.batch_size: 32
+        feature_extraction.cal_split: 0.1
+        feature_extraction.test_split: 0.1
+        feature_extraction.val_split: 0.1
+        model.extractor: dinov3
+        model.image_size: 224
+    outs:
+    - path: data/embeddings/cached_features.pt
+      hash: md5
+      md5: 6e0144f2e715942a1a992e4faffc88a8
+      size: 927405
+  export:
+    cmd: python -m taxon_vision.inference.onnx_exporter --extractor dinov3
+      --image-size 224 --checkpoint models/checkpoints/head.pt --output
+      models/checkpoints/model.onnx --quantize-int8 --quantize-mode dynamic
+      --quantized-output models/model_int8.onnx
+    deps:
+    - path: models/checkpoints/head.pt
+      hash: md5
+      md5: adade9481a11fe931bcf3d377acbc335
+      size: 17101
+    - path: src/taxon_vision/inference/onnx_exporter.py
+      hash: md5
+      md5: 06984bf210e51c580c6c840c539d18ac
+      size: 15792
+    - path: src/taxon_vision/inference/quantizer.py
+      hash: md5
+      md5: a608e96508c4c0340bca3fec7140e38c
+      size: 14036
+    params:
+      params.yaml:
+        export.quantize_int8: true
+        model.extractor: dinov3
+        model.image_size: 224
+    outs:
+    - path: models/checkpoints/model.onnx
+      hash: md5
+      md5: df46025e37ea6567c41e30b82c2f12a1
+      size: 86641254
+    - path: models/model_int8.onnx
+      hash: md5
+      md5: 6616a4abe5c9cfb7a731eb4a63e50298
+      size: 23310024
+  calibrate:
+    cmd: python scripts/calibrate_conformal.py --cache-path
+      data/embeddings/cached_features.pt --checkpoint models/checkpoints/head.pt
+      --split cal --out config/conformal_calibration.json --metrics-out
+      reports/conformal_metrics.json
+    deps:
+    - path: data/embeddings/cached_features.pt
+      hash: md5
+      md5: 6e0144f2e715942a1a992e4faffc88a8
+      size: 927405
+    - path: models/checkpoints/head.pt
+      hash: md5
+      md5: adade9481a11fe931bcf3d377acbc335
+      size: 17101
+    - path: models/model_int8.onnx
+      hash: md5
+      md5: 6616a4abe5c9cfb7a731eb4a63e50298
+      size: 23310024
+    - path: scripts/calibrate_conformal.py
+      hash: md5
+      md5: 246e000435c096590fad01ee10f74762
+      size: 10356
+    outs:
+    - path: config/conformal_calibration.json
+      hash: md5
+      md5: 3d5da74360df2414fc7014f4a7818c71
+      size: 123
+    - path: reports/conformal_metrics.json
+      hash: md5
+      md5: 4dfc5ea4ed20689093d17790fc54f1bb
+      size: 167
+  eval:
+    cmd: python scripts/benchmark_pareto.py --cache-path
+      data/embeddings/cached_features.pt --checkpoint models/checkpoints/head.pt
+      --conformal-config config/conformal_calibration.json --split test --out
+      docs/assets/pareto_results.json --metrics-out
+      reports/pareto_evaluation.json
+    deps:
+    - path: config/conformal_calibration.json
+      hash: md5
+      md5: 3d5da74360df2414fc7014f4a7818c71
+      size: 123
+    - path: data/embeddings/cached_features.pt
+      hash: md5
+      md5: 6e0144f2e715942a1a992e4faffc88a8
+      size: 927405
+    - path: models/checkpoints/head.pt
+      hash: md5
+      md5: adade9481a11fe931bcf3d377acbc335
+      size: 17101
+    - path: scripts/benchmark_pareto.py
+      hash: md5
+      md5: 26b983102a6e717298460b5cf64a772d
+      size: 12298
+    outs:
+    - path: docs/assets/pareto_results.json
+      hash: md5
+      md5: 01883e0eee52e782412cd9c7092ada60
+      size: 2147
+    - path: reports/pareto_evaluation.json
+      hash: md5
+      md5: 0eb495a91fa55e9f7e0d0ad38e0825d0
+      size: 329

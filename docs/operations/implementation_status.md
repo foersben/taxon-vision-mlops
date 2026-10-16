@@ -49,6 +49,7 @@ If the project requires strictly adhering to the remaining requirements, here is
 ### 1. DVC to version datasets and store hashes in MLflow (1-2 Hours)
 
 * ✅ **Completed:** The `_init_mlflow_run` method in the training pipeline now directly parses `dvc.lock` (bypassing Git entirely as required) to extract the true DVC `md5` dataset hash and logs it as `dvc_dataset_hash` in MLflow.
+* ✅ **Completed (Phase 3 DAG Modernization):** Modernized `dvc.yaml` into an unbroken 7-stage single-trunk DAG (`ingestion`, `audit_license`, `extract_features`, `train`, `export`, `calibrate`, `eval`) with multi-remote storage (`local-minio` for high-throughput embedding caches and `origin` DagsHub S3 for model releases), automated bucket initialization sidecar in Kubernetes (`deploy/k8s/mlops-storage-and-optuna.yaml`), uncached metrics tracking, and root symlinked `params.yaml`.
 
 ### 2. Docker-based microservices using `docker-compose` (2-3 Hours)
 
