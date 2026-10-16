@@ -309,7 +309,7 @@ The system implements a production two-layer CI/CD architecture:
 For local development and debugging, a `docker-compose.local.yaml` is provided at the
 repository root. It spins up the infrastructure components that cannot run inside Pixi:
 
-* **MinIO** (ports `9000` / `9001`) - S3-compatible local object store for DVC remotes
+* **SeaweedFS** (ports `8333` / `9333` / `8888`) - S3-compatible local object store for DVC remotes
   and S3 streamer development without hitting real AWS.
 * **Prometheus** (port `9090`) - scrapes the local FastAPI `/metrics` endpoint at
   `host.docker.internal:8000`. Configuration lives in `config/prometheus.yaml`.

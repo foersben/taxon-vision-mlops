@@ -34,7 +34,7 @@ stages:
       - feature_extraction.test_split
     outs:
       - data/embeddings/cached_features.pt:
-          remote: local-minio
+          remote: local-seaweedfs
           push: true
 
   train:

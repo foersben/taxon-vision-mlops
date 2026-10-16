@@ -511,17 +511,19 @@ spec:
             git config --global --add safe.directory "*"
             pixi install --frozen -e dev
 
-            # Configure local MinIO credentials for DVC cache
-            pixi run --frozen -e dev dvc config --local remote.local-minio.access_key_id minioadmin
-            pixi run --frozen -e dev dvc config --local remote.local-minio.secret_access_key minioadmin
+            # Configure local SeaweedFS credentials for DVC cache
+            pixi run --frozen -e dev dvc config --local remote.local-seaweedfs.access_key_id taxonadmin
+            pixi run --frozen -e dev dvc config --local remote.local-seaweedfs.secret_access_key taxonadmin
 
             # Prime cached embeddings from host volume tier if available
             mkdir -p data/embeddings
             if [ ! -f "data/embeddings/cached_features.pt" ]; then
               if [ -f "/var/lib/taxon-vision/embeddings/cached_features.pt" ]; then
+                echo ">>> Found cached features on host tier; priming data/embeddings/cached_features.pt..."
                 cp -f /var/lib/taxon-vision/embeddings/cached_features.pt data/embeddings/cached_features.pt
-              elif kubectl get service minio -n taxon-vision >/dev/null 2>&1; then
-                pixi run --frozen -e dev dvc pull -r local-minio data/embeddings/cached_features.pt || true
+              elif kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
+                echo ">>> Attempting feature cache retrieval from in-cluster SeaweedFS (local-seaweedfs)..."
+                pixi run --frozen -e dev dvc pull -r local-seaweedfs data/embeddings/cached_features.pt || echo "Cache pull from local-seaweedfs skipped; will generate via DVC pipeline."
               fi
             fi
 
@@ -541,9 +543,10 @@ spec:
               cp -f data/embeddings/cached_features.pt /var/lib/taxon-vision/embeddings/cached_features.pt
             fi
 
-            # Push embedding cache to local MinIO if reachable
-            if kubectl get service minio -n taxon-vision >/dev/null 2>&1; then
-              pixi run --frozen -e dev dvc push -r local-minio data/embeddings/cached_features.pt
+            # Push embedding cache to local SeaweedFS if reachable
+            if kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
+              echo ">>> Synchronizing feature cache to in-cluster SeaweedFS (local-seaweedfs)..."
+              pixi run --frozen -e dev dvc push -r local-seaweedfs data/embeddings/cached_features.pt
             fi
 
             # Push release checkpoints and INT8 models to DagsHub S3 remote (origin)
