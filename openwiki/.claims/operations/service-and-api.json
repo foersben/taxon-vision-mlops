@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:8914f0d3173262ae17ccd184c63f269d2517cc68a3de9cccf72f9a0209810b70",
+  "claims": [
+    {
+      "id": "claim_163f91bc2af946ea88050867374b5cc0",
+      "statement": "The FastAPI ASGI application root instantiates a unified service that mounts routes for health monitoring, species prediction, model head retraining, visual CAM explanation, and server-rendered Jinja2/HTMX dashboard views, alongside static styling assets.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/service/api.py#L19-L41",
+          "version": "repo-lines-v1:sha256:e944f743f8a96a788989d266b8292c84593854e7cbd554698e5181f50fb93022:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2NDk0Mzg1Mzc2YjExNDVmMTExOGNjZmJlZTdkYjE4YzM4MzkzNTcyMGQwYWZmOWI4OTcxODEyY2ViYWU5NDIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM2MmNiOTkzOTU0MWU1MGU1ZDA1ZDY4MGZkMzM5YTdjOTlhNWU3YTYxOTFhNzY4ZTc4ZDhiZjc1ODJmNzU1ZDQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjUyY2NjNWYxN2ZjMTM3M2FjYjU4YjMzYTViY2Y5ODM5ZDkwNmQ0NWVjYjAyZmMxY2IyNzliNWMwNTM4N2ZlODUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f2044b6942f14757921079a794a7b50e",
+      "statement": "The species prediction routes (/predict and /api/v1/predict) enforce payload validation by rejecting empty uploads with HTTP 422 and payloads exceeding max_image_upload_bytes with HTTP 413, offloading synchronous inference to an AnyIO threadpool worker.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/service/inference.py#L274-L298",
+          "version": "repo-lines-v1:sha256:ad23e95bffa6af2154c0eb043ad507ebce122dcbb99f73afe5f52387f5267b49:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVjOWJmY2VmYmQyZDJhN2M5YTQ5MmYwNGNkMjg1ZTljZTViZmY4Y2ZlZDJmOTZiMTgyYTQ5NzczN2M2NDk4MzUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhjYzRhN2QxY2M3OTZhYmEzZTQ2NzIzMzI3ZjUxN2U5ZjgxMTk4MmQyNTBmMDcwMjk4NmU0YjU3NjRhZDk1ODkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBlNDg2ZjA3YTIxMWMxODlkMzhjNWY0MGQ5NTAzZjliOTBiZDgyYTE4NTMyYWQ1MWJiNzVmZDNiZDhjYTgzZmMifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/service/routes/predict.py#L93-L150",
+          "version": "repo-lines-v1:sha256:0eea74efe5f90d9ec23d0b4fefd723aea53656567bca94beeaa963c67faf140d:eyJzZWxlY3RlZExpbmVDb3VudCI6NTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFhODEzOTc1ZDk3YWQzOGQ5YzkxZTQ4NGMzODU2Y2IwZjQ4MzM5OGE3MDVmM2E3NGE5ODk5MTE0YmRmY2QxZDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkwNWMxZTZhYmVkNmM0ZjFhYzNiMzdhOTRlZDBlMWExNThiZWIyMWI0ZTVlNzIwY2EyMmMwODZmM2Y0MDQ1MmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhjYzRhN2QxY2M3OTZhYmEzZTQ2NzIzMzI3ZjUxN2U5ZjgxMTk4MmQyNTBmMDcwMjk4NmU0YjU3NjRhZDk1ODkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjIxOTA5ZDMxYjQyODI2MGQ1OWViMThjMzFmNjhkNDAwZWU4NjMwOTg0NWJiNTYxMTkwNWU2NmE5ZDhiM2U2MzQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_553e84febb88434799457525edbb5ba9",
+      "statement": "Prediction results are serialized into PredictionResponse payloads containing the top-1 TaxonPrediction, secondary candidates from the conformal set with distributed remaining confidence, conformal ambiguity flags, OOD indicators, and execution latency.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/service/routes/predict.py#L24-L90",
+          "version": "repo-lines-v1:sha256:1acd2c8218b6ace2bf7b98fff572b583ac253c9eebaa26dcbdb4af8c23453779:eyJzZWxlY3RlZExpbmVDb3VudCI6NjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY2ZGExOWEwNjJlNzYyYWNkMGNhYTcyYjE0YjI4NjAxZDBlNjIzMTllODBkMDVlYTVkMDQ4YTA1MmZhMmU4YWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwYzFmMTg4ZjE0MmVkN2E4MjQ2ODBiMjA3MTcyYzU1MTliYzYxNGE0OGZkYTdjZjE2N2VkYjhkZGY3OTk1NmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjAzOTMwNDYxZTJhYmFiOTdjOTA1MmExOGMyZDgzOWUzMzAwM2E4N2EwOTJkZGU2MDc0ZTA5MGU4NWM2ZjUwZTQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM1NDM2YzYyOThlMWJhMTJiMTA1NmZjOGE2OTI3NDViMWVmZTAwMGU2YzY5OGY0N2FmNTdiODNlZDE5MzVhZjQifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/service/schemas.py#L10-L46",
+          "version": "repo-lines-v1:sha256:51f5a4d229186daa2365d5c59928f1860213805b7fa570ade006c6cdeaca73be:eyJzZWxlY3RlZExpbmVDb3VudCI6MzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZmMzUzODI3OWJkMDc2YWUxNGQ3NzYzOTdmNjgwODBmZDljYmZlMTBiZWM1NjJjNzRkYzgyMTU2YWI3YWU0NTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU0MDEwYmNmM2Q3ZDIwOTcyYjY4Yjc3MmQ0NmUxMzEyZDI1NWU5YjhmZWNhMjVmMTQ2ODQ0OTMwNzAyYWJkYjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQxYzBhYzQwOTAxYWU3ZjRiZWYyODYzYmEzZWU5Yjk3NWM1MjBmNjM0NDBkYzg1YWZlMzkwODQ2MTc3YzA3NjMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8e3d8e24581e4219b165b82241227e41",
+      "statement": "When an observation is flagged as out-of-distribution or requires human review during prediction, the service atomically persists dense feature embeddings to an .npy file, decision metadata to a JSON artifact, and appends the record to manifest.jsonl.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/service/routes/predict.py#L152-L155",
+          "version": "repo-lines-v1:sha256:daa47eb5148d614f08194717dba6d45096d67886ac31989f06bdc2508e1dfbbf:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjQyMjNiNWYzM2FkYWIxZTgxMWQwMGM2ZmFjZTM2Mzc3MTIzZjJhNDA4OGZkYzU3NmJjZGY3ZmY0NGRiNzU0NSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODY4MjEyODEwY2JhZWVmZWExYTIyNzdjNmQ1Mjg3MTU0ZTIyNjY2MTMwYTU0YjZlNzAzNzZmYjUzYTc1YWIxYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDRhMGE4MGY4MzIxM2JlNGQyZDJhNzI3MTFiY2FiMmJmYjhlNjQ3ODA3ZTY4NzhhMTUxY2Q2YWI4NGE0ZDE0NSJ9"
+        },
+        {
+          "resource": "repo://src/taxon_vision/service/storage.py#L21-L92",
+          "version": "repo-lines-v1:sha256:820a3f09ade8622209e5becb835c1efc7d6208453ef4ea921c99fa41791e8267:eyJzZWxlY3RlZExpbmVDb3VudCI6NzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVlMTlkMmMyYzg2Njk3YjZkZTVmMmY1NDE5NTZjZmVhN2Q1YmRjMGM5YzA1Y2Q4Y2JhMGNkMDFlNDk5YzRiZGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU4MzkzZjQ0NjFiNWQ4ZDk4YWFkYjRhY2U4YWNiOTlkMDc1OGM4ZjMwOTAyMDI3ZmNmZWZhMGJiMjEzZjRkNDQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYyMDA5N2U0YWE1MDA2OGJhMTU3ZjlhMjczOWZhZDg2OTk1ZTFlMGNkY2NkYWRjNTg5N2MyMDM0Yzc0ZDNlZmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_09243eaa46a1461aa134dc689ecde3ba",
+      "statement": "The visual explanation route (/api/v1/explain) computes Class Activation Maps using forward spatial projection and bilinear resizing in an AnyIO worker thread to satisfy sub-25ms latency constraints and forward-only INT8 ONNX runtime limitations.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/service/routes/explain.py#L39-L81",
+          "version": "repo-lines-v1:sha256:f3923b63da43cbef1a31e1868bf6554724c09695890e5ba9ea91c070c985fea8:eyJzZWxlY3RlZExpbmVDb3VudCI6NDMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkZmNjM2FhMGVhYWM0NmQ0MzE3NWJjNTZmOWE4YjFlODc0MTRlYmMzMjg1MjViN2E0MTdlNTk1NjY3NDVmMjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgxMDA0ZGFhYzBmMzRjNzE2NGI3NGQwYzg1ODc2YmYxYWEzNjNhYThkODkzYzg5Nzg0NzUyNWY5NTE3NTY2NDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdmNTU4ZTFhMGRiMGE1NzkzNmZhZjZlOTg4ZTg5YTg5ZjliNzAxNmEzNWQ0YmYwM2IwNjM3ZWNhM2Q1YTk0YjgifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/service/routes/explain.py#L83-L133",
+          "version": "repo-lines-v1:sha256:b800c9caaafcf193c4d68093dfedcb8059f9613b734a625d32d48b21d0c13cff:eyJzZWxlY3RlZExpbmVDb3VudCI6NTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFiM2Y4YTgzMGFhZjI0MTVlNTg0MGZlOGY0MjE5ZDNlNjQ1ZTNkMDA3MTQ3YmEyZDM2NDZjMDBjMWRlODQ2YmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwYzFmMTg4ZjE0MmVkN2E4MjQ2ODBiMjA3MTcyYzU1MTliYzYxNGE0OGZkYTdjZjE2N2VkYjhkZGY3OTk1NmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQzODdjMDkyOGQ3Y2ZjOWZjMzJjZjcyMDdkYjQyZmRhNTY4OTA5ZGJjNTk5Y2QwODhjZGQ1OTNiMDJmZmI5NDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ca980b8e2a0c484a8ca81a5047b0a4d3",
+      "statement": "Model head retraining endpoints (/training and /train) support dual execution modes: immediate background dispatch via FastAPI BackgroundTasks when background=True returning a started status, or non-blocking threadpool execution awaiting completion and returning validation metrics when background=False.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/service/routes/train.py#L19-L108",
+          "version": "repo-lines-v1:sha256:51e7c3ef3baa185223c9da6ed9ff08a4a04289e7e7d22d74c53802e2cf08aaef:eyJzZWxlY3RlZExpbmVDb3VudCI6OTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1MzI2OTVmZjkxMTMzNTM5M2YyZWMyMjNmYWE0OWMwZTFjNTJjNDU2YzQ3MmU0ZWE0MzkzYmRkMTNmZDgxOTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwYzFmMTg4ZjE0MmVkN2E4MjQ2ODBiMjA3MTcyYzU1MTliYzYxNGE0OGZkYTdjZjE2N2VkYjhkZGY3OTk1NmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkxNzMxMGZiZGFiM2E3ZjZiMGZlOTc3ZTRjMGUwMWJhMjAzNjIyOTJkMWIzNTE0ZTZiMzNlNDgwNDQ1ZGU5NWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/service/schemas.py#L48-L90",
+          "version": "repo-lines-v1:sha256:db844b10def1b173885fe998f236a8c4049b11f3bf4eb4e0fb5067c31ab51849:eyJzZWxlY3RlZExpbmVDb3VudCI6NDMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVlNzVlZTNiZjQxNDQ3MmMzYjc5ZWYxNzU5ZTY1OTY4YmY3ODdiOGVhNDY3ZTRmZGZlNjgyNDkyOGE3M2NhOGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBkZTEwOTgxMmZjMWE2NjMxZDAyYjg1MWQyMzE4NmNmZTQwZjM1MjBiYjk3ODQwMGFlZGViMmE0MDRjNDE3NjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVlNjk3NzBmNzQ2ZTZkMzUxZGUzN2Q3YWY0MjVhYmY2MzRlYzRlMjdkOGM0NzA2NjY1NDVhYjA4MDMxMDY0Y2YiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_26c9414693f04e75af3adfb83083cee0",
+      "statement": "Orchestration probes decouple liveness from readiness, where /health performs a zero-I/O in-memory status check, while /health/ready validates taxa catalogue loading and serving model initialization, returning HTTP 503 if any dependency check fails.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/service/inference.py#L173-L201",
+          "version": "repo-lines-v1:sha256:320c434c4c75f765155f88cb7f5ab05ed667306a211e23109208c9d42328a951:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRkMjM2NzYzNjIyMTg2ZTI1M2EyZjY2NzNiZjcwZDAzYzE3YjMzNTdkYWEzZTFmZDNkZTUzYzg2MGI4NDM1ZTkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2OWQxMzg3OGE0OWM5MWJlY2JlNWVjMzAzMTU2YzE4MDA0OWU0MDBjZDhlNTEwMGRiY2I0N2M0YmVkZjQ1ZmEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5NjIzODViMzcwNDkxNTk5ZTQ1ZWI3NzFhM2IyZDU1MjQwYzdkYWQ0M2FmYjJiNGVkNmFkZTQxYjY5ODY3YjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRiYTY0OGMxNjI3ZDg5ZjM5YTQwNTVkZDA5NTZjZjBlZTQyYjZiZGJjYjRlYjdmZWI2MTdhMmQyMzk2NzE0YzEifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/service/routes/health.py#L16-L67",
+          "version": "repo-lines-v1:sha256:4129143be446b048de1227680de21b1169ef768a312ac59293e15d53cc5a21f7:eyJzZWxlY3RlZExpbmVDb3VudCI6NTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY4YzA3NThmZmY3MTI3OWIzODBjMzIwOTE5ZGNkM2VhYzkzMzA4ZjY5MzgyZTY0NWQ3Zjg4ODliOTkzMzk5YTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA0OGY4ZTBmZjEyYWE3ZTAyNmIyYWJlZjllMzJmZmU2MmZlNTE4OThkMDlhNjRlODZmNzk5NDNiOTZhY2QyMmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM5OWEwNWU2M2UzMDI4ZDMyYTAxYmViNzQxZTliOWJhZTI4OTFlMzljOTc0NTg4MWNkYzQzMGE4N2IxODMxODEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_9291b95b1a8644028bb2784916fd8c32",
+      "statement": "The server-side rendered dashboard provides an HTMX-driven hypermedia cockpit where / renders the upload view and POST /ui/predict-htmx returns HTML partial cards with conformal set badges, latency metrics, and OOD or expert triage warning banners.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/service/routes/views.py#L24-L117",
+          "version": "repo-lines-v1:sha256:4bf4f449cb227cadbd821eb917ccf09d4c70be26f0801192f34b37ff095e192a:eyJzZWxlY3RlZExpbmVDb3VudCI6OTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY2Njc0YmVjOGM2ZjUzNzlmMmY4YzRkMDY1NWVlNzRmMTg3NWZkNGI4NTc2Mjg4NDM0NDc2ODRhMTJhMjUwODgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgyZTc5OWE4OWJiMGI4OGVlM2I1NzU1YTk5NTJjMmU3MjNhMWI2MTIwMmQxMjQ1MGIyODY0YmU5NjhkMDljOWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE2NjA1OTA1OWU1NWI5ZWU4NzU2NTllN2U0Y2Y3ZmMxZjY3MGNhMzNmMDU1YTg5ZjRhYjhmNDM1NjE3ZDI1OGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/service/templates/index.html#L8-L28",
+          "version": "repo-lines-v1:sha256:8fe9f4f9810924c219ba080a48630cea2fbed3d1c279a2e11207b9ff750fd31a:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNmNmU2MTZjMzNhMTMxYWU4OTE1YTMyMDFiMzE4ZjE3YWQ0OTVlMWRjYTZlMTM1ZWFhNmIwZDBiNjE1ZDQ0NzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJmZDJiOTNmOTMwOTIzNWUwYWE1NDgzZDU5NTNjY2YzZWE4MTU0ZTgzYzc5ZjBmNjljMDc5MzlmMDFhMmI3M2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVmNTZhNWI5MTlhMDQ0ZGUxZDcyZDc3MjFiNDllNTNkMTdjMzRmM2JkMTZmODk2ODY5NDI1YjExZDdjMmMzZDQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIwNmRjNGNiNjY3OGM1MTE5ZWRhZDFjNjUyN2ZjZjMyNWUwNTg3NmZjMWRhNWIzZTA2NmI5ZjExZjA3N2U2MTYifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/service/templates/partials/prediction_card.html#L1-L36",
+          "version": "repo-lines-v1:sha256:e9d92a05fa6fc4dec14dbf87b32322193ac0646b63bebe57ceadb61ba34c3e76:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2MGIyYTEyZDQ0NTk4ZTEwNGNmODE3Y2I0ZDMxOTQzNzUyYzg5ZmEyNDE3NzFiMmZhODA4NjdjNGY1ZTQ2YjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVlYjUxNjU4YzRmZjAzNWZlY2RlYjRjMjY5ZWZiMmQzM2E2N2FjOTkyOGEyYTZjMmQyZDlhMTQ2MzBhMGVjMzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a85e1e5350d945ff89f0449c2cb012cf",
+      "statement": "The inference execution pipeline evaluates both Helmholtz free energy and Shannon entropy to detect out-of-distribution observations, and queries a pre-calibrated split-conformal prediction engine to flag ambiguous or empty prediction sets for human triage.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/service/inference.py#L367-L438",
+          "version": "repo-lines-v1:sha256:fd8891dc37f050746324aa63bc7dc88f7275f3b578dd9e0b5ebd42d6172910a1:eyJzZWxlY3RlZExpbmVDb3VudCI6NzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk3MTZmNTAwMjQxZThkNjVlMzJhMDFjNmRmNGQ3OTQwMjUwYjQ2MGNlY2NlYmI5YmIxNzAzNjZkMzIwMzlkNWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI0N2E1YzIyMGU4NWY3NjNlZmE2NzJkZGI4NzJhZjg0Nzg0NGZhNzZjZDRiNjdjMjQ5NDUzMDM5NDExMzY5NGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-15T19:46:36.219Z"
+  }
+}

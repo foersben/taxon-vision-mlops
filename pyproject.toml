@@ -59,7 +59,7 @@ packages = ["src/taxon_vision"]
 target-version = "py312"
 line-length = 120
 force-exclude = true
-extend-exclude = [".pixi", "scratch", "notebooks", "site"]
+extend-exclude = [".pixi", "scratch", "notebooks", "site", "openwiki"]
 cache-dir = ".cache/ruff_cache"
 
 [tool.ruff.lint]
@@ -138,6 +138,7 @@ scikit-learn = ">=1.6.0"
 optuna = ">=4.1.0"
 mlflow = ">=3.16.0,<4"
 onnx = ">=1.23.2,<2"
+optuna-dashboard = ">=0.21.0,<0.22"
 
 [tool.pixi.feature.gpu.dependencies]
 cuda-version = "12.*"

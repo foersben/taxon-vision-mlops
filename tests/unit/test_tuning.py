@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import sqlite3
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import mlflow
@@ -14,6 +16,7 @@ import torch
 from taxon_vision.models.training.tuning import (
     HyperparameterObjective,
     _log_best_run,
+    _resolve_optuna_storage,
     _setup_mlflow,
     tune_hyperparameters,
 )
@@ -123,7 +126,7 @@ def test_tune_hyperparameters_fast(synthetic_split: EmbeddingSplit, monkeypatch:
     monkeypatch.setattr("taxon_vision.models.training.tuning._setup_mlflow", lambda _cfg=None: False)
     monkeypatch.setattr("taxon_vision.models.training.tuning._log_best_run", MagicMock())
 
-    cfg = TuningConfig(n_trials=1, epochs_per_trial=1, batch_size=16, seed=42)
+    cfg = TuningConfig(n_trials=1, epochs_per_trial=1, batch_size=16, seed=42, storage_url=None)
     best_params, study = tune_hyperparameters(
         data=synthetic_split,
         num_classes=2,
@@ -133,3 +136,29 @@ def test_tune_hyperparameters_fast(synthetic_split: EmbeddingSplit, monkeypatch:
     assert "lr" in best_params
     assert "weight_decay" in best_params
     assert len(study.trials) == 1
+
+
+def test_resolve_optuna_storage(tmp_path: Path) -> None:
+    """Verify _resolve_optuna_storage handles memory, paths, and SQLite WAL pragmas."""
+    assert _resolve_optuna_storage(None) is None
+    assert _resolve_optuna_storage("") is None
+    assert _resolve_optuna_storage("memory") is None
+
+    # PostgreSQL / non-sqlite URI returned as-is
+    pg_uri = "postgresql://user:pass@localhost:5432/optuna_db"
+    assert _resolve_optuna_storage(pg_uri) == pg_uri
+
+    # SQLite URI creates directory and configures WAL mode
+    db_file = tmp_path / "studies" / "sub" / "optuna.db"
+    sqlite_uri = f"sqlite:///{db_file}"
+
+    resolved = _resolve_optuna_storage(sqlite_uri)
+    assert resolved == sqlite_uri
+    assert db_file.exists()
+
+    conn = sqlite3.connect(str(db_file))
+    try:
+        journal_mode = conn.execute("PRAGMA journal_mode;").fetchone()[0]
+        assert journal_mode.lower() == "wal"
+    finally:
+        conn.close()

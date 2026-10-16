@@ -1,0 +1,188 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:cb54eeb2e62e2596bf7ff9f37404e94fa80f9613dceec3ed3fca34ec3ed353ed",
+  "claims": [
+    {
+      "id": "claim_005722403a184426affb9e867c93d059",
+      "statement": "create_feature_extractor instantiates frozen pre-trained vision foundation backbones via timm with classification heads removed (num_classes=0), all parameter gradients locked (requires_grad=False), and evaluation mode active, only substituting a lightweight un-pretrained model when allow_fallback is True.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/models/factory.py#L30-L71",
+          "version": "repo-lines-v1:sha256:1351318405a4174aea8f312a40b337172317fd334a2aaad99922467474be4c92:eyJzZWxlY3RlZExpbmVDb3VudCI6NDIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ2N2QyNjk3Y2VjMTFiYzJmOWYxYmZmMGRkMDNhNzQ0YWU3ZTU1NGViMDUxY2U0MjYyNmNjMWJlOTBjYWNhNmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY3OTg5MjY2MGFkN2JjMjkxYTYwOTdkN2Q2MjU5ZTU3ZmI0Njg2NjdhYjc5Mjc3Yzc2YTJiZmI5YmQ0MTNmOTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMzODhjOTZjZmI2ZjEwNWJiZDEwMGZlZDI2MWRlZTA2MTZkMDYzYmRkM2ZjNzE5ZmZhYTlkZTA4YWZlYzMxNDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJlNGI2MGE0YzkwMmVjNDY3MmZlZTQ4MmE1YTdjYzRmMTAxYmU1Mzk0YTVmZTQ5YzM2ZTBmYzQ1NGM5NzY1ZGIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_82f7b60e18b94c99862128e75377b5ef",
+      "statement": "get_feature_dimension deterministically determines the output feature embedding dimension of a backbone by executing a single-sample zero tensor forward pass in torch.inference_mode() without hardcoding architectural widths.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/models/factory.py#L74-L102",
+          "version": "repo-lines-v1:sha256:cbe7d713e87257977feb18175a45651a00b236195c41e3c2e40d51bd0675d25b:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNhOTQ4ZjZmNDI2NjdkZGVmNDlmNjEzZjM2YzM0NTQ5ZmRhYjIyY2RlMmM5MmE5OGY3M2FhZGY5OWVlNzhiYjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI2YTE4YTNiMGYxNGRiNGQ1NmI0ZGFmMGFhMjgyYTVkMTM5OTE2NDk2OWFlZGY4OTdhYmM2YzIyM2YzYjU5ZDIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjljYTg1OTUzMTU3Y2NiM2E1NzE2OWViMWE0MTcxOGJiNWMyMTljNjg3N2E4YTcyM2ZhNDAwYmFiZmVjOWRlNDEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5cd7c1343dd944718233ffd7d87dd47a",
+      "statement": "TaxonClassifier wraps a frozen vision foundation backbone with a trainable dropout and linear classification head sequence, providing separate forward pathways for image feature extraction, direct representation projection, end-to-end evaluation, and dual-output logit and embedding emission.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/models/head.py#L53-L163",
+          "version": "repo-lines-v1:sha256:fcaf485e42ffb019ca9c967d7f1f7b2df5b05415b0af64eb4d3b4893ca2deae1:eyJzZWxlY3RlZExpbmVDb3VudCI6MTExLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI0MmQxNjgyNDE4MmUxNTJlZTczYTg5YjYxY2ExY2QyODcyY2I3ZTM0ZjFjYWJiMjBlMGZmOWM4NjczNjc0OWY5IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI5ZTg3Zjg0YTI1M2U3ZDVlZjdiMmM0ZTliN2YwMTgxNWYwNGI5Y2E5ZjBmZTM1MjExMTg4NmYzMGRjYTUyNGYwIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI5NDJmYjAyM2MxYjJjMWYxZGEwZDIxM2UzYzA4NjBjMzc4NWE4YjBlNmI1ODU4Y2MxMGNiN2YwMjhiZmM0ZjU4IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MCwiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_663798e2c4f34be2bdb25b7d28df2473",
+      "statement": "load_head_checkpoint restores trained classification head state dictionaries onto CPU with strict shape matching and automatically strips leading head. prefixes from state dictionary keys.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/models/head.py#L24-L51",
+          "version": "repo-lines-v1:sha256:f4b6e339d3e8403e9eea1b27c0dd06db2c5f4228864d93c0c0d99291382bc0c3:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFmMzRjMzUwNGEwYWI0MWVjOTkzMzAzZTY5ZjkyY2EzN2YzZTlmYWQ0ODhkZmIzOGZiNjNmNmQ3MmMyYTBhMGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE0MTJkODZiY2MwZmRmYzkyM2EwNGEyNDIyMzg4NzUyNTZkODVhYWYxNDYzNDY2OGY2N2QxNjU4ZmY4MTdmODIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFjMzFhOGIyYTUwNjRjNzgzMWY3MDE4YTk1MWFiMzc1ZTM4YWM1OTQwYzYxMGMwYTA2NDFmMjE0NjE1NzllODYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ad544fccfd28487b9899cb71523a9991",
+      "statement": "ClassBalancedLoss weights cross-entropy by the inverse effective number of samples E_n = (1 - beta^n) / (1 - beta) per class, normalizing weights to sum to the total class count and buffering them as non-trainable module buffers to stabilize gradients across long-tailed species distributions.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/models/loss.py#L25-L101",
+          "version": "repo-lines-v1:sha256:d2596d36f1e405e143673b7a806f5be1717034210ccdc65ad3291938a1b6a91b:eyJzZWxlY3RlZExpbmVDb3VudCI6NzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY4M2ZhMjBkNGRjZWYzYzdjNzI1M2MxMzRiMDFjNzE3NmYxZmRmMzhkNGZjOWI0YzY3MGNjYmNmOTIzYmJkZGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZhMjAzYmY0ZjA4OTk5YjU0MzI5NzBjMTAxMzMyNmUxNTMyNmZhMDQ4NDY0MWNiNmM1ZGNlMDg4ODVhMzVhZjkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgzZGE1YmRhZTcxMGE1Yzk1OTVmZTczZDM2MTYwYjg2ZGNlOTc4NmI0MGNkMTU3NzI0OGVmNDY5YjRlNDljYTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0f0f2e3622d04f90990ed3c32497675f",
+      "statement": "stream_and_extract_representations lazily streams images from S3 via S3ImageStreamer, applies deterministic evaluation resizing and normalization transforms, and accumulates batches for zero-gradient feature extraction across the frozen backbone into unified embedding and label tensors.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/pipelines/extract_features.py#L220-L325",
+          "version": "repo-lines-v1:sha256:de5c2753f702c25f6e96dc96275c598a2e8b45701dece402959818c66b1eb721:eyJzZWxlY3RlZExpbmVDb3VudCI6MTA2LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI0MWNhZTQzNjBlZTAzNmJiMGMzNTliZjVmYTNhMzc1Njk1Yjg2NzVmYjhmZWI0YjRlY2E5ODgxMzY2MjEyMWQ4IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIwMWJhNDcxOWM4MGI2ZmU5MTFiMDkxYTdjMDUxMjRiNjRlZWVjZTk2NGUwOWMwNThlZjhmOTgwNWRhY2E1NDZiIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJkYTE3YmQ2MjIwOGM4ZTBiNzNkZmM2MDQwZjcxYThmZWI4YmNmMGYyZGI5MTJlOWEyNzBhZWZmYTI3YTgyNjc2IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJiMmM1ODBkNmMyNDU5ZmFlMjVmODBjYzQxM2I0ZDMyZGQ3MTY5N2ZiMTFiODBlYzUyOTg2YTg4NDdhMGZkNWE3In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_b49976869f0a4170a2fb16b23a3164e6",
+      "statement": "create_stratified_embedding_split partitions extracted representations into stratified training and validation splits preserving class proportions, validates 2D tensor shape and dimension consistency invariants, and counts per-class training frequencies for loss weighting.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/models/training/types.py#L13-L91",
+          "version": "repo-lines-v1:sha256:fe42b207d3694314211936516c71ba7e048e53c3a96db33e5a8c3c0ec14ca013:eyJzZWxlY3RlZExpbmVDb3VudCI6NzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY2OWExMzk3NWMyNTZlYzgzMjBlMjAxNjA4M2M5NmRmNjM3Y2EzZDM1YmViZGUyMzE0YmVlM2E0NzExYjU2Y2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY3OTJjNjc5Yzc5MDFiNjlkMzM3NGU1YTRmOGY5YmM5NjRiZTM2M2NiNjEwYWNkOGE0MDk0YWU5YmZlNWZlNzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNkMWNmNjhmNmQwMTcyNjc3N2RlOGVmMWI0MzkzODIyMTU4MGM0NTA2ZDE5N2JkZTRiZWY1ZmFlY2ZmMjljNzYifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/pipelines/extract_features.py#L327-L374",
+          "version": "repo-lines-v1:sha256:bec06dcb7628032af02a878d02f57f48737a1e3cfb8c86b6c792d80c839d1a29:eyJzZWxlY3RlZExpbmVDb3VudCI6NDgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFiMzFiYTg0YmU0NDU3ZjJkODY0MzdhNDBkMzI3NmZjYTVhYjI0NGJkMDRlNzQ4ZGNkNGMyZDY5N2ZlNWJhYjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM1NmZkYzQ2MzVjYzZjNTQyODllOTAxYTdlNzZhNWE5NzNjNjAwZWJiNmQ0YjdjNjM0MTU1YmUwNWJmM2Y2ZDMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI0ODQ5NTBjY2M4OTc4ZjY4MWJjZDUwYThkYWZhNGU3ZDllMTc5ODEyOTVhZmVmMDI2YTNhOWE5OWMxMGU0YWQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ee8b29377c354444b2c8229a89e92212",
+      "statement": "run_feature_extraction orchestrates offline representation extraction and serializes a binary checkpoint artifact containing the extractor name, feature dimension, class count, and EmbeddingSplit container to disk.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/pipelines/extract_features.py#L376-L464",
+          "version": "repo-lines-v1:sha256:4c2c12b1bdd734136c1e0fa40e0b84edc3aeba62acfad616e9604e8004af2632:eyJzZWxlY3RlZExpbmVDb3VudCI6ODksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkODJhYmNmNTI5OWY5MDJmZTk5NDhkNjA0MjljOGU2N2QxMmM4NmExMjA5ZTM2MTU1NDc5ZDgxMDU0NDkxYzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhjYzRhN2QxY2M3OTZhYmEzZTQ2NzIzMzI3ZjUxN2U5ZjgxMTk4MmQyNTBmMDcwMjk4NmU0YjU3NjRhZDk1ODkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVhY2Y4ZmU1MzE0Y2RmY2M5M2RiYTUxNTQzMzg1ODc4MzU2MWE0NWM1NTFlM2M0ZjQ5ZTQwMjkwYmJlMjM0OTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e205c91ef06d4565aeaafd8056510d14",
+      "statement": "train_head_on_cached_embeddings optimizes classification heads directly on pre-allocated device-resident embedding tensors using mini-batch permutation, optional Gaussian noise regularization, learning rate scheduling on validation PR-AUC, and early stopping patience.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/models/training/embeddings.py#L198-L302",
+          "version": "repo-lines-v1:sha256:b2c216d9c24fdad25fe25fcafe1710684e3f8931d5e8ee4ae434ba9e07489996:eyJzZWxlY3RlZExpbmVDb3VudCI6MTA1LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIzNWQ5NzhmYjBlNjE4MmYyNzI2NDM5NDA2ZjAwMjExZGU3YjU2YzQ0YWY2M2RkY2Q2Yjg2YWJmMDY1ODUzYTVmIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0YWJiZTljNWY0YjA2MGVlYTlhNjI2MGVhOTA1ZTY3MTRjZDFmZjMxMzFkOWU2NjM3ZDEyM2YxZjgyYTcwMzBjIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJlMGIyMWJmODk1ZmFlMmQ3MzkyMGQ5MzE3OGNmZDU4NDFjZGY4Zjk1MjQ1MTZjOGE1NjU4NDM2YTRhYzQ4ZjNiIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MCwiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_daa131931e7a4614ac8ea77c24f7110c",
+      "statement": "tune_hyperparameters automates Bayesian hyperparameter optimization over learning rate, weight decay, dropout, Class-Balanced beta, batch size, and noise using an Optuna TPE sampler with Successive Halving (ASHA) trial pruning and warm-start SQLite study storage.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/models/training/tuning.py#L24-L212",
+          "version": "repo-lines-v1:sha256:390708e1f3aaf7cf3e10735df7342635053e745dbacd92a392c97e940a3120f5:eyJzZWxlY3RlZExpbmVDb3VudCI6MTg5LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJmNzljNTNmNzQ5NjQ3M2E3ZDRmNDJmZWVjYTI0MGJjYWM5MTYwMjQwZTJmOGEzMDA0NjA1M2RmMWJkNmFkZDhmIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIwMWJhNDcxOWM4MGI2ZmU5MTFiMDkxYTdjMDUxMjRiNjRlZWVjZTk2NGUwOWMwNThlZjhmOTgwNWRhY2E1NDZiIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI2MjAwOTdlNGFhNTAwNjhiYTE1N2Y5YTI3MzlmYWQ4Njk5NWUxZTBjZGNjZGFkYzU4OTdjMjAzNGM3NGQzZWZhIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIwMmVkNzhmNWI4MWM4ZDNhMTE0ZDg1NTUwNDBkZWFkNTYwZjRiNWMxYmMyNDE0NmEyNGNiYWExYWY5NDRlOTYzIn0"
+        },
+        {
+          "resource": "repo://src/taxon_vision/models/training/tuning.py#L305-L362",
+          "version": "repo-lines-v1:sha256:3f614d8dc8f19ff6dc57f53fb684f6907933b50fce18615ea828ade533d9933e:eyJzZWxlY3RlZExpbmVDb3VudCI6NTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ3Yjc3Njk2NTI1YzNkOTE3NDlhMGU3M2FiYWIyMzgyNzYyZjBjMWU1YjkzMGE3MTIyNGQzMzE4ZGZlZDY3OGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY2MjM3ZjIwYzQ1ZjIyZTI2YWQ2YjgxNjhiY2EwZjIxNzY0YmUyYjM3MmQ4ODNiYzBkOWMyYjQxNDQ2YjIwM2EiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY0OWQyYWMzNmM4YmNjMDBlZTQzOWMxNmY2YThhOWMzZmVmNmY0MDYzNTExMGVkMjI2MWZkYzA1MDUxOTA4ZGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ae15b6d04a664c6c8ff735139e751df6",
+      "statement": "mlflow_run_scope provides an RAII context manager for MLflow experiment tracking that initializes remote runs, logs parameters and Git lineage tags, sets run status to FINISHED on success or FAILED on uncaught exceptions, and gracefully degrades to local execution if the server is unreachable.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/models/training/tracking.py#L85-L154",
+          "version": "repo-lines-v1:sha256:677f62e86472953ca0893a3ab65f525fa8454399c66fa9d577608d54f4df3029:eyJzZWxlY3RlZExpbmVDb3VudCI6NzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU2MWYzM2MxMzI1NjlhNzQ5NDZiMmZjZjU0NmNhM2M0NDI1ZGEwY2E1Y2Y2YjY4NmMyNjA5MGZhYTlkMTEyYjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ2MGI2MGEwOGJmYjQ0ZmJkNzBlNDdlNzIwMTJlZjg0YWFmOTUwZWQxMGMwYWM3ZmFmNzMzNGExMzE0MjBjN2EiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI2ZmYxYTdjMzhmMGUwNDIxYmRjNTg2MTg3YzM1MjBkODY1ZGI0ZTU2MGMzMWQ3ZjAzMTczOTFkNzRmNTBlM2MifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_1447ec26df9c460d87e5f1dfa4078eb8",
+      "statement": "_get_dvc_dataset_hash parses dvc.lock to extract the ingestion stage output MD5 checksum for data/manifests and logs it as dvc_dataset_hash in MLflow to cryptographically connect trained model checkpoints to immutable dataset versions.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/models/training/tracking.py#L23-L57",
+          "version": "repo-lines-v1:sha256:1c83b370fc998c4a0679a435fc335261a31b137e5894df27970285e99d39a651:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE5MTIyNzMyMmJkNjJmODRmYTY0NWRlMDc0MzA4YzcxNDVlYTU5NzZkMTkxNjg3Zjg2MzQ3Y2ZkZTlmN2VhODYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYyMDA5N2U0YWE1MDA2OGJhMTU3ZjlhMjczOWZhZDg2OTk1ZTFlMGNkY2NkYWRjNTg5N2MyMDM0Yzc0ZDNlZmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYxOTNjMzQyODc3ZjUyZjM3MGNhODFjOTU4MDdjN2IzNWY4NGUyOWEzNWE2MzRiNWUzNWVhNTZkMmEyNDU1ZDIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_3eb370158d464a01986055d263f67acf",
+      "statement": "log_training_visualizations generates and logs a normalized validation confusion matrix, per-class Precision-Recall curves, and a Helmholtz free energy distribution annotated with the calibrated 95th-percentile OOD threshold boundary to MLflow.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/models/training/tracking.py#L320-L367",
+          "version": "repo-lines-v1:sha256:4dcbacaca060940849b9d6e1f65a7c9696859e7f6216fb0aa0fd2bec74bfde7e:eyJzZWxlY3RlZExpbmVDb3VudCI6NDgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE1ZWZiYTVjYjIyZDQwZDZlMjgyYjZjMjVjYjYzZDcyZjllMjNmY2NiYTM3ZTkzYjIwNDhmODk4OGE3MmJjNWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjlhYTQwYjdiZTE0NGQ4ZGNkNWY4NTU3NGRhMjJkNjRkZWM5MzNmNTU4MWY0NjIxZWMyMjA0MzhhNjJjOTRhNjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYyZDg2MGRjYTk0NzA4ZGMxMTY5YWYzNzVlNmY4YjM2Yzk4Mjc2MDgyMDYwMjYwN2JkYzJjMWJmMGY5YzljOGEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_feeb395163cb47089b59b775c17a6527",
+      "statement": "_promote_model_if_better registers trained PyTorch classification heads in the MLflow Model Registry and conditionally assigns aliases, promoting candidates outperforming the existing Production baseline's validation Macro PR-AUC to Challenger, demoting inferior models to Archived, or establishing initial models as Production.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/models/training/tracking.py#L476-L549",
+          "version": "repo-lines-v1:sha256:3917fe5cf59e7c3933f6519ed3773d068c13480d991c4690d69b2c0b0bda1a5d:eyJzZWxlY3RlZExpbmVDb3VudCI6NzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEzZGJiMTcwM2RjOTM0MDE1ZDM3ZDg4YmZiMDJjNDAxY2M4ZmY0YzgyOTA0NjAxMTU3YzVhMmExYTQ4NjFmNTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2ZTA0ZjQ2NWVkMzNmNTVjZjY5YTRkMGRkYzdhN2ZjMjQzYmU4YzE2OGJlYmYwYjg5NDQ4YzE2ZWY1ZTg5NjMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc5YjRhNDYwNmQ0ZTc4MGYxMWYxMGZlMmYwYzA4ODdlYWE5M2I4MzRjZjcwMDAyM2QzNWU2NzNhZDI2NTNmM2MiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_3c3f24936cba434c94de28b91be25680",
+      "statement": "configure_cuda_memory_budget enforces a per-process CUDA memory fraction limit via torch.cuda.set_per_process_memory_fraction (defaulting to 70%) to reserve GPU VRAM for co-located real-time ONNX Runtime serving under GPU time-slicing.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/models/training/runner.py#L225-L260",
+          "version": "repo-lines-v1:sha256:3d6fd029ffb5489e88377529596defcc09278da21b7553405f1209b7dd648f9a:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4YmU2M2Y1MTUzNDY4NWVmNjBhZjVhY2M1ZDZhZDgxZjhlYWQyZmY0MDFhZWI3YmQxMGI2Zjc0MzUxYzJjN2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY2N2UyOWFlNWNhY2RhNjFhODk4YTY2YjRkY2JiZGM2ZTUzMTI1YTE1NjQyODU1NTRkNmI1NDE0YmU4ZjQ1YTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJjOWQwZWFlZDliY2Y3M2QwMzVjNmM3MWYyOTJlMmIyZDY5NGUzZDY5MjA1MWIxZjczNGI2MDNiYjYwMTA0M2IifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a3700bf4e832499992a8562705594e42",
+      "statement": "_save_checkpoint persists trained classification head weights to disk and invokes get_classifier.cache_clear() to immediately invalidate the runtime serving classifier singleton cache without service restarts.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/models/training/checkpoint.py#L17-L46",
+          "version": "repo-lines-v1:sha256:8a486d72f22fff661d8419769d66ef9cc26286acfaf4ee9bacc69b9705f19712:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFlNjc1ZWI0ODNmNDQyNjEwZWI0ZTc3ZGQ4ODM2ZWQ0MzlmMzE0YjRhODQwM2YyOWE2ZWY5YTZjNjk5ZjEwODgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU2Y2NjZDVhMzRmNTUzOWU2MjExZjRjNTVmYmE4NzEwNDA0MjY3NDI5OTY0OWFjNTYzZjdhYjgwODEwZTc2MjMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjlkYmU2ZmM1YzE3OTRmYzhjM2QxZTBjZjcxNTMxOGQzN2ZjMTFmZTU2NGUwZjg5MDNhMmU2ODJiZjUxZGQyYjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_451f3090a85348f886651387b0edcb86",
+      "statement": "run_training_pipeline coordinates the end-to-end classification head training workflow: feature dimension resolution, cached embedding split loading, optional Optuna tuning, Class-Balanced Loss optimization, weight checkpointing, and MLflow metric logging and model promotion.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/models/training/runner.py#L436-L604",
+          "version": "repo-lines-v1:sha256:fdfeccd39c7542cf5f844c8a9d9e90cf6ca21060b17c034c69c086d9da78417c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTY5LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIyZmM0Mzg1MzcxMmJhMTMwNWJlOTk5MGIxOTg3ZjNkODhlYTE5Yjk0NzdiNDM0MjlkZmM4ZjQxNDQ0OTY1N2U1IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIwMWJhNDcxOWM4MGI2ZmU5MTFiMDkxYTdjMDUxMjRiNjRlZWVjZTk2NGUwOWMwNThlZjhmOTgwNWRhY2E1NDZiIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI2OTQ3NWM2MzkwMTk0MmVjMzU5YTcwM2UzOGJhNGU4YTUyYmZlOTVjZDcwYzAwYTA0NmQ1ZDkzZWZhYmU3MzFmIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJkM2IwYzNmMzA4YjAzMDRmMTg3NTdmZjUxOGYzOWFkYzU1MzVmMmVjN2QyODAzYzk4OThmYzgyNDMzZjhhOTQ5In0"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-15T19:46:36.219Z"
+  }
+}

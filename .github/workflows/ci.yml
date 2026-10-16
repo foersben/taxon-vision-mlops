@@ -50,7 +50,10 @@ jobs:
           fi
 
       - name: Pre-Commit Quality Checks
-        run: SKIP=enforce-author-identity pixi run --frozen -e ci-dev pre-commit run --all-files
+        run: SKIP=enforce-author-identity,openwiki-sync pixi run --frozen -e ci-dev pre-commit run --all-files
+
+      - name: Validate Open Knowledge Format (OKF v0.2)
+        run: pixi run --frozen -e ci-dev python scripts/validate_okf.py
 
       - name: Pass 1 - Unit Tests & Coverage
         run: |

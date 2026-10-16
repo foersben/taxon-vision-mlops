@@ -1,0 +1,188 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:0ab67e6339a1a72ccc841f96958a3ba532765abb7961397750ff8b96beb66fe8",
+  "claims": [
+    {
+      "id": "claim_a500d1e55b784bdc89b1a98154530eb1",
+      "statement": "TaxonVision enforces a pure Pixi workspace invariant that strictly prohibits legacy virtual environments (.venv/) and uv lockfiles or commands, requiring that dependencies and development environments be managed solely via Pixi and verified through automated invariant tests, pre-commit hooks, and CI quality checks.",
+      "evidence": [
+        {
+          "resource": "repo://.pre-commit-config.yaml#L49-L54",
+          "version": "repo-lines-v1:sha256:a5bbb975c1bd4511d21b7562be439d5a33a5b931156462f973875f2eb42bb720:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMmYyM2YyMWM3MGVjNzM1MGY5MmY4MDNmZTExNWVhMmMwYmNiOGM3MGQ3OWFhMmU5NjU1ZjZkZWJlOWU2MzUyNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDY2OTk5YzU4ZTYyNzY5ZmUwYTEzODI4ZDZmYWJlOWYxYmNiZjYwYzZjYmU5NzgxMmFmNDI4ZmUzMjc1NjUwZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDcxZTEzNGU1ZGZlY2M4MzljOWQ0NTQ0ZTM4MzZjMGMzYTYyOTdlNDViNDdjYzM0YzM0MTE0MjkyY2VmMmZiNCJ9"
+        },
+        {
+          "resource": "repo://scripts/local_ci.sh#L44-L49",
+          "version": "repo-lines-v1:sha256:2a7e855ca04a898d731f7525d638aca4d6eafacd64ba96c48664ef9621f071e1:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWRmNzg0ZjQ3Nzc3MmNjN2RhYmE3ZDg0YzY1NTI1Y2Y1NDkxNzMzNzc0MmQyNWY1YjczZWJkMjMwNDE4NzFjYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzVmYzkwZmY4YTQ0MTRjNTQ0MWQwZjY3N2M1Y2JmZGEzOGI0NzRlNTFiZmQ1NTlhNTU1OWRlMGY4NzcwNTUyNCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZGJiZTVhYzUyOThjNDFhYjJlYjgyZjdjMDE2M2U5YTk1M2VmMTM2MTkzMmRjY2IyNzE2ODU3ZDY2Yzc2MzRmOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiN2ZkYTA3MWJiN2ZmZWI0YzhiZmU0YjA0ODExZDc3YTI4YWVhOGM4MTg4OTVjYzk5Y2ViYzllYTcxMGJhYTllMiJ9"
+        },
+        {
+          "resource": "repo://tests/invariants/test_pure_pixi_invariant.py#L14-L55",
+          "version": "repo-lines-v1:sha256:0cbe953eba48ac7c86bc51c593eff76dcd13769e8ad688d6a3711c0d39181ac4:eyJzZWxlY3RlZExpbmVDb3VudCI6NDIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE4ZWYzZGJlNzk4MTA1YmQyZjBlZjAwN2RkMzc2YjNiYmU4OTAzM2I1ODNiZDgzZDBlZmEyMGEwY2NlY2VhMDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIwYzY3NjY4OWVlM2Q4MDJiNDg4ZDZiMDU4NWE5ODhhZWM0MGUwMTU5ZmQzNTQ3Y2YxNDg3YWQzMmQ4MmE4YmEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEyY2RjNGE2MTc1NmFkMzdmYmIzY2JhZTJjNWY5MzU4YjJlODVlNDJlZWI4MzY2MDNjZmY1ODQxMmZlMDNiNzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b8da199ee45e4bb69bc174cf92efe565",
+      "statement": "The test suite mathematically asserts Split Conformal empirical coverage guarantees P(Y in C(X)) >= 1 - alpha on holdout distributions by calibrating empirical non-conformity quantiles and verifying that nominal coverage is satisfied across evaluation samples.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/calibrate_conformal.py#L26-L50",
+          "version": "repo-lines-v1:sha256:a8c50dbe90d540c72782784a4e181ff8c43f8aa0c2c18e4cc96714da616a7601:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIzNjkxNzViZTZkZWVhMDU1N2ZkNzlkOGY0NjgyOWRlN2Q3ZTkxOTRkMDUyMmEwMGM0MDlkMGVkNDUyMjQ4NzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYyMDA5N2U0YWE1MDA2OGJhMTU3ZjlhMjczOWZhZDg2OTk1ZTFlMGNkY2NkYWRjNTg5N2MyMDM0Yzc0ZDNlZmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYwODcxMWU0ZmRjOWJiN2RhMzgxNmJkOWRhNTBmZTNlZmJiMGIzNThjZDVhYTQ5YmQ2ZWE4YzkzODhlNTdhMDgifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/uncertainty/conformal.py#L53-L83",
+          "version": "repo-lines-v1:sha256:86b8075f293da2a361541ee46d0ddd9d8e1f3cc208a4292aa6f6ee8b834107cb:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZiMjU3YWNkYmY4MDI4YzM2ZjZhNjNmYjk5ZmFhNzM0MjRjZDQyYjllZGI3NDMxZDNkZGIxMzBkYTcyMTg4ZDAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjZjVjMzk0YTMwOGIzNjRlMmIzNDc0ZjBlNzUyOGZkMDBjMmRmYzMyNjRkNjg1YWRlZmFjYTc0YWMxODk0ZmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBjMzRhOTI4YmMwYzNlYWM0M2ZiNjFmNmY5NzllNjJiMmJhM2UzMzlhNjg1YzExNmEyZmI0NjJjNDJiNzdhZWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://tests/invariants/test_conformal_coverage_invariant.py#L12-L38",
+          "version": "repo-lines-v1:sha256:07436a3ce9d34bfe268fa5932a1ac901d6c574dab3c3dfe4735147b7ba276515:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMyZTg5MjhiYWNkZDE0OTMzZDU1ZjI0NzQ2ZThlNGNiMjA4Y2Q1ZjE5NDg1ZDU2ZWQ3YzFlYmVmM2EwNDI3NDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY4YjA0Y2I4ZGNjNDk5YzJmOWFhN2QxYzcwZjQ3ZjE3N2NmMDM0MzcwNmMyZjI4ZmYwOTU5NmFkZWQxMzQ1NTkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdmZTZiMzc3MjdkYjhjZDcyN2ZjOTRlMDgxOTRjOGI1ZGZiODQ3ZmI3ZTY1ZDEzZGYxNzNmYjVmOWM4ODBkY2EiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f60aaa5a3f434c88b224a8085b026e18",
+      "statement": "The Split Conformal prediction engine mandates active learning triage referral whenever a prediction set is empty, exceeds the maximum cardinality threshold k_max, or the top prediction confidence fails to satisfy min_confidence_threshold.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/uncertainty/conformal.py#L76-L83",
+          "version": "repo-lines-v1:sha256:74c9b501128981814ea819ebface7a3380bb8946847e5bb470b9429f5d88b6a4:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDc3YzY4OTMwODcxZmRhZjMzNjU0N2E1YzhkYmE0ZWM1N2JiZDk1MWZiYmNhMGJlZjFkMWRlZGQ4Y2MwNTkxNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZmNmNWMzOTRhMzA4YjM2NGUyYjM0NzRmMGU3NTI4ZmQwMGMyZGZjMzI2NGQ2ODVhZGVmYWNhNzRhYzE4OTRmZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDM3ODhiYWEzY2E5ZTBmY2M1ZTVjMDg5ZDYyMDc5NDM5YWE4MGI4NDkxOGNhOTY3YzhjZDNkYjc1MzA4MjJkMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        },
+        {
+          "resource": "repo://tests/unit/test_conformal_bounds.py#L12-L31",
+          "version": "repo-lines-v1:sha256:38946e619cf9a3321ba64ef9bb6a58ab4ff8e77e73fa8fa374c0804e063fb028:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk2ZjZjMTRmNzk1ODI4OTIyYjMyNmEyN2ZmNDNlOWM2YTAxMjg5NDIyMWFhODc5ZTU1OTFiN2ZjMGM4OGIzZWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3NTNjMGE0NDFiNzQ5ZjA1ZTA0NzNmYTQ1ZDZmZmRkNjZiNGU1MjM5YTYzMmVhNjAzODczNDU0YTU1NWE0ZmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdmZTZiMzc3MjdkYjhjZDcyN2ZjOTRlMDgxOTRjOGI1ZGZiODQ3ZmI3ZTY1ZDEzZGYxNzNmYjVmOWM4ODBkY2EiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_cc2761d35fc34724a4123b2a64a2f15f",
+      "statement": "The OKF v0.2 validation engine validates documentation structure by enforcing mandatory 'type' frontmatter on concept files, prohibiting YAML frontmatter on subdirectory index.md (Option A) and update logs (log.md), requiring newest-first chronological ordering on log files, and mandating a runtime field on Attested Computation concepts.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/validate_okf.py#L204-L222",
+          "version": "repo-lines-v1:sha256:4df8ba8d8ff06ab6c554b3fba5e4088a03ffb082a3c01d58705996fe70c9c11b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJhZjRhM2ExOTYyNjVlMzFmYWE2ZTk3ODFkMDY0MmVlZWVkMmE0MWUwNmFjMmExZDk4NWE4MDM3NWU2MDdhOWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRlMTAxYjk2NmMwNjZkMzE2M2MxYjgwZDBhMjA2OWFiNGZhZGY3NjU0MzJjMjA4MjI2Yzc4MjNkOWQ3ZmU0NDciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNkNDI3MjAwY2JjYzMxNThhMGYxMTFhZDQ5NmM0Yzk4NjRhZGM1ODJjYmM4MTVlMTBlZTUzN2EzOGRlZjJhYzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFhYTljNWU5OTg2NWZhODM2YmJhYjFiZjlmNzQ2OTVlOWJiMDQ5ODJlMjBjNTE2YmJiM2E3NDIwOTRkYTFkMmYifQ"
+        },
+        {
+          "resource": "repo://scripts/validate_okf.py#L272-L304",
+          "version": "repo-lines-v1:sha256:e52748861f777e2a1938a4b9be2a23a05aad6e239a4e5dd96ff1153e331da6b9:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZlZjhiZDM3YjE3ZjQxMmZjMTFmODgzNGQwZDY0NDNhNTdiMTJkMDYwZDA1YmE1MWE1M2UyZGQ2ZmM1MjdjMTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2YWY3YzJhYzIyNzk2MGZjZDVjM2NjODgwZDViMDhjZmIzOTcxMTJkYTgxMGJmNzVjM2Y0ZWJhYTNhMzdlNWQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJhNmNjZDliYjliZjMxOTJkNjNiYzM0NDQyYWY1NTI0NmNhY2UwMjEzZmRlOTZhNTQ4NDIzNmU2ZTBlOTBiM2MiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQyMDE5ZmRhNGY0YTFkNDc3NTA3OWVhNmJiMzYzODQxMGNhNWI0MWIyYTNkNzk0NDc1OTlhOTNiYmExYTk5YTIifQ"
+        },
+        {
+          "resource": "repo://scripts/validate_okf.py#L307-L322",
+          "version": "repo-lines-v1:sha256:0f3ea7e496feeaad33104fc5b02854911644cd9b3d48caae75740650dee58ee5:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhmMWZlOGRkN2VmYzdkYTY5MDEzMjI0YWYzY2I4NmQ4YTNkNzdmNDk1NTkzZTg3MTJhNTgwMjBhZDE0YWIxOGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2YWY3YzJhYzIyNzk2MGZjZDVjM2NjODgwZDViMDhjZmIzOTcxMTJkYTgxMGJmNzVjM2Y0ZWJhYTNhMzdlNWQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJhNmNjZDliYjliZjMxOTJkNjNiYzM0NDQyYWY1NTI0NmNhY2UwMjEzZmRlOTZhNTQ4NDIzNmU2ZTBlOTBiM2MiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVmM2IxZjZkNGViMmM5MmQzODY0MzZjZjJhMTExMWM0ZGJhMzlhMTI2OGE1YzJjZTNjNTBmNDBmNmRmZGJlOGYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ed43e39431434207b778b752092675eb",
+      "statement": "The OKF v0.2 validator verifies provenance integrity by requiring strict ISO-8601 UTC timestamps with trailing 'Z', conforming actor naming conventions, existence of declared source resource paths, and bounded cross-document Markdown link topology.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/validate_okf.py#L119-L167",
+          "version": "repo-lines-v1:sha256:aafb703ad1364aec680cecaa32456ee13b1d1b059b6caa447338dd27bc6b5375:eyJzZWxlY3RlZExpbmVDb3VudCI6NDksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE4YzY2MmI1NTU5Yzg1NTFiYzczNzEwYTdmZGRmMjE0N2YyODRkNWFlZTM1MzhiMDg0Mzk3NGQ5NTlhZmEyZTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTYwMGE3M2QyZTAyZjM1MmI5MGZlZjFkOGQ2MzgxMWJhNGE4ZWUwYzFiZWFhN2FlNDY1OGYzNmFhMmUxOTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUwYjIxYmY4OTVmYWUyZDczOTIwZDkzMTc4Y2ZkNTg0MWNkZjhmOTUyNDUxNmM4YTU2NTg0MzZhNGFjNDhmM2IiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJhODQyYTU2Y2YxZDE3ZTA0OGM4MTE1MDc3ODBlMjM3MGJkNmRkMzZhM2M4YzlhZDljY2I2YzA3YzVkNDdhZmMifQ"
+        },
+        {
+          "resource": "repo://scripts/validate_okf.py#L424-L463",
+          "version": "repo-lines-v1:sha256:b7a1508a884d61d5a113b541625236389275a50948c830fac48fc28ae22b7298:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwODRhOWM2MDA4Y2NhODFjYTUzZThiN2FhMGRhODE3NjYxMDFmYjFhZDNhM2ZlY2U5NjE5NWNhYzRlOWM1Y2UiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2YWY3YzJhYzIyNzk2MGZjZDVjM2NjODgwZDViMDhjZmIzOTcxMTJkYTgxMGJmNzVjM2Y0ZWJhYTNhMzdlNWQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRiYmM5ZDM3MmRkYzkyNzk1ZGE5Y2JhODJjMjg0N2ExNTY3ZGZhODhmY2QwZTMwZmU0MTc3MTU0ZDg3MjlhZWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY3YWE3NDdlOGVkM2FiMmUwYTY0NjViYmFhY2JkMTZlYmJjM2Y2MjY2MTk3ZDZlYWMzOGQ0OGVhZWJkOWU1ZjMifQ"
+        },
+        {
+          "resource": "repo://scripts/validate_okf.py#L466-L528",
+          "version": "repo-lines-v1:sha256:2da358a194ae03694eed2d5b2f081adfb3cbd587b75d94eb145bcbd2e7d07b98:eyJzZWxlY3RlZExpbmVDb3VudCI6NjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgwZjliNDUxZjg4ZWZmMTE2ZjM2OTIzNWIxNzMwNDNkYWE4NjMzN2NmOWY5NDA5MGJiMGRkODNmNGI0Y2Q1MGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJhNmNjZDliYjliZjMxOTJkNjNiYzM0NDQyYWY1NTI0NmNhY2UwMjEzZmRlOTZhNTQ4NDIzNmU2ZTBlOTBiM2MiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQyOWM3ODAyNmRhZDhiOTE0ZWQyMjFlOWZhYTQ0ZmI1MTVhMGVjYzdlYTRhZDI4YWJiOWQ5ZmUxNTY5OGUzODEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2fdb4fe0a8934f549b2a156eab6a5e03",
+      "statement": "TaxonVision partitions its test suite across tests/unit/, tests/integration/, and tests/invariants/ and executes them via a two-pass CI strategy where Pass 1 enforces an 80% code coverage threshold on unit tests and Pass 2 executes integration and invariant suites in fail-fast mode without coverage overhead.",
+      "evidence": [
+        {
+          "resource": "repo://.github/workflows/ci.yml#L55-L62",
+          "version": "repo-lines-v1:sha256:87e1670afb45dba89fbc030acd33d577636dfb10a9c38f9ad26f25c41b001b56:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZGM4YjQyNjlkYWViNTU4OWM5MTNlM2MzNzJiNjljODM3YzdlNzVhYjA3NDBiMmY4MzhlMTA1ZDcyOWU1MjgyOCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDUyYmIyOTgxNTUxMTQ4NzEyMTdjYTYyYzE2MDI4ZDcyOTdiMzc3ZTdlYjU2YTljYTRhNzRhMzYwMWY1NGUyYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiY2RhYWYyZWVkNjhkMjNmZjAzN2U3OWU5ZmY2OTUwYjUyYzc2ZTQwMDIwYzdhMmM3ZGIzZDVkZTkzMzkxNmIzNCJ9"
+        },
+        {
+          "resource": "repo://pyproject.toml#L104-L109",
+          "version": "repo-lines-v1:sha256:7af79b7ea2e8bd4c187402bbf192368ffbed7bf63684705aaef496f401ac6d57:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODY3NmU2NDE0NjVhNjU1MWU5ZTljZmZkN2ZhYTFlNmE0MmY5YjcyNDgwOTgxM2M5MDNkN2VkY2I1MmYzMDA2ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTVlOTYzMWI4ZjZjNWI5NDZkMWM5NjhjNGNkYWYyOTRhMDMxOTAyMmRlNjliMGY1NDc4MjU2ZDQxODM1NTViMiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiN2NkMjY3NGJjNzY4N2RhYzVlM2Y0ZmU2MmM0NmE5OTVlZjVjYzRlOWYwNGRiM2NiYTAzNDA4NTJkMTM3MjcwYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNTA5ZWViYmIzOGIxOThiYjczYzBlZTMwY2M4MTNjNDNkZDIzZmQ0YWM2NWY2NDY3NTFlNGE1OGUzZGRlZGY2MyJ9"
+        },
+        {
+          "resource": "repo://scripts/local_ci.sh#L60-L69",
+          "version": "repo-lines-v1:sha256:5f34d1c42c80e412bb60f896e938767352753e0cfee5b918bd3dd33cd6b43251:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNiY2FhNDFiYmFjMDhiYmUxNDI1YzRlNGJkOWJjZGEyNjkyZTcyZGY1ZTdlODZiNWEyNWZmOGQ0ZTIzMzE3ZjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUxZjBkYzg0YWFlOTM1YTZlMDg0MTJhMGVkMzQxZGE3YTk4ZDg2ZjEyM2ZiYjcxNzU0YjA5NDI5ZWQwZWYxOGUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM4NjYzOTNmZWFlMzcwOTM2MjkyMTkwMmNhMGIxNjU5ODlmOGU0ZWFmNmZiODFmMjE1OWE2M2RkZTgxZGVkZWQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8e75901f78684fd08f6e104c6bcb58cc",
+      "statement": "The pytest harness uses an autouse test isolation fixture in tests/conftest.py that guarantees offline deterministic execution by enabling untrained model fallbacks, sandboxing flagged observation directories to temporary paths, and purging configuration and model caches before and after each test.",
+      "evidence": [
+        {
+          "resource": "repo://tests/conftest.py#L15-L44",
+          "version": "repo-lines-v1:sha256:1c44d842ad380468e48ef66d5f4211159c58840b7213f7fa59e6dc3519616887:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZmMDg2NmY0MDExZTU4NWZmYzA5MDkyZWRmMDgzMmUxN2I1MmY0YzkwYzRjYTBiNDJkY2ZhMDUwZmEzNzViNWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhlODg4Y2YwNmMxYmI1Yjc3OTdjMmY5OGI1MjE1YjIwMDgyMzFlYWVlZTMwNmM0NTNjMDM3ZmFlZGZjYzU5MjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgzMzk1OGZiYjZmNzdkODM2MTU1MTcyOTA3NGNmMDIwNGFkMmJkYzdhMThhZTllZDliNGE0YzYzMjYyMjkyZGUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_9ab3f250fe6b423e87c786a804d8d063",
+      "statement": "The pre-commit and CI static analysis quality gates enforce code quality and type safety via Ruff linting and formatting under Google docstyle conventions, MyPy strict static type checking with zero untyped definitions across src and scripts, and iNaturalist open license auditing.",
+      "evidence": [
+        {
+          "resource": "repo://.pre-commit-config.yaml#L55-L74",
+          "version": "repo-lines-v1:sha256:ec28fea6583f5a8b5ae7e80bc458a0d570b1911eee9630bb43a1cbaa73bfd1e0:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMxNjFjMjVkMjQ3MzM0NDFjZTFkNDYzOGUwN2Q5OGQzMDYzMTlhODVhODBlNTQzYmE5NTJmYmYyZDNhZmEzZmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjMwODQ3MzFkMGFiMjlhYTQ4ZjI1ZmMwMDgxYTljMWIxMTU4ZGJjN2FhNTVkMzkwZDI2OTZiODExYTdlMDBiOTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJiMWViMTFhNGVkOTM1NmJjZTg3YzkyOWI2YjNjMzI4OWU0MTc3ZTU2MTYzZWVlNmY3NDI4N2JjNTlkYTY0MDgifQ"
+        },
+        {
+          "resource": "repo://pyproject.toml#L58-L103",
+          "version": "repo-lines-v1:sha256:8b5ed70df4b98b7f7f201e404d79055d9e53b155d570f1a14cc9ec12cf03bb9d:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc3NDVmYWI4NmIxMjFkYzg1YjRmNzg2NzMzOWExM2ZlZTgwNGM4YTAyZjQ3MTA2NTcyZjJiZjA2NjRkNTk1MWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc3ZjExN2Q2NTNhYWYxYTUxZTVkYmRkYTZhYmVkODhmOWZjYmNiOTAwOTRhNjlkYTg0OGQ5ODI2ZGVkY2ZlM2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgyOTgyMDY1ZmM2OTc3NWUyZTQxZWM1ZDQ0YmNhZDc2NTM0YTk3MzkyYjA2NmQyMGU5ZmRmNjRkMzFjMmZhNGMifQ"
+        },
+        {
+          "resource": "repo://scripts/local_ci.sh#L52-L58",
+          "version": "repo-lines-v1:sha256:00b543edb21f0eab73124472b5c683386096d2f01e5c98c3311ecce937e06d76:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTNkNzJkOWQzMTIxN2Q4YmI0NmU2Nzk2MGUwMGRjMTQ2OGIyNWEyMzhjYTc1MWUzNmE2ZDQ2MmI5YTdjMzExOCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWNhN2EzM2JiODM0NWU0YjljNGQ5ZTk5YjdlOTAyOWRiMjU4YWQ1NDBlNjdiZjM1NzNhNjNjZDIxY2MzZGZmNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMWQ4M2U3NmE4MzJlZTVjYjQxZWQ4MjY5NTZkZDA4ZDBhNjUyZTFlZjM2NWJjYmVhMjM5MTg4OGMxNzE4ZDBhYiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_1ddece79d9494298a97d53a0c7e9c75f",
+      "statement": "The CI quality gate enforces a cognitive complexity budget of at most 15 per function across all source modules using complexipy, failing builds on violations and generating SARIF metrics reports for GitHub Code Scanning.",
+      "evidence": [
+        {
+          "resource": "repo://.github/workflows/ci.yml#L63-L86",
+          "version": "repo-lines-v1:sha256:90de1c56f6fb8386a8d3d00250e17c821e1d85c2f0360edeff27c1b57d97dc20:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA4MDZjZGI5YjkyYjNiOTk3MWM3Njc4M2YwNDAzNGEzNGE1NjM4NTU5MGVkOTE5OGRkN2VjZGEzMWI2ZjE1MDMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk1MDIxMjkzNDE1MzEwOGQ3MTZjMWJhYmRhMmI5MTk5ODhiM2EzYThlOGYxNzBjMmYyOWVmZGJlM2IwNzg5MDMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI4MDM2YmJhYmI1OGU0MDBjNTNhN2I1MmY4MWM0ZGM3Mjg3Mjg5MzQ2NGQ1MDk5NWUyZTUwYTJhNWQ3ZWI2MjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE3YzU2MTRlZWZkOTFmNjY1YmI4MzNhMWZmMzY4OTZhMmRkNWRiNDgzN2NmMjQwNDc3NTRjOGQwODExMDcyZDMifQ"
+        },
+        {
+          "resource": "repo://Justfile#L74-L77",
+          "version": "repo-lines-v1:sha256:9f8553f2d560ec5387767a2f6658bc3e845b306c1eab637f1f61201d1f60d8c9:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTQwNWM5Nzc2NzQ5MDA0Mzc1NzIzOWY5ZTJlZWIwNmE5MmNkYzE0NzE3ZmU2YjdlZWFiNTQxNjRhMDUwZjRjOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMmQyM2I2MTU1YzAzMTgxMTNhMGRiZGVhMGEwNGI2NjRjYWUzMGJiY2ZiY2EyM2E0ZTNiMTU3NjFkZDJkYTYzYyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiN2JhZmY4MmM3OGM0NmQ2NzRkZGU1YjkxN2UxYmYyY2VlNWQxMDhkMDY2MzU0YzllNjE5ZDA3MTI4MTBlYjJkNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDZiNThlN2VjMzYwMjU3ODA4YmY3YmNjOGFjNDkwMzVhNzMzYzljZWY2ZDIzMzFlM2UzNTFjOWVmYmUxM2UxNiJ9"
+        },
+        {
+          "resource": "repo://pyproject.toml#L52-L52",
+          "version": "repo-lines-v1:sha256:c124391f9340d0fcb06687aec0d05a7c6863482c2ad05e6a770ec54199b2fb86:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzEyNDM5MWY5MzQwZDBmY2IwNjY4N2FlYzBkMDVhN2M2ODYzNDgyYzJhZDA1ZTZhNzcwZWM1NDE5OWIyZmI4NiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzEyNDM5MWY5MzQwZDBmY2IwNjY4N2FlYzBkMDVhN2M2ODYzNDgyYzJhZDA1ZTZhNzcwZWM1NDE5OWIyZmI4NiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiM2NhYWRjODMzYmMzNjk4NDRlZjUzMmE4ZGU1OWE2MGE4YTc3NTEyYWZjMmFmZmQ0MmRiMzNkYzA5MTA1NDYzMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiM2I1ODYxYmVjMDBlNjE1NzJjNjZkZTk0NzVlZDc3NzllYTZjOTEwMjI1Yjg2MjY4ODMyMTg4MGRlYTkxZjlmYiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_dda518ed39c94b86a64c32535af00a87",
+      "statement": "Integration tests use FastAPI TestClient to verify health probe status, HTTP 422 validation on corrupt or empty uploads, HTTP 503 readiness failure on missing model checkpoints, synchronous training runs, HTMX server-rendered partials, spatial CAM heatmap generation, and Prometheus metric exposition.",
+      "evidence": [
+        {
+          "resource": "repo://tests/integration/test_api_endpoints.py#L25-L96",
+          "version": "repo-lines-v1:sha256:dfc380fe8bc6ddbfee338362e0929271dd93b6df7035cb152f1f999f425e8b7d:eyJzZWxlY3RlZExpbmVDb3VudCI6NzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRhMTgyMmEzNDU3YWUwOTNmMjE1OTE4YTAzMGNhYzI5ODZiYTFlMTg3M2M3NmU4YzFlMTg0NzQxMzc2MGMyNDIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjljN2Q2MWZlODhkNjQzNWIwOTZhYjhhZWI2MWJmMTE3ZTE2NWVhYTBkYjE1NTQzZTMxZWI0NmVlMzAzMTE5YWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBjZWI4ZGEzZWQwNWExZDljZjcwZTczYmQ2Y2I0OTI1YmQ4ZTViMzJmNzg5M2YxZGYxYjY4OTlkOThmOGQ3ZDgifQ"
+        },
+        {
+          "resource": "repo://tests/integration/test_views_and_routes.py#L18-L68",
+          "version": "repo-lines-v1:sha256:256ffa88d4d53d61c682dc1063c35ffc27b4c55b1b81d44bfe76716717ede57a:eyJzZWxlY3RlZExpbmVDb3VudCI6NTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ2ZmZiYzczZTk5NGUxMGNjMmFiZjk5OWZlNGQzYTYyMWUwYWU3ZGI4MTJhYWYyYjNkNmYyZDkyMDVmMGNhMWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA0Y2Q3NmIyYWZiYTZlYThhNzEyNmY1MDBjZDllNWQ5YjgyYWNjYzhlM2JkYjIzMzUwYTUyOTE5ZThhMjZjZjkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjljN2Q2MWZlODhkNjQzNWIwOTZhYjhhZWI2MWJmMTE3ZTE2NWVhYTBkYjE1NTQzZTMxZWI0NmVlMzAzMTE5YWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_73a14c9af5d14b37b2724ac154f2805f",
+      "statement": "ONNX exporter unit tests verify computational graph export with dual logits and embeddings outputs, validating that missing or mismatched model checkpoints strictly fail with exit code 1 unless untrained fallback execution is explicitly enabled.",
+      "evidence": [
+        {
+          "resource": "repo://tests/unit/test_onnx_exporter.py#L25-L65",
+          "version": "repo-lines-v1:sha256:d6543caff8059e3ddae282c37b5a82b46620a9c5be3472c1d04c816389f58cb0:eyJzZWxlY3RlZExpbmVDb3VudCI6NDEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU5YTRmYmZjMGI5ZDE4N2JiMTJjMWM1YTA0NDUyYzQ0MGIxMzI0MDM3OTA1ZWQ1YTM2MmFmZDY5NGJmMzJmMWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE5OGIwNjNkOWI0N2U2NTM3OTYyNTU3MmNjZTE5NzY2OWQ1NzY3ZTEyYzE4YmUwNzU2NTJiOGNkOTgxY2U4ZDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE2ZTZmYjBkODdmZTY0NDk0NDVlZTZjNzljMzFjYTcyYTdiZWQwNjk0MmQ4NmQ0ZTQ3NzY1ZjY0MjU4ZjFhYjQifQ"
+        },
+        {
+          "resource": "repo://tests/unit/test_onnx_exporter.py#L66-L99",
+          "version": "repo-lines-v1:sha256:24445342ba70f5c844694b0b53c9e9150c9b796456f9afe5360897ed4075a2f3:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA3YmQyM2E1ZDliYTEyODJjNTQ3YWU5MDQzMmE0N2UxNmZhYTAwMzE0YzM1MWE4ZWRhNDAxODc0NTk3ZTExZmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNkNDBkMTgxYTdjZWIwYzFjNThiZjdjN2FiODJkNWE5YTBiOWVmNWVkZjBjNDI4MmFiZmU1YTliOGZkZWM0YzYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE4ZmVkMWM3OTJiMDcwZTM3OGNlN2M2OTk5ZmUxYjg1YjhjMDM5ZGY3Zjg3ZDJlNDQxOTQyNGZhYWI2ZjAwZjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM5ODUyZWY4MDc0MmJiZjM0Y2Q5NTUwZjhhODkyZmE1ODAwOTg5YjlmMDgyOWEzZTFhMWZkYmIzMTY1ZTI1MWUifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-15T19:46:36.219Z"
+  }
+}

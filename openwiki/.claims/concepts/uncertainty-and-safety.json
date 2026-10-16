@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:50197e2de981cf74708a9ecbe8c267f46aadc0b2ca3ba0d81c20435e283ec8e2",
+  "claims": [
+    {
+      "id": "claim_0a2014c54ca0490bbfecd7475ab839d7",
+      "statement": "ConformalPredictionEngine evaluates non-conformity scores s_i = 1 - p_i and admits all candidate classes satisfying s_i <= q_hat into the prediction set C(x), delivering finite-sample distribution-free (1 - alpha) coverage guarantees under exchangeability.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/uncertainty/conformal.py#L53-L83",
+          "version": "repo-lines-v1:sha256:86b8075f293da2a361541ee46d0ddd9d8e1f3cc208a4292aa6f6ee8b834107cb:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZiMjU3YWNkYmY4MDI4YzM2ZjZhNjNmYjk5ZmFhNzM0MjRjZDQyYjllZGI3NDMxZDNkZGIxMzBkYTcyMTg4ZDAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjZjVjMzk0YTMwOGIzNjRlMmIzNDc0ZjBlNzUyOGZkMDBjMmRmYzMyNjRkNjg1YWRlZmFjYTc0YWMxODk0ZmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBjMzRhOTI4YmMwYzNlYWM0M2ZiNjFmNmY5NzllNjJiMmJhM2UzMzlhNjg1YzExNmEyZmI0NjJjNDJiNzdhZWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://tests/invariants/test_conformal_coverage_invariant.py#L12-L38",
+          "version": "repo-lines-v1:sha256:07436a3ce9d34bfe268fa5932a1ac901d6c574dab3c3dfe4735147b7ba276515:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMyZTg5MjhiYWNkZDE0OTMzZDU1ZjI0NzQ2ZThlNGNiMjA4Y2Q1ZjE5NDg1ZDU2ZWQ3YzFlYmVmM2EwNDI3NDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY4YjA0Y2I4ZGNjNDk5YzJmOWFhN2QxYzcwZjQ3ZjE3N2NmMDM0MzcwNmMyZjI4ZmYwOTU5NmFkZWQxMzQ1NTkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdmZTZiMzc3MjdkYjhjZDcyN2ZjOTRlMDgxOTRjOGI1ZGZiODQ3ZmI3ZTY1ZDEzZGYxNzNmYjVmOWM4ODBkY2EiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_4a4293dae8ea4779a112f20b97ea84f9",
+      "statement": "ConformalPredictionEngine.predict_set triggers the human review referral flag if the prediction set is empty, exceeds the maximum cardinality threshold k_max, or the top-1 prediction confidence fails to reach min_confidence_threshold.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/uncertainty/conformal.py#L76-L83",
+          "version": "repo-lines-v1:sha256:74c9b501128981814ea819ebface7a3380bb8946847e5bb470b9429f5d88b6a4:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDc3YzY4OTMwODcxZmRhZjMzNjU0N2E1YzhkYmE0ZWM1N2JiZDk1MWZiYmNhMGJlZjFkMWRlZGQ4Y2MwNTkxNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZmNmNWMzOTRhMzA4YjM2NGUyYjM0NzRmMGU3NTI4ZmQwMGMyZGZjMzI2NGQ2ODVhZGVmYWNhNzRhYzE4OTRmZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDM3ODhiYWEzY2E5ZTBmY2M1ZTVjMDg5ZDYyMDc5NDM5YWE4MGI4NDkxOGNhOTY3YzhjZDNkYjc1MzA4MjJkMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        },
+        {
+          "resource": "repo://tests/unit/test_conformal_bounds.py#L12-L31",
+          "version": "repo-lines-v1:sha256:38946e619cf9a3321ba64ef9bb6a58ab4ff8e77e73fa8fa374c0804e063fb028:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk2ZjZjMTRmNzk1ODI4OTIyYjMyNmEyN2ZmNDNlOWM2YTAxMjg5NDIyMWFhODc5ZTU1OTFiN2ZjMGM4OGIzZWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3NTNjMGE0NDFiNzQ5ZjA1ZTA0NzNmYTQ1ZDZmZmRkNjZiNGU1MjM5YTYzMmVhNjAzODczNDU0YTU1NWE0ZmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdmZTZiMzc3MjdkYjhjZDcyN2ZjOTRlMDgxOTRjOGI1ZGZiODQ3ZmI3ZTY1ZDEzZGYxNzNmYjVmOWM4ODBkY2EiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0c65353da7ff49faa62829d99a5ec165",
+      "statement": "scripts/calibrate_conformal.py computes the empirical non-conformity quantile cutoff q_hat on holdout validation data using the higher order statistic at level ceil((n + 1)(1 - alpha)) / n, serializing calibration metadata for inference serving.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/calibrate_conformal.py#L107-L121",
+          "version": "repo-lines-v1:sha256:28065b71a32528ecca953f5bcc970d0de536df43d1809c4243a3ab1b44e2a9c8:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZiM2VmYjMxOGQyMjk4YTc2MDhlY2ExYmNmMWU0MDEzYzQ3OTFiNzA0MzRiYTZkOWJiOWFmNGI2OTIzYjhjZDIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZhOTcwNmM3N2IyNDEzYmZjZDJmNjIyNWIyOWNlNmE0YzMyZjc2MDExMDdhYmY3NGJiYThlYWI2Njc1NDZmODYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY5ZTRhNGM4NzQwZWMxZTY0OTljZWMxMjIxYTcyNTA3YTRiMmQ2MmE3ZGFjOWUwMjA0YWY3NTNkMTg4YTc4NjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNkNDEzNDBjYzIzOWExNTljZTliNjAyMmU5ZjYzMjI4MzJlMmVhZDc2Y2FlOWU0NzU0ZDIxMGViOGZiNmQ1ZTgifQ"
+        },
+        {
+          "resource": "repo://scripts/calibrate_conformal.py#L26-L50",
+          "version": "repo-lines-v1:sha256:a8c50dbe90d540c72782784a4e181ff8c43f8aa0c2c18e4cc96714da616a7601:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIzNjkxNzViZTZkZWVhMDU1N2ZkNzlkOGY0NjgyOWRlN2Q3ZTkxOTRkMDUyMmEwMGM0MDlkMGVkNDUyMjQ4NzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYyMDA5N2U0YWE1MDA2OGJhMTU3ZjlhMjczOWZhZDg2OTk1ZTFlMGNkY2NkYWRjNTg5N2MyMDM0Yzc0ZDNlZmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYwODcxMWU0ZmRjOWJiN2RhMzgxNmJkOWRhNTBmZTNlZmJiMGIzNThjZDVhYTQ5YmQ2ZWE4YzkzODhlNTdhMDgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_66933305410442ed820a7004546b4174",
+      "statement": "EnergyOODDetector calculates Helmholtz free energy E(x; T) = -T * log(sum_i exp(z_i / T)) from unnormalized logits using numerically stable max-subtraction LogSumExp, classifying observations exceeding energy_threshold as out-of-distribution.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/uncertainty/ood_detector.py#L111-L135",
+          "version": "repo-lines-v1:sha256:4ec4cb87ea9099e02682f6ac9f5be93a80aa2b34eab9a722e6d20b7710328fd5:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkMGNmYTFkODE4ZGUwMWE0MWUxYmJjOGZiYjRhYTFhNjk5ODEwZThiOTM2MmEwOWQ4M2Q1N2JhY2FkYWIxYjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFhYzIwZGRjMTMzYTQ1YzQ3OTAwMTVlZDZkNWMzNzRkZWVmODBmYzc5ODNjNzRmNGQ1MTYzOTFiNzEzNmRjNzgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFmZWNhODA0OTgzZmYwYjQzMGRkNzdmNjVhOWI0Y2ZhZmY2ZjMzNTA1ZDNiYTc3OGI1NWIzYjljZWI1NDA3NjUifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/uncertainty/ood_detector.py#L50-L70",
+          "version": "repo-lines-v1:sha256:2385a842a1981d1696cde80e88e46531d3d645ba3b143b283044ae5a0064510c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNlMjY2M2M0OGRhYzA5NTMxODc3ZjliYmU0YWFmODE5NDdiMTUyMWQ0ODQwN2ZjZmE2MjZhNjM0OTZiYjBiMzkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEzY2VmYzRjYTI1YjMzODlhYmJiN2U1NWY1Yzc3Y2EwZTAzZjk4ZGExMzczYThkZGFkY2NlNzc4MjJkZjkxZmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM3YmVhOTA0Y2NiYWE0ODYzOTYzYzVhNzMzZGE3Y2FjMjVlNDJkZWM2YWI4NDUzYWI4MThjMzUwN2JiMzRiODEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE3NGI4N2E0OTZlZjRhNWNhMmFjOTA3OWNlMDQ0MWRlYmQwNThjNDU5Y2UyMzM3NjljYjYxOWYzNzA0NTM3ODEifQ"
+        },
+        {
+          "resource": "repo://tests/unit/test_ood_energy.py#L12-L30",
+          "version": "repo-lines-v1:sha256:e1d4e58599a41df2859ac02d1dd4f3be9d56bcecde071ea41d533b6092a98675:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE3NzgxM2E4OTcwMzFmZjJjNDUyZTE0NzE3Mzk3NzBiNmVhYzQ4Yzk2ZjllNDY0ZTUxMGI3YzA3YTEzMjk2ZTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQxNjFlMjIzNmNmMjQ0NGI3NDA2N2E1MzdlMTZlNzM4NTZlYmVhODIyMTdjNTc1YmNkMjM5MTVmZjgyZDQyZGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc3MTE1MjBiYjgwMGY0MWViNjkwODE1NjFkNmUxNTU2ZjI5YWQxMWJmZWY5ODE0NjNjYjNiYzY0MDQ1OTE0NzkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_040bd3fc7d754c8e88c6757c27f734f0",
+      "statement": "EnergyOODDetector calibrates the empirical energy decision boundary to the 95th percentile of in-distribution validation logits and evaluates Shannon predictive entropy to detect diffuse probability distributions.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/uncertainty/ood_detector.py#L136-L179",
+          "version": "repo-lines-v1:sha256:79778fc13d4083bd4611cc7ab5c88035b1714a90f8fe760d8d90f1606bcd9d6a:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhOTNjNzQwMzEyZGI4MjA5ZTZmODZmMjI0M2JlODM3MmNkZjMwY2NkZmJmMzZiZTQ4MTBlZjYyZmIyMThhNGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEwM2I5ZmNiMzk3MTQwM2JlNDZiNjNlYzBlNzQ3MjcxZGY4MDFkZGVmMGY1MjQ3NDI3NDYwMjY3MGUyMzliNmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk0ZTY5NWZkN2U4ZDA5NTdhZWYyODhkYjc2ZDVlZDU0MGM3ZTBiMTk0NmY5MDJkZjYxNTE5YmM0NDgzOGQzMTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/uncertainty/ood_detector.py#L84-L110",
+          "version": "repo-lines-v1:sha256:b8ba3e3f21f5f7f7ba6664e4822f2a6d9c6f50447111eacf2e4f6b83fe479d02:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxYWJjZDBjYzY5MTNkNGY1MWViMjFlNGY1YWZjMmU5MGY4NmQzNmE0NTBiYjQyY2IwNWM2ZjNlMGQ3MDZmOGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM5NjdhNzkxNzQ4OWJkNzFiN2VkNmNjOWYyNmQ0NmEzMzA2OGM4ZDAwZWQ3OTJkZTQwZTc4ZDFjNTNjOGUxYzYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzMjIyZDhlNWRhYWViODBmMDBiZWIwMWM2MDMxMjc4NTZhYWRlMzk3MjQ1ZjZjMjhmOWY4NTE3MjAzZmEzYTAifQ"
+        },
+        {
+          "resource": "repo://tests/unit/test_ood_energy.py#L32-L54",
+          "version": "repo-lines-v1:sha256:859d6cc5175c0ce39778870e51144e0def70880b35cf7c2851326acc7e1cf123:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdhNTdjYTBjZjdjZGY4NTZhZWMyNjZhNWE1NTk5Y2RmOWUyMzY2N2Q1MjExNzUwMDE5MjU3NGVhZjMxOTQzMzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjczMjhkNGQyYTk4NGIxODg4OGY4ODA3MTQyMGNhNjNhODMwZWM2NDYxYThjY2IxODYyNmRiOTNjZTg1ZDk4YTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjczYWYxNzg3NTM3ZmUwMDlkMzAwZTRiNTUyNDU4YWM2OTQ2YzFlMmRlNTBiMDUwYzYzZTRlOTJhMTc0OTZhMWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_bfefc8d0fff740ee8deeffe9587e07ae",
+      "statement": "generate_heatmap computes Class Activation Mapping attribution without backward autograd passes by directly contracting backbone spatial feature maps with the terminal linear classification head weights for the target class.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/inference/cam.py#L152-L201",
+          "version": "repo-lines-v1:sha256:08c53260c0f74b8d400c1d6c244f2cc9e28fd05d669c02e6fd454fe105f9557d:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc3NDg3YWY3YzI4MTQ2NmQ4MGQxYmRiM2IzOTMzNTkzZTQ5MDZjYTFlYzVkOGQ0YjA0NmVjYWE5YzYyMDJhMzYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwYzFmMTg4ZjE0MmVkN2E4MjQ2ODBiMjA3MTcyYzU1MTliYzYxNGE0OGZkYTdjZjE2N2VkYjhkZGY3OTk1NmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRlMGY0YjQ5MTA3M2IzZWMyODE4MmY5MDU4ZmYwN2I4MjBhMTliNzhkYmNjZTUwN2NlZDE3OWIzOGRkYzM1MWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJiZDgyY2Y5YzQwOGYwM2ViMDdjYTk5YWQ5NWZhOTgzYzVkZTJmMjdkMTRmYmQ2NjE1NTRmMWE5MjlmMzE3N2QifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/inference/cam.py#L204-L286",
+          "version": "repo-lines-v1:sha256:356625b231dc6e06c96059550e8317c35e8e0dcbc5d9f77e8d141c34a9ca87c1:eyJzZWxlY3RlZExpbmVDb3VudCI6ODMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUzZTBmMTk0MDJjZjA3NjUwYWU5ZTBiMmZmMDE2OWZhY2Q3OTlkN2E0Y2FkYjI2ZjFiZGZhZjliODhiMThkMmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY3ZTYyZTQ0NWQzODJiNjUzM2ZiN2Q3YjdlNjU2YzI3NjhlMmUyYzUzNzRjZDAzZTMzNDlkMjg1ZjFiMmM2ZmEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhjYzRhN2QxY2M3OTZhYmEzZTQ2NzIzMzI3ZjUxN2U5ZjgxMTk4MmQyNTBmMDcwMjk4NmU0YjU3NjRhZDk1ODkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/inference/cam.py#L71-L100",
+          "version": "repo-lines-v1:sha256:e497d5af3a4a52046dd22a035ef855f40568c8e7e45b3e1c30b68c2b8d45cc9b:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRlZjg3NjUzYzZhNjNlMDA0MzA2MDk0NjhjOGRlMzdiMWI4NTI3NmY0MDY1NGJiOGJhNzRhMjYwMzIwYTE4ZjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhlMTAyYTE5YmE2NTQwZmFhMjNhMTQ4NTZkYmM0MTMyZTQ5MjFkYjA4OWM1NjA5NThjZGQ2ZDlkYTAwZjkyODYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVjYTNkMGNkYzllYThiM2ZiYTBiYmE1YjZkOGYwMTczZjI2NzE5NjIyOTA0NGVlZmVkZGZhZTNmOWM1YWZmMTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_6d3fbdb155ee435384e4dcaf10c1451e",
+      "statement": "Forward-only CAM extracts spatial feature activations from 4D convolutional feature tensors or 3D Vision Transformer patch tokens unflattened into square grids, bilinearly upsampling and min-max normalizing heatmaps to [0.0, 1.0].",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/inference/cam.py#L102-L150",
+          "version": "repo-lines-v1:sha256:dbfe79dfc1832cbc397ba8487744fc8ff9c83665c2260cc918fe59e2ca92ef38:eyJzZWxlY3RlZExpbmVDb3VudCI6NDksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM1Nzk2YzlhNGYwZTM5NGM5MThlMDEzZDllZTI2ZmExNTcyODdjMzhmZTFkYmEyYmFjNjVlMGI3YzUwMjViMDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhmY2YxOTczODIyZjZmMzI1ZjhkNjRjYTliNmQ2MWIyMDk0YTY5YjM3ZmViNGRiOGI3NWU0Y2UwMDFkOTgxYzIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdiYjIzYzgxM2UwMWYxYzhmYTkyOTNiM2YyM2VmMjdmM2QzZGJlNzM1MjAzNzI2NTk0OWE0NDU0NWQyMDBiZDMifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/inference/cam.py#L274-L286",
+          "version": "repo-lines-v1:sha256:6f111c5a410f498a26f0747df97dfc185c203254eeccd7dabf0bd924ba12d7fb:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRjYTZjYjJhMTNkYmM5ODQxM2M0M2IxOTdiZDU4MTVjNTc5Mjg3NTJkY2U4ZTUwMGQ0MjA1OWE4NmI5YzM4Y2IiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY3ZTYyZTQ0NWQzODJiNjUzM2ZiN2Q3YjdlNjU2YzI3NjhlMmUyYzUzNzRjZDAzZTMzNDlkMjg1ZjFiMmM2ZmEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZmM2I4NTI3YzI4NjAxN2JkMTcxM2U3ZTU0YWU3NDU4MjA0OGIxZjIzNjA3MWVhNDFkZTVlM2EyNzNhYjk5MzQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://tests/unit/test_models_components.py#L213-L246",
+          "version": "repo-lines-v1:sha256:3161bdbc99f97f255ce22b1934e61f56aa4889ed3af378bfe28d31afee94840d:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEwNzEyNGE0NWVhN2ZhNTNkZThlOTFlZTUzOTE0YmMwNzFlYmFmMDg0MTZhN2EyNGVmODFkMmVlMDIxNzNmZTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg4YjdiZThjNGNmNjdkOGQzM2NhNzMzZDdhMzVjMTk2ZDNmMjcwYWM2ZGRlZGJkZTEzYzRiZDM0NDhlY2VhYzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVkY2FiMTlkZTQyNTE0NmNlZjJlNWU4Mzg3M2IwZTY1NmI5Njc5N2EyMGIyZmM3ODdiYTg0NzdmN2NiOTc2MDgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_98e0994cc2a8450b8d83fadd26fb3fbf",
+      "statement": "margin_sampling computes active learning uncertainty scores as 1.0 - (p_top1 - p_top2), prioritizing observations with contested classification boundaries between the top two candidate classes.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/active_learning/query.py#L10-L31",
+          "version": "repo-lines-v1:sha256:8e646a6cb4a84c3f1c6ce06bcf1ea5a5df580cc3e26f3a3be5cc09de429babaa:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRmMmRhMmMyYjg3OTFiYWQxYjllZmFjYzEyZjBmYmI4NGQ1YmUyYTZjNmY4NjllMDI3YmU1YjFhYjY3YjIzNWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhMTFjMDU2N2QwYTVmOWU5YjEzNWY2NWNkMjUzNzJkZmQ2Mjg3NzVmN2MxZWQyNTNmOGJhZDQyZGQyZDY2NjkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY1ODI1MzliN2FjMDg3ZDhkMDY3NGEzMzNjOWZkNGZkMDUzMjIyNWE3N2NiNjRkYTViZGUwYzZhMTkwZTg2ODIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://tests/unit/test_active_learning.py#L13-L19",
+          "version": "repo-lines-v1:sha256:c23967b3d4a41c5d0ddbb96b05221e3f82c16cd09483c9f068c1bf64174d9d44:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTE3ZTA4Y2QwMWYzMGZiY2FkMDliNTQ3MWY0MTE5ZWFhMTk5Y2UyYmQ4NzA5M2M5YjMxODQwMDZlNDVjMjZjMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDg4MTM2YTIzMmEwZGFkOTAzNWQ4NzgzMTg2Yjc3YWI0OTkxYmVlOTkzZTBiZWExOTI4ZDc2NThlNzk0Y2E0YyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDE4YjQxNGQ1YTY2ZmU2ZTBkYWNiNjVhYjI4ODEzMmViZGMyZWM3ZDc5NTcxOTA2ODA4ZTZiZmI0ZjZmNjMxNyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_1688e360611145c7acee917e5c18ef5e",
+      "statement": "TriageQueue prioritizes observations for human expert review using a binary max-heap via Python heapq with negated uncertainty scores and a monotonic integer tie-breaking counter, guaranteeing O(log N) push and pop operations.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/active_learning/triage_queue.py#L11-L79",
+          "version": "repo-lines-v1:sha256:b7257ce02766e2e448a917e724f5de27cac2bdc62ac9d6337ce32015a2583369:eyJzZWxlY3RlZExpbmVDb3VudCI6NjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI2ZmJhZTBiOTFkNDRmYzBkNDlmNWRlNjkxZGE2ZmM0MzFmMjYwMTM0YmY3MzFlMGUyMWY3NjQ4MDk0MzM0Y2IiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE5NGZhZGMwNzUyM2UyMGY0MTRiNDNkZWRmMDY2OWVmZmRhNDFkMDFiY2Q1YmRiY2QwOWVjMWI2NTY3ZDA5ZDciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc3YWNjNTQyYmM2MjM1NWVmZmJiZGI1YTdhOGMyYzY0ZjNjMWFiMDk3ZGViZDY4MWNiMjY0MWVkYTc5MDE3NTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://tests/unit/test_active_learning.py#L21-L39",
+          "version": "repo-lines-v1:sha256:e530ad5c913a1959115b21565b53f682c2df86406190b85c6c4b6654cb8f4876:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdjMzI2NDIzZGVmN2ViOTljYTExZmJmNTVjYWU1OGNhY2U3Zjc3OTIzNjA3M2EyNWMwNzQxNzdjMzgzZmFkMDQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY5YWZiZDBiZDZhNDRjYWMzYzU5ZTNkMDU0NmRhNTVmNzJkN2Q1ZTA4ZWFkMmVhNzVlNGZmZmVkN2ViZGU1ODUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg0MjE5Y2IxMDliYThjMjU3ZTNkYjE3OWVkNWI5Njk2YTk5MjJmM2YwZGJlZmIzN2U2ZmRiYzY0MmQ4ODY4NTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f19a51d5c4b1483e874c2bff2cfbfe25",
+      "statement": "The inference service executes energy and entropy OOD screening alongside split conformal set evaluation in run_prediction, asserting human referral flags and persisting observation metadata and visual embeddings for triage and active learning loops.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/service/inference.py#L367-L438",
+          "version": "repo-lines-v1:sha256:fd8891dc37f050746324aa63bc7dc88f7275f3b578dd9e0b5ebd42d6172910a1:eyJzZWxlY3RlZExpbmVDb3VudCI6NzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk3MTZmNTAwMjQxZThkNjVlMzJhMDFjNmRmNGQ3OTQwMjUwYjQ2MGNlY2NlYmI5YmIxNzAzNjZkMzIwMzlkNWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI0N2E1YzIyMGU4NWY3NjNlZmE2NzJkZGI4NzJhZjg0Nzg0NGZhNzZjZDRiNjdjMjQ5NDUzMDM5NDExMzY5NGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/service/routes/predict.py#L148-L157",
+          "version": "repo-lines-v1:sha256:78e5ec5d15ba364f7f1a834f2000f59bf63296b8ea2314b6b8c5c2de60dbfad7:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkYTVjNjZlMTdiMTQ1Mzk3ODM0YjhjODU0ZGM0MTkzZTIxMjUxODBhODk5NmExNGMzMTg4MzMyNmIyZWZiY2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY1ZDQzNjJiYmUyOTY3NDk3NzdmYjY1NDQ1YWE3MjQ3MWIxYjYwMmRiYTQ5M2IzMDI5OGFlYTRmODc2NTJkNmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM1NjVmMDQ3MjdhNzgwZWFjY2I1ODU5NWJkYzM3MjA1NTkzZmY4NGIxMzUwYjhlMjA0NTk4NDExNDZhZWEyNWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNmMTBmYjc0ZDgzNTZhM2RjZmZjODViY2JlM2RiOWJhMGU0NjNiNDBiZGVlMjhlNmE5NzQyNjAzODQ0YTIyMjEifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/service/storage.py#L21-L92",
+          "version": "repo-lines-v1:sha256:820a3f09ade8622209e5becb835c1efc7d6208453ef4ea921c99fa41791e8267:eyJzZWxlY3RlZExpbmVDb3VudCI6NzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVlMTlkMmMyYzg2Njk3YjZkZTVmMmY1NDE5NTZjZmVhN2Q1YmRjMGM5YzA1Y2Q4Y2JhMGNkMDFlNDk5YzRiZGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU4MzkzZjQ0NjFiNWQ4ZDk4YWFkYjRhY2U4YWNiOTlkMDc1OGM4ZjMwOTAyMDI3ZmNmZWZhMGJiMjEzZjRkNDQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYyMDA5N2U0YWE1MDA2OGJhMTU3ZjlhMjczOWZhZDg2OTk1ZTFlMGNkY2NkYWRjNTg5N2MyMDM0Yzc0ZDNlZmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-15T19:46:36.219Z"
+  }
+}

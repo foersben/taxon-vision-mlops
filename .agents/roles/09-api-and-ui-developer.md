@@ -13,7 +13,15 @@ role: API & UI Developer
 
 # Directives for @api-&-ui-developer
 
-* **Primary Mandate:** Develops FastAPI endpoints, async upload routes, and Jinja2/HTMX dashboards.
-* **Trigger Condition:** FastAPI routes, HTMX templates, static assets.
+* **Primary Mandate:** Develops FastAPI REST endpoints (`/predict`, `/explain`, `/health/ready`), server-rendered Jinja2/HTMX operator views, CAM visualization overlays, and local disk observation storage.
+* **Owned Source Files:**
+    * `src/taxon_vision/service/{api,inference,schemas,storage}.py`
+    * `src/taxon_vision/service/routes/{predict,explain,health,views}.py`
+    * `src/taxon_vision/service/templates/*.html`
+* **Targeted Tests:**
+    * `tests/integration/test_api_endpoints.py`
+    * `tests/integration/test_views_and_routes.py`
+* **Trigger Condition:** FastAPI routes, HTMX templates, static assets, saliency rendering.
 * **Tooling Standard:** Execute all operations via `pixi run -e dev` or `just`.
-* **Verification Gate:** Run test suite and pre-commit checks before completing any task.
+* **Fast Verification:** `pixi run -e ci-dev pytest tests/integration/test_api_endpoints.py tests/integration/test_views_and_routes.py -q -o "addopts="`
+* **Verification Gate:** Run full test suite and pre-commit checks before completing any task.

@@ -48,6 +48,26 @@ def test_health_ready_failure_when_model_fails(monkeypatch: pytest.MonkeyPatch) 
     assert "Service not ready" in resp.json()["detail"]
 
 
+def test_health_ready_failure_when_catalog_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify readiness probe returns HTTP 503 when taxa catalog is empty."""
+    monkeypatch.setattr(health_mod, "load_taxa_catalog", lambda: [])
+    resp = client.get("/health/ready")
+    assert resp.status_code == 503
+    assert "Service not ready" in resp.json()["detail"]
+
+
+def test_health_ready_failure_when_classifier_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify readiness probe returns HTTP 503 when classifier initialization raises."""
+
+    def mock_fail() -> None:
+        raise RuntimeError("Classifier checkpoint missing or corrupted")
+
+    monkeypatch.setattr(health_mod, "get_classifier", mock_fail)
+    resp = client.get("/health/ready")
+    assert resp.status_code == 503
+    assert "Service not ready" in resp.json()["detail"]
+
+
 def test_predict_endpoint() -> None:
     """Verify /api/v1/predict rejects non-image bytes with HTTP 422."""
     dummy_img = io.BytesIO(b"fake image bytes")

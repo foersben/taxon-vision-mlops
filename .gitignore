@@ -101,3 +101,7 @@ scripts/unlock_taxon.sh
 
 # Docs Archive
 docs/.archive/
+
+# OpenWiki ephemeral runtime state
+openwiki/.run.json
+.openwiki/

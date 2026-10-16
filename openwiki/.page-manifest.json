@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "pages": {
+    "/openwiki/architecture/domain-and-taxa.md": {
+      "pageVersion": "sha256:0ca7054635a0bca565ae3eb8d5a3034a6b3fe420e7186a90e6615ec6faa349cc",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "ae1ff972-7e61-4996-89b9-f0e8a49a3bb3",
+      "gitHead": "bc08b54cc58313454338eef054859e9f8c0250f8",
+      "sourceFingerprint": "sha256:5cd4e1757d515b19e9555e2825f54163c041a3adbb15ba08482385d79cc273a2"
+    },
+    "/openwiki/architecture/system-overview.md": {
+      "pageVersion": "sha256:c0ec6a0b55b6a2ff1e0d2c2faad04bf3c1439995b5ff4e944301b885b3907bd0",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "ae1ff972-7e61-4996-89b9-f0e8a49a3bb3",
+      "gitHead": "bc08b54cc58313454338eef054859e9f8c0250f8",
+      "sourceFingerprint": "sha256:5cd4e1757d515b19e9555e2825f54163c041a3adbb15ba08482385d79cc273a2"
+    },
+    "/openwiki/concepts/uncertainty-and-safety.md": {
+      "pageVersion": "sha256:50197e2de981cf74708a9ecbe8c267f46aadc0b2ca3ba0d81c20435e283ec8e2",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "ae1ff972-7e61-4996-89b9-f0e8a49a3bb3",
+      "gitHead": "bc08b54cc58313454338eef054859e9f8c0250f8",
+      "sourceFingerprint": "sha256:5cd4e1757d515b19e9555e2825f54163c041a3adbb15ba08482385d79cc273a2"
+    },
+    "/openwiki/operations/deployment-and-observability.md": {
+      "pageVersion": "sha256:ce8d2b83b9be336380ab2b814a83f11de1dd6cb5a68952cd3d146d0c83d05ae7",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "ae1ff972-7e61-4996-89b9-f0e8a49a3bb3",
+      "gitHead": "bc08b54cc58313454338eef054859e9f8c0250f8",
+      "sourceFingerprint": "sha256:5cd4e1757d515b19e9555e2825f54163c041a3adbb15ba08482385d79cc273a2"
+    },
+    "/openwiki/operations/service-and-api.md": {
+      "pageVersion": "sha256:8914f0d3173262ae17ccd184c63f269d2517cc68a3de9cccf72f9a0209810b70",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "ae1ff972-7e61-4996-89b9-f0e8a49a3bb3",
+      "gitHead": "bc08b54cc58313454338eef054859e9f8c0250f8",
+      "sourceFingerprint": "sha256:5cd4e1757d515b19e9555e2825f54163c041a3adbb15ba08482385d79cc273a2"
+    },
+    "/openwiki/quickstart.md": {
+      "pageVersion": "sha256:1f8f03a0df2462afc3d6e52a60cf16937f6844d76a73df06bc9ad6b39efd18cb",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "ae1ff972-7e61-4996-89b9-f0e8a49a3bb3",
+      "gitHead": "bc08b54cc58313454338eef054859e9f8c0250f8",
+      "sourceFingerprint": "sha256:5cd4e1757d515b19e9555e2825f54163c041a3adbb15ba08482385d79cc273a2"
+    },
+    "/openwiki/testing/test-strategy-and-invariants.md": {
+      "pageVersion": "sha256:0ab67e6339a1a72ccc841f96958a3ba532765abb7961397750ff8b96beb66fe8",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "ae1ff972-7e61-4996-89b9-f0e8a49a3bb3",
+      "gitHead": "bc08b54cc58313454338eef054859e9f8c0250f8",
+      "sourceFingerprint": "sha256:5cd4e1757d515b19e9555e2825f54163c041a3adbb15ba08482385d79cc273a2"
+    },
+    "/openwiki/workflows/data-ingestion-and-versioning.md": {
+      "pageVersion": "sha256:73e0b1f43c28351864214e79773775935c3e7b0f6754f7648b6fc88a5df841ff",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "ae1ff972-7e61-4996-89b9-f0e8a49a3bb3",
+      "gitHead": "bc08b54cc58313454338eef054859e9f8c0250f8",
+      "sourceFingerprint": "sha256:5cd4e1757d515b19e9555e2825f54163c041a3adbb15ba08482385d79cc273a2"
+    },
+    "/openwiki/workflows/inference-and-optimization.md": {
+      "pageVersion": "sha256:c6dcc8409857bbb21869cf573b731a897b4f66142293058c9abd36a8404c25ef",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "ae1ff972-7e61-4996-89b9-f0e8a49a3bb3",
+      "gitHead": "bc08b54cc58313454338eef054859e9f8c0250f8",
+      "sourceFingerprint": "sha256:5cd4e1757d515b19e9555e2825f54163c041a3adbb15ba08482385d79cc273a2"
+    },
+    "/openwiki/workflows/model-training-and-tracking.md": {
+      "pageVersion": "sha256:cb54eeb2e62e2596bf7ff9f37404e94fa80f9613dceec3ed3fca34ec3ed353ed",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "ae1ff972-7e61-4996-89b9-f0e8a49a3bb3",
+      "gitHead": "bc08b54cc58313454338eef054859e9f8c0250f8",
+      "sourceFingerprint": "sha256:5cd4e1757d515b19e9555e2825f54163c041a3adbb15ba08482385d79cc273a2"
+    }
+  }
+}

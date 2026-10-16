@@ -177,35 +177,53 @@ spec:
           cloud 'k3s'
           defaultContainer 'ml-runner'
           yaml '''
-apiVersion: v1
-kind: Pod
-metadata:
-  namespace: jenkins-ci
-  labels:
-    app.kubernetes.io/name: taxon-vision-jenkins-gpu-agent
-spec:
-  serviceAccountName: jenkins-agent
-  containers:
-  - name: ml-runner
-    image: ghcr.io/prefix-dev/pixi:latest
-    command: ["sleep"]
-    args: ["99d"]
-    tty: true
-    volumeMounts:
+  apiVersion: v1
+  kind: Pod
+  metadata:
+    namespace: jenkins-ci
+    labels:
+      app.kubernetes.io/name: taxon-vision-jenkins-gpu-agent
+  spec:
+    serviceAccountName: jenkins-agent
+    containers:
+    - name: ml-runner
+      image: ghcr.io/prefix-dev/pixi:latest
+      command: ["sleep"]
+      args: ["99d"]
+      tty: true
+      volumeMounts:
+      - name: rattler-cache
+        mountPath: /root/.cache/rattler/cache
+      - name: hf-cache
+        mountPath: /root/.cache/huggingface
+      - name: optuna-studies
+        mountPath: /workspace/optuna
+      - name: host-embeddings
+        mountPath: /var/lib/taxon-vision/embeddings
+      resources:
+        limits:
+          memory: "16Gi"
+          cpu: "8"
+          nvidia.com/gpu: "1"
+        requests:
+          memory: "2Gi"
+          cpu: "1000m"
+          nvidia.com/gpu: "1"
+    volumes:
     - name: rattler-cache
-      mountPath: /root/.cache/rattler/cache
-    resources:
-      limits:
-        memory: "16Gi"
-        cpu: "8"
-        nvidia.com/gpu: "1"
-      requests:
-        memory: "2Gi"
-        cpu: "1000m"
-        nvidia.com/gpu: "1"
-  volumes:
-  - name: rattler-cache
-    emptyDir: {}
+      emptyDir: {}
+    - name: hf-cache
+      hostPath:
+        path: /var/lib/taxon-vision/hf-cache
+        type: DirectoryOrCreate
+    - name: optuna-studies
+      hostPath:
+        path: /var/lib/taxon-vision/optuna
+        type: DirectoryOrCreate
+    - name: host-embeddings
+      hostPath:
+        path: /var/lib/taxon-vision/embeddings
+        type: DirectoryOrCreate
 '''
         }
       }
@@ -214,6 +232,7 @@ spec:
           sh '''
             export PATH="/root/.pixi/bin:$PATH"
             export PYTHONUNBUFFERED=1
+            export TAXON_OPTUNA_STORAGE_URI="sqlite:////workspace/optuna/optuna_studies.db"
             which git >/dev/null 2>&1 || pixi global install git
             which kubectl >/dev/null 2>&1 || pixi global install kubernetes-client
             git config --global --add safe.directory "*"
@@ -222,7 +241,19 @@ spec:
             pixi install --frozen -e dev
 
             # Pull latest DVC manifests and datasets from DagsHub
-            pixi run --frozen -e dev dvc pull -f
+            pixi run --frozen -e dev dvc pull -f data/manifests
+
+            # Tiered feature embeddings retrieval
+            mkdir -p data/embeddings
+            if [ ! -f "data/embeddings/cached_features.pt" ]; then
+              echo ">>> Attempting feature cache retrieval from local-minio remote..."
+              pixi run --frozen -e dev dvc pull -r local-minio data/embeddings/cached_features.pt || true
+            fi
+
+            if [ ! -f "data/embeddings/cached_features.pt" ] && [ -f "/var/lib/taxon-vision/embeddings/cached_features.pt" ]; then
+              echo ">>> Recovering cached features from host cache tier..."
+              cp -f /var/lib/taxon-vision/embeddings/cached_features.pt data/embeddings/cached_features.pt
+            fi
 
             # Extract vision foundation features from S3 manifest if not cached
             if [ ! -f "data/embeddings/cached_features.pt" ]; then
@@ -231,6 +262,11 @@ spec:
                 --extractor "${EXTRACTOR:-dinov3}" \
                 --manifest data/manifests/dataset_manifest.parquet \
                 --out data/embeddings/cached_features.pt
+
+              # Cache extracted features back to host tier and local MinIO
+              mkdir -p /var/lib/taxon-vision/embeddings
+              cp -f data/embeddings/cached_features.pt /var/lib/taxon-vision/embeddings/cached_features.pt || true
+              pixi run --frozen -e dev dvc push -r local-minio data/embeddings/cached_features.pt || true
             fi
 
             # Execute classification head training (with optional Optuna tuning)
@@ -251,9 +287,9 @@ spec:
             # Re-export fresh ONNX computational graph
             pixi run --frozen -e dev python -m taxon_vision.inference.onnx_exporter --extractor "${EXTRACTOR:-dinov3}"
 
-            # Record trained model artifacts in DVC cache and push to DagsHub remote
+            # Record trained model artifacts in DVC cache and push strictly model checkpoints to DagsHub
             pixi run --frozen -e dev dvc commit -f models/checkpoints/head.pt models/checkpoints/model.onnx
-            pixi run --frozen -e dev dvc push models/checkpoints/head.pt models/checkpoints/model.onnx
+            pixi run --frozen -e dev dvc push -r origin models/checkpoints/head.pt models/checkpoints/model.onnx
           '''
         }
       }

@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:c6dcc8409857bbb21869cf573b731a897b4f66142293058c9abd36a8404c25ef",
+  "claims": [
+    {
+      "id": "claim_9141a442929a4c6bb20390cb3aba5277",
+      "statement": "The _ONNXDualOutputModule wraps TaxonClassifier to delegate forward execution to forward_with_embeddings, ensuring the exported ONNX computational graph concurrently emits both classification logits and penultimate dense feature embeddings.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/inference/onnx_exporter.py#L24-L56",
+          "version": "repo-lines-v1:sha256:f70c33f471cb81f280dc6aa01474301ba8b070f218faa3f7f3d3028aa06d0ed5:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRmZjdkNDgzY2RhZDVkMWU5N2Y4YmUzNDAwM2E4YjYzOGJhNmQ0MGZjZTNkMjFjYjAzNTg4NDhjMTdlYjBlOWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYyMDA5N2U0YWE1MDA2OGJhMTU3ZjlhMjczOWZhZDg2OTk1ZTFlMGNkY2NkYWRjNTg5N2MyMDM0Yzc0ZDNlZmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFmN2ZlMDIzZmVkY2Y3Mjk3ZmRjNDA0ZjI1MGY5MmRmNTNiNzBiMzJmZjc4N2MzNDM5OWYzZjc3MWQwNjI2YjQifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/inference/onnx_exporter.py#L88-L98",
+          "version": "repo-lines-v1:sha256:90a19d17ed03d55b675a22a6068612f468a4357e8136df27cc86f27d01739e3c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhjMzExYTMxNGJkODBiZTA3Mjg5MzIwN2UyNGI0MzI2NWE5MWU4NjFkZDljMTBjZGZkNWRjMmE0NTE2NWY5YzEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUxODgyY2VjMmE0M2Q2OTI1ZDM2MTkxM2FiNjMwZDdmMmY4YzM5MDI0ODU5YjNmY2ZiZDkzNzExNzA1Y2U3M2YiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQxOWQ1MWU5YTRkZDIyNDg5MWM1Y2M3NDMxMjg5ZTkwNTE2M2U4ZTg1M2FjYTY4YTZhOTljNzc2YmNiYWI3MWIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_fd82237640c1469b9990264457ec1cc1",
+      "statement": "The export_to_onnx function configures dynamic batching across input, logits, and embeddings tensors, runs graph constant folding, and serializes the model to the configured ONNX operator set version.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/inference/onnx_exporter.py#L58-L111",
+          "version": "repo-lines-v1:sha256:45eb2bf63fac08ce95d8785a704cde268f47e760af6ed702edd53119386142c8:eyJzZWxlY3RlZExpbmVDb3VudCI6NTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg5NzZlNWZmMjEwZjUzMTE5ZTcxNjcyOWUwYWM3Zjk3YjJhYjBjODk4ZTdhOWI4NGVjMjI3ZjU4Yzc5MDJlNWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJmNDY5ZDU3NDkwZDAxM2ZlODg3MjcxNzBmMzAyMmM1NDRmYmE3M2U3MjQ0MjNiOGFhZTE3Yzk5Mjg2ZDc5MDEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNmZGY0ZDA4OTJlNDc5YjA1MTUwMTFkNWY5YTkwZWYxMWRiZGU4MDI0ZjFjYzZkNWQzOWI4NTRiNTAzYzZlNzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM4MTMwNDNhMjExY2I0MzdjZGZlMmY2OTM4MmI5YWIwMmY5MmM0MmI4M2I1YmU1YzhmZjEwNGZjNGU3ZGMyYzYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_29ccf2b0382a4b77ad7417c8527ca9d0",
+      "statement": "The ONNX export CLI validates checkpoint compatibility and strictly aborts with exit code 1 on missing or mismatched checkpoints unless the untrained fallback flag is explicitly set.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/inference/onnx_exporter.py#L160-L208",
+          "version": "repo-lines-v1:sha256:d848555a118a3b5e1c0f9d42390ea0d1b4978307d3e8090cfa4c058037230f25:eyJzZWxlY3RlZExpbmVDb3VudCI6NDksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgyMmEwYmE2OTcxYzE1Y2I5MjljZDlkYmFkZGNlYjE0NTlkM2RmNjk0ZjFiOTRjOWYwYjVhNDY3OGRmMTQ5MTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjczM2U4NDg3Yzg1ZGZkY2Y5ZmE3YjkzYzc0NmM5NDYyNWFlNDdlMTIwYzc5N2U3OTFlNzM3ZjllZDdmZmM3M2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZjMWJjMTU0Mjc1ZTIzYjIxMGRlYmU5ZDQyZjk3NDI3MjkwMjkyOTUxODE2MjQwNWJiMmYyZjAwZjM2ZDA0N2EifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/inference/onnx_exporter.py#L355-L406",
+          "version": "repo-lines-v1:sha256:86d785157df21e9c568971491c7624da5fa115d03cc1d459300858ee273ca498:eyJzZWxlY3RlZExpbmVDb3VudCI6NTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkYTVjNjZlMTdiMTQ1Mzk3ODM0YjhjODU0ZGM0MTkzZTIxMjUxODBhODk5NmExNGMzMTg4MzMyNmIyZWZiY2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZiZTk4MDNlZjg0MGI3Y2FjNzkyNGRlOGMyYjE3NjgyNmE1ODAwZDZjYzE1MDRkM2I1MDE1YzgzMGE0NjYzMDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRkMjRhZWU3MDdiOTEwMzQwZGJjYjZiMTk3YjE0ZjBlZGRkM2RjYzcxMTM5OGE5YzhkNWNiNzdjZDA2YjI5MTMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d87646597ab7447f88265e8fc382666e",
+      "statement": "Static post-training quantization executes QDQ-format quantization using offline MinMax calibration across Conv, MatMul, and Gemm operators while preserving normalization, activations, and softmax in FP32.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/inference/quantizer.py#L171-L220",
+          "version": "repo-lines-v1:sha256:663d7018e8a28536a06e027e81a51d67f5296996314bd394b95c09b3b061aae6:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY5NWJiMThlOWU5NTY0MmVlN2RlZTI4ZDE1YTY0NzI3YjNjMDAwM2E1MjVjMjE2MWYwNzM2N2RiODc4MGU0ZmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIzNTQ2MjkwOTdmYjQ2MGZkYzYwZWQ5OTZkZjU1NWVlMjY5OTFmZDhhYmQwMzQ5NTkyYTY4YjM0ZGYzYTMxOGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVmOWEzYTQzMGM5YzFjN2JhY2NkM2JkZDMyODYzZjFhMTAyY2RhNGViNmQ5YzE2Y2ZlY2IxOWFmNmQ1NWI5MjIifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/inference/quantizer.py#L43-L45",
+          "version": "repo-lines-v1:sha256:9b8e47a0bef5984bd70ffd2ce35f52e09971c85e85dabc1afb3cbd96d2116e81:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOWQ3NDhjMmNjMTk1NjQ0ZTQ1OGRiOTk2NWE0OGJkNWQ3YTBmNWYxZjdkN2VjZjlmNTAxNjRiNjI3MTRlYjc3NSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTBhNGYyOGJlMmE4N2NjMGJkNDI1ZjllY2IzNjIyYWMyODY3M2M0YmMwODU1NDNjM2Y4OWMxMzE0MjU3Zjg5OCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWI5YTliOGJkMmRhMWRjNmE3MTFmYjdmY2U4ODQ2MDU5YzAyNWFhYzEyOGZjMjIxMTgxYzJkYjA5ODUxOWMzZiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_ce39d52557da4208b8e899ab9bc69d28",
+      "statement": "Dynamic INT8 quantization quantizes only MatMul and Gemm operators without calibration data and deliberately excludes Conv operators because ONNX Runtime lacks an efficient dynamic INT8 convolution kernel.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/inference/quantizer.py#L222-L267",
+          "version": "repo-lines-v1:sha256:3fa0d2c913932480893357b6a5711cd2350d5e522851c7afd5e7bd676a111319:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY4YzA5NjYxYWQyYmQzODcxY2M1YjkwM2RkMGQxMDZmMjkyNWZkZjIzYjRkMjBhYzcxZDRmMzNlMDhiYmNlMmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk2ZTU4YTdmNGJhNGNhNTUyNDNiMjY0NjhkYjA2OTlkZjcxYmU1ZWQwNWNkOTlkMzM3YzIyMTg5ZGY4MmZmNjUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU3YjUxNzgwZDgxNGNiNDEwYzYwNjVlNWE5MDc0NWNhY2EzMDNlNWJjNmU3MzQ0ZGI5YjdmZDNmMmYwMTBiMzIifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/inference/quantizer.py#L46-L47",
+          "version": "repo-lines-v1:sha256:d2ad35c510a52753fd634ba2bb5ccb75ecf701f036d9bf71c7811a0032d58dbf:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMWY5ZDQzYjBlZWQ4ZWZkMWMyZDgwOTljYjc1ZjM1NGQyNjJlZTEwY2YzNjg0ZTc3YWIxY2UyYTYxMTNhNDY1ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMmY2ZjVjMGE0ZGU5NDQxN2VhNWIyNzU1OTMxODRiMjE5OWE0ZjZjYzA4OWQ0YzA5NWI0MmEyMmUzNDFjMjM4MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWI4ZTQ3YTBiZWY1OTg0YmQ3MGZmZDJjZTM1ZjUyZTA5OTcxYzg1ZTg1ZGFiYzFhZmIzY2JkOTZkMjExNmU4MSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNTY2MjEzNGIxZGFkMDVmMDMyOTY2OTgzNmVmZTZjNTkwNWE2ZGEwY2UwNjNlNTY4MWM2YTRlYjRlMjk1YjFlYSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_2eee17b949c24b529283c8387cacf9cb",
+      "statement": "The find_logit_nodes routine locates graph output producers and upstream MatMul nodes to exclude them from INT8 quantization, preventing logit staircase discretization that would bias conformal prediction non-conformity quantiles and energy-based OOD thresholds.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/inference/quantizer.py#L200-L215",
+          "version": "repo-lines-v1:sha256:55d67d2db1a809bef3b5d7e46468c9c3c1a5e5634cc47a618ad8e46201b6aae8:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRhNGRhOTYwOWU0YjU1MzNkOGQ4ZDMxMTNkNzhlOWVkZjFjNTJmNjg0ODI4NmNiNTI3MzQ0MmU4ZmJlMDNjZTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1MDMyZTk2NGQwOTMyMzUxZTVkMTg1MjY5MjgxYjE3MWEzYTA5YjA4YjI4NmU2NjFlYTQ3MDMyM2M4MmViNGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRkODE2NzI3ZTk5NmIzMWQxZTQzZDNjNTIxMWUzMzU0ZDE5MjJlYTYxYjNlZjRhZWI2OTEwMzJmMDNhMDFhYzgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA0MzYxZmJlOGRhMGFiZDEyZjA5NThhMWE1NjNkMDI1NDdjN2IxYjQ2OWE4YjhjMTE2OTg0ODczZjY2MDZhMjMifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/inference/quantizer.py#L93-L149",
+          "version": "repo-lines-v1:sha256:33be51ebe49a6bc52cf200d35ad46dd59f0eaf94856c8418c220c5ef28c9b78e:eyJzZWxlY3RlZExpbmVDb3VudCI6NTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRlMmQxMzY1MDNlZTMwNDNhNTA3YzkzMjU3MzM5MGFlYjk3YmJmN2ZhYzMwYmIxN2I0YWE5YWQ2NWIzMDRiZGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhlNmUwZGE2ZThlMDYxN2Q2YzVkOWRjNjgxOGU4NWU2YWQ1OGJhMGM4NzZlOGViYWQ5ZDg4ODIyMTVlYmZhNmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZkYTg1MjIyMDU2YmE2ODFmOGViMDhmY2U1ZmVkYjZlNjBjZGU3Yjk5NjFmOGNlN2FjNWZkOTk5NDk1ODk3YzAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_648250c3cc5a4f69a4ab8093ca18cca5",
+      "statement": "The load_calibration_tensors pipeline deterministically samples real domain imagery using the exact serving transform geometry and prohibits synthetic noise to avoid clipping real activation dynamic ranges during static PTQ.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/inference/calibration.py#L23-L74",
+          "version": "repo-lines-v1:sha256:6212cbd330089d511e5173accd7840512c76252d11e23f35b3afce21ed5148d2:eyJzZWxlY3RlZExpbmVDb3VudCI6NTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVhNzAyMTNiYjcxOTY5OTk5MTg4MDBlMWJlMGM4ZjM5ZDg5OThiYWMxZDU3ZTU0NjNkOWU4ZDI4YTc5MTA0OWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAwNjI3MjM0MmM0ZTYzMzkwMjNiZTlmMjkzZTg3NGI1ZjYwNWM5MjQ5MGMxMTFkMDczZjBhZmZlOGI3MDc2ZDYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFkNTQzZTQ5YWVlZjhjODRkNzFhZDBhZTk2ZWE5OGQ2NTMxZmMyNjBmNzEwZWUxZmI0M2RiMWZjZmU2YjNiMjQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ef99136c43fc47aea330e161b479df7c",
+      "statement": "The quantize_onnx_model dispatcher resolves auto mode to static when calibration tensors are provided and to dynamic otherwise, raising an error if static quantization is requested without calibration data.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/inference/quantizer.py#L269-L315",
+          "version": "repo-lines-v1:sha256:0b4d1e134d82018c87d01c455229c55e4ad1806752ece99b62ce879018695266:eyJzZWxlY3RlZExpbmVDb3VudCI6NDcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZjMzJmMWQ1ZDExOTY1MGY3ZTNhNTkyODk2Zjg5ZTZmNDRmN2RiNzJhYTM0YWJhZWU5YTVjN2U5YmMxNThhMjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY3YTcxYjRmZWNiMGQ3MmM4YzAyNzJlNzRiZWY3MjkyODI0ZjgxYzI2YjEwMmRhNWRjNmUxMGU3YWY4ZDUxOWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk2ZTU4YTdmNGJhNGNhNTUyNDNiMjY0NjhkYjA2OTlkZjcxYmU1ZWQwNWNkOTlkMzM3YzIyMTg5ZGY4MmZmNjUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_17c37860fe3b4d2488edaad014fbe215",
+      "statement": "ONNXInferenceEngine maintains a persistent ONNX Runtime session with graph optimization level ORT_ENABLE_ALL and executes single-pass inference returning an InferenceOutputs dataclass containing logits and optional embeddings.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/inference/onnx_engine.py#L14-L25",
+          "version": "repo-lines-v1:sha256:3a1b756c71af4751baa92e62da0c0e62d983b47c871591572293ae2289249487:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY2OWExMzk3NWMyNTZlYzgzMjBlMjAxNjA4M2M5NmRmNjM3Y2EzZDM1YmViZGUyMzE0YmVlM2E0NzExYjU2Y2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhhMmIyYTY2NmU4YWJjNWI2OWIwYWVhYWExNmM1NmIxMTViMjJjYThmZTNjNzAzMjE1ZjcyMmQwNmEzYmQ5OGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFmMzlhY2Y4Zjk4Y2E4MzU4ZGVhYTk4YzQ0ZTQ4N2VkODQ4YjdlNWYxYjg4YWYxZTZkMDkwOGFhYjJhODg5YjQifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/inference/onnx_engine.py#L48-L87",
+          "version": "repo-lines-v1:sha256:cbf2dbee09e641d40e5261d475d9448c5ab0a11c59214cab03073472851309a3:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdkODZmMTZiZTAxZTU5OGZlNDA2ODAzNmQ5MGM5Y2VmNjcwZmEwZjAwNzk1N2U0NjY2NWQ4OWQ2MGEzNzcxM2QiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcxODg4MmY1N2U2ZGEzYThiNTI4YzAzMDE3MGQ4MWU5YjI4ZWNiYjZmMDZjZjBlOWMxYzNmNDRiZDE1M2ZlMjkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU1NzcxOGJmM2Y2MzRkYTI0OGU3ZjMyOGJlNmVhOTA0NmIyZmViMmRjOTEwMWU5MGU1N2VhODFlMDAzN2VlYjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY0ZmFmNjA4YmJiMjcyNTA5NzNlZmY5MGIzNzM2ODM4MDY3OWFmMzRlZWZhNzUxMWIzZDcwNWMzOWZlNWE1ZTYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_034a5e9008994540bcf85fd9036ac40e",
+      "statement": "The inference service router get_onnx_engine validates output class cardinality against the taxa catalog and enforces strict failure if the ONNX artifact is missing under inference_backend='onnx', while falling back to PyTorch with a warning under inference_backend='auto'.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/service/inference.py#L128-L163",
+          "version": "repo-lines-v1:sha256:2b74ba6645960c85d287f278b41cf2b8be8ad9c78d450d5d3862ba14ce6a512c:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkNmYxOWY4ZTlkMGU5YmQwYjI5MDkxNzU0Mzc5OGZhMTUwNzhmMDY5OWEyYTk5NGUzNDY5NjUwYjZmODk5NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUyNmYyYzAzNzQxYTU5NjA3NzA3YTQ2ZWIwODViZTgxMDFlYzE4ZTk2YzY3MGUwYzdjZTBmYTExYTk1ZjNjMjEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNhNjAwZDQwZjZhMDNmMTFiOThjYTYyYTY3MzZjODRhMmI1YmEzNmUxOGI0N2EzNDcyNDcxMjczM2M2ZjVmMzAifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/service/inference.py#L329-L342",
+          "version": "repo-lines-v1:sha256:4be43a90815dba0e6627f447a7d7936ed40c73b57550e3746c5c474cced6e764:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA1NGVhZTFlOTQ1YzEwNWUyYjQ5MTU5NjlhMTJjYzFiM2I4ZjNiZjRhNmUyMjE1NGI1OWUzMWVkY2VhMjY4ZjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc1ZGM4OGQxZjYyZGZmYjNmNDJiNTcyNDY5N2NiYzFjYWE3OWFlM2Q1ZmI4MDNkNDkyMjA4NDc1OWQyOTlkYzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYxYWViMTc3MGU2ZDA0ZTc4M2I3OWMwNjE4ODM0MzkwODNjYTlmOGE3Y2NmMjE4ZmQ4ZTlhOTVjYjI2YzlmYjMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_18b0850849d140e9ad047311214a7b40",
+      "statement": "The Pareto benchmark script evaluates candidate vision backbones across accuracy baselines, P50/P95 latency, throughput, peak memory, and serving cost per million inferences to characterize architectural trade-offs between cloud GPU serving and edge CPU deployment.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/benchmark_pareto.py#L155-L200",
+          "version": "repo-lines-v1:sha256:c865843eb904db9e0bb57b773b0e942f4004c4aa5d0dbbcfee687c6a220cb0c4:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkMzgxMjE2MTVhZjg4MjQ5OTQ4OGVmODVlYzQ0Y2VlOTNmNWVkZjY1MzZjYjBjNzU4NTIyNDM5ZDU2MmU0MGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE0ZDM1ZWM1MDUwNzBhMTAxNzY5ODU1ODk5YTc4ZmE2OWY5NGUyYzY2M2MyNzQ5NWU1ZDY0MGMzMzRlNGMxNzMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAzMmU2OTIyNTE4NDY1ZGVlOTg3MGU3NjAxNjU0YWVkZWI4OThiODQ5ZmJmNmMzZjA0OGM4YzE5MmY3M2JmMGUifQ"
+        },
+        {
+          "resource": "repo://scripts/benchmark_pareto.py#L28-L140",
+          "version": "repo-lines-v1:sha256:76fcd55a97007e7222b650684d2d5d976f3d8457f54a69d27a7ad4b2aef40dd4:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEzLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJiNmZiYWUwYjkxZDQ0ZmMwZDQ5ZjVkZTY5MWRhNmZjNDMxZjI2MDEzNGJmNzMxZTBlMjFmNzY0ODA5NDMzNGNiIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJhZGQyNDQ1ODJiNmZiMDNkMjNiODQxNWFiZWNkMzQ2YjBjOWY0NjZiNmY3NTJiMDY4MTg5Y2U3ZTlhMmRjMzUwIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI2MjAwOTdlNGFhNTAwNjhiYTE1N2Y5YTI3MzlmYWQ4Njk5NWUxZTBjZGNjZGFkYzU4OTdjMjAzNGM3NGQzZWZhIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJmODc4ZWI0Mjk3ODAxY2UxZWNiNDhiZjZiMWM5N2E2ZjQ0OWUyODNmOTg0MWE1MWUyZTIzYzJkNDYxMjg2OTYxIn0"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-15T19:46:36.219Z"
+  }
+}

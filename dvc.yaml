@@ -11,6 +11,15 @@ stages:
         - ingestion.per_page
     outs:
       - data/manifests
+  extract_features:
+    cmd: pixi run --frozen -e dev python -m taxon_vision.pipelines.extract_features --extractor dinov3 --manifest data/manifests/dataset_manifest.parquet --out data/embeddings/cached_features.pt
+    deps:
+      - data/manifests
+      - src/taxon_vision/pipelines/extract_features.py
+    outs:
+      - data/embeddings/cached_features.pt:
+          remote: local-minio
+          push: false
   train:
     cmd: pixi run --frozen -e dev python -m taxon_vision.models.trainer --epochs 5 --extractor dinov3
     deps:

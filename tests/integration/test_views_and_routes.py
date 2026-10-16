@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import io
 
+import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
@@ -66,3 +67,37 @@ def test_metrics_endpoint() -> None:
     resp = client.get("/metrics")
     assert resp.status_code == 200
     assert "taxon_predictions_total" in resp.text
+
+
+def test_explain_endpoint_saliency_extraction_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify CAM visual explanation endpoint translates SaliencyExtractionError into HTTP 422."""
+    import taxon_vision.service.routes.explain as explain_mod
+    from taxon_vision.inference.cam import SaliencyExtractionError
+
+    def mock_generate_heatmap(*args: object, **kwargs: object) -> None:
+        raise SaliencyExtractionError("Backbone failed to emit spatial activations")
+
+    monkeypatch.setattr(explain_mod, "generate_heatmap", mock_generate_heatmap)
+    buf = io.BytesIO()
+    Image.new("RGB", (32, 32), color="green").save(buf, format="JPEG")
+    buf.seek(0)
+    resp = client.post("/api/v1/explain", files={"file": ("leaf.jpg", buf, "image/jpeg")})
+    assert resp.status_code == 422
+    assert "Backbone failed to emit spatial activations" in resp.json()["detail"]
+
+
+def test_ui_predict_htmx_saliency_extraction_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify UI predict HTMX route sets heatmap_status='unavailable' on SaliencyExtractionError."""
+    import taxon_vision.service.routes.views as views_mod
+    from taxon_vision.inference.cam import SaliencyExtractionError
+
+    def mock_generate_heatmap(*args: object, **kwargs: object) -> None:
+        raise SaliencyExtractionError("Spatial map unavailable for model")
+
+    monkeypatch.setattr(views_mod, "generate_heatmap", mock_generate_heatmap)
+    dummy_img = io.BytesIO()
+    Image.new("RGB", (10, 10), color="blue").save(dummy_img, format="JPEG")
+    dummy_img.seek(0)
+    resp = client.post("/ui/predict-htmx", files={"file": ("test.jpg", dummy_img, "image/jpeg")})
+    assert resp.status_code == 200
+    assert "Visual attribution (saliency heatmap) is unavailable" in resp.text

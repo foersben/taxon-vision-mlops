@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:1f8f03a0df2462afc3d6e52a60cf16937f6844d76a73df06bc9ad6b39efd18cb",
+  "claims": [
+    {
+      "id": "claim_e7499452d0ca43b6a384f1e88e54319e",
+      "statement": "TaxonVision manages all project dependencies, virtual environments, and multi-platform build targets exclusively through Pixi, strictly banning .venv directories and uv.lock files via workspace architectural invariants.",
+      "evidence": [
+        {
+          "resource": "repo://pyproject.toml#L111-L166",
+          "version": "repo-lines-v1:sha256:76e4f9a1fe3964784824ae2269e79fb3fbd983cc257c6deb5abd9312a464fefc:eyJzZWxlY3RlZExpbmVDb3VudCI6NTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBkZGMxZTc0ZjM3MWNiNjM3YTYyMjk3YzgyNTk1ZmNmMGU5NzkwMTljYzA0NmE0NGVhMmZhZTM0ODcwYzEzZGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ3YTc3YTVkMWIwOTRjYjQyMzU2YTA0MTg4NjFjY2EyYmE3NWE1YWQ1MjRiYzhmZTAzNzdiMjZiYWFhMjgwMjQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE3MWRlMDViMTBjYmFiZGViOTAwYzlmMGY4M2EwMzhlMGIxNmE5MGMxNGZiMmU1M2JhYWFhZWNmZDE2MWYwYzQifQ"
+        },
+        {
+          "resource": "repo://scripts/local_ci.sh#L44-L49",
+          "version": "repo-lines-v1:sha256:2a7e855ca04a898d731f7525d638aca4d6eafacd64ba96c48664ef9621f071e1:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWRmNzg0ZjQ3Nzc3MmNjN2RhYmE3ZDg0YzY1NTI1Y2Y1NDkxNzMzNzc0MmQyNWY1YjczZWJkMjMwNDE4NzFjYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzVmYzkwZmY4YTQ0MTRjNTQ0MWQwZjY3N2M1Y2JmZGEzOGI0NzRlNTFiZmQ1NTlhNTU1OWRlMGY4NzcwNTUyNCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZGJiZTVhYzUyOThjNDFhYjJlYjgyZjdjMDE2M2U5YTk1M2VmMTM2MTkzMmRjY2IyNzE2ODU3ZDY2Yzc2MzRmOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiN2ZkYTA3MWJiN2ZmZWI0YzhiZmU0YjA0ODExZDc3YTI4YWVhOGM4MTg4OTVjYzk5Y2ViYzllYTcxMGJhYTllMiJ9"
+        },
+        {
+          "resource": "repo://tests/invariants/test_pure_pixi_invariant.py#L14-L48",
+          "version": "repo-lines-v1:sha256:9362c3289072cd67dec4e790c2257c4e7e3b1f1ea2da299d258d5f7115fb3de1:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE4ZWYzZGJlNzk4MTA1YmQyZjBlZjAwN2RkMzc2YjNiYmU4OTAzM2I1ODNiZDgzZDBlZmEyMGEwY2NlY2VhMDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEyY2RjNGE2MTc1NmFkMzdmYmIzY2JhZTJjNWY5MzU4YjJlODVlNDJlZWI4MzY2MDNjZmY1ODQxMmZlMDNiNzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYxOTQzYjJlMzNmYWY1M2VhNTUxODAzMzgwNzYwODE1M2FjMjcxNjI4MmU5YjM1MTdiNTA3MmUyNTk5MGUyYTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_70068b45c92d4ed9bb2d90c4d58e1f71",
+      "statement": "The Justfile automates developer onboarding via just setup, with an optional --scratch flag that initializes an isolated Git repository with nbstripout filters and registers an ipykernel in scratch/ to isolate interactive notebook experimentation from repository commits.",
+      "evidence": [
+        {
+          "resource": "repo://Justfile#L13-L49",
+          "version": "repo-lines-v1:sha256:7e11f17f1431bc975643ff075287b761e653d4c907434db85892f5051230d734:eyJzZWxlY3RlZExpbmVDb3VudCI6MzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgyMzg2ODU1NWM2NzU0ZWQ5YTRlM2ViODBlODc5YTViNzRmMGQ4NzFhNmFlY2M2M2NjZjg5ZDI1Nzc5OGI4ZGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYzMzA4YjU1MGUyYTA1ODYxOGMxY2Q2YzdjZDY1MzYwNGNkYjY4MzhkZTBkZGFjYjJmNzM0NTZhZWQ3ODY2ZTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFiM2JkYjI1OWY4YmQ3NWQ2NzhjYTYxZDFkMjMwYTI4M2JiMTRmODg4Y2NjOTA3ZDhkZDViMWQxNjRlYjk5MWQifQ"
+        },
+        {
+          "resource": "repo://pyproject.toml#L126-L132",
+          "version": "repo-lines-v1:sha256:a873016d66c9fe2d48a83bc1767bb1e412fa9ad5ef8d61f185fb3b5fbc304c28:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiM2YyZGRhNzE1YTEyMzA4NTdkMDk3NzZkYWMxMjYxMzI2NmU0NGE4NmZlNTE5OTQ0ZDM0NTc0ODg1NzY0NDUzNCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiM2E0MDNiYmY4Y2U0MzNkZTU0ZTRlODM0OWM0N2RjMjU2NWJlZjEzMWIyYWQwNGYxNDE5NTU1ZGRkMjg2Mzc5MiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDk0NDQxOTkzYTkxZWJkNTUzNTA1MWJiMzA2ZTQ5OTk1MWQ3ZTBmNzg5NzMyZmY3YzAyNGQ0ZjE2YzRiOTJhNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDlmNzBlZmYwMDk1ZTNhMjExNGY5MDJmZDI1OTc2NDU4Y2NkMzA2ZjczMGIxMTE5MmVmZDY0NzA3MTZkMzRmYiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_d4bcf1bd3853499eb129ce8c38b99ea6",
+      "statement": "Application runtime settings follow a strict Single Source of Truth configuration hierarchy where declarative defaults in config/default_config.yaml are layered with params.yaml, conformal_config.yaml, custom override paths, and TAXON_-prefixed environment variables parsed through Pydantic BaseSettings.",
+      "evidence": [
+        {
+          "resource": "repo://config/default_config.yaml#L1-L79",
+          "version": "repo-lines-v1:sha256:3b789372010863b6d6d8fe3c8b1533cdf7875293a7060c7d809ba362697bd125:eyJzZWxlY3RlZExpbmVDb3VudCI6NzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQzZmY0OTYyMmE0OWY3NzEyMDgyYzliZGRiNTkxZGMxNzg4NTA2MDY2NzQxODUyYzk1OWYwZjUxZDE5MjcwZDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgwM2ZlODA2ZGY5Mzg1NWE5M2RhMTIyYjBlYTdjOWJjNTM2MGFjZjM1OGI5NGM3YjYxMDNjYzFmNmI3YTA5MmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/config.py#L186-L206",
+          "version": "repo-lines-v1:sha256:91e61f1c450b1adfd9afae7048a2fe683688c4ab769427abb45d0b4adcef2db5:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjODYzMzFjOTBiNzhjZGI5MTdmZDViZDY5ZmMwNzE0ZDVhNWZlODQ2MGQ4NzYyNzllMTVmZjQyZmZjNzIzNWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQwZjc4ZDRjZDFiZjc3YWZhNzU2Yzg1MzE5MGQ5ZmJiYTJkY2ZjMThmM2I4NWMzYTc3ODZkZTcwNTc0MGZmMjMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE1ZDIxMjQ3ZWYwODM5MTMyMzQxMWRmNGRiNTJkZTNmN2YwYTA4YmMzODVmNjczOGI3MTBhODEyZDYzNTZkOTkifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/config.py#L313-L355",
+          "version": "repo-lines-v1:sha256:0e1aa15bd9a86f3462eaa0aac33ee4ef51c2fa8f00b604bf0e6d5cf5efef33dc:eyJzZWxlY3RlZExpbmVDb3VudCI6NDMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkNmYxOWY4ZTlkMGU5YmQwYjI5MDkxNzU0Mzc5OGZhMTUwNzhmMDY5OWEyYTk5NGUzNDY5NjUwYjZmODk5NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMzZGRiMTQ4YmIyMmIyYzQ3MjgzNTMyMDRjMWJkZDMxN2M2NDQ1MzhiNDc4N2UwNWI3YjJkZmEyZDZjMDM2ZTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFhYTU5YWRmZTZiMzk3ZTIzOWI0MzgwMDFmMDcxOTBkZGY0ZDAyZmY5MjkwYTQxNWJiMTA2Y2VmODk4NGNjOTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_290dd852ae3846569c92930f5fdb9fcb",
+      "statement": "Test execution is automatically isolated from remote pre-trained weights and production storage by a shared pytest fixture setting TAXON_ALLOW_UNTRAINED_FALLBACK='true' and redirecting flagged observation storage to a temporary directory.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/config.py#L290-L310",
+          "version": "repo-lines-v1:sha256:16494f67e930d8e9ef7ca03be64210286ac38f9728642f3fb24889f10e56627c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA1MjIwMzI0MGZiNDc5NmIyYzdmYjNiODczNTM1NDNjYWY3NWI3M2MyY2E5ZDFkMDEyMjU0ZTUwNmQ1M2Q5NDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY5MzIxN2QwZjAxOGQ1ZDUxYTg4ZDcxMWRhZWU3M2RiNzZiNTFmMWJhNWZiMDRkY2Q1YjVjYmMyOTI1MjE3OGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjlhOGJjNDhlN2FmMTg1ZmRjNTgwNzFhMjdjNTc4ZDkzY2U0YjE3ZWIxMTJhYjM3OTk5OThjMzA0ZmM5N2Q4OWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRiYTY0OGMxNjI3ZDg5ZjM5YTQwNTVkZDA5NTZjZjBlZTQyYjZiZGJjYjRlYjdmZWI2MTdhMmQyMzk2NzE0YzEifQ"
+        },
+        {
+          "resource": "repo://tests/conftest.py#L15-L45",
+          "version": "repo-lines-v1:sha256:31751262df16b394b7de144df8182d615c9ffb0a526c6378cfc7d24b6f6a9238:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZmMDg2NmY0MDExZTU4NWZmYzA5MDkyZWRmMDgzMmUxN2I1MmY0YzkwYzRjYTBiNDJkY2ZhMDUwZmEzNzViNWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhlODg4Y2YwNmMxYmI1Yjc3OTdjMmY5OGI1MjE1YjIwMDgyMzFlYWVlZTMwNmM0NTNjMDM3ZmFlZGZjYzU5MjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNiMGE5MDU4YjdkNGEzZTU0MDM3MmViM2IzZmJmZGM4ZDE0NjJhODFiODFkZWMzYjgzM2VmNDU1YzVkNDE4NmYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d951f5bd866d459d99973de1c9ff1310",
+      "statement": "The local CI harness (scripts/local_ci.sh) replicates multi-pass pipeline validation across pure Pixi enforcement, Markdown formatting (Rule 04), Ruff linting, MyPy type checks, pytest test suites with coverage thresholds, license compliance audits, OKF frontmatter validation, and strict documentation builds.",
+      "evidence": [
+        {
+          "resource": "repo://Justfile#L111-L120",
+          "version": "repo-lines-v1:sha256:67ac28305fcb6376abb9f9c4c0fb459bf264367948c18f2c7ad5d88550359436:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQyZDFmYTU3NzQ4MDBjZjkyNWJmMjE3YTcwYTczZjE3NjllM2RlMWY2NTJlYzhkZGEwYWI5YjM0MWE2ODQ5ZGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU5NTliMDdiZWNjY2FmNDM5MDQzMjkwYzUwYzU4MDM4NjY3ZDAwZWRkMWU4MTQ4OWNkNTEwYTAyYjU5ODZhNWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZhMDgyZDkwZmQ1MTU4MzlhYTIwZWFkOWJkNzkzMTBkYzUwNzY4MzMzZGMyZjYxNWJlNTAyYWNiZjI2ZDEzNWMifQ"
+        },
+        {
+          "resource": "repo://scripts/local_ci.sh#L44-L77",
+          "version": "repo-lines-v1:sha256:9dfd8184a57a2272b29d98ebf52591f6143ef890bb3236e4dc080cee533f42b1:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVkZjc4NGY0Nzc3NzJjYzdkYWJhN2Q4NGM2NTUyNWNmNTQ5MTczMzc3NDJkMjVmNWI3M2ViZDIzMDQxODcxY2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRiYmU1YWM1Mjk4YzQxYWIyZWI4MmY3YzAxNjNlOWE5NTNlZjEzNjE5MzJkY2NiMjcxNjg1N2Q2NmM3NjM0ZjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM0OTQ4NjA5YTM4ZDQ3ZjIxMTAwMzllM2U4MDFhZDcwYTUyMjhlZDg5ZmZmMTk2MWEzYmZiODI1ZDkxMmM3MjIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_627ef4e5d82341d1ba054fccaf3b8fd4",
+      "statement": "MLOps workflows in Justfile integrate DVC dataset synchronization and MLflow experiment logging with system Secret Service retrieval to authenticate transparently against remote DagsHub endpoints.",
+      "evidence": [
+        {
+          "resource": "repo://Justfile#L133-L152",
+          "version": "repo-lines-v1:sha256:39816634c845f5a9481233b5b8ec702751702dc04c8d10e49d4ca6731dc541e1:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE4MmIyNmI2OWY1MjhhNGZiZjI1MGNkNTdkOTQ1ZTdhMWNkYTEwOTg4ZmM5MWQxNWE5NWI2ZmZmZGQ4MjI4NDYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdjNjQzNjI0YzM1YTBiMzYzMzNkYzFiZDY0NTY0MTRhOGRkZGIzYTA3YmQwYjE5OWRlNTcwYzc1NjA1MDg1YjEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ1NTU3YTg5ZmE2YzQ2ZDQ4OWVmYzJhNmRjNmFlZDlkMGRhZjRlYjcwN2Y4ZjkyNmQ3YTU4ODZiMTZkMGYxOWIifQ"
+        },
+        {
+          "resource": "repo://Justfile#L180-L201",
+          "version": "repo-lines-v1:sha256:66893330d11a80caee9b89519079ed7175a14733fbaa3b93e2d54ec34a1b6b12:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc0MTBjMjVlNzM4ZDQzOTdhOGY0MDNiZTQyOTQwODZlZWZjNDdlOTFhZjAxZjExZjdmNjZiMDBjOTllODBlZmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRjZjUxNmJiYTgyOGY3YTM3ZTA4Y2Q4YWI1YjdkZGQ4ODg5M2EyZmQ0NGY3Zjc3M2ZjMmIyZWQ4NGNkMTUxN2UiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjMxOWM0YTM4MTk3YjRmYTZhY2E1MzU0MDYwMTEzMDk5YzBiYTIwY2FkZDcyZTNiMDZkNTdlYjFkZGIxMjViMDcifQ"
+        },
+        {
+          "resource": "repo://config/default_config.yaml#L64-L67",
+          "version": "repo-lines-v1:sha256:319e28daaf08bab0dd6bdc95321f9a0b7982cb88464c9437f5de9e3d89a2ae0b:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZmVlZDZjNDJjYmViODU3NWRhYzFhNDdhNDYyZjlhNDg0YmRmYmU5ZTdhN2Q5Nzg5ZGQ3YjY3ZTlkZjBhMTgzNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZGVkZjA4NWZjYzdlNDM0MjdhZGI3ZWViYTg0ZjJmMWI0OGM3NDNjOTcyODA3ZWY5ZjhlMTRiYTk0Zjc0M2QzNCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNTBlOTliNjFlY2I2N2NjYWEyZWNhNzg4YmVjNWZmZWVjY2I1NDRjM2IyNGQ4MWJhNzZkOTEzNTY4ZWNlM2UxMyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_853b12edb8704c3aaa5e8f4bfb10f408",
+      "statement": "The serving stack exposes a unified FastAPI ASGI server with HTMX interactive dashboarding and live reloading via just run or just run-api, binding to port 8000.",
+      "evidence": [
+        {
+          "resource": "repo://Justfile#L204-L213",
+          "version": "repo-lines-v1:sha256:f0c7ec70e25b55e3d56d899398ec8ab7aa8e4089e7d7e8a3a8a1f12e1ff35bf7:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhlYmRiNzA3NTk2N2ZjNDhhZWRiNjI3ZGEzNDA2YmU2NWUxMzFlMGJmNmE5NzQ5YmMwMDg3NjA4MzkyMjgyZmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc0M2QzNGZlMGYzYjQ3YjZlYTg3YjhkZGRjZmE0NmMzZTI4NzJjZjBiOWY2Nzg2YzRkOTc1YWE4YWNjOTlkNWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgxOWViMGQ4MzYwZGU4ZDYwMzU1M2JmNjFiZDdmOTZhMDVlZmUwZGRkMWYxNjJiN2IyY2Q4MDU4MTExN2E2MzIifQ"
+        },
+        {
+          "resource": "repo://config/default_config.yaml#L2-L9",
+          "version": "repo-lines-v1:sha256:201965aaf8486f8796411aa7ef8834e0add270a8c2c325368d1784727d553620:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDgwNGE4YjRhMjkxMDk1OTgxNTk1OGIzZmZiMTk0ZjRkNzJhNThlMjBlMGRhZmQ0MTNjNjc2ODM0YzkzMzc4NyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjEsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDNmZjQ5NjIyYTQ5Zjc3MTIwODJjOWJkZGI1OTFkYzE3ODg1MDYwNjY3NDE4NTJjOTU5ZjBmNTFkMTkyNzBkNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZGJkMTdkNGJmMGNkODZlOTExMzM3ZTA1MDIzZjhkYTE2YWIyOGUzYjFlZTE2ZjJjNTEwYjU2NGRlMDg5NTkxOSJ9"
+        },
+        {
+          "resource": "repo://src/taxon_vision/config.py#L32-L50",
+          "version": "repo-lines-v1:sha256:e22ffbfcc8650e819c58a49209c43333de4b84c6dd55d8fd6e7f55c65fea1e1d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjZTczMjk4MjE3NGIwMTcxN2Y0OTU5NWQxZWRkODg0ZDIwOGJiZjYyNjA1M2I3NDgzMzFhNmY5MGMwN2Q3YzQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZkYzExNjI2OTRkZmZhNzA0NjU5MDA2MTExNTBiYzE4OTVmOWVmNGRiNWQxMjNjMmFlMzkyMTIzNGE1Y2E2NjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAzZDMzZjU5MWM2NzA3YjM3MGYzOGVmNjRiMzk2YjFmNGM5YTMyNTJmZmFiNmU1YWMwYmZkN2MxODM0N2E1YzEifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-15T19:46:36.219Z"
+  }
+}

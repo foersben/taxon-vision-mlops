@@ -7,7 +7,7 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^(\.agents/|docs/)
+        exclude: ^(\.agents/|docs/|openwiki/)
       - id: end-of-file-fixer
       - id: mixed-line-ending
         args: [--fix=lf]
@@ -84,8 +84,15 @@ repos:
         name: Enforce Google Open Knowledge Format (OKF v0.2)
         entry: pixi run -e dev python scripts/validate_okf.py
         language: system
-        files: ^(docs/|\.agents/).*\.md$
+        files: ^(docs/|\.agents/|openwiki/).*\.md$
         pass_filenames: true
+
+      - id: openwiki-sync
+        name: Update OpenWiki Code Documentation (OKF)
+        entry: bash -c 'openwiki code --update --print'
+        language: system
+        pass_filenames: false
+        stages: [manual]
 
       - id: audit-license-compliance
         name: Audit iNaturalist Open License Compliance

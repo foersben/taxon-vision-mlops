@@ -30,6 +30,7 @@ def test_environment_isolation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     flagged_dir.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("TAXON_ALLOW_UNTRAINED_FALLBACK", "true")
     monkeypatch.setenv("TAXON_FLAGGED_STORAGE_DIR", str(flagged_dir))
+    monkeypatch.setenv("TAXON_OPTUNA_STORAGE_URI", "memory")
 
     from taxon_vision.config import get_settings
     from taxon_vision.service.inference import reset_model_caches

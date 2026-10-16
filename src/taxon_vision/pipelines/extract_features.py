@@ -198,8 +198,7 @@ def build_taxon_index_map(
         Biological taxonomies in citizen-science repositories use arbitrary, non-contiguous integer IDs (e.g., Monarch Butterfly is `48662`, Western Honey Bee is `47120`). Deep learning classification heads and loss functions (such as PyTorch `CrossEntropyLoss` or `ClassBalancedLoss`) mathematically require target labels to be dense integers bounded by $0 \le y < K$, where $K$ is the class count. Creating a deterministic mapping guarantees alignment between observation metadata and head logits.
 
     How:
-        Initializes baseline mappings from `DEFAULT_INAT_TAXON_MAP` when `include_defaults` is True.
-        Resolves catalog items via `_resolve_raw_catalog` and maps candidate keys via `_populate_taxon_indices`.
+        Initializes baseline mappings from `DEFAULT_INAT_TAXON_MAP` when `include_defaults` is True. Resolves catalog items via `_resolve_raw_catalog` and maps candidate keys via `_populate_taxon_indices`.
 
     Args:
         catalog: Optional pre-loaded list of taxa metadata dictionaries.
@@ -248,7 +247,7 @@ def extract_batch_representations(
 
 
 def stream_and_extract_representations(
-    streamer: S3ImageStreamer,
+    streamer: S3ImageStreamer | Any,
     backbone: torch.nn.Module,
     taxon_to_index: dict[int, int],
     transform: transforms.Compose,
@@ -434,6 +433,25 @@ def run_feature_extraction(config: FeatureExtractionConfig) -> Path:
         device=target_device,
         limit=config.limit,
     )
+
+    manifest_total = min(len(streamer.df), config.limit) if config.limit is not None else len(streamer.df)
+    extracted_total = len(embeddings)
+    success_ratio = extracted_total / max(manifest_total, 1)
+
+    settings = get_settings()
+    min_success_ratio = settings.data.min_extraction_success_ratio
+    if success_ratio < min_success_ratio and not settings.model.allow_untrained_fallback:
+        logger.error(
+            "Extraction completeness gate failed: extracted %d/%d (%.2f%%) < required %.2f%%",
+            extracted_total,
+            manifest_total,
+            success_ratio * 100.0,
+            min_success_ratio * 100.0,
+        )
+        raise RuntimeError(
+            f"Extraction completeness gate failed: extracted {extracted_total}/{manifest_total} "
+            f"({success_ratio:.2%}) which is below the minimum threshold of {min_success_ratio:.2%}."
+        )
 
     logger.info(
         "Successfully extracted %d representations of dimension %d.",

@@ -24,7 +24,7 @@ import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -76,7 +76,7 @@ def _parse_frontmatter_block(content: str) -> tuple[dict[str, Any] | None, str, 
     try:
         data = yaml.safe_load(yaml_text)
         if data is None:
-            data = {}
+            data = cast(dict[str, Any], {})
         if not isinstance(data, dict):
             return None, body, ["YAML frontmatter must be a key-value mapping."]
         return data, body, []
@@ -103,6 +103,9 @@ def _resolve_source_path(resource: str, doc_path: Path, root_path: Path) -> bool
     if not clean_resource:
         return True
 
+    if clean_resource.startswith("repo://"):
+        clean_resource = clean_resource[len("repo://") :].lstrip("/")
+
     # Check relative to document parent
     if (doc_path.parent / clean_resource).exists():
         return True
@@ -111,6 +114,9 @@ def _resolve_source_path(resource: str, doc_path: Path, root_path: Path) -> bool
         return True
     # Check relative to docs directory
     if (root_path / "docs" / clean_resource).exists():
+        return True
+    # Check relative to openwiki directory
+    if (root_path / "openwiki" / clean_resource).exists():
         return True
 
     return False
@@ -511,7 +517,11 @@ def _validate_concept_links(
         A list of validation errors.
     """
     errors: list[str] = []
-    for link in MARKDOWN_LINK_PATTERN.findall(body):
+    # Strip fenced code blocks and inline code spans to prevent matching syntax examples
+    sanitized_body = re.sub(r"```.*?```", "", body, flags=re.DOTALL)
+    sanitized_body = re.sub(r"`[^`\n]+`", "", sanitized_body)
+
+    for link in MARKDOWN_LINK_PATTERN.findall(sanitized_body):
         if link.startswith(("http://", "https://", "#")):
             continue
 
@@ -608,6 +618,8 @@ def _is_valid_target_file(md_file: Path) -> bool:
     """
     if not md_file.exists() or not md_file.is_file():
         return False
+    if md_file.name == "INSTRUCTIONS.md":
+        return False
     file_posix = md_file.as_posix()
     return "docs/legacy/" not in file_posix and "site/" not in file_posix
 
@@ -630,7 +642,7 @@ def _validate_single_bundle_file(
     md_file: Path,
     root_path: Path,
     base_paths: list[Path],
-    docs_root_index: Path,
+    bundle_root_indexes: set[Path],
     stats: OKFAuditStats,
 ) -> list[str]:
     """Validate an individual markdown file based on file role.
@@ -639,7 +651,7 @@ def _validate_single_bundle_file(
         md_file: The markdown file to validate.
         root_path: The path to the workspace root.
         base_paths: A list of base paths to check for sources.
-        docs_root_index: The path to the docs root index.
+        bundle_root_indexes: The set of bundle root index paths.
         stats: The audit statistics.
 
     Returns:
@@ -647,7 +659,7 @@ def _validate_single_bundle_file(
     """
     if md_file.name == "index.md":
         stats.total_indexes += 1
-        is_root = (md_file.resolve() == docs_root_index) or (md_file.parent.resolve() == root_path.resolve())
+        is_root = (md_file.resolve() in bundle_root_indexes) or (md_file.parent.resolve() == root_path.resolve())
         return validate_index_document(md_file, root_path, is_bundle_root=is_root)
 
     if md_file.name == "log.md":
@@ -674,13 +686,18 @@ def scan_bundle(
     """
     total_errors = 0
     stats = OKFAuditStats()
-    docs_root_index = (root_path / "docs" / "index.md").resolve()
+    bundle_root_indexes = {
+        (root_path / "docs" / "index.md").resolve(),
+        (root_path / "openwiki" / "index.md").resolve(),
+    }
+    for bp in base_paths:
+        bundle_root_indexes.add((bp / "index.md").resolve())
 
     for md_file in target_files:
         if not _is_valid_target_file(md_file):
             continue
 
-        file_errors = _validate_single_bundle_file(md_file, root_path, base_paths, docs_root_index, stats)
+        file_errors = _validate_single_bundle_file(md_file, root_path, base_paths, bundle_root_indexes, stats)
         if file_errors:
             total_errors += len(file_errors)
             _print_file_errors(md_file, file_errors, root_path)
@@ -691,21 +708,40 @@ def scan_bundle(
 def main() -> None:
     """CLI entry point for OKF v0.2 validation engine."""
     parser = argparse.ArgumentParser(description="Google Open Knowledge Format (OKF v0.2) Conformance Validator")
-    parser.add_argument("files", nargs="*", help="Specific markdown files to validate (defaults to docs/ and .agents/)")
+    parser.add_argument(
+        "files",
+        nargs="*",
+        help="Specific markdown files or directories to validate (defaults to docs/, .agents/, and openwiki/)",
+    )
     parser.add_argument("--fix", action="store_true", help="Auto-fix date-only timestamps to strict ISO 8601 UTC")
     parser.add_argument("--root", default=".", help="Root workspace directory")
     args = parser.parse_args()
 
     root_path = Path(args.root).resolve()
-    base_dirs = [root_path / "docs", root_path / ".agents"]
+    base_dirs = [root_path / "docs", root_path / ".agents", root_path / "openwiki"]
     base_paths = [d for d in base_dirs if d.exists()]
 
     if args.files:
-        target_files = [Path(f).resolve() for f in args.files if ".archive" not in str(f)]
+        target_files: list[Path] = []
+        for f in args.files:
+            p = Path(f).resolve()
+            if p.is_dir():
+                target_files.extend(
+                    child
+                    for child in p.rglob("*.md")
+                    if ".archive" not in str(child) and child.name != "INSTRUCTIONS.md"
+                )
+                if p not in base_paths and p.is_relative_to(root_path):
+                    base_paths.append(p)
+            elif p.is_file():
+                if ".archive" not in str(p) and p.name != "INSTRUCTIONS.md":
+                    target_files.append(p)
     else:
         target_files = []
         for base in base_paths:
-            target_files.extend(f for f in base.rglob("*.md") if ".archive" not in str(f))
+            target_files.extend(
+                f for f in base.rglob("*.md") if ".archive" not in str(f) and f.name != "INSTRUCTIONS.md"
+            )
 
     if args.fix:
         fixed_count = auto_fix_timestamps(target_files)

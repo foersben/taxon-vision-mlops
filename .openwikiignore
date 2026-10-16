@@ -1,0 +1,8 @@
+pixi.lock
+dvc.lock
+data/**
+docs/latex/**/*.pdf
+docs/Species identification.pdf
+docs/assets/**
+src/taxon_vision/service/static/js/htmx.min.js
+.dvc/**

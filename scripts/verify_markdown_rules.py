@@ -25,7 +25,7 @@ DASH_REPLACEMENTS = {
     "\u2212": "-",  # minus sign
 }
 
-IGNORE_DIR_PATTERNS = (".pixi", "site", ".cache", ".archive")
+IGNORE_DIR_PATTERNS = (".pixi", "site", ".cache", ".archive", "openwiki")
 
 
 def _normalize_dashes(text: str, fix: bool) -> tuple[str, list[str]]:
