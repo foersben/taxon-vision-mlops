@@ -505,38 +505,49 @@ spec:
         container('ml-runner') {
           sh '''
             export PATH="/root/.pixi/bin:$PATH"
+            export TAXON_OPTUNA_STORAGE_URI="sqlite:////workspace/optuna/optuna_studies.db"
             which git >/dev/null 2>&1 || pixi global install git
             which kubectl >/dev/null 2>&1 || pixi global install kubernetes-client
             git config --global --add safe.directory "*"
             pixi install --frozen -e dev
-            pixi run --frozen -e dev dvc pull -f
 
-            # Extract vision foundation features from S3 manifest if not cached
+            # Configure local MinIO credentials for DVC cache
+            pixi run --frozen -e dev dvc config --local remote.local-minio.access_key_id minioadmin
+            pixi run --frozen -e dev dvc config --local remote.local-minio.secret_access_key minioadmin
+
+            # Prime cached embeddings from host volume tier if available
+            mkdir -p data/embeddings
             if [ ! -f "data/embeddings/cached_features.pt" ]; then
-              pixi run --frozen -e dev python -m taxon_vision.pipelines.extract_features \
-                --extractor "${EXTRACTOR:-dinov3}" \
-                --manifest data/manifests/dataset_manifest.parquet \
-                --out data/embeddings/cached_features.pt
+              if [ -f "/var/lib/taxon-vision/embeddings/cached_features.pt" ]; then
+                cp -f /var/lib/taxon-vision/embeddings/cached_features.pt data/embeddings/cached_features.pt
+              elif kubectl get service minio -n taxon-vision >/dev/null 2>&1; then
+                pixi run --frozen -e dev dvc pull -r local-minio data/embeddings/cached_features.pt || true
+              fi
             fi
 
-            # Train classification head with calibrated hyperparameters
-            EXTRA_OPTS=""
+            # Execute unified 7-stage DVC pipeline
+            EXTRA_DVC_OPTS=""
             if [ "${TUNE_HYPERPARAMETERS:-false}" = "true" ]; then
-              EXTRA_OPTS="--tune --n-trials 10"
+              EXTRA_DVC_OPTS="-S training.tune=true"
+            fi
+            if [ -n "${EXTRACTOR}" ] && [ "${EXTRACTOR}" != "dinov3" ]; then
+              EXTRA_DVC_OPTS="${EXTRA_DVC_OPTS} -S model.extractor=${EXTRACTOR}"
             fi
 
-            pixi run --frozen -e dev python -m taxon_vision.models.trainer \
-              --extractor "${EXTRACTOR:-dinov3}" \
-              --epochs 15 \
-              --require-cache \
-              --require-promotion \
-              --cuda-memory-fraction 0.7 \
-              $EXTRA_OPTS
+            pixi run --frozen -e dev dvc repro ${EXTRA_DVC_OPTS}
 
-            # Re-export ONNX computational graph and commit artifacts
-            pixi run --frozen -e dev python -m taxon_vision.inference.onnx_exporter --extractor "${EXTRACTOR:-dinov3}"
-            pixi run --frozen -e dev dvc commit -f models/checkpoints/head.pt models/checkpoints/model.onnx
-            pixi run --frozen -e dev dvc push models/checkpoints/head.pt models/checkpoints/model.onnx
+            # Persist generated features to host volume cache
+            if [ -d "/var/lib/taxon-vision/embeddings" ] && [ -f "data/embeddings/cached_features.pt" ]; then
+              cp -f data/embeddings/cached_features.pt /var/lib/taxon-vision/embeddings/cached_features.pt
+            fi
+
+            # Push embedding cache to local MinIO if reachable
+            if kubectl get service minio -n taxon-vision >/dev/null 2>&1; then
+              pixi run --frozen -e dev dvc push -r local-minio data/embeddings/cached_features.pt
+            fi
+
+            # Push release checkpoints and INT8 models to DagsHub S3 remote (origin)
+            pixi run --frozen -e dev dvc push -r origin models/checkpoints/head.pt models/checkpoints/model.onnx models/model_int8.onnx
           '''
         }
       }
@@ -546,13 +557,26 @@ spec:
       when {
         anyOf {
           branch 'main'
-          branch 'feature/phase1-foundations'
+          branch 'develop'
         }
       }
       steps {
         container('ml-runner') {
           sh '''
             export PATH="/root/.pixi/bin:$PATH"
+            kubectl version --client
+
+            # Hydrate model checkpoints from DVC origin
+            pixi run --frozen -e ci-dev dvc pull -f models/checkpoints/head.pt models/checkpoints/model.onnx models/model_int8.onnx
+
+            # Synchronize checkpoints to host volume if available
+            if [ -d "/home/benni/taxon-vision-mlops/models/checkpoints" ] && [ -f "models/checkpoints/head.pt" ]; then
+              cp -f models/checkpoints/* /home/benni/taxon-vision-mlops/models/checkpoints/
+            fi
+            if [ -d "/home/benni/taxon-vision-mlops/models" ] && [ -f "models/model_int8.onnx" ]; then
+              cp -f models/model_int8.onnx /home/benni/taxon-vision-mlops/models/
+            fi
+
             kubectl apply -f deploy/k8s/api-deployment.yaml
             kubectl rollout restart deployment/taxon-vision-api -n taxon-vision
             kubectl rollout status deployment/taxon-vision-api -n taxon-vision --timeout=120s
