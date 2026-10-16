@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
       - name: minio
-        image: minio/minio:latest
+        image: elestio/minio:latest
         args:
         - server
         - /data
@@ -38,7 +38,7 @@ spec:
         - name: minio-storage
           mountPath: /data
       - name: create-buckets
-        image: minio/mc:latest
+        image: elestio/minio:latest
         command:
         - /bin/sh
         - -c
