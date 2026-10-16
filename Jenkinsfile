@@ -301,8 +301,17 @@ spec:
             echo ">>> Executing zero-downtime rolling deployment to Kubernetes cluster..."
             kubectl version --client
 
-            # Hydrate model checkpoints from DVC origin
-            pixi run --frozen -e ci-dev dvc pull -f models/checkpoints/head.pt models/checkpoints/model.onnx models/model_int8.onnx
+            # Configure SeaweedFS credentials in case models are in local cache
+            if kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
+              pixi run --frozen -e ci-dev dvc config --local remote.local-seaweedfs.access_key_id taxonadmin
+              pixi run --frozen -e ci-dev dvc config --local remote.local-seaweedfs.secret_access_key taxonadmin
+            fi
+
+            # Hydrate model checkpoints from DVC
+            echo ">>> Hydrating model checkpoints from DVC remotes..."
+            pixi run --frozen -e ci-dev dvc pull -r origin models/checkpoints/head.pt models/checkpoints/model.onnx models/model_int8.onnx || \
+            pixi run --frozen -e ci-dev dvc pull models/checkpoints/head.pt models/checkpoints/model.onnx models/model_int8.onnx || \
+            echo ">>> Warning: Remote checkpoints not found in DVC; falling back to existing host volume checkpoints."
 
             # Synchronize checkpoints to host volume if available
             if [ -d "/home/benni/taxon-vision-mlops/models/checkpoints" ] && [ -f "models/checkpoints/head.pt" ]; then
