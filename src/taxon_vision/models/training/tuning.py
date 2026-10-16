@@ -408,13 +408,19 @@ def tune_hyperparameters(
 
     storage_uri = _resolve_optuna_storage(cfg.storage_url or settings.optuna.optuna_storage_uri)
     study_prefix = settings.optuna.optuna_study_prefix
+    study_name = cfg.study_name or f"{study_prefix}_{cfg.extractor_name}"
+
+    if cfg.reset_study and storage_uri:
+        with contextlib.suppress(Exception):
+            optuna.delete_study(study_name=study_name, storage=storage_uri)
+            logger.info("Deleted prior Optuna study '%s' to reset Bayesian history.", study_name)
 
     sampler = optuna.samplers.TPESampler(seed=cfg.seed)
     pruner = optuna.pruners.SuccessiveHalvingPruner(min_resource=2, reduction_factor=2)
     study = optuna.create_study(
-        study_name=f"{study_prefix}_{cfg.extractor_name}",
+        study_name=study_name,
         storage=storage_uri,
-        load_if_exists=True,  # Warm-starts from prior runs!
+        load_if_exists=not cfg.reset_study,
         direction="maximize",
         sampler=sampler,
         pruner=pruner,

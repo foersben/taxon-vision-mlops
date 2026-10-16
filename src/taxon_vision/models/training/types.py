@@ -7,6 +7,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import torch
 
@@ -93,23 +94,36 @@ class EmbeddingSplit:
             raise ValueError(f"Feature dimension mismatch: train is {expected_dim}, {name} is {embeddings.shape[1]}.")
 
     @classmethod
-    def from_cache(cls, candidate: Path | str) -> EmbeddingSplit:
-        """Load and deserialize EmbeddingSplit from serialized cache file.
+    def _load_from_directory(cls, dir_path: Path) -> EmbeddingSplit:
+        """Load and assemble EmbeddingSplit from a directory containing partition files."""
+        composite_pt = dir_path / "cached_features.pt"
+        if composite_pt.exists():
+            return cls.from_cache(composite_pt)
+        train_pt = dir_path / "train_embeddings.pt"
+        val_pt = dir_path / "val_embeddings.pt"
+        if not (train_pt.exists() and val_pt.exists()):
+            raise ValueError(f"Directory {dir_path} lacks valid embedding cache files")
+        tr_data = torch.load(train_pt, map_location="cpu", weights_only=False)
+        va_data = torch.load(val_pt, map_location="cpu", weights_only=False)
+        cal_pt = dir_path / "cal_embeddings.pt"
+        test_pt = dir_path / "test_embeddings.pt"
+        ca_data = torch.load(cal_pt, map_location="cpu", weights_only=False) if cal_pt.exists() else {}
+        te_data = torch.load(test_pt, map_location="cpu", weights_only=False) if test_pt.exists() else {}
+        return cls(
+            train_embeddings=tr_data["embeddings"],
+            train_labels=tr_data["labels"],
+            val_embeddings=va_data["embeddings"],
+            val_labels=va_data["labels"],
+            cal_embeddings=ca_data.get("embeddings"),
+            cal_labels=ca_data.get("labels"),
+            test_embeddings=te_data.get("embeddings"),
+            test_labels=te_data.get("labels"),
+            samples_per_class=tr_data.get("samples_per_class"),
+        )
 
-        Args:
-            candidate: Filesystem path to cache .pt file.
-
-        Returns:
-            Validated EmbeddingSplit instance.
-
-        Raises:
-            FileNotFoundError: If cache file does not exist.
-            ValueError: If file payload cannot be parsed into an EmbeddingSplit.
-        """
-        candidate_path = Path(candidate)
-        if not candidate_path.exists():
-            raise FileNotFoundError(f"Embedding cache not found: {candidate_path}")
-        payload = torch.load(candidate_path, map_location="cpu", weights_only=False)
+    @classmethod
+    def _load_from_payload(cls, payload: Any, path: Path) -> EmbeddingSplit:
+        """Parse in-memory deserialized object or dictionary into an EmbeddingSplit."""
         if isinstance(payload, EmbeddingSplit):
             return payload
         if isinstance(payload, dict) and isinstance(payload.get("split"), EmbeddingSplit):
@@ -126,7 +140,29 @@ class EmbeddingSplit:
                 test_labels=payload.get("test_labels"),
                 samples_per_class=payload.get("samples_per_class"),
             )
-        raise ValueError(f"Unsupported payload format in embedding cache: {candidate_path}")
+        raise ValueError(f"Unsupported payload format in embedding cache: {path}")
+
+    @classmethod
+    def from_cache(cls, candidate: Path | str) -> EmbeddingSplit:
+        """Load and deserialize EmbeddingSplit from serialized cache file or directory.
+
+        Args:
+            candidate: Filesystem path to cache .pt file or directory.
+
+        Returns:
+            Validated EmbeddingSplit instance.
+
+        Raises:
+            FileNotFoundError: If cache file does not exist.
+            ValueError: If file payload cannot be parsed into an EmbeddingSplit.
+        """
+        candidate_path = Path(candidate)
+        if not candidate_path.exists():
+            raise FileNotFoundError(f"Embedding cache not found: {candidate_path}")
+        if candidate_path.is_dir():
+            return cls._load_from_directory(candidate_path)
+        payload = torch.load(candidate_path, map_location="cpu", weights_only=False)
+        return cls._load_from_payload(payload, candidate_path)
 
     @property
     def feature_dim(self) -> int:
@@ -210,3 +246,5 @@ class TuningConfig:
     experiment_name: str = "taxon-vision-hyperparameter-tuning"
     extractor_name: str = "dinov3"
     storage_url: str | None = None
+    study_name: str | None = None
+    reset_study: bool = False

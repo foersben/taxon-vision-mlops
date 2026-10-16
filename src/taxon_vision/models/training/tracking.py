@@ -482,6 +482,9 @@ def _apply_model_version_metadata(
         if extractor:
             client.set_model_version_tag(model_name, version, "extractor", extractor)
         client.set_model_version_tag(model_name, version, "val_pr_auc", f"{pr_auc:.4f}")
+        dataset_hash = _get_dvc_dataset_hash()
+        if dataset_hash:
+            client.set_model_version_tag(model_name, version, "dvc_dataset_hash", dataset_hash)
     except Exception as meta_err:
         logger.debug("Failed to set model version metadata: %s", meta_err)
 
@@ -510,11 +513,13 @@ def _determine_promotion_alias(
         prod_run = client.get_run(prod_version.run_id)
         prod_score = prod_run.data.metrics.get("val_promotion_score", 0.0)
 
-        if pr_auc > prod_score:
-            logger.info("New model outperforms production (%.4f > %.4f). Tagging as Challenger.", pr_auc, prod_score)
+        if pr_auc >= prod_score:
+            logger.info(
+                "New model meets or outperforms production (%.4f >= %.4f). Tagging as Challenger.", pr_auc, prod_score
+            )
             client.set_registered_model_alias(model_name, "Challenger", version)
             return "Challenger"
-        logger.info("New model is worse than production (%.4f <= %.4f). Tagging as Archived.", pr_auc, prod_score)
+        logger.info("New model is worse than production (%.4f < %.4f). Tagging as Archived.", pr_auc, prod_score)
         client.set_registered_model_alias(model_name, "Archived", version)
         return "Archived"
     except Exception:

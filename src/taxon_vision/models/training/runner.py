@@ -286,6 +286,8 @@ def _build_training_components(
     data: EmbeddingSplit,
     extractor: str,
     applied_vram_fraction: float | None,
+    study_name: str | None = None,
+    reset_study: bool = False,
 ) -> tuple[nn.Module, nn.Module, optim.Optimizer, HeadTrainingConfig, dict[str, Any]]:
     """Construct model head, loss, optimizer, and training parameters.
 
@@ -306,6 +308,8 @@ def _build_training_components(
         data: Split containing train and validation embeddings.
         extractor: Name of the feature extractor.
         applied_vram_fraction: Applied GPU memory fraction or None.
+        study_name: Optional custom Optuna study name identifier.
+        reset_study: Whether to purge prior trial history before tuning.
 
     Returns:
         Tuple containing head module, loss criterion, optimizer, training config, and params dict.
@@ -317,6 +321,9 @@ def _build_training_components(
             epochs_per_trial=epochs,
             batch_size=batch_size,
             seed=seed,
+            extractor_name=extractor,
+            study_name=study_name,
+            reset_study=reset_study,
         )
         best_params, _ = tune_hyperparameters(data=data, num_classes=num_classes, config=tuning_cfg)
         dropout_p = float(best_params.get("dropout", 0.2))
@@ -460,6 +467,8 @@ def run_training_pipeline(
     cache_path: Path | str | None = None,
     require_cache: bool = False,
     allow_synthetic: bool | None = None,
+    study_name: str | None = None,
+    reset_study: bool = False,
 ) -> dict[str, Any]:
     """Execute end-to-end classification head training on cached or synthetic embeddings.
 
@@ -489,6 +498,8 @@ def run_training_pipeline(
         cache_path: Optional custom filesystem path to serialized `.pt` embedding cache.
         require_cache: Whether to strictly require real embedding cache and disable synthetic fallback.
         allow_synthetic: Explicit override to permit synthetic embeddings when cache is absent.
+        study_name: Optional custom Optuna study name identifier.
+        reset_study: Whether to purge prior trial history before tuning.
 
     Returns:
         Dictionary containing training metrics, checkpoint path, duration, and status.
@@ -544,6 +555,8 @@ def run_training_pipeline(
         data=data,
         extractor=resolved_extractor,
         applied_vram_fraction=applied_vram_fraction,
+        study_name=study_name,
+        reset_study=reset_study,
     )
 
     run_name = f"train_{extractor}_{int(time.time())}"
@@ -770,6 +783,17 @@ def train_cli(argv: list[str] | None = None) -> int:
         help="Disallow fallback to synthetic data if embedding cache is absent",
     )
     parser.add_argument(
+        "--study-name",
+        type=str,
+        default=None,
+        help="Optional custom Optuna study name identifier",
+    )
+    parser.add_argument(
+        "--reset-study",
+        action="store_true",
+        help="Reset existing Optuna study history to start with a fresh Bayesian optimization prior",
+    )
+    parser.add_argument(
         "--allow-synthetic",
         action="store_true",
         default=settings.model.allow_untrained_fallback,
@@ -815,6 +839,8 @@ def train_cli(argv: list[str] | None = None) -> int:
         cache_path=args.cache_path,
         require_cache=args.require_cache,
         allow_synthetic=args.allow_synthetic,
+        study_name=args.study_name,
+        reset_study=args.reset_study,
     )
 
     logger.info("Training Completed Successfully")

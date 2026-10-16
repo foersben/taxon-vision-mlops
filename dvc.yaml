@@ -2,6 +2,7 @@ stages:
   ingestion:
     cmd: python scripts/ingest_data.py
     deps:
+      - config/taxa_catalog.yaml
       - scripts/ingest_data.py
       - src/taxon_vision/data/inat_client.py
       - src/taxon_vision/data/license_filter.py
@@ -23,7 +24,9 @@ stages:
   extract_features:
     cmd: python -m taxon_vision.pipelines.extract_features --extractor ${model.extractor} --image-size ${model.image_size} --batch-size ${feature_extraction.batch_size} --val-split ${feature_extraction.val_split} --cal-split ${feature_extraction.cal_split} --test-split ${feature_extraction.test_split} --manifest data/manifests/dataset_manifest.parquet --out data/embeddings/cached_features.pt
     deps:
+      - config/taxa_catalog.yaml
       - data/manifests
+      - src/taxon_vision/models/factory.py
       - src/taxon_vision/pipelines/extract_features.py
     params:
       - model.extractor
@@ -36,20 +39,33 @@ stages:
       - data/embeddings/cached_features.pt:
           remote: local-seaweedfs
           push: true
+      - data/embeddings/train_embeddings.pt:
+          remote: local-seaweedfs
+          push: true
+      - data/embeddings/val_embeddings.pt:
+          remote: local-seaweedfs
+          push: true
+      - data/embeddings/cal_embeddings.pt:
+          remote: local-seaweedfs
+          push: true
+      - data/embeddings/test_embeddings.pt:
+          remote: local-seaweedfs
+          push: true
 
   train:
     cmd: python -m taxon_vision.models.training.runner --extractor ${model.extractor} --epochs ${training.epochs} --batch-size ${training.batch_size} --lr ${training.learning_rate} --cache-path data/embeddings/cached_features.pt --checkpoint-path models/checkpoints/head.pt --require-cache --metrics-out reports/train_metrics.json
     deps:
-      - data/embeddings/cached_features.pt
-      - src/taxon_vision/models/training/
+      - data/embeddings/train_embeddings.pt
+      - data/embeddings/val_embeddings.pt
       - src/taxon_vision/models/loss.py
+      - src/taxon_vision/models/training/
     params:
       - model.extractor
-      - training.epochs
       - training.batch_size
+      - training.cb_beta
+      - training.epochs
       - training.learning_rate
       - training.weight_decay
-      - training.cb_beta
     outs:
       - models/checkpoints/head.pt:
           remote: origin
@@ -64,9 +80,9 @@ stages:
       - src/taxon_vision/inference/onnx_exporter.py
       - src/taxon_vision/inference/quantizer.py
     params:
+      - export.quantize_int8
       - model.extractor
       - model.image_size
-      - export.quantize_int8
     outs:
       - models/checkpoints/model.onnx:
           remote: origin
@@ -76,7 +92,7 @@ stages:
   calibrate:
     cmd: python scripts/calibrate_conformal.py --cache-path data/embeddings/cached_features.pt --checkpoint models/checkpoints/head.pt --split cal --out config/conformal_calibration.json --metrics-out reports/conformal_metrics.json
     deps:
-      - data/embeddings/cached_features.pt
+      - data/embeddings/cal_embeddings.pt
       - models/checkpoints/head.pt
       - models/model_int8.onnx
       - scripts/calibrate_conformal.py
@@ -90,9 +106,9 @@ stages:
   eval:
     cmd: python scripts/benchmark_pareto.py --cache-path data/embeddings/cached_features.pt --checkpoint models/checkpoints/head.pt --conformal-config config/conformal_calibration.json --split test --out docs/assets/pareto_results.json --metrics-out reports/pareto_evaluation.json
     deps:
-      - data/embeddings/cached_features.pt
-      - models/checkpoints/head.pt
       - config/conformal_calibration.json
+      - data/embeddings/test_embeddings.pt
+      - models/checkpoints/head.pt
       - scripts/benchmark_pareto.py
     outs:
       - docs/assets/pareto_results.json:

@@ -356,3 +356,67 @@ def test_extract_features_completeness_gate_raises(monkeypatch: pytest.MonkeyPat
         run_feature_extraction(cfg)
 
     get_settings.cache_clear()
+
+
+def test_embedding_split_directory_loading(tmp_path: Path) -> None:
+    """Verify EmbeddingSplit loads correctly from a directory of discrete split files."""
+    from taxon_vision.models.training.types import EmbeddingSplit
+
+    split_dir = tmp_path / "splits"
+    split_dir.mkdir()
+
+    torch.save(
+        {"embeddings": torch.randn(10, 16), "labels": torch.zeros(10, dtype=torch.long), "samples_per_class": [10]},
+        split_dir / "train_embeddings.pt",
+    )
+    torch.save(
+        {"embeddings": torch.randn(4, 16), "labels": torch.zeros(4, dtype=torch.long)},
+        split_dir / "val_embeddings.pt",
+    )
+    torch.save(
+        {"embeddings": torch.randn(3, 16), "labels": torch.zeros(3, dtype=torch.long)},
+        split_dir / "cal_embeddings.pt",
+    )
+    torch.save(
+        {"embeddings": torch.randn(2, 16), "labels": torch.zeros(2, dtype=torch.long)},
+        split_dir / "test_embeddings.pt",
+    )
+
+    split = EmbeddingSplit.from_cache(split_dir)
+    assert split.train_embeddings.shape == (10, 16)
+    assert split.val_embeddings.shape == (4, 16)
+    assert split.cal_embeddings is not None and split.cal_embeddings.shape == (3, 16)
+    assert split.test_embeddings is not None and split.test_embeddings.shape == (2, 16)
+    assert split.samples_per_class == [10]
+    assert split.feature_dim == 16
+
+
+def test_save_split_artifacts(tmp_path: Path) -> None:
+    """Verify _save_split_artifacts saves both composite and discrete files."""
+    from taxon_vision.models.training.types import EmbeddingSplit
+    from taxon_vision.pipelines.extract_features import _save_split_artifacts
+
+    output_pt = tmp_path / "embeddings" / "cached_features.pt"
+    split = EmbeddingSplit(
+        train_embeddings=torch.randn(12, 8),
+        train_labels=torch.zeros(12, dtype=torch.long),
+        val_embeddings=torch.randn(4, 8),
+        val_labels=torch.zeros(4, dtype=torch.long),
+        cal_embeddings=torch.randn(3, 8),
+        cal_labels=torch.zeros(3, dtype=torch.long),
+        test_embeddings=torch.randn(2, 8),
+        test_labels=torch.zeros(2, dtype=torch.long),
+        samples_per_class=[12],
+    )
+
+    _save_split_artifacts(output_pt, split, "mobilenetv4_conv_small", 2)
+
+    assert output_pt.exists()
+    parent = output_pt.parent
+    assert (parent / "train_embeddings.pt").exists()
+    assert (parent / "val_embeddings.pt").exists()
+    assert (parent / "cal_embeddings.pt").exists()
+    assert (parent / "test_embeddings.pt").exists()
+
+    loaded = EmbeddingSplit.from_cache(output_pt)
+    assert loaded.feature_dim == 8

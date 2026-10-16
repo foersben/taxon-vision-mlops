@@ -602,10 +602,32 @@ def run_feature_extraction(config: FeatureExtractionConfig) -> Path:
     )
 
     output_file = Path(config.output_path)
-    output_file.parent.mkdir(parents=True, exist_ok=True)
+    _save_split_artifacts(output_file, split, config.extractor, num_classes)
+    return output_file
 
+
+def _save_split_artifacts(
+    output_file: Path,
+    split: EmbeddingSplit,
+    extractor: str,
+    num_classes: int,
+) -> None:
+    """Save composite embedding split and individual 4-way partition files to disk.
+
+    Why:
+        Encapsulates binary tensor serialization, preserving backward compatibility with
+        single-file caches while materializing individual 4-way partitions for granular
+        Directed Acyclic Graph (DAG) stage tracking in DVC.
+
+    Args:
+        output_file: Target path for the composite cached_features.pt file.
+        split: Instantiated EmbeddingSplit container.
+        extractor: Name of the feature extractor backbone.
+        num_classes: Total number of target classification categories.
+    """
+    output_file.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "extractor": config.extractor,
+        "extractor": extractor,
         "feature_dim": split.feature_dim,
         "num_classes": num_classes,
         "split": split,
@@ -621,7 +643,44 @@ def run_feature_extraction(config: FeatureExtractionConfig) -> Path:
     }
     torch.save(payload, output_file)
     logger.info("Serialized feature embedding split artifact to: %s", output_file)
-    return output_file
+
+    emb_dir = output_file.parent
+    torch.save(
+        {
+            "embeddings": split.train_embeddings,
+            "labels": split.train_labels,
+            "samples_per_class": split.samples_per_class,
+            "feature_dim": split.feature_dim,
+        },
+        emb_dir / "train_embeddings.pt",
+    )
+    torch.save(
+        {
+            "embeddings": split.val_embeddings,
+            "labels": split.val_labels,
+            "feature_dim": split.feature_dim,
+        },
+        emb_dir / "val_embeddings.pt",
+    )
+    if split.cal_embeddings is not None and split.cal_labels is not None:
+        torch.save(
+            {
+                "embeddings": split.cal_embeddings,
+                "labels": split.cal_labels,
+                "feature_dim": split.feature_dim,
+            },
+            emb_dir / "cal_embeddings.pt",
+        )
+    if split.test_embeddings is not None and split.test_labels is not None:
+        torch.save(
+            {
+                "embeddings": split.test_embeddings,
+                "labels": split.test_labels,
+                "feature_dim": split.feature_dim,
+            },
+            emb_dir / "test_embeddings.pt",
+        )
+    logger.info("Materialized individual 4-way split artifacts in: %s", emb_dir)
 
 
 def extract_features_cli(argv: list[str] | None = None) -> int:
