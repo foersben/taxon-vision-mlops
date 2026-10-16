@@ -228,6 +228,7 @@ spec:
         }
       }
       steps {
+        checkout scm
         container('ml-runner') {
           sh '''
             export PATH="/root/.pixi/bin:$PATH"

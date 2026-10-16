@@ -7,8 +7,9 @@ stages:
       - src/taxon_vision/data/inat_client.py
       - src/taxon_vision/data/license_filter.py
     params:
-      - ingestion.taxa_to_fetch
-      - ingestion.per_page
+      - config/params.yaml:
+          - ingestion.taxa_to_fetch
+          - ingestion.per_page
     outs:
       - data/manifests
 
@@ -26,15 +27,17 @@ stages:
     deps:
       - config/taxa_catalog.yaml
       - data/manifests
+      - reports/license_audit.json
       - src/taxon_vision/models/factory.py
       - src/taxon_vision/pipelines/extract_features.py
     params:
-      - model.extractor
-      - model.image_size
-      - feature_extraction.batch_size
-      - feature_extraction.val_split
-      - feature_extraction.cal_split
-      - feature_extraction.test_split
+      - config/params.yaml:
+          - model.extractor
+          - model.image_size
+          - feature_extraction.batch_size
+          - feature_extraction.val_split
+          - feature_extraction.cal_split
+          - feature_extraction.test_split
     outs:
       - data/embeddings/cached_features.pt:
           remote: local-seaweedfs
@@ -60,12 +63,13 @@ stages:
       - src/taxon_vision/models/loss.py
       - src/taxon_vision/models/training/
     params:
-      - model.extractor
-      - training.batch_size
-      - training.cb_beta
-      - training.epochs
-      - training.learning_rate
-      - training.weight_decay
+      - config/params.yaml:
+          - model.extractor
+          - training.batch_size
+          - training.cb_beta
+          - training.epochs
+          - training.learning_rate
+          - training.weight_decay
     outs:
       - models/checkpoints/head.pt:
           remote: origin
@@ -80,9 +84,10 @@ stages:
       - src/taxon_vision/inference/onnx_exporter.py
       - src/taxon_vision/inference/quantizer.py
     params:
-      - export.quantize_int8
-      - model.extractor
-      - model.image_size
+      - config/params.yaml:
+          - export.quantize_int8
+          - model.extractor
+          - model.image_size
     outs:
       - models/checkpoints/model.onnx:
           remote: origin
@@ -94,7 +99,6 @@ stages:
     deps:
       - data/embeddings/cal_embeddings.pt
       - models/checkpoints/head.pt
-      - models/model_int8.onnx
       - scripts/calibrate_conformal.py
     outs:
       - config/conformal_config.yaml:
@@ -108,7 +112,7 @@ stages:
     deps:
       - config/conformal_config.yaml
       - data/embeddings/test_embeddings.pt
-      - models/checkpoints/head.pt
+      - models/model_int8.onnx
       - scripts/benchmark_pareto.py
     outs:
       - docs/assets/pareto_results.json:

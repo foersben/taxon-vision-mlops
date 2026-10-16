@@ -745,6 +745,12 @@ def extract_features_cli(argv: list[str] | None = None) -> int:
         help=f"Holdout test split ratio (default: {settings.training.test_split})",
     )
     parser.add_argument(
+        "--image-size",
+        type=int,
+        default=settings.model.image_size,
+        help=f"Spatial resolution for image resize and center crop (default: {settings.model.image_size})",
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         default=None,
@@ -774,6 +780,7 @@ def extract_features_cli(argv: list[str] | None = None) -> int:
         val_split=args.val_split,
         cal_split=args.cal_split,
         test_split=args.test_split,
+        image_size=args.image_size,
         limit=args.limit,
         device=args.device,
     )
