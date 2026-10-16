@@ -214,6 +214,8 @@ def test_export_classifier_cli_quantize_int8(tmp_path: Path) -> None:
             "--output",
             str(out_file),
             "--quantize-int8",
+            "--quantize-mode",
+            "dynamic",
             "--quantized-output",
             str(int8_file),
             "--extractor",

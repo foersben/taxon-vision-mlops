@@ -9,6 +9,7 @@ import logging
 import sys
 import warnings
 from pathlib import Path
+from typing import Literal
 
 import torch
 import torch.nn as nn
@@ -305,20 +306,35 @@ def _quantize_exported_graph(fp32_path: Path, args: argparse.Namespace, settings
 
     model_cfg = settings.model
     requested = args.quantize_mode or model_cfg.quantization_mode
-    mode = "static" if requested == "auto" else requested
+    cal_dir = Path(args.calibration_dir or model_cfg.calibration_dir)
+    calibration = None
+    mode: Literal["auto", "static", "dynamic"]
+    if requested == "static":
+        calibration = load_calibration_tensors(
+            cal_dir,
+            args.calibration_samples or model_cfg.calibration_samples,
+        )
+        mode = "static"
+    elif requested == "auto":
+        if cal_dir.exists() and any(cal_dir.glob("*.*")):
+            calibration = load_calibration_tensors(
+                cal_dir,
+                args.calibration_samples or model_cfg.calibration_samples,
+            )
+            mode = "static"
+        else:
+            mode = "dynamic"
+    elif requested == "dynamic":
+        mode = "dynamic"
+    else:
+        mode = "auto"
+
     default_quantized = (
         fp32_path.with_name(f"{fp32_path.stem}.int8.onnx")
         if args.output != "models/checkpoints/model.onnx"
         else Path(model_cfg.onnx_model_path)
     )
     quantized_path = Path(args.quantized_output or default_quantized)
-
-    calibration = None
-    if mode == "static":
-        calibration = load_calibration_tensors(
-            args.calibration_dir or model_cfg.calibration_dir,
-            args.calibration_samples or model_cfg.calibration_samples,
-        )
 
     quantize_onnx_model(fp32_path, quantized_path, calibration_tensors=calibration, mode=mode)
     logger.info("Quantized INT8 ONNX graph (%s) saved to %s", mode, quantized_path)

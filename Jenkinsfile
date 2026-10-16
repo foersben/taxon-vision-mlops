@@ -340,8 +340,10 @@ spec:
   post {
     always {
       script {
-        catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-          cleanWs()
+        try {
+          cleanWs notFailBuild: true
+        } catch (Throwable t) {
+          echo "Workspace cleanup skipped: ${t.message}"
         }
       }
     }
