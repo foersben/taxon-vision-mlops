@@ -170,7 +170,9 @@ class ConformalConfig(BaseModel):
     nominal_coverage: float = Field(default=0.95, gt=0.0, lt=1.0)
     method: str = "split-conformal"
     empty_set_action: str = "route_to_human_triage"
+    min_confidence: float = Field(default=0.60, ge=0.0, le=1.0)
     min_confidence_threshold: float = Field(default=0.60, ge=0.0, le=1.0)
+    ood_tpr: float = Field(default=0.95, gt=0.0, le=1.0)
 
 
 class OODConfig(BaseModel):
@@ -229,6 +231,16 @@ class OptunaConfig(BaseModel):
     optuna_study_prefix: str = "taxon_vision"
 
 
+class EvaluationConfig(BaseModel):
+    """Configuration schema for model evaluation and latency SLAs.
+
+    Attributes:
+        latency_sla_ms (float): Latency service level agreement threshold in milliseconds (default: 25.0).
+    """
+
+    latency_sla_ms: float = Field(default=25.0, gt=0.0)
+
+
 class Settings(BaseSettings):
     """Global application settings container with strict schema validation.
 
@@ -250,6 +262,7 @@ class Settings(BaseSettings):
     ingestion: IngestionConfig = Field(default_factory=IngestionConfig)
     streaming: StreamingConfig = Field(default_factory=StreamingConfig)
     optuna: OptunaConfig = Field(default_factory=OptunaConfig)
+    evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
 
     @property
     def data(self) -> StreamingConfig:
@@ -311,9 +324,15 @@ def _load_conformal_override(path: Path) -> dict[str, Any]:
         "nominal_coverage": "nominal_coverage",
         "method": "method",
         "empty_set_action": "empty_set_action",
+        "min_confidence": "min_confidence",
         "min_confidence_threshold": "min_confidence_threshold",
+        "ood_tpr": "ood_tpr",
     }
     override = {target_k: calib[yaml_k] for yaml_k, target_k in mapping.items() if yaml_k in calib}
+    if "min_confidence" in override and "min_confidence_threshold" not in override:
+        override["min_confidence_threshold"] = override["min_confidence"]
+    elif "min_confidence_threshold" in override and "min_confidence" not in override:
+        override["min_confidence"] = override["min_confidence_threshold"]
     if "q_hat" in override:
         override["quantile_threshold"] = override["q_hat"]
     elif "quantile_threshold" in calib:
@@ -401,8 +420,12 @@ def get_settings(config_path: str | Path | None = None) -> Settings:
     config_data = _load_yaml_dict(base_path)
     config_dir = base_path.parent
 
-    # Layer params.yaml if present
-    params_data = _load_yaml_dict(config_dir / "params.yaml")
+    # Layer params.yaml if present (check repo root first, then config_dir)
+    repo_root = base_path.parent.parent
+    params_path = repo_root / "params.yaml"
+    if not params_path.is_file():
+        params_path = config_dir / "params.yaml"
+    params_data = _load_yaml_dict(params_path)
     if params_data:
         config_data = _deep_merge(config_data, params_data)
 

@@ -82,7 +82,8 @@ class FeatureExtractionConfig:
 
     extractor: str = ""
     manifest_path: Path = Path("data/manifests/dataset_manifest.parquet")
-    output_path: Path = Path("data/embeddings/cached_features.pt")
+    output_path: Path | None = None
+    out_dir: Path = Path("data/embeddings")
     batch_size: int = 0
     val_split: float = 0.0
     cal_split: float = 0.0
@@ -95,6 +96,8 @@ class FeatureExtractionConfig:
 
     def __post_init__(self) -> None:
         """Resolve unspecified hyperparameters dynamically from centralized settings."""
+        if self.output_path is not None and self.out_dir == Path("data/embeddings"):
+            object.__setattr__(self, "out_dir", self.output_path.parent)
         settings = get_settings()
         if not self.extractor:
             object.__setattr__(self, "extractor", settings.model.default_extractor)
@@ -601,16 +604,17 @@ def run_feature_extraction(config: FeatureExtractionConfig) -> Path:
         random_seed=config.random_seed,
     )
 
-    output_file = Path(config.output_path)
-    _save_split_artifacts(output_file, split, config.extractor, num_classes)
-    return output_file
+    emb_dir = config.out_dir
+    _save_split_artifacts(emb_dir, split, config.extractor, num_classes, output_file=config.output_path)
+    return config.output_path if config.output_path is not None else (emb_dir / "train_embeddings.pt")
 
 
 def _save_split_artifacts(
-    output_file: Path,
+    emb_dir: Path,
     split: EmbeddingSplit,
     extractor: str,
     num_classes: int,
+    output_file: Path | None = None,
 ) -> None:
     """Save composite embedding split and individual 4-way partition files to disk.
 
@@ -620,31 +624,45 @@ def _save_split_artifacts(
         Directed Acyclic Graph (DAG) stage tracking in DVC.
 
     Args:
-        output_file: Target path for the composite cached_features.pt file.
+        emb_dir: Target directory for individual partition files.
         split: Instantiated EmbeddingSplit container.
         extractor: Name of the feature extractor backbone.
         num_classes: Total number of target classification categories.
+        output_file: Optional legacy path for composite cached_features.pt file.
     """
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "extractor": extractor,
-        "feature_dim": split.feature_dim,
-        "num_classes": num_classes,
-        "split": split,
-        "train_embeddings": split.train_embeddings,
-        "train_labels": split.train_labels,
-        "val_embeddings": split.val_embeddings,
-        "val_labels": split.val_labels,
-        "cal_embeddings": split.cal_embeddings,
-        "cal_labels": split.cal_labels,
-        "test_embeddings": split.test_embeddings,
-        "test_labels": split.test_labels,
-        "samples_per_class": split.samples_per_class,
-    }
-    torch.save(payload, output_file)
-    logger.info("Serialized feature embedding split artifact to: %s", output_file)
+    if emb_dir.suffix in (".pt", ".bin"):
+        actual_output_file: Path | None = emb_dir
+        actual_emb_dir: Path = emb_dir.parent
+    else:
+        actual_output_file = output_file
+        actual_emb_dir = emb_dir
 
-    emb_dir = output_file.parent
+    actual_emb_dir.mkdir(parents=True, exist_ok=True)
+    if actual_output_file is not None:
+        actual_output_file.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "extractor": extractor,
+            "feature_dim": split.feature_dim,
+            "num_classes": num_classes,
+            "split": split,
+            "train_embeddings": split.train_embeddings,
+            "train_labels": split.train_labels,
+            "val_embeddings": split.val_embeddings,
+            "val_labels": split.val_labels,
+            "cal_embeddings": split.cal_embeddings,
+            "cal_labels": split.cal_labels,
+            "test_embeddings": split.test_embeddings,
+            "test_labels": split.test_labels,
+            "samples_per_class": split.samples_per_class,
+        }
+        torch.save(payload, actual_output_file)
+        logger.info("Serialized feature embedding split artifact to: %s", actual_output_file)
+    else:
+        stale_composite = actual_emb_dir / "cached_features.pt"
+        if stale_composite.exists():
+            stale_composite.unlink()
+            logger.info("Purged obsolete composite cache %s to eliminate dead-ends", stale_composite)
+
     torch.save(
         {
             "embeddings": split.train_embeddings,
@@ -652,7 +670,7 @@ def _save_split_artifacts(
             "samples_per_class": split.samples_per_class,
             "feature_dim": split.feature_dim,
         },
-        emb_dir / "train_embeddings.pt",
+        actual_emb_dir / "train_embeddings.pt",
     )
     torch.save(
         {
@@ -660,7 +678,7 @@ def _save_split_artifacts(
             "labels": split.val_labels,
             "feature_dim": split.feature_dim,
         },
-        emb_dir / "val_embeddings.pt",
+        actual_emb_dir / "val_embeddings.pt",
     )
     if split.cal_embeddings is not None and split.cal_labels is not None:
         torch.save(
@@ -669,7 +687,7 @@ def _save_split_artifacts(
                 "labels": split.cal_labels,
                 "feature_dim": split.feature_dim,
             },
-            emb_dir / "cal_embeddings.pt",
+            actual_emb_dir / "cal_embeddings.pt",
         )
     if split.test_embeddings is not None and split.test_labels is not None:
         torch.save(
@@ -678,9 +696,9 @@ def _save_split_artifacts(
                 "labels": split.test_labels,
                 "feature_dim": split.feature_dim,
             },
-            emb_dir / "test_embeddings.pt",
+            actual_emb_dir / "test_embeddings.pt",
         )
-    logger.info("Materialized individual 4-way split artifacts in: %s", emb_dir)
+    logger.info("Materialized individual 4-way split artifacts in: %s", actual_emb_dir)
 
 
 def extract_features_cli(argv: list[str] | None = None) -> int:
@@ -715,10 +733,16 @@ def extract_features_cli(argv: list[str] | None = None) -> int:
         help="Path to Parquet dataset manifest",
     )
     parser.add_argument(
+        "--out-dir",
+        type=str,
+        default=None,
+        help="Destination directory for discrete 4-way split artifacts (default: data/embeddings)",
+    )
+    parser.add_argument(
         "--out",
         type=str,
-        default="data/embeddings/cached_features.pt",
-        help="Destination path for serialized EmbeddingSplit artifact",
+        default=None,
+        help="Optional destination path for legacy composite EmbeddingSplit artifact",
     )
     parser.add_argument(
         "--batch-size",
@@ -772,10 +796,16 @@ def extract_features_cli(argv: list[str] | None = None) -> int:
         stream=sys.stdout,
     )
 
+    out_dir_path = Path(args.out_dir) if args.out_dir else Path("data/embeddings")
+    output_path = Path(args.out) if args.out else None
+    if output_path is not None and args.out_dir is None:
+        out_dir_path = output_path.parent
+
     cfg = FeatureExtractionConfig(
         extractor=args.extractor,
         manifest_path=Path(args.manifest),
-        output_path=Path(args.out),
+        output_path=output_path,
+        out_dir=out_dir_path,
         batch_size=args.batch_size,
         val_split=args.val_split,
         cal_split=args.cal_split,

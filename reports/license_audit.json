@@ -1,8 +1,9 @@
 {
   "status": "PASSED",
-  "manifest": "data/manifests/dataset_manifest.parquet",
+  "manifest": "data/manifests/raw_manifest.parquet",
+  "total_observations": 2000,
   "verified_observations": 1687,
-  "violations": 0,
+  "violations": 313,
   "allowed_licenses": [
     "CC-BY",
     "CC-BY-NC",

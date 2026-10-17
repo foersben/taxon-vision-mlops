@@ -2,9 +2,9 @@
   "status": "completed",
   "extractor": "dinov3",
   "epochs_trained": 5,
-  "final_train_loss": 1.8847,
-  "final_val_loss": 2.556,
-  "final_val_accuracy": 0.0,
-  "duration_seconds": 1.412,
+  "final_train_loss": 0.7497,
+  "final_val_loss": 0.7058,
+  "final_val_accuracy": 0.8757,
+  "duration_seconds": 1.876,
   "promotion_status": null
 }

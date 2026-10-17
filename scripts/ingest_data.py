@@ -11,19 +11,19 @@ Usage:
 import argparse
 import asyncio
 from pathlib import Path
+from typing import Any
 
 import polars as pl
 
 from taxon_vision.config import get_settings
 from taxon_vision.data.inat_client import INatAPIClient
-from taxon_vision.data.license_filter import LicenseFilter
 from taxon_vision.service.inference import load_taxa_catalog
 
 MANIFEST_DIR = Path("data/manifests")
 
 
-async def ingest_taxon_metadata(taxon_id: int, inat_client: INatAPIClient, per_page: int) -> list[dict[str, str | int]]:
-    """Fetch and filter metadata for a specific taxon.
+async def ingest_taxon_metadata(taxon_id: int, inat_client: INatAPIClient, per_page: int) -> list[dict[str, Any]]:
+    """Fetch raw observation metadata for a specific taxon.
 
     Args:
         taxon_id: The taxon ID to fetch metadata for.
@@ -31,26 +31,25 @@ async def ingest_taxon_metadata(taxon_id: int, inat_client: INatAPIClient, per_p
         per_page: Number of items per page to fetch.
 
     Returns:
-        A list of dictionaries containing the metadata for the specified taxon.
+        A list of dictionaries containing the raw metadata for the specified taxon.
     """
     print(f"Fetching metadata for taxon {taxon_id}...")
     observations = await inat_client.fetch_observations(taxon_id=taxon_id, per_page=per_page)
 
-    manifest_records = []
+    manifest_records: list[dict[str, Any]] = []
 
     for obs in observations:
-        record = LicenseFilter.process_record(obs)
-        if not record:
-            continue
-
+        obs_id = obs.get("observation_id") or obs.get("id") or ""
         manifest_records.append(
             {
-                "observation_uuid": record.observation_uuid,
+                "observation_uuid": str(obs_id),
                 "taxon_id": taxon_id,
-                "image_url": obs["image_url"],
-                "photographer_name": record.photographer_name,
-                "license_code": record.license_code.value,
-                "license_url": record.license_url,
+                "image_url": str(obs.get("image_url", "")),
+                "photographer_name": str(obs.get("attribution", "")),
+                "attribution": str(obs.get("attribution", "")),
+                "license_code": str(obs.get("license_code", "")),
+                "license_url": str(obs.get("license_url", "")),
+                "is_open_dataset_verified": bool(obs.get("is_open_dataset_verified", False)),
             }
         )
 
@@ -80,7 +79,7 @@ async def main() -> None:
     parser.add_argument(
         "--out",
         type=Path,
-        default=MANIFEST_DIR / "dataset_manifest.parquet",
+        default=MANIFEST_DIR / "raw_manifest.parquet",
         help="Target output Parquet file path",
     )
     args = parser.parse_args()
@@ -97,7 +96,7 @@ async def main() -> None:
     for taxon_id in taxa_to_fetch:
         records = await ingest_taxon_metadata(taxon_id, inat, per_page)
         all_records.extend(records)
-        print(f"Ingested {len(records)} compliant metadata records for taxon {taxon_id}.")
+        print(f"Ingested {len(records)} raw metadata records for taxon {taxon_id}.")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     manifest_path = args.out
@@ -105,7 +104,7 @@ async def main() -> None:
     # Save directly to high-performance Parquet using Polars
     df = pl.DataFrame(all_records)
     df.write_parquet(manifest_path)
-    print(f"Successfully wrote {len(all_records)} records to {manifest_path}")
+    print(f"Successfully wrote {len(all_records)} raw records to {manifest_path}")
 
 
 if __name__ == "__main__":

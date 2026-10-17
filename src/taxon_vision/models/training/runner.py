@@ -179,10 +179,68 @@ def _generate_synthetic_embedding_split(dim: int, num_classes: int) -> Embedding
     )
 
 
+def _try_load_split_from_pair(train_path: Path, val_path: Path, dim: int) -> EmbeddingSplit | None:
+    """Load train and validation partitions directly from discrete .pt tensor files.
+
+    Args:
+        train_path: Path to train_embeddings.pt.
+        val_path: Path to val_embeddings.pt.
+        dim: Expected feature dimension.
+
+    Returns:
+        Instantiated EmbeddingSplit or None if missing or incompatible.
+    """
+    if not train_path.exists() or not val_path.exists():
+        return None
+    try:
+        train_payload = torch.load(train_path, map_location="cpu", weights_only=False)
+        val_payload = torch.load(val_path, map_location="cpu", weights_only=False)
+
+        train_z = train_payload["embeddings"] if isinstance(train_payload, dict) else train_payload
+        train_y = train_payload["labels"] if isinstance(train_payload, dict) else None
+        samples_per_class = train_payload.get("samples_per_class") if isinstance(train_payload, dict) else None
+        feat_dim = (
+            train_payload.get("feature_dim", train_z.shape[1]) if isinstance(train_payload, dict) else train_z.shape[1]
+        )
+
+        val_z = val_payload["embeddings"] if isinstance(val_payload, dict) else val_payload
+        val_y = val_payload["labels"] if isinstance(val_payload, dict) else None
+
+        if not isinstance(train_z, torch.Tensor) or not isinstance(train_y, torch.Tensor):
+            return None
+        if not isinstance(val_z, torch.Tensor) or not isinstance(val_y, torch.Tensor):
+            return None
+        if feat_dim != dim:
+            logger.warning("Split embeddings at %s have dimension %d, expected %d", train_path, feat_dim, dim)
+            return None
+
+        split = EmbeddingSplit(
+            train_embeddings=train_z,
+            train_labels=train_y,
+            val_embeddings=val_z,
+            val_labels=val_y,
+            samples_per_class=samples_per_class,
+        )
+        logger.info(
+            "Loaded isolated train (%d) and val (%d) embeddings from %s, %s (dim=%d)",
+            len(train_z),
+            len(val_z),
+            train_path,
+            val_path,
+            dim,
+        )
+        return split
+    except Exception as err:
+        logger.warning("Failed loading split tensors from %s / %s: %s", train_path, val_path, err)
+        return None
+
+
 def _prepare_embedding_split(
     dim: int,
     num_classes: int,
     cache_path: Path | str | None = None,
+    train_embeddings_path: Path | str | None = None,
+    val_embeddings_path: Path | str | None = None,
     allow_synthetic: bool = False,
 ) -> EmbeddingSplit:
     """Construct or restore deterministic embedding splits for rapid head training.
@@ -194,10 +252,11 @@ def _prepare_embedding_split(
         in seconds. Synthetic data generation is strictly opt-in to avoid masking data pipeline bugs.
 
     How:
-        1. Checks whether an embedding cache exists at `cache_path` (or standard `data/embeddings/cached_features.pt`).
-        2. If found, deserializes the payload, validates that `split.feature_dim == dim`, and returns the cached split.
-        3. If absent or shape-incompatible and allow_synthetic is False, logs an error and raises FileNotFoundError.
-        4. If allow_synthetic is True, generates a deterministic synthetic Gaussian split.
+        1. Checks whether discrete train/val split files exist.
+        2. Checks whether an embedding cache exists at `cache_path` (or standard `data/embeddings/cached_features.pt`).
+        3. If found, deserializes the payload, validates that `split.feature_dim == dim`, and returns the cached split.
+        4. If absent or shape-incompatible and allow_synthetic is False, logs an error and raises FileNotFoundError.
+        5. If allow_synthetic is True, generates a deterministic synthetic Gaussian split.
 
     Complexity:
         O(N * D) where N is the number of samples and D is the feature dimension.
@@ -206,6 +265,8 @@ def _prepare_embedding_split(
         dim: Dimensionality of feature vectors.
         num_classes: Total number of classification categories.
         cache_path: Optional custom filesystem path to a serialized `.pt` embedding cache.
+        train_embeddings_path: Optional custom path to train_embeddings.pt.
+        val_embeddings_path: Optional custom path to val_embeddings.pt.
         allow_synthetic: Whether to fall back to synthetic Gaussian embeddings if cache is missing.
 
     Returns:
@@ -214,6 +275,18 @@ def _prepare_embedding_split(
     Raises:
         FileNotFoundError: If cache is absent and allow_synthetic is False.
     """
+    if train_embeddings_path is not None and val_embeddings_path is not None:
+        pair_loaded = _try_load_split_from_pair(Path(train_embeddings_path), Path(val_embeddings_path), dim)
+        if pair_loaded is not None:
+            return pair_loaded
+
+    default_train = Path("data/embeddings/train_embeddings.pt")
+    default_val = Path("data/embeddings/val_embeddings.pt")
+    if cache_path is None and default_train.exists() and default_val.exists():
+        pair_loaded = _try_load_split_from_pair(default_train, default_val, dim)
+        if pair_loaded is not None:
+            return pair_loaded
+
     candidates: list[Path] = (
         [Path(cache_path)] if cache_path is not None else [Path("data/embeddings/cached_features.pt")]
     )
@@ -465,6 +538,8 @@ def run_training_pipeline(
     tune: bool = False,
     n_trials: int = 15,
     cache_path: Path | str | None = None,
+    train_embeddings: Path | str | None = None,
+    val_embeddings: Path | str | None = None,
     require_cache: bool = False,
     allow_synthetic: bool | None = None,
     study_name: str | None = None,
@@ -496,6 +571,8 @@ def run_training_pipeline(
         tune: Whether to execute Optuna Bayesian hyperparameter search prior to final training.
         n_trials: Number of Optuna evaluation trials when `tune` is enabled.
         cache_path: Optional custom filesystem path to serialized `.pt` embedding cache.
+        train_embeddings: Optional custom path to train_embeddings.pt partition.
+        val_embeddings: Optional custom path to val_embeddings.pt partition.
         require_cache: Whether to strictly require real embedding cache and disable synthetic fallback.
         allow_synthetic: Explicit override to permit synthetic embeddings when cache is absent.
         study_name: Optional custom Optuna study name identifier.
@@ -538,6 +615,8 @@ def run_training_pipeline(
         dim,
         num_classes,
         cache_path=cache_path,
+        train_embeddings_path=train_embeddings,
+        val_embeddings_path=val_embeddings,
         allow_synthetic=resolved_allow_synthetic,
     )
     samples = data.samples_per_class or [1] * num_classes
@@ -778,6 +857,18 @@ def train_cli(argv: list[str] | None = None) -> int:
         help="Optional path to serialized .pt feature embedding cache file",
     )
     parser.add_argument(
+        "--train-embeddings",
+        type=str,
+        default=None,
+        help="Optional path to train_embeddings.pt partition file",
+    )
+    parser.add_argument(
+        "--val-embeddings",
+        type=str,
+        default=None,
+        help="Optional path to val_embeddings.pt partition file",
+    )
+    parser.add_argument(
         "--require-cache",
         action="store_true",
         help="Disallow fallback to synthetic data if embedding cache is absent",
@@ -837,6 +928,8 @@ def train_cli(argv: list[str] | None = None) -> int:
         tune=args.tune,
         n_trials=args.n_trials,
         cache_path=args.cache_path,
+        train_embeddings=args.train_embeddings,
+        val_embeddings=args.val_embeddings,
         require_cache=args.require_cache,
         allow_synthetic=args.allow_synthetic,
         study_name=args.study_name,

@@ -227,8 +227,8 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output",
         type=str,
-        default="models/checkpoints/model.onnx",
-        help="Destination path for serialized ONNX model graph.",
+        default=None,
+        help="Optional destination path for serialized FP32 ONNX model graph.",
     )
     parser.add_argument(
         "--extractor",
@@ -331,7 +331,7 @@ def _quantize_exported_graph(fp32_path: Path, args: argparse.Namespace, settings
 
     default_quantized = (
         fp32_path.with_name(f"{fp32_path.stem}.int8.onnx")
-        if args.output != "models/checkpoints/model.onnx"
+        if args.output and args.output != "models/checkpoints/model.onnx"
         else Path(model_cfg.onnx_model_path)
     )
     quantized_path = Path(args.quantized_output or default_quantized)
@@ -339,6 +339,90 @@ def _quantize_exported_graph(fp32_path: Path, args: argparse.Namespace, settings
     quantize_onnx_model(fp32_path, quantized_path, calibration_tensors=calibration, mode=mode)
     logger.info("Quantized INT8 ONNX graph (%s) saved to %s", mode, quantized_path)
     return quantized_path
+
+
+def _resolve_export_output(output_arg: str | None, quantize_int8: bool) -> tuple[Path, Path | None]:
+    """Resolve target output path and optional temporary FP32 path.
+
+    Args:
+        output_arg: CLI output argument.
+        quantize_int8: Whether INT8 quantization is requested.
+
+    Returns:
+        Tuple of (output_path, temporary_fp32_path_or_none).
+    """
+    if output_arg is not None:
+        return Path(output_arg), None
+    if not quantize_int8:
+        return Path("models/checkpoints/model.onnx"), None
+
+    import tempfile
+
+    temp_fp32 = tempfile.NamedTemporaryFile(suffix=".onnx", delete=False)
+    temp_path = Path(temp_fp32.name)
+    temp_fp32.close()
+    return temp_path, temp_path
+
+
+def _build_and_restore_classifier(args: argparse.Namespace, settings: Settings) -> TaxonClassifier | None:
+    """Instantiate backbone, configure classifier, and restore head checkpoint.
+
+    Args:
+        args: Parsed command-line arguments.
+        settings: Global application settings.
+
+    Returns:
+        TaxonClassifier instance or None on error.
+    """
+    extractor_name = args.extractor or settings.model.default_extractor
+    checkpoint_file = Path(args.checkpoint or settings.model.head_checkpoint_path)
+
+    backbone = _resolve_backbone(extractor_name, settings.model.fallback_extractor, args.allow_untrained)
+    if backbone is None:
+        return None
+
+    feat_dim = get_feature_dimension(backbone)
+    taxa = load_taxa_catalog()
+    if not taxa:
+        logger.error("Authoritative taxa catalog loaded from %s is empty", settings.model.taxa_catalog_path)
+        return None
+
+    num_classes = len(taxa)
+    classifier = TaxonClassifier(backbone=backbone, feature_dim=feat_dim, num_classes=num_classes)
+
+    if not _restore_head(
+        classifier,
+        checkpoint_file,
+        args.allow_untrained,
+        extractor_name,
+        feat_dim,
+        num_classes,
+    ):
+        return None
+    return classifier
+
+
+def _finalize_export_artifacts(target_artifact: Path, output_arg: str | None, quantize_int8: bool) -> int:
+    """Validate exported model artifact existence and purge intermediate unquantized models.
+
+    Args:
+        target_artifact: Path to finalized output model graph.
+        output_arg: Raw user-specified output path string.
+        quantize_int8: Whether quantization was applied.
+
+    Returns:
+        Exit code: 0 on success, 1 on failure.
+    """
+    if not target_artifact.exists() or target_artifact.stat().st_size == 0:
+        logger.error("ONNX export failed: Output file %s was not created", target_artifact)
+        return 1
+
+    logger.info("ONNX export succeeded: %s (%d bytes)", target_artifact, target_artifact.stat().st_size)
+    if output_arg is None and quantize_int8:
+        stale_fp32 = Path("models/checkpoints/model.onnx")
+        if stale_fp32.exists():
+            stale_fp32.unlink()
+    return 0
 
 
 def export_classifier_cli(argv: list[str] | None = None) -> int:
@@ -371,34 +455,14 @@ def export_classifier_cli(argv: list[str] | None = None) -> int:
         stream=sys.stdout,
     )
 
+    output_file, temp_fp32_path = _resolve_export_output(args.output, args.quantize_int8)
+
     try:
         settings = get_settings()
-        extractor_name = args.extractor or settings.model.default_extractor
         image_dim = args.image_size or settings.model.image_size
-        output_file = Path(args.output)
-        checkpoint_file = Path(args.checkpoint or settings.model.head_checkpoint_path)
 
-        backbone = _resolve_backbone(extractor_name, settings.model.fallback_extractor, args.allow_untrained)
-        if backbone is None:
-            return 1
-
-        feat_dim = get_feature_dimension(backbone)
-        taxa = load_taxa_catalog()
-        if not taxa:
-            logger.error("Authoritative taxa catalog loaded from %s is empty", settings.model.taxa_catalog_path)
-            return 1
-        num_classes = len(taxa)
-
-        classifier = TaxonClassifier(backbone=backbone, feature_dim=feat_dim, num_classes=num_classes)
-
-        if not _restore_head(
-            classifier,
-            checkpoint_file,
-            args.allow_untrained,
-            extractor_name,
-            feat_dim,
-            num_classes,
-        ):
+        classifier = _build_and_restore_classifier(args, settings)
+        if classifier is None:
             return 1
 
         logger.info(
@@ -409,19 +473,18 @@ def export_classifier_cli(argv: list[str] | None = None) -> int:
         )
         export_to_onnx(classifier, output_file, input_shape=(1, 3, image_dim, image_dim))
 
+        target_artifact = output_file
         if args.quantize_int8:
-            _quantize_exported_graph(output_file, args, settings)
+            target_artifact = _quantize_exported_graph(output_file, args, settings)
 
-        if output_file.exists():
-            logger.info("ONNX export succeeded: %s (%d bytes)", output_file, output_file.stat().st_size)
-            return 0
-
-        logger.error("ONNX export failed: Output file %s was not created", output_file)
-        return 1
+        return _finalize_export_artifacts(target_artifact, args.output, args.quantize_int8)
 
     except Exception as err:
         logger.exception("Fatal error during ONNX export: %s", err)
         return 1
+    finally:
+        if temp_fp32_path is not None and temp_fp32_path.exists():
+            temp_fp32_path.unlink()
 
 
 if __name__ == "__main__":

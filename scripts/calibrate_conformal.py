@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: MIT
 """Calibrate Split Conformal Prediction non-conformity quantiles and OOD thresholds.
 
-Implements Angelopoulos & Bates (2021) conformal prediction and Helmholtz free energy calibration:
-- Input: Holdout calibration embeddings and ground truth labels (or precomputed scores).
-- Output: Exact conformal non-conformity threshold q_hat and OOD energy threshold tau_ood.
+Consumes the exported quantized ONNX graph (models/checkpoints/model_int8.onnx) and discrete
+calibration embeddings (data/embeddings/cal_embeddings.pt) to guarantee distribution-free coverage
+(1 - alpha) and calibrate Helmholtz free energy OOD rejection bounds without PyTorch head.pt fallback.
 """
 
 from __future__ import annotations
@@ -15,140 +15,52 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import torch
-import torch.nn as nn
 import yaml
 
 from taxon_vision.config import get_settings
-from taxon_vision.models.training.types import EmbeddingSplit
+from taxon_vision.inference.onnx_engine import compute_onnx_logits, extract_onnx_head_weights
+from taxon_vision.uncertainty.conformal import SplitConformalPredictor
 from taxon_vision.uncertainty.ood_detector import EnergyOODDetector
 
 logger = logging.getLogger(__name__)
 
 
-def compute_conformal_quantile(scores: np.ndarray, alpha: float) -> float:
-    """Compute distribution-free split conformal prediction quantile.
-
-    Why:
-        Split conformal prediction provides mathematical finite-sample coverage guarantees (1 - alpha)
-        by calibrating on non-conformity scores calculated on holdout data.
-
-    How:
-        Evaluates the empirical quantile at ceil((n + 1) * (1 - alpha)) / n using the higher order statistic.
-
-    Complexity:
-        O(n log n) sorting overhead or O(n) order statistic selection.
+def load_embeddings_and_labels(path: Path) -> tuple[np.ndarray, np.ndarray]:
+    """Load embeddings and corresponding labels from a serialized .pt split file.
 
     Args:
-        scores: The non-conformity scores array of shape (N,).
-        alpha: The user-specified significance error tolerance.
+        path: Path to serialized PyTorch embedding partition dictionary.
 
     Returns:
-        The calibrated conformal quantile threshold q_hat.
+        Tuple of (embeddings, labels) as numpy arrays.
     """
-    n = len(scores)
-    level = np.ceil((n + 1) * (1.0 - alpha)) / n
-    level = min(1.0, max(0.0, float(level)))
-    q_hat = float(np.quantile(scores, level, method="higher"))
-    return q_hat
+    if not path.exists():
+        raise FileNotFoundError(f"Embedding partition file not found: {path}")
 
-
-def _load_scores_from_cache(
-    cache_path: Path,
-    checkpoint_path: Path | None,
-    split_name: str,
-) -> tuple[np.ndarray, np.ndarray | None, int]:
-    """Load calibration embeddings from cache and evaluate head checkpoint.
-
-    Args:
-        cache_path: Path to cached_features.pt.
-        checkpoint_path: Optional path to trained classification head checkpoint.
-        split_name: Name of the split to extract ('cal' or 'val').
-
-    Returns:
-        Tuple of (non-conformity scores, logits or None, sample size).
-    """
-    split = EmbeddingSplit.from_cache(cache_path)
-    if split_name == "cal" and split.cal_embeddings is not None and split.cal_labels is not None:
-        embeddings = split.cal_embeddings
-        labels = split.cal_labels
+    data = torch.load(path, map_location="cpu", weights_only=True)
+    if isinstance(data, dict):
+        embs = data.get("embeddings", data.get("cal_embeddings", data.get("test_embeddings")))
+        lbls = data.get("labels", data.get("cal_labels", data.get("test_labels")))
     else:
-        embeddings = split.val_embeddings
-        labels = split.val_labels
+        raise ValueError(f"Expected dict with embeddings and labels in {path}, got {type(data)}")
 
-    sample_size = len(labels)
-    if checkpoint_path is None or not checkpoint_path.exists():
-        logger.warning("Checkpoint %s not found; returning uniform baseline scores.", checkpoint_path)
-        mock_probs = np.full(sample_size, 0.5)
-        return 1.0 - mock_probs, None, sample_size
+    if embs is None or lbls is None:
+        raise ValueError(f"Could not extract embeddings or labels from {path}")
 
-    raw_state = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
-    state_dict = raw_state.get("state_dict", raw_state.get("model_state_dict", raw_state))
-    if any(k.startswith("head.") for k in state_dict):
-        state_dict = {k.removeprefix("head."): v for k, v in state_dict.items() if k.startswith("head.")}
+    embs_np = embs.numpy() if isinstance(embs, torch.Tensor) else np.asarray(embs, dtype=np.float32)
+    lbls_np = lbls.numpy() if isinstance(lbls, torch.Tensor) else np.asarray(lbls, dtype=np.int64)
+    return embs_np, lbls_np
 
-    weight_key = "1.weight" if "1.weight" in state_dict else "weight"
-    weight_tensor = state_dict[weight_key]
-    num_classes, feat_dim = weight_tensor.shape[0], weight_tensor.shape[1]
 
-    head = nn.Sequential(nn.Dropout(0.0), nn.Linear(feat_dim, num_classes))
-    head.load_state_dict(state_dict, strict=False)
-    head.eval()
-
-    with torch.no_grad():
-        logits_tensor = head(embeddings)
-        logits = logits_tensor.numpy()
-
+def _compute_stable_probabilities(logits: np.ndarray) -> np.ndarray:
+    """Compute numerically stable softmax probabilities from logits."""
     shifted = logits - np.max(logits, axis=1, keepdims=True)
     exp_logits = np.exp(shifted)
-    probs = exp_logits / (np.sum(exp_logits, axis=1, keepdims=True) + 1e-12)
-
-    labels_np = labels.numpy()
-    true_class_probs = probs[np.arange(sample_size), labels_np]
-    scores = 1.0 - true_class_probs
-    return scores, logits, sample_size
-
-
-def _resolve_calibration_data(
-    args: argparse.Namespace,
-    random_seed: int,
-) -> tuple[np.ndarray, np.ndarray | None, int]:
-    """Resolve scores and optional logits from disk or synthetic generation.
-
-    Args:
-        args: Parsed command-line arguments.
-        random_seed: PRNG seed for synthetic generation.
-
-    Returns:
-        Tuple of (non-conformity scores, logits or None, sample size).
-    """
-    if args.cache_path is not None and Path(args.cache_path).exists():
-        checkpoint_p = Path(args.checkpoint) if args.checkpoint else None
-        return _load_scores_from_cache(Path(args.cache_path), checkpoint_p, args.split)
-
-    scores_p = Path(args.scores_path)
-    if scores_p.exists():
-        scores = np.load(str(scores_p))
-        return scores, None, len(scores)
-
-    if not args.allow_synthetic:
-        logger.error(
-            "Neither cache file (%s) nor scores file (%s) found. Pass --allow-synthetic to permit synthetic fallback.",
-            args.cache_path,
-            args.scores_path,
-        )
-        sys.exit(1)
-
-    logger.warning("Generating synthetic non-conformity scores and logits for testing.")
-    np.random.seed(random_seed)
-    sample_size = 1000
-    mock_true_class_probs = np.random.beta(a=8.0, b=1.0, size=sample_size)
-    synthetic_scores = 1.0 - mock_true_class_probs
-    synthetic_logits = np.random.randn(sample_size, 10).astype(np.float32)
-    return synthetic_scores, synthetic_logits, sample_size
+    probs: np.ndarray = exp_logits / (np.sum(exp_logits, axis=1, keepdims=True) + 1e-12)
+    return probs
 
 
 def _save_calibration_artifacts(
@@ -160,50 +72,29 @@ def _save_calibration_artifacts(
     sample_size: int,
     empirical_coverage: float,
 ) -> None:
-    """Save calibration configuration and optional DVC summary metrics to disk.
-
-    Args:
-        out_path: Path to target configuration YAML or JSON file.
-        metrics_path: Optional path to target summary metrics JSON file.
-        alpha: Error significance parameter.
-        q_hat: Calibrated non-conformity quantile.
-        tau_ood: Calibrated Helmholtz energy threshold or None.
-        sample_size: Total calibration observation count.
-        empirical_coverage: Empirical coverage rate achieved on calibration samples.
-    """
+    """Save calibration configuration and optional DVC summary metrics to disk."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    if out_path.suffix in (".yaml", ".yml"):
-        yaml_payload = {
-            "calibration": {
-                "method": "split-conformal",
-                "nominal_coverage": round(1.0 - alpha, 4),
-                "alpha": round(alpha, 4),
-                "q_hat": round(q_hat, 4),
-                "tau_ood": round(tau_ood, 4) if tau_ood is not None else None,
-                "max_set_size_for_auto_accept": 3,
-                "empty_set_action": "route_to_human_triage",
-                "min_confidence_threshold": 0.60,
-                "num_calibration_samples": sample_size,
-            }
-        }
-        with out_path.open("w", encoding="utf-8") as f:
-            yaml.safe_dump(yaml_payload, f, sort_keys=False)
-    else:
-        calibration_meta: dict[str, Any] = {
-            "alpha": alpha,
+    yaml_payload = {
+        "calibration": {
+            "method": "split-conformal",
             "nominal_coverage": round(1.0 - alpha, 4),
+            "alpha": round(alpha, 4),
             "q_hat": round(q_hat, 4),
             "tau_ood": round(tau_ood, 4) if tau_ood is not None else None,
+            "max_set_size_for_auto_accept": 3,
+            "empty_set_action": "route_to_human_triage",
+            "min_confidence_threshold": 0.60,
             "num_calibration_samples": sample_size,
         }
-        with out_path.open("w", encoding="utf-8") as f:
-            json.dump(calibration_meta, f, indent=2)
+    }
+    with out_path.open("w", encoding="utf-8") as f:
+        yaml.safe_dump(yaml_payload, f, sort_keys=False)
     logger.info("Saved calibration configuration to %s", out_path)
 
     if metrics_path is not None:
         metrics_path.parent.mkdir(parents=True, exist_ok=True)
         metrics_meta = {
-            "alpha": alpha,
+            "alpha": round(alpha, 4),
             "nominal_coverage": round(1.0 - alpha, 4),
             "empirical_calibration_coverage": round(empirical_coverage, 4),
             "q_hat": round(q_hat, 4),
@@ -215,74 +106,98 @@ def _save_calibration_artifacts(
         logger.info("Saved calibration summary metrics to %s", metrics_path)
 
 
-def main() -> None:
-    """Execute Split Conformal Prediction and OOD energy calibration pipeline."""
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-    settings = get_settings()
+def _build_arg_parser(default_alpha: float) -> argparse.ArgumentParser:
+    """Construct CLI argument parser for conformal calibration."""
     parser = argparse.ArgumentParser(description="Calibrate Split Conformal Prediction and OOD energy thresholds.")
     parser.add_argument(
-        "--alpha",
-        type=float,
-        default=settings.conformal.alpha,
-        help=f"Significance level (default: {settings.conformal.alpha})",
+        "--onnx-model",
+        type=Path,
+        default=Path("models/checkpoints/model_int8.onnx"),
+        help="Path to exported ONNX model (FP32 or INT8).",
+    )
+    parser.add_argument(
+        "--embeddings",
+        type=Path,
+        default=Path("data/embeddings/cal_embeddings.pt"),
+        help="Path to calibration embeddings partition (.pt).",
     )
     parser.add_argument(
         "--out",
         type=Path,
         default=Path("config/conformal_config.yaml"),
-        help="Destination path for calibrated conformal configuration YAML",
+        help="Destination path for calibrated conformal configuration YAML.",
     )
     parser.add_argument(
         "--metrics-out",
         type=Path,
         default=None,
-        help="Optional destination path for DVC summary metrics JSON",
+        help="Optional destination path for DVC summary metrics JSON.",
     )
     parser.add_argument(
-        "--cache-path",
-        type=str,
-        default=None,
-        help="Path to serialized .pt feature embedding cache file",
+        "--alpha",
+        type=float,
+        default=default_alpha,
+        help=f"Significance level error budget (default: {default_alpha}).",
     )
     parser.add_argument(
-        "--split",
-        type=str,
-        default="cal",
-        help="Dataset split to calibrate against ('cal' or 'val')",
-    )
-    parser.add_argument(
-        "--checkpoint",
-        type=str,
-        default=settings.model.head_checkpoint_path,
-        help="Path to trained classification head checkpoint (.pt)",
-    )
-    parser.add_argument(
-        "--scores-path",
-        type=Path,
-        default=Path("data/conformal/calibration_scores.npy"),
-        help="Fallback path to precomputed calibration non-conformity scores array",
+        "--ood-tpr",
+        type=float,
+        default=0.95,
+        help="Target true positive rate for in-distribution calibration (default: 0.95).",
     )
     parser.add_argument(
         "--allow-synthetic",
         action="store_true",
-        default=settings.model.allow_untrained_fallback,
-        help="Allow synthetic score generation when calibration files are absent",
+        default=False,
+        help="Allow synthetic score generation when calibration files are absent.",
     )
+    # Legacy flags for compatibility
+    parser.add_argument("--cache-path", type=str, default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--split", type=str, default="cal", help=argparse.SUPPRESS)
+    parser.add_argument("--checkpoint", type=str, default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--scores-path", type=Path, default=None, help=argparse.SUPPRESS)
+    return parser
+
+
+def main() -> None:
+    """Execute Split Conformal Prediction and OOD energy calibration pipeline."""
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    settings = get_settings()
+    parser = _build_arg_parser(settings.conformal.alpha)
     args = parser.parse_args()
 
-    scores, logits, sample_size = _resolve_calibration_data(args, settings.training.random_seed)
-    q_hat = compute_conformal_quantile(scores, args.alpha)
+    emb_path = args.embeddings
+    if not emb_path.exists() and args.cache_path and Path(args.cache_path).exists():
+        emb_path = Path(args.cache_path)
+
+    if not emb_path.exists():
+        if not args.allow_synthetic and not settings.model.allow_untrained_fallback:
+            logger.error("Calibration embeddings not found at %s. Aborting.", emb_path)
+            sys.exit(1)
+        logger.warning("Generating synthetic non-conformity scores and logits for testing.")
+        np.random.seed(settings.training.random_seed)
+        sample_size = 1000
+        mock_probs = np.random.beta(a=8.0, b=1.0, size=sample_size)
+        scores = 1.0 - mock_probs
+        logits = np.random.randn(sample_size, 10).astype(np.float32)
+    else:
+        embeddings, labels = load_embeddings_and_labels(emb_path)
+        sample_size = len(labels)
+        weight, bias = extract_onnx_head_weights(args.onnx_model)
+        logits = compute_onnx_logits(embeddings, weight, bias)
+        probs = _compute_stable_probabilities(logits)
+        scores = 1.0 - probs[np.arange(sample_size), labels]
+
+    q_hat = SplitConformalPredictor.compute_quantile(scores, args.alpha)
     empirical_coverage = float(np.mean(scores <= q_hat))
 
-    tau_ood: float | None = None
-    if logits is not None:
-        tau_ood = EnergyOODDetector.calibrate_threshold_from_logits(logits, percentile=95.0)
+    percentile = args.ood_tpr * 100.0 if args.ood_tpr <= 1.0 else args.ood_tpr
+    tau_ood = EnergyOODDetector.calibrate_threshold_from_logits(logits, percentile=percentile)
 
     print(f"Calibrated Split Conformal Quantile for alpha={args.alpha} (Nominal Coverage {1 - args.alpha:.0%}):")
     print(f"  q_hat = {q_hat:.4f}")
     print(f"  Empirical Calibration Coverage = {empirical_coverage:.2%}")
-    if tau_ood is not None:
-        print(f"  Calibrated OOD Energy Threshold (95th pctl) = {tau_ood:.4f}")
+    print(f"  Calibrated OOD Energy Threshold ({percentile:.1f}th pctl) = {tau_ood:.4f}")
 
     _save_calibration_artifacts(
         out_path=args.out,
