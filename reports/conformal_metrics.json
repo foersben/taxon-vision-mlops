@@ -2,7 +2,7 @@
   "alpha": 0.05,
   "nominal_coverage": 0.95,
   "empirical_calibration_coverage": 0.9645,
-  "q_hat": 0.8541,
-  "tau_ood": -2.1689,
+  "q_hat": 0.864,
+  "tau_ood": -2.1485,
   "num_calibration_samples": 169
 }

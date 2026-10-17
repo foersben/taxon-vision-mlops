@@ -397,6 +397,19 @@ def _apply_direct_env_overrides(config_data: dict[str, Any]) -> dict[str, Any]:
     return config_data
 
 
+def get_params_path() -> Path:
+    """Resolve the canonical params.yaml path, checking repository root first then config/.
+
+    Returns:
+        Path: Canonical path to params.yaml.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    root_params = repo_root / "params.yaml"
+    if root_params.is_file():
+        return root_params
+    return repo_root / "config" / "params.yaml"
+
+
 @lru_cache(maxsize=1)
 def get_settings(config_path: str | Path | None = None) -> Settings:
     """Retrieve the validated global application configuration settings.
@@ -421,10 +434,7 @@ def get_settings(config_path: str | Path | None = None) -> Settings:
     config_dir = base_path.parent
 
     # Layer params.yaml if present (check repo root first, then config_dir)
-    repo_root = base_path.parent.parent
-    params_path = repo_root / "params.yaml"
-    if not params_path.is_file():
-        params_path = config_dir / "params.yaml"
+    params_path = get_params_path()
     params_data = _load_yaml_dict(params_path)
     if params_data:
         config_data = _deep_merge(config_data, params_data)

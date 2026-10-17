@@ -88,6 +88,7 @@ stages:
       - training.cb_beta
       - training.epochs
       - training.learning_rate
+      - training.tune
       - training.weight_decay
     outs:
       - models/checkpoints/head.pt:
@@ -157,6 +158,7 @@ stages:
       - models/checkpoints/model_int8.onnx
       - scripts/benchmark_pareto.py
     params:
+      - conformal.alpha
       - evaluation.latency_sla_ms
     outs:
       - docs/assets/pareto_results.json:
