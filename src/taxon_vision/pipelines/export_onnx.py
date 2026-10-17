@@ -138,6 +138,19 @@ def export_onnx_cli(argv: list[str] | None = None) -> int:
         if args.quantize_int8:
             target_artifact = _quantize_exported_graph(output_file, args, settings)
 
+        import mlflow
+
+        if mlflow.active_run():
+            from taxon_vision.models.training.tracking import MLflowTracker
+
+            MLflowTracker.log_onnx_model(
+                onnx_model=target_artifact,
+                artifact_path="model",
+                num_classes=classifier.num_classes,
+                image_size=image_dim,
+                registered_model_name="taxon_vision_onnx",
+            )
+
         return _finalize_export_artifacts(target_artifact, args.output, args.quantize_int8)
 
     except Exception as err:

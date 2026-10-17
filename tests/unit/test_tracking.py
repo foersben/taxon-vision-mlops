@@ -13,8 +13,11 @@ import numpy as np
 import pytest
 import torch
 import torch.nn as nn
+from mlflow.models import ModelSignature
+from mlflow.types.schema import Schema, TensorSpec
 
 from taxon_vision.models.training.tracking import (
+    MLflowTracker,
     _attach_mlflow_artifact_safely,
     _determine_promotion_alias,
     _end_mlflow_run_safely,
@@ -381,3 +384,116 @@ def test_plot_confusion_matrix_explicit_labels() -> None:
 
     fig = _plot_confusion_matrix(y_true, y_pred, class_names)
     assert fig is not None
+
+
+def test_build_embedding_and_onnx_signatures() -> None:
+    """Verify MLflowTracker signature builders create valid ModelSignature instances with TensorSpecs."""
+    emb_sig = MLflowTracker.build_embedding_signature(input_dim=512, num_classes=15)
+    assert isinstance(emb_sig, ModelSignature)
+    assert isinstance(emb_sig.inputs, Schema)
+    assert isinstance(emb_sig.outputs, Schema)
+    assert len(emb_sig.inputs.inputs) == 1
+    assert emb_sig.inputs.inputs[0].name == "backbone_embeddings"
+    assert emb_sig.inputs.inputs[0].shape == (-1, 512)
+    assert emb_sig.inputs.inputs[0].type == np.dtype(np.float32)
+
+    assert len(emb_sig.outputs.inputs) == 1
+    assert emb_sig.outputs.inputs[0].name == "taxonomic_logits"
+    assert emb_sig.outputs.inputs[0].shape == (-1, 15)
+    assert emb_sig.outputs.inputs[0].type == np.dtype(np.float32)
+
+    onnx_sig = MLflowTracker.build_onnx_signature(num_classes=15, image_size=224)
+    assert isinstance(onnx_sig, ModelSignature)
+    assert isinstance(onnx_sig.inputs, Schema)
+    assert isinstance(onnx_sig.outputs, Schema)
+    assert len(onnx_sig.inputs.inputs) == 1
+    assert onnx_sig.inputs.inputs[0].name == "input_images"
+    assert onnx_sig.inputs.inputs[0].shape == (-1, 3, 224, 224)
+    assert onnx_sig.inputs.inputs[0].type == np.dtype(np.float32)
+
+    assert len(onnx_sig.outputs.inputs) == 1
+    assert onnx_sig.outputs.inputs[0].name == "taxonomic_logits"
+    assert onnx_sig.outputs.inputs[0].shape == (-1, 15)
+    assert onnx_sig.outputs.inputs[0].type == np.dtype(np.float32)
+
+
+def test_log_model_with_explicit_schema(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify MLflowTracker.log_model invokes mlflow.pytorch.log_model with explicit ModelSignature and input example."""
+    mock_log_model = MagicMock()
+    monkeypatch.setattr(mlflow.pytorch, "log_model", mock_log_model)
+
+    model = nn.Sequential(nn.Dropout(0.2), nn.Linear(64, 8))
+
+    MLflowTracker.log_model(model=model, model_name="taxon_vision_classifier")
+
+    mock_log_model.assert_called_once()
+    kwargs = mock_log_model.call_args.kwargs
+    sig = kwargs.get("signature")
+    assert sig is not None
+    assert isinstance(sig, ModelSignature)
+
+    # Validate input schema
+    assert len(sig.inputs.inputs) == 1
+    input_spec = sig.inputs.inputs[0]
+    assert isinstance(input_spec, TensorSpec)
+    assert input_spec.name == "backbone_embeddings"
+    assert input_spec.shape == (-1, 64)
+    assert input_spec.type == np.dtype(np.float32)
+
+    # Validate output schema
+    assert len(sig.outputs.inputs) == 1
+    output_spec = sig.outputs.inputs[0]
+    assert isinstance(output_spec, TensorSpec)
+    assert output_spec.name == "taxonomic_logits"
+    assert output_spec.shape == (-1, 8)
+    assert output_spec.type == np.dtype(np.float32)
+
+    # Validate input example
+    example = kwargs.get("input_example")
+    assert example is not None
+    assert isinstance(example, np.ndarray)
+    assert example.shape == (1, 64)
+    assert example.dtype == np.float32
+
+
+def test_log_onnx_model_signature(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify MLflowTracker.log_onnx_model constructs valid ONNX image tensor signature."""
+    import mlflow.onnx
+
+    mock_log_onnx = MagicMock()
+    monkeypatch.setattr(mlflow.onnx, "log_model", mock_log_onnx)
+
+    dummy_onnx = MagicMock()
+    MLflowTracker.log_onnx_model(
+        onnx_model=dummy_onnx,
+        artifact_path="model",
+        num_classes=12,
+        image_size=224,
+    )
+
+    mock_log_onnx.assert_called_once()
+    kwargs = mock_log_onnx.call_args.kwargs
+    sig = kwargs.get("signature")
+    assert sig is not None
+    assert isinstance(sig, ModelSignature)
+
+    # Validate input image TensorSpec
+    input_spec = sig.inputs.inputs[0]
+    assert isinstance(input_spec, TensorSpec)
+    assert input_spec.name == "input_images"
+    assert input_spec.shape == (-1, 3, 224, 224)
+    assert input_spec.type == np.dtype(np.float32)
+
+    # Validate output logits TensorSpec
+    output_spec = sig.outputs.inputs[0]
+    assert isinstance(output_spec, TensorSpec)
+    assert output_spec.name == "taxonomic_logits"
+    assert output_spec.shape == (-1, 12)
+    assert output_spec.type == np.dtype(np.float32)
+
+    # Validate input example
+    example = kwargs.get("input_example")
+    assert example is not None
+    assert isinstance(example, np.ndarray)
+    assert example.shape == (1, 3, 224, 224)
+    assert example.dtype == np.float32

@@ -13,6 +13,8 @@ from typing import Any
 import mlflow
 import numpy as np
 import torch
+from mlflow.models import ModelSignature
+from mlflow.types.schema import Schema, TensorSpec
 from torch import nn
 
 from taxon_vision.config import get_settings
@@ -371,10 +373,224 @@ def log_training_visualizations(
         logger.warning("Failed to render and log training visualizations to MLflow: %s", err)
 
 
+def _resolve_model_dims(
+    model: nn.Module,
+    input_dim: int | None,
+    num_classes: int | None,
+) -> tuple[int, int]:
+    """Resolve embedding dimension and class count from linear layer geometry.
+
+    Args:
+        model: PyTorch model module to inspect.
+        input_dim: Optional explicit input dimension.
+        num_classes: Optional explicit number of output classes.
+
+    Returns:
+        Tuple of (resolved_input_dim, resolved_num_classes).
+    """
+    resolved_dim = input_dim or 1280
+    resolved_classes = num_classes or 10
+    linear_layers = [m for m in model.modules() if isinstance(m, nn.Linear)]
+    if not linear_layers:
+        return resolved_dim, resolved_classes
+    if input_dim is None:
+        resolved_dim = linear_layers[0].in_features
+    if num_classes is None:
+        resolved_classes = linear_layers[-1].out_features
+    return resolved_dim, resolved_classes
+
+
+def _log_pytorch_model_with_fallback(
+    model: nn.Module,
+    reg_name: str,
+    signature: ModelSignature,
+    input_example: np.ndarray,
+    pip_reqs: list[str],
+) -> Any:
+    """Attempt default logging with fallback to pickle serialization.
+
+    Args:
+        model: PyTorch model module on CPU.
+        reg_name: Target registered model name.
+        signature: ModelSignature instance.
+        input_example: Input array example.
+        pip_reqs: Required pip dependencies.
+
+    Returns:
+        ModelInfo instance on success, or None on failure.
+    """
+    try:
+        return mlflow.pytorch.log_model(
+            model,
+            name="model",
+            registered_model_name=reg_name,
+            signature=signature,
+            input_example=input_example,
+            pip_requirements=pip_reqs,
+        )
+    except Exception:
+        pass
+
+    try:
+        return mlflow.pytorch.log_model(
+            model,
+            name="model",
+            registered_model_name=reg_name,
+            signature=signature,
+            input_example=input_example,
+            serialization_format="pickle",
+            pip_requirements=pip_reqs,
+        )
+    except Exception as err:
+        logger.warning("Failed to log model to registry: %s", err)
+        return None
+
+
+class MLflowTracker:
+    """MLOps experiment tracking and model registration orchestrator."""
+
+    run_scope = staticmethod(mlflow_run_scope)
+    log_metrics = staticmethod(_log_mlflow_metrics)
+    log_visualizations = staticmethod(log_training_visualizations)
+
+    @staticmethod
+    def build_embedding_signature(input_dim: int, num_classes: int) -> ModelSignature:
+        """Construct explicit MLflow ModelSignature for backbone embeddings -> taxonomic logits.
+
+        Why:
+            Populates explicit named inputs and outputs in MLflow Model Registry metadata,
+            preventing unpopulated schema definitions (`Inputs (0) / Outputs (0)`).
+
+        Args:
+            input_dim: Dimensionality of feature embeddings.
+            num_classes: Number of target taxonomic classes.
+
+        Returns:
+            ModelSignature with backbone_embeddings input and taxonomic_logits output TensorSpecs.
+        """
+        input_schema = Schema([TensorSpec(np.dtype(np.float32), (-1, input_dim), name="backbone_embeddings")])
+        output_schema = Schema([TensorSpec(np.dtype(np.float32), (-1, num_classes), name="taxonomic_logits")])
+        return ModelSignature(inputs=input_schema, outputs=output_schema)
+
+    @staticmethod
+    def build_onnx_signature(num_classes: int, image_size: int = 224) -> ModelSignature:
+        """Construct explicit MLflow ModelSignature for raw image tensor -> taxonomic logits.
+
+        Why:
+            Provides end-to-end tensor contracts for deployed ONNX Runtime graphs.
+
+        Args:
+            num_classes: Number of target taxonomic classes.
+            image_size: Spatial resolution of input images in pixels.
+
+        Returns:
+            ModelSignature with input_images tensor and taxonomic_logits output TensorSpecs.
+        """
+        input_schema = Schema([TensorSpec(np.dtype(np.float32), (-1, 3, image_size, image_size), name="input_images")])
+        output_schema = Schema([TensorSpec(np.dtype(np.float32), (-1, num_classes), name="taxonomic_logits")])
+        return ModelSignature(inputs=input_schema, outputs=output_schema)
+
+    @classmethod
+    def log_model(
+        cls,
+        model: nn.Module,
+        model_name: str = "taxon_vision_classifier",
+        input_dim: int | None = None,
+        num_classes: int | None = None,
+        signature: ModelSignature | None = None,
+        input_example: np.ndarray | None = None,
+        registered_model_name: str | None = None,
+        pip_requirements: list[str] | None = None,
+    ) -> Any:
+        """Log PyTorch classifier to MLflow registry with strongly-typed signature and input example.
+
+        Args:
+            model: PyTorch model module to serialize.
+            model_name: Target artifact or registry name.
+            input_dim: Optional dimensionality of embedding features.
+            num_classes: Optional number of taxonomic output categories.
+            signature: Optional pre-constructed ModelSignature.
+            input_example: Optional real or zero-padded input tensor.
+            registered_model_name: Optional explicit registry model name.
+            pip_requirements: Optional list of package dependencies.
+
+        Returns:
+            ModelInfo instance on success, or None on failure.
+        """
+        import copy
+
+        cpu_model = copy.deepcopy(model).cpu().eval()
+        resolved_dim, resolved_classes = _resolve_model_dims(cpu_model, input_dim, num_classes)
+
+        if signature is None:
+            signature = cls.build_embedding_signature(resolved_dim, resolved_classes)
+
+        if input_example is None:
+            input_example = np.zeros((1, resolved_dim), dtype=np.float32)
+
+        reg_name = registered_model_name or model_name
+        pip_reqs = pip_requirements or ["torch", "numpy", "cloudpickle"]
+        return _log_pytorch_model_with_fallback(cpu_model, reg_name, signature, input_example, pip_reqs)
+
+    @classmethod
+    def log_onnx_model(
+        cls,
+        onnx_model: Any,
+        artifact_path: str = "model",
+        num_classes: int = 10,
+        image_size: int = 224,
+        signature: ModelSignature | None = None,
+        input_example: np.ndarray | None = None,
+        registered_model_name: str | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Log ONNX model to MLflow with explicit input/output tensor signature.
+
+        Args:
+            onnx_model: ONNX ModelProto or path to .onnx artifact.
+            artifact_path: Artifact directory destination in MLflow run.
+            num_classes: Number of target taxonomic classes.
+            image_size: Input spatial image dimension in pixels.
+            signature: Optional pre-constructed ModelSignature.
+            input_example: Optional real or zero-padded input tensor.
+            registered_model_name: Optional model registry name.
+            **kwargs: Extra arguments forwarded to mlflow.onnx.log_model.
+
+        Returns:
+            ModelInfo instance on success, or None on failure.
+        """
+        import mlflow.onnx
+
+        if signature is None:
+            signature = cls.build_onnx_signature(num_classes=num_classes, image_size=image_size)
+
+        if input_example is None:
+            input_example = np.zeros((1, 3, image_size, image_size), dtype=np.float32)
+
+        model_proto = onnx_model
+        if isinstance(onnx_model, (str, Path)):
+            import onnx
+
+            model_proto = onnx.load(str(onnx_model))
+
+        try:
+            return mlflow.onnx.log_model(
+                onnx_model=model_proto,
+                artifact_path=artifact_path,
+                registered_model_name=registered_model_name,
+                signature=signature,
+                input_example=input_example,
+                **kwargs,
+            )
+        except Exception as err:
+            logger.warning("Failed to log ONNX model to MLflow: %s", err)
+            return None
+
+
 def _prepare_model_signature_and_example(
     model: nn.Module,
     val_embeddings: torch.Tensor | None,
-) -> tuple[Any, Any]:
+) -> tuple[ModelSignature, np.ndarray]:
     """Infer model signature and input example from real validation data or module geometry.
 
     Args:
@@ -387,27 +603,17 @@ def _prepare_model_signature_and_example(
     import copy
 
     cpu_model = copy.deepcopy(model).cpu().eval()
+    input_dim, num_classes = _resolve_model_dims(cpu_model, None, None)
+
     if val_embeddings is not None and val_embeddings.shape[0] > 0:
+        input_dim = val_embeddings.shape[1]
         sample_size = min(5, val_embeddings.shape[0])
-        sample_input = val_embeddings[:sample_size].detach().cpu()
-        with torch.no_grad():
-            sample_output = cpu_model(sample_input)
-        input_example = sample_input.numpy()
-        output_example = sample_output.numpy()
-        try:
-            from mlflow.models.signature import infer_signature
+        input_example = val_embeddings[:sample_size].detach().cpu().numpy()
+    else:
+        input_example = np.zeros((1, input_dim), dtype=np.float32)
 
-            return infer_signature(input_example, output_example), input_example
-        except Exception as sig_err:
-            logger.debug("Could not infer model signature from validation batch: %s", sig_err)
-            return None, input_example
-
-    input_dim = 1280
-    for module in cpu_model.modules():
-        if isinstance(module, nn.Linear):
-            input_dim = module.in_features
-            break
-    return None, torch.zeros(1, input_dim).numpy()
+    signature = MLflowTracker.build_embedding_signature(input_dim, num_classes)
+    return signature, input_example
 
 
 def _log_model_artifact(
@@ -427,33 +633,13 @@ def _log_model_artifact(
     Returns:
         ModelInfo instance on success, or None on failure.
     """
-    import copy
-
-    cpu_model = copy.deepcopy(model).cpu().eval()
-    pip_reqs = ["torch", "numpy", "cloudpickle"]
-    try:
-        return mlflow.pytorch.log_model(
-            cpu_model,
-            name="model",
-            registered_model_name=model_name,
-            signature=signature,
-            input_example=input_example,
-            pip_requirements=pip_reqs,
-        )
-    except Exception:
-        try:
-            return mlflow.pytorch.log_model(
-                cpu_model,
-                name="model",
-                registered_model_name=model_name,
-                signature=signature,
-                input_example=input_example,
-                serialization_format="pickle",
-                pip_requirements=pip_reqs,
-            )
-        except Exception as err:
-            logger.warning("Failed to log model to registry: %s", err)
-            return None
+    return MLflowTracker.log_model(
+        model=model,
+        model_name=model_name,
+        signature=signature,
+        input_example=input_example,
+        registered_model_name=model_name,
+    )
 
 
 def _apply_model_version_metadata(
