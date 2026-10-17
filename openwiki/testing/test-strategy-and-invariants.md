@@ -174,7 +174,7 @@ Unit tests in `tests/unit/test_conformal_bounds.py` explicitly verify all three 
 - Ambiguous diffuse distributions (e.g., $[0.34, 0.33, 0.33]$) admit all three classes, triggering referral because $|C(x)| = 3 > k_{\text{max}} = 2$.
 - Low-confidence predictions (e.g., top-1 probability $0.482 < 0.60$ with other classes $< 0.20$) yield a singleton set $C(x) = [0]$ but still mandate human referral.
 
-The standalone calibration script `scripts/calibrate_conformal.py` computes $\hat{q}$ from real holdout validation softmax logits or permitted synthetic fallback (`--allow-synthetic`), serializing the calibrated threshold to `config/conformal_calibration.json`.
+The calibration pipeline `src/taxon_vision/pipelines/calibrate.py` (with CLI shim `scripts/calibrate_conformal.py`) computes $\hat{q}$ and Helmholtz OOD energy threshold $\tau_{\text{energy}}$ from calibration partition representations (`data/embeddings/cal_embeddings.pt`) evaluated through `models/checkpoints/model_int8.onnx`, serializing calibrated parameters to `config/conformal_config.yaml`.
 
 ---
 

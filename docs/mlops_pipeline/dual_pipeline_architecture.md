@@ -139,8 +139,8 @@ This guarantees absolute cryptographic lineage connecting source code, DVC data 
 
 Before any candidate model enters the production registry, an automated evaluation pipeline executes two sequential epistemic verification gates:
 
-* **Post-Quantization Calibration (`scripts/calibrate_conformal.py`):** Calibrates the exact non-conformity threshold $\hat{q}_\alpha$ and Helmholtz OOD energy threshold $\tau_{\text{OOD}}$ on the holdout calibration partition $\mathcal{D}_{\text{cal}}$ ($10\%$ split) using the exported INT8 ONNX model.
-* **Holdout Coverage Verification (`scripts/benchmark_pareto.py`):** Formally asserts that the empirical marginal coverage on the holdout test partition $\mathcal{D}_{\text{test}}$ ($10\%$ split) mathematically satisfies the nominal guarantee:
+* **Post-Quantization Calibration (`src/taxon_vision/pipelines/calibrate.py`):** Calibrates the exact non-conformity threshold $\hat{q}_\alpha$ and Helmholtz OOD energy threshold $\tau_{\text{OOD}}$ on the holdout calibration partition $\mathcal{D}_{\text{cal}}$ ($10\%$ split via `data/embeddings/cal_embeddings.pt`) using the exported INT8 ONNX model (`models/checkpoints/model_int8.onnx`), serializing parameters to `config/conformal_config.yaml`.
+* **Holdout Coverage Verification (`src/taxon_vision/pipelines/evaluate.py`):** Formally asserts that the empirical marginal coverage on the holdout test partition $\mathcal{D}_{\text{test}}$ ($10\%$ split via `data/embeddings/test_embeddings.pt`) mathematically satisfies the nominal guarantee:
 
 $$\text{Coverage}_{\text{empirical}} = \frac{1}{n_{\text{test}}} \sum_{i=1}^{n_{\text{test}}} \mathbb{I}\left(y_i \in \hat{C}(x_i)\right) \ge 1 - \alpha$$
 

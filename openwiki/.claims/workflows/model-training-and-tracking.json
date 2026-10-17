@@ -64,7 +64,7 @@
     },
     {
       "id": "claim_b49976869f0a4170a2fb16b23a3164e6",
-      "statement": "create_stratified_embedding_split partitions extracted representations into stratified training and validation splits preserving class proportions, validates 2D tensor shape and dimension consistency invariants, and counts per-class training frequencies for loss weighting.",
+      "statement": "create_stratified_embedding_split partitions extracted representations into four stratified splits (train, validation, calibration, test) preserving class proportions, validates 2D tensor shape and dimension consistency invariants, and counts per-class training frequencies for loss weighting.",
       "evidence": [
         {
           "resource": "repo://src/taxon_vision/models/training/types.py#L13-L91",
@@ -78,7 +78,7 @@
     },
     {
       "id": "claim_ee8b29377c354444b2c8229a89e92212",
-      "statement": "run_feature_extraction orchestrates offline representation extraction and serializes a binary checkpoint artifact containing the extractor name, feature dimension, class count, and EmbeddingSplit container to disk.",
+      "statement": "run_feature_extraction orchestrates offline representation extraction and serializes four discrete stratified embedding files (train_embeddings.pt, val_embeddings.pt, cal_embeddings.pt, test_embeddings.pt) along with metadata to disk.",
       "evidence": [
         {
           "resource": "repo://src/taxon_vision/pipelines/extract_features.py#L376-L464",
@@ -122,7 +122,7 @@
     },
     {
       "id": "claim_1447ec26df9c460d87e5f1dfa4078eb8",
-      "statement": "_get_dvc_dataset_hash parses dvc.lock to extract the ingestion stage output MD5 checksum for data/manifests and logs it as dvc_dataset_hash in MLflow to cryptographically connect trained model checkpoints to immutable dataset versions.",
+      "statement": "_get_dvc_dataset_hash parses dvc.lock to extract the audit_license or ingest stage output checksum for data/manifests and logs it as dvc_dataset_hash in MLflow to cryptographically connect trained model checkpoints to immutable dataset versions.",
       "evidence": [
         {
           "resource": "repo://src/taxon_vision/models/training/tracking.py#L23-L57",

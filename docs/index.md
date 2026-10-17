@@ -15,18 +15,22 @@ verified: {by: process:scaffold-init, at: "2026-10-02T10:00:00Z"}
 TaxonVision-MLOps is an automated, end-to-end machine learning operations pipeline and production service designed for species identification from citizen-science photographs.
 
 ```mermaid
-flowchart LR
-    A["iNaturalist S3 / API"] --> B["Open License Filter"]
-    B --> C["Timm Backbone Factory"]
-    C --> D["ONNX INT8 Engine"]
-    D --> E["Conformal Uncertainty Gate"]
-    E -->|Certain| F["FastAPI + HTMX Dashboard"]
-    E -->|Ambiguous| G["Human-in-the-Loop Review"]
+flowchart TD
+    A["raw_manifest.parquet<br/>(pipelines.ingest)"] --> B["dataset_manifest.parquet<br/>(pipelines.audit_license)"]
+    B --> C["4-Way Split Embeddings<br/>(pipelines.extract_features)"]
+    C --> D["head.pt<br/>(pipelines.train)"]
+    D --> E["model_int8.onnx<br/>(pipelines.export_onnx)"]
+    C -.-> F["conformal_config.yaml<br/>(pipelines.calibrate)"]
+    E --> F
+    C -.-> G["pareto_evaluation.json<br/>(pipelines.evaluate)"]
+    E --> G
+    F --> G
 ```
 
 ## System Tenets
 
+* **Epistemic Diamond DAG Topology:** A 7-stage DVC pipeline under `src/taxon_vision/pipelines/` governed by root `params.yaml`, enforcing strict license compliance before S3 streaming, zero-leakage 4-way embedding splits (`train_embeddings.pt`, `val_embeddings.pt`, `cal_embeddings.pt`, `test_embeddings.pt`), and post-quantization calibration on `model_int8.onnx`.
 * **Modern Foundation Backbones:** Seamlessly supports state-of-the-art vision extractors including **DINOv3**, BioCLIP-2, DINOv2, and edge-optimized MobileNetV4 architectures.
-* **Production Chain Over Notebook Glory:** A simple, versioned, monitored, deployed, and automatically retrainable model is infinitely better than an isolated notebook model.
-* **Mathematical Safety Invariants:** Predictions are accompanied by distribution-free **Split Conformal Prediction** sets guaranteeing a user-specified error rate ($1 - \alpha$).
-* **Open Licensing & Attribution:** Adheres to DarwinCore and Creative Commons standards, strictly filtering open licenses and preserving photographer attribution.
+* **Production Chain Over Notebook Glory:** A versioned, audited, and automated DVC pipeline where code, parameters, and tensor hashes guarantee end-to-end reproducibility.
+* **Mathematical Safety Invariants:** Predictions are accompanied by distribution-free **Split Conformal Prediction** sets guaranteeing a user-specified coverage bound ($1 - \alpha = 0.95$) alongside Helmholtz OOD energy gating.
+* **Open Licensing & Attribution:** Adheres to DarwinCore and Creative Commons standards, strictly filtering open licenses (CC0, CC-BY, CC-BY-NC) and preserving photographer attribution.

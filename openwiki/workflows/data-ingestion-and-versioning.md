@@ -167,10 +167,10 @@ The orchestration script `scripts/ingest_data.py` synthesizes API retrieval and 
 
 ### Ingestion Execution Lifecycle
 
-1. **Taxon Discovery**: Reads `settings.ingestion.taxa_to_fetch` from `config/params.yaml`. If unspecified, it dynamically extracts all species with an `inat_taxon_id` from the authoritative catalog via `load_taxa_catalog()`.
+1. **Taxon Discovery**: Reads `settings.ingestion.taxa_to_fetch` from root `params.yaml`. If unspecified, it dynamically extracts all species with an `inat_taxon_id` from the authoritative catalog via `load_taxa_catalog()`.
 2. **Asynchronous Traversal**: Instantiates `INatAPIClient` and iterates through the target taxa, fetching `settings.ingestion.per_page` (default 200) observations per taxon.
-3. **Audit Filtering**: Passes raw records through `LicenseFilter.process_record(obs)`. Non-compliant observations are discarded.
-4. **Columnar Serialization**: Compiles valid records into a Polars DataFrame (`pl.DataFrame(all_records)`) and writes them directly to `data/manifests/dataset_manifest.parquet`.
+3. **Raw Ingestion Stage**: Executes `taxon_vision.pipelines.ingest` (or CLI shim `scripts/ingest_data.py`), compiling retrieved observation records into `data/manifests/raw_manifest.parquet`.
+4. **License Gatekeeper**: Passes raw records through `taxon_vision.pipelines.audit_license`. Non-compliant observations are discarded, writing strictly open-licensed records to `data/manifests/dataset_manifest.parquet` and logging compliance metrics to `reports/license_audit.json`.
 
 ```bash
 # Execute full ingestion workflow via Pixi or Just
@@ -314,38 +314,63 @@ The DVC pipeline configuration (`dvc.yaml`) formalizes the data ingestion stage,
 ```yaml
 stages:
   ingestion:
-    cmd: pixi run --frozen -e dev python scripts/ingest_data.py
+    cmd: pixi run --frozen -e dev python -m taxon_vision.pipelines.ingest
     deps:
-      - scripts/ingest_data.py
+      - config/taxa_catalog.yaml
       - src/taxon_vision/data/inat_client.py
-      - src/taxon_vision/data/license_filter.py
+      - src/taxon_vision/pipelines/ingest.py
     params:
-      - config/params.yaml:
-        - ingestion.taxa_to_fetch
-        - ingestion.per_page
+      - ingestion.taxa_to_fetch
+      - ingestion.per_page
     outs:
-      - data/manifests
-  train:
-    cmd: pixi run --frozen -e dev python -m taxon_vision.models.trainer --epochs 5 --extractor dinov3
+      - data/manifests/raw_manifest.parquet
+  audit_license:
+    cmd: pixi run --frozen -e dev python -m taxon_vision.pipelines.audit_license
     deps:
-      - data/manifests
-      - src/taxon_vision/models/
+      - data/manifests/raw_manifest.parquet
+      - src/taxon_vision/data/license_filter.py
+      - src/taxon_vision/pipelines/audit_license.py
+    outs:
+      - data/manifests/dataset_manifest.parquet
+    metrics:
+      - reports/license_audit.json:
+          cache: false
+  extract_features:
+    cmd: pixi run --frozen -e dev python -m taxon_vision.pipelines.extract_features
+    deps:
+      - data/manifests/dataset_manifest.parquet
+      - src/taxon_vision/pipelines/extract_features.py
     params:
-      - config/params.yaml:
-        - training.epochs
-        - training.extractor
+      - model.extractor
+      - model.image_size
+    outs:
+      - data/embeddings/train_embeddings.pt
+      - data/embeddings/val_embeddings.pt
+      - data/embeddings/cal_embeddings.pt
+      - data/embeddings/test_embeddings.pt
+  train:
+    cmd: pixi run --frozen -e dev python -m taxon_vision.pipelines.train --epochs 5 --extractor dinov3
+    deps:
+      - data/embeddings/train_embeddings.pt
+      - data/embeddings/val_embeddings.pt
+      - src/taxon_vision/models/
+      - src/taxon_vision/pipelines/train.py
+    params:
+      - training.epochs
+      - training.extractor
     outs:
       - models/checkpoints/head.pt
-  export_onnx:
-    cmd: pixi run --frozen -e dev python -m taxon_vision.inference.onnx_exporter
+  export:
+    cmd: pixi run --frozen -e dev python -m taxon_vision.pipelines.export_onnx
     deps:
       - models/checkpoints/head.pt
       - src/taxon_vision/inference/onnx_exporter.py
+      - src/taxon_vision/pipelines/export_onnx.py
     outs:
-      - models/checkpoints/model.onnx
+      - models/checkpoints/model_int8.onnx
 ```
 
-When running `dvc repro`, DVC inspects the cryptographic MD5 hashes of dependencies and the parameters in `config/params.yaml`. If neither code nor parameters have changed, DVC skips re-ingestion and reuses the cached manifest directory.
+When running `dvc repro`, DVC inspects the cryptographic MD5 hashes of dependencies and the parameters in root `params.yaml`. If neither code nor parameters have changed, DVC skips re-ingestion and reuses the cached manifest directory.
 
 ### Cryptographic Lineage Tracking in `dvc.lock`
 
@@ -355,28 +380,28 @@ Execution results and exact content hashes are committed to Git in `dvc.lock`:
 schema: '2.0'
 stages:
   ingestion:
-    cmd: pixi run --frozen -e dev python scripts/ingest_data.py
+    cmd: pixi run --frozen -e dev python -m taxon_vision.pipelines.ingest
     deps:
-    - path: scripts/ingest_data.py
+    - path: config/taxa_catalog.yaml
       hash: md5
-      md5: 252699c9b9439376ffff4c510e27a1fe
+      md5: 9c2dc154e6a53904b0e78c955e8e4221
     - path: src/taxon_vision/data/inat_client.py
       hash: md5
       md5: 6f925d7c31fd3d16da8bc5640ca4c470
-    - path: src/taxon_vision/data/license_filter.py
+    - path: src/taxon_vision/pipelines/ingest.py
       hash: md5
-      md5: 9d53e65484b212283079875587a0dca3
+      md5: c56fdc4635cc6c54289e901a7e76a5a9
     params:
-      config/params.yaml:
+      params.yaml:
         ingestion.per_page: 200
         ingestion.taxa_to_fetch:
         - 47120
         - 47119
         - 47114
     outs:
-    - path: data/manifests
+    - path: data/manifests/raw_manifest.parquet
       hash: md5
-      md5: e1ead79bbe4bac3b0b80cf0d11a68d6b.dir
+      md5: e1ead79bbe4bac3b0b80cf0d11a68d6b
 ```
 
 To establish an unbroken audit trail between data versions and model checkpoints, `taxon_vision.models.training.tracking._get_dvc_dataset_hash()` reads `dvc.lock` at training time, extracts the MD5 checksum of `data/manifests`, and logs it to MLflow as the `dvc_dataset_hash` run parameter. This ensures any deployed ONNX model can be traced back to the exact manifest snapshot used to train it.

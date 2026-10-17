@@ -188,7 +188,7 @@ The production serving image is containerized using a non-root, multi-stage buil
 
 When commits merge to `main`, GitHub Actions (`.github/workflows/ci.yml`) executes the `build-and-push-container` workflow:
 
-* **Authentication & Model Hydration:** The workflow authenticates against DagsHub DVC using `DAGSHUB_TOKEN` and pulls the latest promoted checkpoints (`head.pt` and `model.onnx`) directly into `models/checkpoints/`.
+* **Authentication & Model Hydration:** The workflow authenticates against DagsHub DVC using `DAGSHUB_TOKEN` and pulls the latest promoted checkpoints (`head.pt` and `model_int8.onnx`) directly into `models/checkpoints/`.
 * **Multi-Tag Container Serialization:** Docker Buildx builds the image from `Dockerfile` and publishes it to GitHub Container Registry under two tags:
     * `ghcr.io/foersben/taxon-vision-mlops:latest` (stable production tracking tag)
     * `ghcr.io/foersben/taxon-vision-mlops:sha-<short_sha>` (immutable commit-bound tag)

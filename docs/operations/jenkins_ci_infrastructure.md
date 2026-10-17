@@ -578,16 +578,13 @@ spec:
 
             # Hydrate model checkpoints from DVC
             echo ">>> Hydrating model checkpoints from DVC remotes..."
-            pixi run --frozen -e ci-dev dvc pull -r origin models/checkpoints/head.pt models/checkpoints/model.onnx models/model_int8.onnx || \
-            pixi run --frozen -e ci-dev dvc pull models/checkpoints/head.pt models/checkpoints/model.onnx models/model_int8.onnx || \
+            pixi run --frozen -e ci-dev dvc pull -r origin models/checkpoints/head.pt models/checkpoints/model_int8.onnx || \
+            pixi run --frozen -e ci-dev dvc pull models/checkpoints/head.pt models/checkpoints/model_int8.onnx || \
             echo ">>> Warning: Remote checkpoints not found in DVC; falling back to existing host volume checkpoints."
 
             # Synchronize checkpoints to host volume if available
             if [ -d "/home/benni/taxon-vision-mlops/models/checkpoints" ] && [ -f "models/checkpoints/head.pt" ]; then
               cp -f models/checkpoints/* /home/benni/taxon-vision-mlops/models/checkpoints/
-            fi
-            if [ -d "/home/benni/taxon-vision-mlops/models" ] && [ -f "models/model_int8.onnx" ]; then
-              cp -f models/model_int8.onnx /home/benni/taxon-vision-mlops/models/
             fi
 
             kubectl apply -f deploy/k8s/api-deployment.yaml

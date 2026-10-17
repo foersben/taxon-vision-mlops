@@ -177,9 +177,9 @@ $$P\big(Y_{n+1} \in C(X_{n+1})\big) \ge 1 - \alpha$$
 
 This coverage guarantee holds unconditionally in finite samples under exchangeability, without requiring parametric assumptions about the data geometry, underlying model architecture, or softmax calibration quality.
 
-### Calibration Procedure (`scripts/calibrate_conformal.py`)
+### Calibration Procedure (`src/taxon_vision/pipelines/calibrate.py`)
 
-Calibration is executed on a holdout validation partition $\mathcal{D}_{\text{cal}}$ that was excluded from backbone feature extraction and classifier head weight tuning:
+Calibration is executed on the dedicated calibration partition $\mathcal{D}_{\text{cal}}$ (`data/embeddings/cal_embeddings.pt`) that was excluded from backbone feature extraction and classifier head weight tuning:
 
 1. **Non-Conformity Scoring**: For each calibration sample $(X_i, Y_i)$, compute the model probability assigned to the ground-truth taxon $Y_i$. The non-conformity score $s_i$ measures the degree to which the observation disagrees with the ground truth:
    $$s_i = 1 - p(Y_i \mid X_i)$$
@@ -188,7 +188,7 @@ Calibration is executed on a holdout validation partition $\mathcal{D}_{\text{ca
    $$p_{\text{level}} = \min\left(1.0, \max\left(0.0, \frac{\lceil (n + 1)(1 - \alpha) \rceil}{n}\right)\right)$$
    $$\hat{q} = \text{Quantile}\big(\{s_1, \dots, s_n\}, p_{\text{level}}, \text{method} = \text{"higher"}\big)$$
    Selecting the higher order statistic guarantees that the coverage probability satisfies $P(Y \in C(X)) \ge 1 - \alpha$.
-3. **Artifact Serialization**: The resulting calibration metadata ($\alpha$, nominal coverage $1 - \alpha$, calibrated cutoff $\hat{q}$, sample size $n$) is saved to `config/conformal_calibration.json`.
+3. **Artifact Serialization**: The resulting calibration metadata ($\alpha$, nominal coverage $1 - \alpha$, calibrated cutoff $\hat{q}$, sample size $n$) and Helmholtz OOD energy threshold $\tau_{\text{energy}}$ are saved to `config/conformal_config.yaml`.
 
 ### Online Prediction Set Construction (`ConformalPredictionEngine`)
 

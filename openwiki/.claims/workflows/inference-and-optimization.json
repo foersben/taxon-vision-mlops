@@ -132,7 +132,7 @@
     },
     {
       "id": "claim_18b0850849d140e9ad047311214a7b40",
-      "statement": "The Pareto benchmark script evaluates candidate vision backbones across accuracy baselines, P50/P95 latency, throughput, peak memory, and serving cost per million inferences to characterize architectural trade-offs between cloud GPU serving and edge CPU deployment.",
+      "statement": "The evaluation pipeline and Pareto benchmark script (src/taxon_vision/pipelines/evaluate.py, scripts/benchmark_pareto.py) evaluate candidate vision backbones across accuracy baselines, P50/P95 latency, throughput, peak memory, and serving cost per million inferences to characterize architectural trade-offs between cloud GPU serving and edge CPU deployment.",
       "evidence": [
         {
           "resource": "repo://scripts/benchmark_pareto.py#L155-L200",

@@ -12,6 +12,7 @@ sources:
   - resource: "docs/latex/strategy_report/strategy_report.pdf"
   - resource: "src/taxon_vision/models/factory.py"
   - resource: "src/taxon_vision/models/loss.py"
+  - resource: "src/taxon_vision/pipelines/evaluate.py"
 ---
 
 # Backbone Benchmarking & Pareto Trade-Offs
@@ -42,7 +43,7 @@ Universal academic benchmarks (such as ImageNet-1K or Tree-of-Life zero-shot) pr
 * **BioCLIP-2:** Evaluated across broad taxonomic trees, BioCLIP-2 exhibits high variance depending on methodology: ~59.3% macro zero-shot accuracy across global families, scaling up to >90% in few-shot classification with curated exemplar anchors. Physical feature extraction latency varies substantially between accelerated GPU execution (under 10 ms on modern Tensor Cores) and edge CPU runs (20-50 ms).
 * **DINOv3 ViT-S/14:** Self-supervised vision transformers are evaluated via k-NN or linear probing on frozen representations rather than direct zero-shot predictions. While high 90s accuracies appear in specialized clinical or botanical probes, the backbone itself outputs general dense morphological representations.
 
-Because static literature numbers cannot predict runtime latency on target hardware, the platform relies on [`scripts/benchmark_pareto.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/benchmark_pareto.py) to dynamically profile p50/p95 latency, throughput, and memory footprint on the local silicon test suite.
+Because static literature numbers cannot predict runtime latency on target hardware, the platform relies on [`src/taxon_vision/pipelines/evaluate.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/pipelines/evaluate.py) (accessible via CLI shim [`scripts/benchmark_pareto.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/benchmark_pareto.py)) to dynamically profile p50/p95 latency, throughput, and memory footprint on quantized models (`models/checkpoints/model_int8.onnx`) across holdout test representations (`data/embeddings/test_embeddings.pt`).
 
 ### Extended Pareto Trade-Off Dimensions
 
