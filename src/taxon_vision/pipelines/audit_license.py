@@ -109,7 +109,9 @@ def _filter_observations_gate(
 
         verified_records.append(
             {
-                "observation_uuid": record.observation_uuid,
+                "observation_uuid": str(
+                    record.observation_uuid or obs.get("observation_uuid") or obs.get("observation_id") or ""
+                ),
                 "taxon_id": obs.get("taxon_id", 0),
                 "image_url": obs.get("image_url", ""),
                 "photographer_name": record.photographer_name,

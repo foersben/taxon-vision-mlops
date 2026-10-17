@@ -420,3 +420,215 @@ def test_save_split_artifacts(tmp_path: Path) -> None:
 
     loaded = EmbeddingSplit.from_cache(output_pt)
     assert loaded.feature_dim == 8
+
+
+def test_verify_observation_compliance_valid_and_invalid() -> None:
+    """Verify license compliance logic handles valid open licenses and detects violations."""
+    from taxon_vision.pipelines.audit_license import verify_observation_compliance
+
+    valid = {
+        "observation_id": 1,
+        "license_code": "CC-BY",
+        "image_url": "https://inaturalist-open-data.s3.amazonaws.com/photos/1/medium.jpg",
+        "attribution": "(c) Jane Doe, some rights reserved (CC-BY)",
+    }
+    assert verify_observation_compliance(valid) == []
+
+    invalid = {
+        "observation_id": 2,
+        "license_code": "All-Rights-Reserved",
+        "image_url": "https://static.inaturalist.org/photos/2/medium.jpg",
+        "attribution": "",
+        "is_open_dataset_verified": False,
+    }
+    errors = verify_observation_compliance(invalid)
+    assert len(errors) == 3
+
+
+def test_audit_license_pipeline_gatekeeper_mode(tmp_path: Path) -> None:
+    """Verify Stage 2 audit_license pipeline in gatekeeper mode."""
+    from taxon_vision.pipelines.audit_license import audit_license_cli
+
+    in_parquet = tmp_path / "raw_manifest.parquet"
+    out_parquet = tmp_path / "dataset_manifest.parquet"
+    out_json = tmp_path / "license_audit.json"
+
+    df = pl.DataFrame(
+        [
+            {
+                "observation_uuid": "obs-1",
+                "taxon_id": 47120,
+                "image_url": "https://inaturalist-open-data.s3.amazonaws.com/1.jpg",
+                "attribution": "(c) John Doe",
+                "license_code": "CC0",
+                "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+                "is_open_dataset_verified": True,
+            },
+            {
+                "observation_uuid": "obs-2",
+                "taxon_id": 47120,
+                "image_url": "https://example.com/2.jpg",
+                "attribution": "",
+                "license_code": "COPYRIGHT",
+                "license_url": "",
+                "is_open_dataset_verified": False,
+            },
+        ]
+    )
+    df.write_parquet(in_parquet)
+
+    exit_code = audit_license_cli(
+        [
+            "--manifest",
+            str(in_parquet),
+            "--out-manifest",
+            str(out_parquet),
+            "--out",
+            str(out_json),
+        ]
+    )
+    assert exit_code == 0
+    assert out_parquet.exists()
+    assert out_json.exists()
+
+    filtered_df = pl.read_parquet(out_parquet)
+    assert len(filtered_df) == 1
+    assert filtered_df["observation_uuid"][0] == "obs-1"
+
+    # Test audit mode (without --out-manifest)
+    exit_audit = audit_license_cli(["--manifest", str(out_parquet), "--out", str(out_json)])
+    assert exit_audit == 0
+
+
+def test_ingest_pipeline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify Stage 1 ingest pipeline fetches observations and writes raw parquet."""
+    import asyncio
+
+    from taxon_vision.data.inat_client import INatAPIClient
+    from taxon_vision.pipelines.ingest import ingest_cli, run_ingestion
+
+    mock_records = [
+        {
+            "id": 101,
+            "image_url": "https://inaturalist-open-data.s3.amazonaws.com/101.jpg",
+            "attribution": "(c) Tester",
+            "license_code": "CC-BY",
+            "license_url": "https://creativecommons.org/licenses/by/4.0/",
+            "is_open_dataset_verified": True,
+        }
+    ]
+
+    async def mock_fetch(self: INatAPIClient, taxon_id: int, per_page: int) -> list[dict[str, Any]]:
+        return mock_records
+
+    monkeypatch.setattr(INatAPIClient, "fetch_observations", mock_fetch)
+
+    out_file = tmp_path / "raw.parquet"
+    asyncio.run(run_ingestion(taxa=[47120], per_page=1, out_path=out_file))
+    assert out_file.exists()
+    df = pl.read_parquet(out_file)
+    assert len(df) == 1
+    assert df["taxon_id"][0] == 47120
+
+    cli_out = tmp_path / "cli_raw.parquet"
+    ret = ingest_cli(["--taxa", "47120", "--per-page", "1", "--out", str(cli_out)])
+    assert ret == 0
+    assert cli_out.exists()
+
+
+def test_export_onnx_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify Stage 5 export_onnx pipeline CLI wrapper delegates to exporter."""
+    import taxon_vision.pipelines.export_onnx as export_module
+
+    def mock_export(_argv: list[str] | None = None) -> int:
+        return 0
+
+    monkeypatch.setattr(export_module, "export_classifier_cli", mock_export)
+    assert export_module.main(["--help"]) == 0
+
+
+def test_calibrate_and_evaluate_pipelines(tmp_path: Path) -> None:
+    """Verify Stage 6 calibrate and Stage 7 evaluate pipelines against INT8 ONNX graph."""
+    from taxon_vision.inference.onnx_exporter import export_classifier_cli
+    from taxon_vision.pipelines.calibrate import calibrate_cli, load_embeddings_and_labels
+    from taxon_vision.pipelines.evaluate import evaluate_cli, get_canonical_pareto_profiles
+
+    # 1. Export small quantized ONNX model
+    int8_model = tmp_path / "model_int8.onnx"
+    export_ret = export_classifier_cli(
+        [
+            "--quantize-int8",
+            "--quantize-mode",
+            "dynamic",
+            "--quantized-output",
+            str(int8_model),
+            "--extractor",
+            "mobilenetv4_conv_small",
+            "--allow-untrained",
+        ]
+    )
+    assert export_ret == 0
+
+    # 2. Create calibration and test embedding partitions (dim=1280 for mobilenetv4)
+    cal_pt = tmp_path / "cal_embeddings.pt"
+    test_pt = tmp_path / "test_embeddings.pt"
+    torch.save(
+        {"embeddings": torch.randn(20, 1280), "labels": torch.tensor([i % 10 for i in range(20)])},
+        cal_pt,
+    )
+    torch.save(
+        {"embeddings": torch.randn(20, 1280), "labels": torch.tensor([i % 10 for i in range(20)])},
+        test_pt,
+    )
+
+    # 3. Test load_embeddings_and_labels
+    embs, lbls = load_embeddings_and_labels(cal_pt)
+    assert embs.shape == (20, 1280)
+    assert lbls.shape == (20,)
+
+    # 4. Run Stage 6 calibrate CLI
+    conf_yaml = tmp_path / "conformal_config.yaml"
+    cal_metrics = tmp_path / "conformal_metrics.json"
+    cal_ret = calibrate_cli(
+        [
+            "--onnx-model",
+            str(int8_model),
+            "--embeddings",
+            str(cal_pt),
+            "--out",
+            str(conf_yaml),
+            "--metrics-out",
+            str(cal_metrics),
+            "--alpha",
+            "0.05",
+        ]
+    )
+    assert cal_ret == 0
+    assert conf_yaml.exists()
+    assert cal_metrics.exists()
+
+    # 5. Run Stage 7 evaluate CLI
+    pareto_json = tmp_path / "pareto_results.json"
+    eval_metrics = tmp_path / "pareto_evaluation.json"
+    eval_ret = evaluate_cli(
+        [
+            "--onnx-model",
+            str(int8_model),
+            "--embeddings",
+            str(test_pt),
+            "--conformal-config",
+            str(conf_yaml),
+            "--out",
+            str(pareto_json),
+            "--metrics-out",
+            str(eval_metrics),
+            "--latency-sla-ms",
+            "50.0",
+        ]
+    )
+    assert eval_ret == 0
+    assert pareto_json.exists()
+    assert eval_metrics.exists()
+
+    profiles = get_canonical_pareto_profiles()
+    assert len(profiles) == 5
