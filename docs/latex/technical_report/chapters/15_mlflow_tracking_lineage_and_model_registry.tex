@@ -33,7 +33,7 @@ Real-time evaluation of generalisation capacity is achieved by streaming per-epo
 
 \section{Artefact Persistence and MLflow Model Registry Promotion}
 \label{sec:model_promotion}
-Upon successful completion of the training epoch loop, physical artefacts encompassing the trained PyTorch classification head (\texttt{head.pt}), the quantised computational graph (\texttt{model.onnx}), and Optuna study parameter visualisations are serialised and persisted as MLflow artefacts.
+Upon successful completion of the training epoch loop, physical artefacts encompassing the trained PyTorch classification head (\texttt{head.pt}), the quantised computational graph (\texttt{model\_int8.onnx}), and Optuna study parameter visualisations are serialised and persisted as MLflow artefacts.
 
 Automated continuous deployment necessitates programmatic gating for model promotion. This gating logic is formalised within the \texttt{\_promote\_model\_if\_better} subroutine. Following artefact registration under the canonical name \texttt{taxon\_vision\_classifier}, the newly trained candidate is evaluated against the current production baseline. The evaluation criterion is strictly the Macro PR-AUC score (\texttt{val\_promotion\_score}), ensuring that generalisation across both dominant and rare taxa is preserved.
 

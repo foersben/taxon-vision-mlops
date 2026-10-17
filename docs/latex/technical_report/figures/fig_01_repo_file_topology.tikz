@@ -50,8 +50,8 @@
 ]
 
 % Nodes for Monorepo Core Subsystems
-\node[corebox] (src) {\textbf{\texttt{src/taxon\_vision/}}\\ {\scriptsize Domain, Models, Uncertainty, Service, Data}};
-\node[corebox, below=0.6cm of src] (config) {\textbf{\texttt{config/}}\\ {\scriptsize Hydra hierarchies}};
+\node[corebox] (src) {\textbf{\texttt{src/taxon\_vision/}}\\ {\scriptsize Domain, Models, Pipelines, Service, Data}};
+\node[corebox, below=0.6cm of src] (config) {\textbf{\texttt{params.yaml} / \texttt{config/}}\\ {\scriptsize Single source of truth}};
 \node[corebox, below=0.6cm of config] (deploy) {\textbf{\texttt{deploy/}}\\ {\scriptsize Kubernetes, Docker}};
 \node[corebox, right=1.0cm of src] (scripts) {\textbf{\texttt{scripts/}}\\ {\scriptsize Audits, Validation}};
 \node[corebox, below=0.6cm of scripts] (tests) {\textbf{\texttt{tests/}}\\ {\scriptsize Unit, Invariants}};
@@ -63,10 +63,10 @@
 \end{scope}
 
 % Nodes for File Extension Invariants
-\node[extbox, right=2.0cm of scripts] (dvc) {\textbf{\texttt{.dvc}}\\ {\scriptsize CAS pointer}};
-\node[extbox, below=0.3cm of dvc] (parquet) {\textbf{\texttt{.parquet}}\\ {\scriptsize Arrow observation tables}};
-\node[extbox, below=0.3cm of parquet] (onnx) {\textbf{\texttt{.onnx}}\\ {\scriptsize Serving graph}};
-\node[extbox, below=0.3cm of onnx] (pt) {\textbf{\texttt{.pt}}\\ {\scriptsize Trained PyTorch weights}};
+\node[extbox, right=2.0cm of scripts] (dvc) {\textbf{\texttt{dvc.yaml} / \texttt{dvc.lock}}\\ {\scriptsize Diamond DAG ledger}};
+\node[extbox, below=0.3cm of dvc] (parquet) {\textbf{\texttt{.parquet}}\\ {\scriptsize Raw \& dataset manifests}};
+\node[extbox, below=0.3cm of parquet] (onnx) {\textbf{\texttt{.onnx}}\\ {\scriptsize INT8 serving graph}};
+\node[extbox, below=0.3cm of onnx] (pt) {\textbf{\texttt{.pt}}\\ {\scriptsize 4 embedding splits \& head}};
 \node[extbox, below=0.3cm of pt] (pixi) {\textbf{\texttt{pixi.lock} / \texttt{pixi.toml}}\\ {\scriptsize Environment seal}};
 
 % Grouping File Extension Invariants

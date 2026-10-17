@@ -59,19 +59,19 @@
 
 % Column 1: Git Tracked State
 \node[gitbox] (gitpointer) {
-    \textbf{Git Working Tree Pointer File}\\
-    \scriptsize \texttt{data/sample.dvc}\\
-    \scriptsize $\bullet$ \texttt{md5: f546997db8b542e87e4f006326d04aac.dir}\\
-    \scriptsize $\bullet$ \texttt{size: 37744}, \texttt{nfiles: 1}\\
-    \scriptsize $\bullet$ \texttt{path: sample}\\
-    \scriptsize Lightweight text pointer committed to Git
+    \textbf{DVC Pipeline Specification}\\
+    \scriptsize \texttt{dvc.yaml} (governed by root \texttt{params.yaml})\\
+    \scriptsize $\bullet$ 7 stages: \texttt{ingest}, \texttt{audit\_license},\\
+    \scriptsize \phantom{$\bullet$ } \texttt{extract\_features}, \texttt{train},\\
+    \scriptsize \phantom{$\bullet$ } \texttt{export\_onnx}, \texttt{calibrate}, \texttt{evaluate}\\
+    \scriptsize Declarative lineage committed to Git
 };
 
 \node[gitbox, below=0.7cm of gitpointer] (lockfile) {
     \textbf{Pipeline DAG Ledger (\texttt{dvc.lock})}\\
-    \scriptsize $\bullet$ Cryptographic hash of \texttt{data/manifests}\\
-    \scriptsize $\bullet$ Preserved as \texttt{dvc\_dataset\_hash} in MLflow\\
-    \scriptsize $\bullet$ Atomic link: Git commit SHA $\leftrightarrow$ Dataset snapshot\\
+    \scriptsize $\bullet$ Cryptographic hashes of manifests \& splits\\
+    \scriptsize $\bullet$ Manifest hash logged as \texttt{dvc\_dataset\_hash} in MLflow\\
+    \scriptsize $\bullet$ Atomic link: Git commit SHA $\leftrightarrow$ Pipeline outputs\\
     \scriptsize $\bullet$ Satisfies MLOps Reproducibility Rule 01
 };
 
@@ -105,7 +105,7 @@
 
 % Groupings
 \begin{scope}[on background layer]
-    \node[groupbox, fit=(gitpointer)(lockfile), label={[font=\bfseries, text=DvcTeal]above:Git Metadata Plane}] (g1) {};
+    \node[groupbox, fit=(gitpointer)(lockfile), label={[font=\bfseries, text=DvcTeal]above:Git Lineage Plane}] (g1) {};
     \node[groupbox, fit=(localcas)(dagshub), label={[font=\bfseries, text=DvcAmber]above:Content-Addressed Storage (CAS)}] (g2) {};
     \node[groupbox, fit=(workflow), label={[font=\bfseries, text=DvcPurple]above:Synchronisation Operations}] (g3) {};
 \end{scope}
