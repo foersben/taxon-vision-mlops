@@ -14,7 +14,7 @@ sources:
   - id: openwiki-source-05ccef8d4cf1698187f20464
     resource: repo://pyproject.toml
   - id: openwiki-source-12914d3b78b4a80693643804
-    resource: repo://scripts/local_ci.sh
+    resource: repo://scripts/ci/local_ci.sh
   - id: openwiki-source-7079947a60e14bc71bc44a0e
     resource: repo://src/taxon_vision/config.py
   - id: openwiki-source-f0a6e7dc03522b2682f88655

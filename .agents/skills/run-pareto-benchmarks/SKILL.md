@@ -12,8 +12,6 @@ name: Run Pareto Benchmarks
 sources:
   - id: evaluate_pipeline
     resource: src/taxon_vision/pipelines/evaluate.py
-  - id: benchmark_pareto_script
-    resource: scripts/benchmark_pareto.py
 ---
 
 # Run Pareto Benchmarks
@@ -26,18 +24,6 @@ Skill to evaluate candidate vision backbones across Top-1 accuracy, p95 ONNX Run
 
 ```bash
 pixi run -e dev python -m taxon_vision.pipelines.evaluate \
-  --onnx-model models/checkpoints/model_int8.onnx \
-  --embeddings data/embeddings/test_embeddings.pt \
-  --conformal-config config/conformal_config.yaml \
-  --out docs/assets/pareto_results.json \
-  --metrics-out reports/pareto_evaluation.json \
-  --latency-sla-ms 25.0
-```
-
-* Alternatively, run the backwards-compatible CLI script:
-
-```bash
-pixi run -e dev python scripts/benchmark_pareto.py \
   --onnx-model models/checkpoints/model_int8.onnx \
   --embeddings data/embeddings/test_embeddings.pt \
   --conformal-config config/conformal_config.yaml \

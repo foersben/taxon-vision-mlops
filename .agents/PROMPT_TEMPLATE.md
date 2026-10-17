@@ -29,5 +29,5 @@ Append the guardrail block below to any agent task prompt.
 > Step 3 (Fast Targeted Verify): Run ONLY the targeted checks for your touched files:
 >     pixi run -e ci-dev ruff check <touched_files> && pixi run -e ci-dev mypy <touched_files> && pixi run -e ci-dev pytest <targeted_test_file> -q -o "addopts="
 > Step 4 (Final Gate): Once Step 3 passes, run:
->     pixi run -e ci-dev python scripts/validate_okf.py && pixi run -e ci-dev complexipy <touched_src_files>
+>     pixi run -e ci-dev python scripts/governance/validate_okf.py && pixi run -e ci-dev complexipy <touched_src_files>
 ```

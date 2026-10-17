@@ -9,15 +9,15 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/local_ci.sh [quality|tests|docs|all]
+Usage: ./scripts/ci/local_ci.sh [quality|tests|docs|all]
 
 Runs the main TaxonVision CI commands on the current local interpreter.
 
 Examples:
-  ./scripts/local_ci.sh quality
-  ./scripts/local_ci.sh tests
-  ./scripts/local_ci.sh docs
-  ./scripts/local_ci.sh all
+  ./scripts/ci/local_ci.sh quality
+  ./scripts/ci/local_ci.sh tests
+  ./scripts/ci/local_ci.sh docs
+  ./scripts/ci/local_ci.sh all
 
 Environment variables:
   TAXON_SKIP_SYNC=1  Skip 'pixi install' before running checks.
@@ -48,9 +48,9 @@ run_quality() {
     exit 1
   fi
   echo ">>> Enforcing Markdown Rule 04"
-  pixi run --frozen -e dev python scripts/verify_markdown_rules.py
+  pixi run --frozen -e dev python scripts/governance/verify_markdown_rules.py
   echo ">>> Validating OKF Frontmatter and Links"
-  pixi run --frozen -e dev python scripts/validate_okf.py
+  pixi run --frozen -e dev python scripts/governance/validate_okf.py
   echo ">>> Running Ruff lint"
   pixi run --frozen -e dev ruff check .
   echo ">>> Running Ruff format check"
@@ -67,12 +67,12 @@ run_tests() {
   pixi run --frozen -e dev pytest tests/integration/ tests/invariants/ -x -q -o "addopts="
 
   echo ">>> Open License Compliance Audit"
-  pixi run --frozen -e dev python scripts/audit_license_compliance.py
+  pixi run --frozen -e dev python -m taxon_vision.pipelines.audit_license
 }
 
 run_docs() {
   echo ">>> Validating OKF Frontmatter and Links"
-  pixi run --frozen -e dev python scripts/validate_okf.py
+  pixi run --frozen -e dev python scripts/governance/validate_okf.py
   echo ">>> Building docs in strict mode"
   pixi run --frozen -e dev zensical build --strict
 }

@@ -53,7 +53,7 @@ jobs:
         run: SKIP=enforce-author-identity,openwiki-sync pixi run --frozen -e ci-dev pre-commit run --all-files
 
       - name: Validate Open Knowledge Format (OKF v0.2)
-        run: pixi run --frozen -e ci-dev python scripts/validate_okf.py
+        run: pixi run --frozen -e ci-dev python scripts/governance/validate_okf.py
 
       - name: Pass 1 - Unit Tests & Coverage
         run: |
@@ -114,7 +114,7 @@ jobs:
           environments: ci-dev
 
       - name: Generate OKF Knowledge Graph Visualization
-        run: pixi run --frozen -e ci-dev python scripts/visualize_okf.py
+        run: pixi run --frozen -e ci-dev python scripts/governance/visualize_okf.py
 
       - name: Build Docs with Zensical
         run: pixi run --frozen -e ci-dev zensical build --strict
@@ -186,6 +186,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: deploy/docker/Dockerfile
           push: ${{ !env.ACT }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

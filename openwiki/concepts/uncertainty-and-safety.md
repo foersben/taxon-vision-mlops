@@ -8,7 +8,7 @@ verified:
     at: 2026-10-15T19:46:36.219Z
 sources:
   - id: openwiki-source-8e72812dd1b19bee5573c46c
-    resource: repo://scripts/calibrate_conformal.py
+    resource: repo://src/taxon_vision/pipelines/calibrate.py
   - id: openwiki-source-3371ed1f3cb580f413973243
     resource: repo://src/taxon_vision/active_learning/query.py
   - id: openwiki-source-73c7bf66219b83ba25891873

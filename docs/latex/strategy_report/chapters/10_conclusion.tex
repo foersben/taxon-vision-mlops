@@ -57,9 +57,9 @@ Prometheus \& Grafana observability & \textbf{partial} & FastAPI exposes \texttt
 \addlinespace
 BADGE active learning \& triage queue & \textbf{partial} & \texttt{compute\_badge\_embeddings} (\texttt{query.py}) and Parquet-backed \texttt{TriageQueueManager} (\texttt{triage\_queue.py}) are unit-tested, but are not yet wired into \texttt{/predict} (which currently writes raw JSON/JPEG files via \texttt{storage.py}) or scheduled retraining. \\
 \addlinespace
-Conformal calibration \& Pareto evaluation & \textbf{implemented} & Single-trunk 7-stage DVC DAG integrates \texttt{calibrate} (\texttt{scripts/calibrate\_conformal.py}) and \texttt{eval} (\texttt{scripts/benchmark\_pareto.py}), calculating non-conformity quantiles $\hat{q}_\alpha$ and asserting coverage $\ge 1 - \alpha$ on holdout test partitions. \\
+Conformal calibration \& Pareto evaluation & \textbf{implemented} & Single-trunk 7-stage DVC DAG integrates \texttt{calibrate} (\texttt{taxon\_vision.pipelines.calibrate}) and \texttt{eval} (\texttt{taxon\_vision.pipelines.evaluate}), calculating non-conformity quantiles $\hat{q}_\alpha$ and asserting coverage $\ge 1 - \alpha$ on holdout test partitions. \\
 \addlinespace
-In-cluster S3 cache \& Optuna dashboard & \textbf{implemented} & Kubernetes manifests deploy SeaweedFS (Apache 2.0, port 8333) and Optuna dashboard (NodePort 30081) backed by NVMe SQLite WAL persistence; \texttt{docker-compose.local.yaml} mirrors the stack locally. \\
+In-cluster S3 cache \& Optuna dashboard & \textbf{implemented} & Kubernetes manifests deploy SeaweedFS (Apache 2.0, port 8333) and Optuna dashboard (NodePort 30081) backed by NVMe SQLite WAL persistence; \texttt{deploy/compose/docker-compose.local.yaml} mirrors the stack locally. \\
 \midrule
 Full-manifold MMD drift gate & \textbf{planned} & Specified in Section 7.3.2 as the Tier-2 offline RKHS kernel drift gate ($\text{MMD}^2$), but not yet implemented in \texttt{monitoring/drift.py} or \texttt{Jenkinsfile}. \\
 \addlinespace

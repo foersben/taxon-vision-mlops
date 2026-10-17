@@ -243,7 +243,7 @@
 \begin{frame}{Storage Engineering}{Object Storage Topology: MinIO vs. DagsHub vs. AWS S3}
     \begin{block}{Three-Tier Object Storage Breakdown}
         \begin{itemize}\small
-            \item \textbf{Tier 1: MinIO Local Offline Mock (\texttt{docker-compose.local.yaml}):}
+            \item \textbf{Tier 1: MinIO Local Offline Mock (\texttt{deploy/compose/docker-compose.local.yaml}):}
             Runs S3-compatible service locally on developer workstation (\texttt{http://localhost:9000}). Used strictly to unit-test S3 streaming connectors and verify DVC operations offline with zero cloud latency and zero AWS egress fees.
             \item \textbf{Tier 2: DagsHub S3 Endpoint (\texttt{s3://dvc}):}
             Remote Content-Addressed Storage (CAS) for tracked dataset manifests and model checkpoints, authenticated via unified HMAC tokens.

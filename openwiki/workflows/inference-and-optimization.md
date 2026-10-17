@@ -8,7 +8,7 @@ verified:
     at: 2026-10-15T19:46:36.219Z
 sources:
   - id: openwiki-source-8ad924b52f67b10056fc5e25
-    resource: repo://scripts/benchmark_pareto.py
+    resource: repo://src/taxon_vision/pipelines/evaluate.py
   - id: openwiki-source-d2314fb7d2c604322ed1f16e
     resource: repo://src/taxon_vision/inference/calibration.py
   - id: openwiki-source-7ad80404d4cdd9f0b9759340

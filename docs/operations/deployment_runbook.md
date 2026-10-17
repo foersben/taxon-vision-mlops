@@ -19,7 +19,7 @@ The local development environment requires initialization of the dependent infra
 Start the local infrastructure stack (SeaweedFS, Prometheus, Grafana) via Docker Compose:
 
 ```bash
-docker compose -f docker-compose.local.yaml up -d
+docker compose -f deploy/compose/docker-compose.local.yaml up -d
 ```
 
 Start the Pixi-managed FastAPI service:
@@ -189,7 +189,7 @@ The production serving image is containerized using a non-root, multi-stage buil
 When commits merge to `main`, GitHub Actions (`.github/workflows/ci.yml`) executes the `build-and-push-container` workflow:
 
 * **Authentication & Model Hydration:** The workflow authenticates against DagsHub DVC using `DAGSHUB_TOKEN` and pulls the latest promoted checkpoints (`head.pt` and `model_int8.onnx`) directly into `models/checkpoints/`.
-* **Multi-Tag Container Serialization:** Docker Buildx builds the image from `Dockerfile` and publishes it to GitHub Container Registry under two tags:
+* **Multi-Tag Container Serialization:** Docker Buildx builds the image from `deploy/docker/Dockerfile` and publishes it to GitHub Container Registry under two tags:
     * `ghcr.io/foersben/taxon-vision-mlops:latest` (stable production tracking tag)
     * `ghcr.io/foersben/taxon-vision-mlops:sha-<short_sha>` (immutable commit-bound tag)
 * **Kubernetes Consumption:** The Kubernetes deployment manifest ([deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml)) specifies `ghcr.io/foersben/taxon-vision-mlops:latest` with `imagePullPolicy: Always`, ensuring that pod rollout restarts immediately pull and activate the newly published release.

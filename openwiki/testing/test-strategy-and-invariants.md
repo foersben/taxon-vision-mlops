@@ -16,11 +16,11 @@ sources:
   - id: openwiki-source-05ccef8d4cf1698187f20464
     resource: repo://pyproject.toml
   - id: openwiki-source-8e72812dd1b19bee5573c46c
-    resource: repo://scripts/calibrate_conformal.py
+    resource: repo://src/taxon_vision/pipelines/calibrate.py
   - id: openwiki-source-12914d3b78b4a80693643804
-    resource: repo://scripts/local_ci.sh
+    resource: repo://scripts/ci/local_ci.sh
   - id: openwiki-source-79bc5a0a00c0f3d661174b32
-    resource: repo://scripts/validate_okf.py
+    resource: repo://scripts/governance/validate_okf.py
   - id: openwiki-source-1c89821d53610d1110534353
     resource: repo://src/taxon_vision/uncertainty/conformal.py
   - id: openwiki-source-f0a6e7dc03522b2682f88655

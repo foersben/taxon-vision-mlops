@@ -21,7 +21,7 @@ verified: {by: process:okf-updater, at: "2026-10-17T22:30:00Z"}
 
 ```bash
 pixi run -e dev ruff check . && pixi run -e dev mypy src scripts
-pixi run -e dev python scripts/validate_okf.py
+pixi run -e dev python scripts/governance/validate_okf.py
 pixi run -e dev python -m taxon_vision.pipelines.audit_license
 pixi run -e dev complexipy src
 ```
@@ -49,6 +49,6 @@ pixi run -e dev dvc repro
 * Compile and strictly validate documentation:
 
 ```bash
-pixi run -e dev python scripts/visualize_okf.py
+pixi run -e dev python scripts/governance/visualize_okf.py
 pixi run -e dev zensical build --strict
 ```

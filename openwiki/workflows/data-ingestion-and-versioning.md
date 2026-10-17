@@ -16,7 +16,7 @@ sources:
   - id: openwiki-source-14e6a4e1ddc06973b783ff20
     resource: repo://Justfile
   - id: openwiki-source-0793ecc43815420962b11dbf
-    resource: repo://scripts/ingest_data.py
+    resource: repo://src/taxon_vision/pipelines/ingest.py
   - id: openwiki-source-5636f69cf274aaadd4c1c966
     resource: repo://src/taxon_vision/data/inat_client.py
   - id: openwiki-source-ff920988bce76958fa7d7039

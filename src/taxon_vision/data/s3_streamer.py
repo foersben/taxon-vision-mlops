@@ -340,7 +340,9 @@ class S3ImageStreamer:
         """
         self.manifest_path = Path(manifest_path)
         if not self.manifest_path.exists():
-            raise FileNotFoundError(f"Manifest not found at {self.manifest_path}. Run ingest_data.py first.")
+            raise FileNotFoundError(
+                f"Manifest not found at {self.manifest_path}. Run 'python -m taxon_vision.pipelines.ingest' first."
+            )
 
         self.df = pl.read_parquet(self.manifest_path)
         self._external_client = client is not None

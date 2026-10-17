@@ -76,15 +76,20 @@ format:
 complexity:
 	pixi run --frozen -e dev complexipy src/ --failed
 
+# Lint Markdown documents with markdownlint-cli
+[group("quality")]
+lint-markdown:
+	markdownlint --config config/lint/.markdownlint.yaml --fix "docs/**/*.md" "README.md" ".agents/**/*.md"
+
 # Validate Open Knowledge Format (OKF v0.2) frontmatter and link topology
 [group("quality")]
 validate-okf:
-	pixi run --frozen -e dev python scripts/validate_okf.py
+	pixi run --frozen -e dev python scripts/governance/validate_okf.py
 
 # Verify and fix Markdown Rule 04 formatting invariants
 [group("quality")]
 lint-md:
-	pixi run --frozen -e dev python scripts/verify_markdown_rules.py --fix
+	pixi run --frozen -e dev python scripts/governance/verify_markdown_rules.py --fix
 
 # ── Testing ─────────────────────────────────────────────────────────────────
 
@@ -111,12 +116,12 @@ test-conformal:
 # Run local CI pass without Docker/GPU (options: all, quality, tests, docs)
 [group("testing")]
 ci job="all":
-	./scripts/local_ci.sh {{job}}
+	./scripts/ci/local_ci.sh {{job}}
 
 # Run local CI test pass (alias for 'ci tests')
 [group("testing")]
 ci-test:
-	./scripts/local_ci.sh tests
+	./scripts/ci/local_ci.sh tests
 
 # ── MLOps & Pipelines ───────────────────────────────────────────────────────
 
@@ -173,7 +178,7 @@ predict image="data/sample/406185885_taxon_47120.jpg":
 # Download verified open-license sample images for all 10 catalog taxa from iNaturalist
 [group("mlops")]
 download-samples per_taxon="1":
-	pixi run --frozen -e dev python scripts/download_samples.py --per-taxon {{per_taxon}}
+	pixi run --frozen -e dev python scripts/data/download_samples.py --per-taxon {{per_taxon}}
 
 # Push tracked datasets & models to DagsHub using in-memory Secret Service credentials
 [group("mlops")]
@@ -222,7 +227,7 @@ run:
 # Validate live Kubernetes deployment health, endpoints, and inference
 [group("app")]
 verify-deployment namespace="taxon-vision":
-	@bash scripts/verify_deployment.sh {{namespace}}
+	@bash scripts/ci/verify_deployment.sh {{namespace}}
 
 # ── Documentation ───────────────────────────────────────────────────────────
 
@@ -240,7 +245,7 @@ serve:
 # Generate interactive D3/SVG knowledge graph visualization
 [group("docs")]
 visualize-okf:
-	pixi run --frozen -e dev python scripts/visualize_okf.py
+	pixi run --frozen -e dev python scripts/governance/visualize_okf.py
 
 # Update OpenWiki documentation and reconcile grounded claims
 [group("docs")]
@@ -257,12 +262,12 @@ wiki-update:
 # Validate OKF v0.2 structural integrity for .agents/ and openwiki/
 [group("docs")]
 wiki-validate:
-	pixi run python scripts/validate_okf.py
+	pixi run --frozen -e dev python scripts/governance/validate_okf.py
 
 # Launch local interactive visualizer for the OKF knowledge graph
 [group("docs")]
 wiki-viz:
-	pixi run python scripts/visualize_okf.py
+	pixi run --frozen -e dev python scripts/governance/visualize_okf.py
 
 
 

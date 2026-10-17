@@ -11,8 +11,8 @@
 
 ```bash
 pixi run -e dev ruff check . && pixi run -e dev mypy src scripts
-pixi run -e dev python scripts/audit_license_compliance.py
-pixi run -e dev python scripts/validate_okf.py
+pixi run -e dev python -m taxon_vision.pipelines.audit_license
+pixi run -e dev python scripts/governance/validate_okf.py
 ```
 
 ## Fast Module & Test Routing Map
@@ -38,7 +38,7 @@ Read ONLY the files in your active task row:
 * **Fast Targeted Verify:** During iteration, execute fast test sweeps suppressing global coverage:
     `pixi run -e ci-dev pytest <targeted_test_file> -q -o "addopts="`
 * **Full Quality Gate:** Run the comprehensive test suite and gates once upon completing code changes:
-    `pixi run -e ci-dev ruff check . && pixi run -e ci-dev mypy src scripts && pixi run -e ci-dev python scripts/validate_okf.py && pixi run -e ci-dev python scripts/audit_license_compliance.py`
+    `pixi run -e ci-dev ruff check . && pixi run -e ci-dev mypy src scripts && pixi run -e ci-dev python scripts/governance/validate_okf.py && pixi run -e ci-dev python -m taxon_vision.pipelines.audit_license`
 
 <!-- JULES-SPECIFIC: session routing and token guardrail instructions. -->
 

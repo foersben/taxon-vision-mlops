@@ -326,12 +326,12 @@ The system implements a production two-layer CI/CD architecture:
     * `Integration & Conformal Invariants` - Verifies integration endpoints and asserts split conformal prediction empirical coverage bounds ($1 - \alpha \ge 0.90$).
     * `Documentation Strict Build` - Validates OKF knowledge graph and verifies documentation integrity via `zensical build --strict`.
     * `Model Training & Checkpoint (GPU)` - Runs on `develop` or `main` within a dedicated GPU agent pod requesting `nvidia.com/gpu: 1` on `hive-mind`. Pulls DVC manifests, streams real image observations from AWS S3 via `extract_features.py` into 4 stratified embedding splits on SeaweedFS, trains the head via Optuna sweeps, exports the ONNX graph, and pushes updated release checkpoints to DagsHub DVC.
-    * `Deploy to Kubernetes` - Automatically injects SeaweedFS credentials, hydrates models (with fallback to host-volume checkpoints), applies [`deploy/k8s/api-deployment.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) (`imagePullPolicy: Always`), executes a zero-downtime rolling restart, and runs the automated verification smoke test ([`scripts/verify_deployment.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/verify_deployment.sh)).
+    * `Deploy to Kubernetes` - Automatically injects SeaweedFS credentials, hydrates models (with fallback to host-volume checkpoints), applies [`deploy/k8s/api-deployment.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) (`imagePullPolicy: Always`), executes a zero-downtime rolling restart, and runs the automated verification smoke test ([`scripts/ci/verify_deployment.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/ci/verify_deployment.sh)).
 
 ## Local Development Stack
 
-For local development and debugging, a `docker-compose.local.yaml` is provided at the
-repository root. It spins up the infrastructure components that cannot run inside Pixi:
+For local development and debugging, a `docker-compose.local.yaml` is provided in
+`deploy/compose/docker-compose.local.yaml`. It spins up the infrastructure components that cannot run inside Pixi:
 
 * **SeaweedFS** (ports `8333` / `9333` / `8888`) - S3-compatible local object store for DVC remotes
   and S3 streamer development without hitting real AWS.
@@ -343,7 +343,7 @@ repository root. It spins up the infrastructure components that cannot run insid
 Start the stack with:
 
 ```bash
-docker compose -f docker-compose.local.yaml up -d
+docker compose -f deploy/compose/docker-compose.local.yaml up -d
 ```
 
 The MLflow local tracking server is managed via Pixi (not Docker) to keep it inside the
