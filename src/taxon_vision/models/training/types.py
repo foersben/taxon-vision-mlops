@@ -6,21 +6,28 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 import torch
 
 
 @dataclass(frozen=True)
 class EmbeddingSplit:
-    """Pre-computed feature representations and labels for training and validation.
+    """Pre-computed feature representations and labels for training, validation, calibration, and test.
 
-    Groups training and validation tensors together to eliminate parameter clumps and guarantee consistent feature dimensions across splits.
+    Groups training, validation, calibration, and holdout test tensors together to eliminate parameter
+    clumps and guarantee consistent feature dimensions across splits.
 
     Attributes:
         train_embeddings: Pre-computed representations of shape `(N_train, feature_dim)`.
         train_labels: Ground-truth class labels of shape `(N_train,)`.
         val_embeddings: Validation embeddings of shape `(N_val, feature_dim)`.
         val_labels: Validation class labels of shape `(N_val,)`.
+        cal_embeddings: Optional calibration embeddings of shape `(N_cal, feature_dim)`.
+        cal_labels: Optional calibration class labels of shape `(N_cal,)`.
+        test_embeddings: Optional holdout test embeddings of shape `(N_test, feature_dim)`.
+        test_labels: Optional holdout test class labels of shape `(N_test,)`.
         samples_per_class: Optional pre-computed class sample counts for loss weighting.
     """
 
@@ -28,13 +35,17 @@ class EmbeddingSplit:
     train_labels: torch.Tensor
     val_embeddings: torch.Tensor
     val_labels: torch.Tensor
+    cal_embeddings: torch.Tensor | None = None
+    cal_labels: torch.Tensor | None = None
+    test_embeddings: torch.Tensor | None = None
+    test_labels: torch.Tensor | None = None
     samples_per_class: Sequence[int] | None = None
 
     def __post_init__(self) -> None:
-        """Validate tensor shapes and consistency across training and validation splits.
+        """Validate tensor shapes and consistency across training, validation, calibration, and test splits.
 
         Raises:
-            ValueError: If feature dimensions differ between train and validation tensors, or if label counts do not match sample counts.
+            ValueError: If feature dimensions differ across splits, or if label counts do not match sample counts.
         """
         if self.train_embeddings.ndim != 2 or self.val_embeddings.ndim != 2:
             raise ValueError(
@@ -56,6 +67,102 @@ class EmbeddingSplit:
                 f"Feature dimension mismatch: train is {self.train_embeddings.shape[1]}, "
                 f"val is {self.val_embeddings.shape[1]}."
             )
+        dim = self.train_embeddings.shape[1]
+        self._validate_optional_split("cal", self.cal_embeddings, self.cal_labels, dim)
+        self._validate_optional_split("test", self.test_embeddings, self.test_labels, dim)
+
+    @staticmethod
+    def _validate_optional_split(
+        name: str,
+        embeddings: torch.Tensor | None,
+        labels: torch.Tensor | None,
+        expected_dim: int,
+    ) -> None:
+        """Validate an optional auxiliary split tensor pair."""
+        if embeddings is None and labels is None:
+            return
+        if embeddings is None or labels is None:
+            raise ValueError(f"Both {name}_embeddings and {name}_labels must be provided together.")
+        if embeddings.ndim != 2:
+            raise ValueError(f"{name.capitalize()} embeddings must be a 2D tensor, got {embeddings.shape}.")
+        if embeddings.shape[0] != labels.shape[0]:
+            raise ValueError(
+                f"{name.capitalize()} embeddings count ({embeddings.shape[0]}) does not match "
+                f"{name} labels count ({labels.shape[0]})."
+            )
+        if embeddings.shape[1] != expected_dim:
+            raise ValueError(f"Feature dimension mismatch: train is {expected_dim}, {name} is {embeddings.shape[1]}.")
+
+    @classmethod
+    def _load_from_directory(cls, dir_path: Path) -> EmbeddingSplit:
+        """Load and assemble EmbeddingSplit from a directory containing partition files."""
+        composite_pt = dir_path / "cached_features.pt"
+        if composite_pt.exists():
+            return cls.from_cache(composite_pt)
+        train_pt = dir_path / "train_embeddings.pt"
+        val_pt = dir_path / "val_embeddings.pt"
+        if not (train_pt.exists() and val_pt.exists()):
+            raise ValueError(f"Directory {dir_path} lacks valid embedding cache files")
+        tr_data = torch.load(train_pt, map_location="cpu", weights_only=False)
+        va_data = torch.load(val_pt, map_location="cpu", weights_only=False)
+        cal_pt = dir_path / "cal_embeddings.pt"
+        test_pt = dir_path / "test_embeddings.pt"
+        ca_data = torch.load(cal_pt, map_location="cpu", weights_only=False) if cal_pt.exists() else {}
+        te_data = torch.load(test_pt, map_location="cpu", weights_only=False) if test_pt.exists() else {}
+        return cls(
+            train_embeddings=tr_data["embeddings"],
+            train_labels=tr_data["labels"],
+            val_embeddings=va_data["embeddings"],
+            val_labels=va_data["labels"],
+            cal_embeddings=ca_data.get("embeddings"),
+            cal_labels=ca_data.get("labels"),
+            test_embeddings=te_data.get("embeddings"),
+            test_labels=te_data.get("labels"),
+            samples_per_class=tr_data.get("samples_per_class"),
+        )
+
+    @classmethod
+    def _load_from_payload(cls, payload: Any, path: Path) -> EmbeddingSplit:
+        """Parse in-memory deserialized object or dictionary into an EmbeddingSplit."""
+        if isinstance(payload, EmbeddingSplit):
+            return payload
+        if isinstance(payload, dict) and isinstance(payload.get("split"), EmbeddingSplit):
+            return payload["split"]
+        if isinstance(payload, dict) and "train_embeddings" in payload and "val_embeddings" in payload:
+            return cls(
+                train_embeddings=payload["train_embeddings"],
+                train_labels=payload["train_labels"],
+                val_embeddings=payload["val_embeddings"],
+                val_labels=payload["val_labels"],
+                cal_embeddings=payload.get("cal_embeddings"),
+                cal_labels=payload.get("cal_labels"),
+                test_embeddings=payload.get("test_embeddings"),
+                test_labels=payload.get("test_labels"),
+                samples_per_class=payload.get("samples_per_class"),
+            )
+        raise ValueError(f"Unsupported payload format in embedding cache: {path}")
+
+    @classmethod
+    def from_cache(cls, candidate: Path | str) -> EmbeddingSplit:
+        """Load and deserialize EmbeddingSplit from serialized cache file or directory.
+
+        Args:
+            candidate: Filesystem path to cache .pt file or directory.
+
+        Returns:
+            Validated EmbeddingSplit instance.
+
+        Raises:
+            FileNotFoundError: If cache file does not exist.
+            ValueError: If file payload cannot be parsed into an EmbeddingSplit.
+        """
+        candidate_path = Path(candidate)
+        if not candidate_path.exists():
+            raise FileNotFoundError(f"Embedding cache not found: {candidate_path}")
+        if candidate_path.is_dir():
+            return cls._load_from_directory(candidate_path)
+        payload = torch.load(candidate_path, map_location="cpu", weights_only=False)
+        return cls._load_from_payload(payload, candidate_path)
 
     @property
     def feature_dim(self) -> int:
@@ -139,3 +246,5 @@ class TuningConfig:
     experiment_name: str = "taxon-vision-hyperparameter-tuning"
     extractor_name: str = "dinov3"
     storage_url: str | None = None
+    study_name: str | None = None
+    reset_study: bool = False

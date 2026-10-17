@@ -8,6 +8,10 @@ description: Split conformal prediction mathematics guaranteeing marginal covera
 tags: [conformal-prediction, uncertainty, statistics]
 generated: {by: process:scaffold-init, at: "2026-10-02T10:00:00Z"}
 verified: {by: process:scaffold-init, at: "2026-10-02T10:00:00Z"}
+sources:
+  - resource: "src/taxon_vision/pipelines/calibrate.py"
+  - resource: "src/taxon_vision/pipelines/evaluate.py"
+  - resource: "src/taxon_vision/uncertainty/conformal.py"
 ---
 
 # Conformal Prediction Theory & Coverage Guarantees
@@ -27,3 +31,10 @@ $$P(Y_{n+1} \in \mathcal{C}(X_{n+1})) \ge 1 - \alpha$$
 ## Empty Prediction Sets
 
 In some instances, the model may be highly uncertain, and no class satisfies the threshold condition, resulting in an empty prediction set $\mathcal{C}(X) = \emptyset$. When an empty set is generated, it triggers a mandatory escalation to human taxonomist triage, preventing the system from making unsupported deterministic predictions on highly anomalous inputs.
+
+## Pipeline Calibration & Verification Workflow
+
+In the Epistemic Diamond architecture, conformal prediction is decoupled into discrete calibration and evaluation stages:
+
+* **Post-Quantization Calibration (`src/taxon_vision/pipelines/calibrate.py`):** Calibrates the empirical conformal non-conformity threshold $\hat{q}$ on the dedicated calibration split (`data/embeddings/cal_embeddings.pt`) evaluated through the quantized ONNX graph (`models/checkpoints/model_int8.onnx`). The resulting threshold is serialized into `config/conformal_config.yaml`.
+* **Holdout Coverage Verification (`src/taxon_vision/pipelines/evaluate.py`):** Independently assesses empirical marginal coverage on the holdout test partition (`data/embeddings/test_embeddings.pt`). The evaluation stage asserts that empirical coverage strictly satisfies the nominal $1 - \alpha = 0.95$ bound, exporting coverage statistics and set size distributions to `reports/pareto_evaluation.json`.

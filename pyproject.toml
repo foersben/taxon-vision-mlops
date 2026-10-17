@@ -170,8 +170,8 @@ LD_LIBRARY_PATH = "$CONDA_PREFIX/lib:${LD_LIBRARY_PATH:-}"
 [tool.pixi.tasks]
 api = { cmd = "uvicorn taxon_vision.service.api:app --host 0.0.0.0 --port 8000 --reload" }
 train = { cmd = "python -m taxon_vision.pipelines.train" }
-pareto = { cmd = "python scripts/benchmark_pareto.py" }
-calibrate = { cmd = "python scripts/calibrate_conformal.py" }
+pareto = { cmd = "python -m taxon_vision.pipelines.evaluate" }
+calibrate = { cmd = "python -m taxon_vision.pipelines.calibrate" }
 mlflow = { cmd = "mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5000" }
 
 [tool.ruff.lint.per-file-ignores]

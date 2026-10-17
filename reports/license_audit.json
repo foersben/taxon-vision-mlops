@@ -1,0 +1,16 @@
+{
+  "status": "PASSED",
+  "manifest": "data/manifests/raw_manifest.parquet",
+  "total_observations": 2000,
+  "verified_observations": 1689,
+  "violations": 311,
+  "allowed_licenses": [
+    "CC-BY",
+    "CC-BY-NC",
+    "CC-BY-NC-ND",
+    "CC-BY-NC-SA",
+    "CC-BY-ND",
+    "CC-BY-SA",
+    "CC0"
+  ]
+}

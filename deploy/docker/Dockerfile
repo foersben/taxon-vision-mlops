@@ -21,6 +21,7 @@ RUN pixi install --frozen -e ci
 
 # Copy configuration, model checkpoints, and default parameters
 COPY --chown=appuser:appgroup config/ config/
+COPY --chown=appuser:appgroup params.yaml ./params.yaml
 COPY --chown=appuser:appgroup models/checkpoints/ models/checkpoints/
 
 # Expose FastAPI HTTP serving port

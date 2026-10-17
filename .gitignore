@@ -69,9 +69,7 @@ docs/viz.html
 # Data & Model weights (DVC tracked)
 data/raw/
 data/processed/
-data/sample/*.jpg
-data/sample/*.jpeg
-data/sample/*.png
+data/sample/
 models/checkpoints/*
 *.onnx
 *.pth

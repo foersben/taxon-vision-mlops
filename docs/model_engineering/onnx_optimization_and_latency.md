@@ -13,6 +13,7 @@ sources:
   - resource: "src/taxon_vision/inference/onnx_engine.py"
   - resource: "src/taxon_vision/inference/quantizer.py"
   - resource: "src/taxon_vision/inference/cam.py"
+  - resource: "src/taxon_vision/pipelines/export_onnx.py"
 ---
 
 # ONNX Runtime Optimization & Latency Invariants
@@ -27,9 +28,9 @@ flowchart LR
         P1["FP32 Model Weights<br/>(Illustrative 400 MB Artifact)"]
     end
 
-    subgraph Compilation["ONNX Export & Quantization Pipeline"]
+    subgraph Compilation["ONNX Export & Quantization Pipeline (pipelines.export_onnx)"]
         C1["ONNX Graph Export<br/>Dynamic Batch Axes"] --> C2["Static INT8 PTQ<br/>Calibration Data Reader"]
-        C2 --> C3["Quantized Graph<br/>(Illustrative 100 MB Artifact - 75% Reduction)"]
+        C2 --> C3["Quantized Graph<br/>(models/checkpoints/model_int8.onnx)"]
     end
 
     subgraph Serving["Production Inference Engine (FastAPI)"]

@@ -66,7 +66,7 @@ flowchart TD
     subgraph S_CFG["Configuration Layer (SSOT)"]
         YML["config/default_config.yaml"]
         CAT["config/taxa_catalog.yaml"]
-        PAR["config/params.yaml"]
+        PAR["params.yaml (Canonical Root)"]
         CAL["config/conformal_config.yaml"]
         ENV["Environment Overrides (TAXON_*)"]
         PYD["taxon_vision.config.get_settings<br/>(Pydantic BaseSettings Models)"]
@@ -81,11 +81,11 @@ flowchart TD
     subgraph S_PIPE["Dual-Pipeline Architecture"]
         subgraph S_P1["Pipeline 1: Offline Feature Extraction"]
             INAT["iNaturalist API / S3 Open Data"]
-            ING["scripts/ingest_data.py"]
-            MAN["data/manifests (Parquet)"]
+            ING["taxon_vision.pipelines.ingest & audit_license"]
+            MAN["data/manifests/dataset_manifest.parquet"]
             EXT["taxon_vision.pipelines.extract_features"]
             BB["Frozen Vision Backbone<br/>(DINOv3 / BioCLIP / MobileNetV4)"]
-            EMB["data/embeddings/cached_features.pt<br/>(EmbeddingSplit: Train/Val)"]
+            EMB["data/embeddings/*.pt<br/>(4 Stratified Splits: Train/Val/Cal/Test)"]
             
             INAT --> ING
             ING --> MAN
@@ -165,7 +165,7 @@ Configuration drift between YAML files, runtime scripts, and deployment manifest
 Application settings are loaded and merged by `get_settings()` (`src/taxon_vision/config.py`) using a strict precedence order:
 
 1. **Base Declarative Configuration**: Loaded from `config/default_config.yaml`. Defines base default values across all subsystems (`service`, `model`, `training`, `ingestion`, `mlflow`, `conformal`, `ood`).
-2. **DVC Pipeline Parameters Layer**: If `config/params.yaml` exists in the configuration root, its values are layered over the base configuration using recursive dictionary merging (`_deep_merge`).
+2. **DVC Pipeline Parameters Layer**: If canonical root `params.yaml` exists, its values are layered over the base configuration using recursive dictionary merging (`_deep_merge`).
 3. **Statistical Conformal Calibration Layer**: If `config/conformal_config.yaml` exists, its `calibration` block is mapped and layered onto the `conformal` configuration block (`_load_conformal_override`).
 4. **Custom YAML Overrides**: If a custom YAML file path is passed explicitly to `get_settings(config_path=...)` or specified via the `TAXON_CONFIG_PATH` environment variable, its contents are overlaid on the merged dictionary (`_resolve_custom_override`).
 5. **Targeted Direct Environment Overrides**: Specific environment flags used for test isolation (`TAXON_ALLOW_UNTRAINED_FALLBACK` and `TAXON_FLAGGED_STORAGE_DIR`) are applied directly into the `model` sub-dictionary (`_apply_direct_env_overrides`).
@@ -218,22 +218,22 @@ Modern deep vision foundation backbones (such as DINOv3 ViT-Small, BioCLIP-2, an
 
 TaxonVision resolves this bottleneck through the **Dual-Pipeline Pattern**, decoupling heavy feature extraction from rapid linear classifier head training.
 
-```
+```text
 +-------------------------------------------------------------------------------+
 | Pipeline 1: Offline Feature Extraction (taxa_catalog + dataset_manifest)     |
-| Raw Images -> Preprocessing -> Frozen Backbone -> Stratified EmbeddingSplit   |
+| Raw Images -> Preprocessing -> Frozen Backbone -> 4-Way Stratified Splits     |
 +-------------------------------------------------------------------------------+
                                       │
-                                      ▼ (data/embeddings/cached_features.pt)
+                                      ▼ (data/embeddings/*.pt: train, val, cal, test)
 +-------------------------------------------------------------------------------+
 | Pipeline 2: Rapid Head Training & Tuning (Optuna + ClassBalancedLoss + MLflow)|
-| Cached Embeddings -> Linear Head -> Evaluation -> Model Checkpoint (head.pt)  |
+| Train & Val Embeddings -> Linear Head -> Evaluation -> Checkpoint (head.pt)   |
 +-------------------------------------------------------------------------------+
                                       │
                                       ▼
 +-------------------------------------------------------------------------------+
 | Downstream Serialization: ONNX Dual-Output Graph + Static INT8 Quantization   |
-| Full Model (Backbone + Head) -> ONNX Export -> Calibration -> quantized.onnx  |
+| Full Model (Backbone + Head) -> ONNX Export -> model_int8.onnx -> Calibration |
 +-------------------------------------------------------------------------------+
 ```
 
@@ -243,14 +243,14 @@ The feature extraction pipeline (`taxon_vision.pipelines.extract_features`) proc
 
 1. **Manifest Parsing**: Reads the observation manifest (`data/manifests/dataset_manifest.parquet`) containing observation identifiers, S3/HTTP image URLs, and taxon IDs.
 2. **Deterministic Evaluation Transform**: Raw images are preprocessed via `get_evaluation_transform()`. Stochastic augmentations are omitted during caching so that cached representations capture the canonical visual signal. The transform performs:
-   - Bilinear resizing of the shorter edge to `resize_size = round(image_size * eval_resize_ratio)` (e.g., $256 \times 256$ for $224 \times 224$ crops).
-   - Exact square center cropping to `(image_size, image_size)`.
-   - Conversion to float32 tensors scaled to $[0.0, 1.0]$.
-   - Channel-wise normalization using ImageNet statistics (`mean=[0.485, 0.456, 0.406]`, `std=[0.229, 0.224, 0.225]`).
+    * Bilinear resizing of the shorter edge to `resize_size = round(image_size * eval_resize_ratio)` (e.g., $256 \times 256$ for $224 \times 224$ crops).
+    * Exact square center cropping to `(image_size, image_size)`.
+    * Conversion to float32 tensors scaled to $[0.0, 1.0]$.
+    * Channel-wise normalization using ImageNet statistics (`mean=[0.485, 0.456, 0.406]`, `std=[0.229, 0.224, 0.225]`).
 3. **Forward Representation Pass**: Tensors are streamed in mini-batches through a frozen backbone (`create_feature_extractor`) instantiated without classification heads. The backbone operates with disabled gradient computation (`torch.no_grad()`) on CPU or CUDA hardware.
-4. **Stratified Partitioning & Storage**: Extracted representations are mapped to dense class indices, partitioned into stratified train and validation splits (`EmbeddingSplit`) preserving class frequencies, and persisted to disk at `data/embeddings/cached_features.pt`.
+4. **Stratified Partitioning & Storage**: Extracted representations are mapped to dense class indices, partitioned into 4 stratified splits (train 70%, val 10%, calibration 10%, test 10%) preserving class frequencies, and persisted to disk under `data/embeddings/` (`train_embeddings.pt`, `val_embeddings.pt`, `cal_embeddings.pt`, `test_embeddings.pt`).
 
-The resulting `EmbeddingSplit` container holds `train_embeddings`, `train_labels`, `val_embeddings`, `val_labels`, `feature_dim`, and `samples_per_class`.
+The resulting embedding files store `embeddings`, `labels`, `indices`, and `class_counts`.
 
 ### Pipeline 2: Rapid Linear Head Training & Optimization
 
@@ -394,10 +394,14 @@ This configuration multiplexes the single physical GPU into **4 virtual GPU slic
 Continuous integration and automated retraining runs are orchestrated via Jenkins and DVC:
 
 - **Jenkins CI Agent RBAC**: Defined in `deploy/k8s/jenkins-agent-rbac.yaml`, granting the Jenkins agent service account scoped permissions in the `jenkins-ci` namespace to create, monitor, and delete ephemeral test runner pods without cluster-admin privileges.
-- **Pipeline Reproducibility (DVC)**: DVC pipeline stages (`dvc.yaml`) track artifact and dependency hashing across three formal stages:
-  1. `ingestion`: Downloads raw observations using `scripts/ingest_data.py` and produces `data/manifests`.
-  2. `train`: Executes head training via `pixi run --frozen -e dev python -m taxon_vision.models.trainer` and produces `models/checkpoints/head.pt`.
-  3. `export_onnx`: Exports and quantizes the model via `pixi run --frozen -e dev python -m taxon_vision.inference.onnx_exporter` and produces `models/checkpoints/model.onnx`.
+* **Pipeline Reproducibility (DVC)**: DVC pipeline stages (`dvc.yaml`) track artifact and dependency hashing across the 7 canonical stages in `src/taxon_vision/pipelines/`:
+    1. `ingestion`: Downloads raw observations via `taxon_vision.pipelines.ingest` and outputs `data/manifests/raw_manifest.parquet`.
+    2. `audit_license`: Validates open licenses (CC0, CC-BY, CC-BY-NC) via `taxon_vision.pipelines.audit_license` and produces `data/manifests/dataset_manifest.parquet`.
+    3. `extract_features`: Streams images from S3 via `taxon_vision.pipelines.extract_features` into 4 stratified embedding files (`train`, `val`, `cal`, `test`).
+    4. `train`: Executes classification head training with Class-Balanced Loss via `taxon_vision.pipelines.train` and outputs `models/checkpoints/head.pt`.
+    5. `export_onnx`: Exports and quantizes INT8 runtime via `taxon_vision.pipelines.export_onnx` and outputs `models/checkpoints/model_int8.onnx`.
+    6. `calibrate`: Calibrates conformal quantiles ($\hat{q}$) and Helmholtz OOD thresholds via `taxon_vision.pipelines.calibrate` and outputs `config/conformal_config.yaml`.
+    7. `eval`: Evaluates accuracy, latency, and conformal coverage bounds via `taxon_vision.pipelines.evaluate` and outputs `reports/pareto_evaluation.json`.
 
 ---
 

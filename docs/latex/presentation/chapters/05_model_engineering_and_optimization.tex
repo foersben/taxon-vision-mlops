@@ -254,7 +254,7 @@
         \begin{itemize}
             \item \textbf{Mathematical Safety:} Conformal empirical coverage ($1-\alpha$), quantile threshold $\hat{q}$, average prediction set size $|\hat{C}|$, Helmholtz energy OOD cutoff $\tau_{OOD}$.
             \item \textbf{Production Telemetry:} p95 latency benchmarks, input tensor signature.
-            \item \textbf{Cryptographic Audit:} DVC manifest hash (\texttt{sample.dvc}), Git commit SHA, \texttt{model.onnx}.
+            \item \textbf{Cryptographic Audit:} DVC DAG lineage hash (\texttt{dvc.lock}), Git commit SHA, \texttt{model\_int8.onnx}.
         \end{itemize}
     \end{block}
 
@@ -262,7 +262,7 @@
 
     \script{Currently, our MLflow tracking captures the fundamental metrics and hyperparameters necessary to evaluate basic model performance, such as Class-Balanced Loss and the $\beta$ parameter. However, our target architecture demands rigorous lineage invariants. We need to track conformal prediction metrics like empirical coverage and average set size to mathematically guarantee safety. We also require strict cryptographic binding via DVC hashes and Git SHAs to ensure that the deployed model exactly matches its source code and training data.}
     \qa{Why do we need to track the average prediction set size $|\hat{C}|$?}{The average set size measures the epistemic efficiency of the model. A high coverage ($1-\alpha$) with a massive set size is mathematically safe but practically useless. We track $|\hat{C}|$ to ensure the model remains informative.}
-    \qa{What role does the DVC manifest hash play in model governance?}{The DVC hash mathematically binds the exact state of the training data to the produced \texttt{model.onnx} artifact. If a data contamination event occurs, we can deterministically trace which model versions are affected.}
+    \qa{What role does the DVC manifest hash play in model governance?}{The DVC hash mathematically binds the exact state of the training data to the produced \texttt{model\_int8.onnx} artifact. If a data contamination event occurs, we can deterministically trace which model versions are affected.}
 \end{frame}
 
 \begin{frame}{Evaluation Metrics}{Macro PR-AUC vs Single-Threshold F1 Score}

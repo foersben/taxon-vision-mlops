@@ -65,16 +65,17 @@
 
 % Memory-Mapped Cache Zone
 \node[box=TaxonSecondary, below=2cm of features] (cache) {
-    \textbf{Memory-Mapped Array}\\
-    \texttt{np.memmap} backing\\
-    \texttt{embeddings.npy}\\
-    \textit{(Disk-resident, zero-RAM)}
+    \textbf{Stratified Embedding Splits}\\
+    \texttt{train\_embeddings.pt} (70\%)\\
+    \texttt{val\_embeddings.pt} (10\%)\\
+    \texttt{cal\_embeddings.pt} (10\%)\\
+    \texttt{test\_embeddings.pt} (10\%)
 };
 
 \node[box=TaxonSecondary, left=1cm of cache] (manifest) {
-    \textbf{Manifest Pointer Metadata}\\
-    \texttt{observations.parquet}\\
-    \textit{Aligned 1:1 with \texttt{np.memmap} rows}
+    \textbf{Verified Dataset Manifest}\\
+    \texttt{dataset\_manifest.parquet}\\
+    \textit{Aligned with stratified splits}
 };
 
 % Classification Head Zone
@@ -91,7 +92,7 @@
 \draw[arrow] (backbone) -- node[above, align=center] {Extraction Loop} (features);
 \draw[arrow] (features) -- node[right, align=center] {Serialisation} (cache);
 \draw[<->, thick, TaxonDark, dashed] (manifest) -- node[above, align=center] {Sync} (cache);
-\draw[arrow] (cache) edge[bend left=15] node[below, align=center] {High-Speed Read Directly Off Memory-Map} (head);
+\draw[arrow] (cache) edge[bend left=15] node[below, align=center] {High-Speed Tensor Loading (train/val)} (head);
 
 % Zones (using fit library)
 \begin{scope}[on background layer]

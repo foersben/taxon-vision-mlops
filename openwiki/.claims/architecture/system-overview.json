@@ -4,7 +4,7 @@
   "claims": [
     {
       "id": "claim_70e3c54cb2c74bdbadbc6abd719f5a9f",
-      "statement": "TaxonVision establishes a Single Source of Truth configuration hierarchy where base settings in config/default_config.yaml are layered sequentially with config/params.yaml, config/conformal_config.yaml, optional custom YAML overrides, direct environment flags (TAXON_ALLOW_UNTRAINED_FALLBACK and TAXON_FLAGGED_STORAGE_DIR), and dynamic double-underscore delimited TAXON_ environment variables.",
+      "statement": "TaxonVision establishes a Single Source of Truth configuration hierarchy where base settings in config/default_config.yaml are layered sequentially with params.yaml, config/conformal_config.yaml, optional custom YAML overrides, direct environment flags (TAXON_ALLOW_UNTRAINED_FALLBACK and TAXON_FLAGGED_STORAGE_DIR), and dynamic double-underscore delimited TAXON_ environment variables.",
       "evidence": [
         {
           "resource": "repo://config/default_config.yaml#L1-L79",
@@ -50,7 +50,7 @@
     },
     {
       "id": "claim_98fae87753b84918b05d77f1cfcfb599",
-      "statement": "The system implements a dual-pipeline pattern where the feature extraction pipeline feeds observation batches through a frozen vision backbone using deterministic evaluation transforms, partitioning the resulting dense representations into stratified train and validation splits persisted as an EmbeddingSplit container on disk.",
+      "statement": "The system implements a dual-pipeline pattern where the feature extraction pipeline feeds observation batches through a frozen vision backbone using deterministic evaluation transforms, partitioning the resulting dense representations into four stratified splits (train, validation, calibration, test) persisted as discrete PyTorch tensor files under data/embeddings/ on disk.",
       "evidence": [
         {
           "resource": "repo://dvc.yaml#L1-L24",
@@ -138,7 +138,7 @@
     },
     {
       "id": "claim_c297f67f90cd47f09cffe444cf6593e0",
-      "statement": "Model and data lifecycle automation is governed by DVC stages for ingestion, training, and ONNX export, while remote test execution is supported by Jenkins agent pods restricted by scoped Kubernetes Role and RoleBinding permissions in the jenkins-ci namespace.",
+      "statement": "Model and data lifecycle automation is governed by the 7 canonical DVC pipeline stages (ingest, audit_license, extract_features, train, export_onnx, calibrate, evaluate), while remote test execution is supported by Jenkins agent pods restricted by scoped Kubernetes Role and RoleBinding permissions in the jenkins-ci namespace.",
       "evidence": [
         {
           "resource": "repo://deploy/k8s/jenkins-agent-rbac.yaml#L1-L47",

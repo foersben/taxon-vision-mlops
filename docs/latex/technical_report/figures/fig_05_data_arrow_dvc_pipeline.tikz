@@ -29,12 +29,12 @@
 
 % 3. Serialisation Stage
 \node[process, below=2cm of license] (arrow_serial) {\textbf{Apache Arrow}\\RecordBatch \& Table};
-\node[artifact, below=1.2cm of arrow_serial] (parquet) {\textbf{observations.parquet}\\Snappy-compressed\\serialisation};
+\node[artifact, below=1.2cm of arrow_serial] (parquet) {\textbf{dataset\_manifest.parquet}\\Snappy-compressed Arrow table\\(\& \texttt{raw\_manifest.parquet})};
 
 % 4. Versioning Stage
 \node[process, below=2cm of parquet] (dvc_hash) {\textbf{DVC Content-Addressed Storage}\\MD5 hash computation over\\dataset manifest directory};
 
-\node[artifact, left=0.5cm of dvc_hash] (dvc_file) {\textbf{data/sample.dvc}\\Pointer generation\\(md5, size, nfiles)\\(Git commit tracking only\\small text files)};
+\node[artifact, left=0.5cm of dvc_hash] (dvc_file) {\textbf{dvc.yaml} / \textbf{dvc.lock}\\Epistemic Diamond DAG\\(Git commit tracking\\reproducible lineage)};
 \node[artifact, right=0.5cm of dvc_hash] (dagshub) {\textbf{DagsHub S3 Endpoint}\\\texttt{s3://dvc} via HTTPS HMAC credentials\\\texttt{dvc push} synchronisation};
 
 % Background stages

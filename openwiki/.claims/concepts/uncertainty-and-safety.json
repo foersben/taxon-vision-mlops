@@ -32,7 +32,7 @@
     },
     {
       "id": "claim_0c65353da7ff49faa62829d99a5ec165",
-      "statement": "scripts/calibrate_conformal.py computes the empirical non-conformity quantile cutoff q_hat on holdout validation data using the higher order statistic at level ceil((n + 1)(1 - alpha)) / n, serializing calibration metadata for inference serving.",
+      "statement": "The calibration pipeline (src/taxon_vision/pipelines/calibrate.py, scripts/calibrate_conformal.py) computes the empirical non-conformity quantile cutoff q_hat and Helmholtz OOD energy threshold on holdout calibration data (cal_embeddings.pt), serializing calibration parameters to config/conformal_config.yaml.",
       "evidence": [
         {
           "resource": "repo://scripts/calibrate_conformal.py#L107-L121",

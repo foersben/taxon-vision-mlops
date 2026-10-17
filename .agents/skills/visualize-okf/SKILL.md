@@ -11,7 +11,7 @@ verified: {by: process:okf-updater, at: "2026-10-02T10:00:00Z"}
 name: Visualize Open Knowledge Format
 sources:
 - id: visualize_okf
-  resource: scripts/visualize_okf.py
+  resource: scripts/governance/visualize_okf.py
 ---
 
 # Visualize Open Knowledge Format
@@ -23,5 +23,5 @@ Skill to generate interactive D3 knowledge graph visualization.
 Run using:
 
 ```bash
-pixi run -e dev python scripts/visualize_okf.py
+pixi run -e dev python scripts/governance/visualize_okf.py
 ```

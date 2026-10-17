@@ -13,7 +13,6 @@ The training pipeline consists of the following steps:
 
 from __future__ import annotations
 
-import argparse
 import json
 import logging
 import os
@@ -106,6 +105,10 @@ def _try_load_cached_split(candidate: Path, dim: int) -> EmbeddingSplit | None:
                 train_labels=payload["train_labels"],
                 val_embeddings=payload["val_embeddings"],
                 val_labels=payload["val_labels"],
+                cal_embeddings=payload.get("cal_embeddings"),
+                cal_labels=payload.get("cal_labels"),
+                test_embeddings=payload.get("test_embeddings"),
+                test_labels=payload.get("test_labels"),
                 samples_per_class=payload.get("samples_per_class"),
             )
 
@@ -150,10 +153,16 @@ def _generate_synthetic_embedding_split(dim: int, num_classes: int) -> Embedding
     torch.manual_seed(seed)
     num_train = 120
     num_val = 30
+    num_cal = 20
+    num_test = 20
     train_z = torch.randn(num_train, dim)
     train_y = torch.randint(0, num_classes, (num_train,))
     val_z = torch.randn(num_val, dim)
     val_y = torch.randint(0, num_classes, (num_val,))
+    cal_z = torch.randn(num_cal, dim)
+    cal_y = torch.randint(0, num_classes, (num_cal,))
+    test_z = torch.randn(num_test, dim)
+    test_y = torch.randint(0, num_classes, (num_test,))
     samples_per_class = [max(1, int((train_y == c).sum().item())) for c in range(num_classes)]
 
     return EmbeddingSplit(
@@ -161,14 +170,76 @@ def _generate_synthetic_embedding_split(dim: int, num_classes: int) -> Embedding
         train_labels=train_y,
         val_embeddings=val_z,
         val_labels=val_y,
+        cal_embeddings=cal_z,
+        cal_labels=cal_y,
+        test_embeddings=test_z,
+        test_labels=test_y,
         samples_per_class=samples_per_class,
     )
+
+
+def _try_load_split_from_pair(train_path: Path, val_path: Path, dim: int) -> EmbeddingSplit | None:
+    """Load train and validation partitions directly from discrete .pt tensor files.
+
+    Args:
+        train_path: Path to train_embeddings.pt.
+        val_path: Path to val_embeddings.pt.
+        dim: Expected feature dimension.
+
+    Returns:
+        Instantiated EmbeddingSplit or None if missing or incompatible.
+    """
+    if not train_path.exists() or not val_path.exists():
+        return None
+    try:
+        train_payload = torch.load(train_path, map_location="cpu", weights_only=False)
+        val_payload = torch.load(val_path, map_location="cpu", weights_only=False)
+
+        train_z = train_payload["embeddings"] if isinstance(train_payload, dict) else train_payload
+        train_y = train_payload["labels"] if isinstance(train_payload, dict) else None
+        samples_per_class = train_payload.get("samples_per_class") if isinstance(train_payload, dict) else None
+        feat_dim = (
+            train_payload.get("feature_dim", train_z.shape[1]) if isinstance(train_payload, dict) else train_z.shape[1]
+        )
+
+        val_z = val_payload["embeddings"] if isinstance(val_payload, dict) else val_payload
+        val_y = val_payload["labels"] if isinstance(val_payload, dict) else None
+
+        if not isinstance(train_z, torch.Tensor) or not isinstance(train_y, torch.Tensor):
+            return None
+        if not isinstance(val_z, torch.Tensor) or not isinstance(val_y, torch.Tensor):
+            return None
+        if feat_dim != dim:
+            logger.warning("Split embeddings at %s have dimension %d, expected %d", train_path, feat_dim, dim)
+            return None
+
+        split = EmbeddingSplit(
+            train_embeddings=train_z,
+            train_labels=train_y,
+            val_embeddings=val_z,
+            val_labels=val_y,
+            samples_per_class=samples_per_class,
+        )
+        logger.info(
+            "Loaded isolated train (%d) and val (%d) embeddings from %s, %s (dim=%d)",
+            len(train_z),
+            len(val_z),
+            train_path,
+            val_path,
+            dim,
+        )
+        return split
+    except Exception as err:
+        logger.warning("Failed loading split tensors from %s / %s: %s", train_path, val_path, err)
+        return None
 
 
 def _prepare_embedding_split(
     dim: int,
     num_classes: int,
     cache_path: Path | str | None = None,
+    train_embeddings_path: Path | str | None = None,
+    val_embeddings_path: Path | str | None = None,
     allow_synthetic: bool = False,
 ) -> EmbeddingSplit:
     """Construct or restore deterministic embedding splits for rapid head training.
@@ -180,10 +251,11 @@ def _prepare_embedding_split(
         in seconds. Synthetic data generation is strictly opt-in to avoid masking data pipeline bugs.
 
     How:
-        1. Checks whether an embedding cache exists at `cache_path` (or standard `data/embeddings/cached_features.pt`).
-        2. If found, deserializes the payload, validates that `split.feature_dim == dim`, and returns the cached split.
-        3. If absent or shape-incompatible and allow_synthetic is False, logs an error and raises FileNotFoundError.
-        4. If allow_synthetic is True, generates a deterministic synthetic Gaussian split.
+        1. Checks whether discrete train/val split files exist.
+        2. Checks whether an embedding cache exists at `cache_path` (or standard `data/embeddings/cached_features.pt`).
+        3. If found, deserializes the payload, validates that `split.feature_dim == dim`, and returns the cached split.
+        4. If absent or shape-incompatible and allow_synthetic is False, logs an error and raises FileNotFoundError.
+        5. If allow_synthetic is True, generates a deterministic synthetic Gaussian split.
 
     Complexity:
         O(N * D) where N is the number of samples and D is the feature dimension.
@@ -192,6 +264,8 @@ def _prepare_embedding_split(
         dim: Dimensionality of feature vectors.
         num_classes: Total number of classification categories.
         cache_path: Optional custom filesystem path to a serialized `.pt` embedding cache.
+        train_embeddings_path: Optional custom path to train_embeddings.pt.
+        val_embeddings_path: Optional custom path to val_embeddings.pt.
         allow_synthetic: Whether to fall back to synthetic Gaussian embeddings if cache is missing.
 
     Returns:
@@ -200,6 +274,18 @@ def _prepare_embedding_split(
     Raises:
         FileNotFoundError: If cache is absent and allow_synthetic is False.
     """
+    if train_embeddings_path is not None and val_embeddings_path is not None:
+        pair_loaded = _try_load_split_from_pair(Path(train_embeddings_path), Path(val_embeddings_path), dim)
+        if pair_loaded is not None:
+            return pair_loaded
+
+    default_train = Path("data/embeddings/train_embeddings.pt")
+    default_val = Path("data/embeddings/val_embeddings.pt")
+    if cache_path is None and default_train.exists() and default_val.exists():
+        pair_loaded = _try_load_split_from_pair(default_train, default_val, dim)
+        if pair_loaded is not None:
+            return pair_loaded
+
     candidates: list[Path] = (
         [Path(cache_path)] if cache_path is not None else [Path("data/embeddings/cached_features.pt")]
     )
@@ -272,6 +358,8 @@ def _build_training_components(
     data: EmbeddingSplit,
     extractor: str,
     applied_vram_fraction: float | None,
+    study_name: str | None = None,
+    reset_study: bool = False,
 ) -> tuple[nn.Module, nn.Module, optim.Optimizer, HeadTrainingConfig, dict[str, Any]]:
     """Construct model head, loss, optimizer, and training parameters.
 
@@ -292,6 +380,8 @@ def _build_training_components(
         data: Split containing train and validation embeddings.
         extractor: Name of the feature extractor.
         applied_vram_fraction: Applied GPU memory fraction or None.
+        study_name: Optional custom Optuna study name identifier.
+        reset_study: Whether to purge prior trial history before tuning.
 
     Returns:
         Tuple containing head module, loss criterion, optimizer, training config, and params dict.
@@ -303,6 +393,9 @@ def _build_training_components(
             epochs_per_trial=epochs,
             batch_size=batch_size,
             seed=seed,
+            extractor_name=extractor,
+            study_name=study_name,
+            reset_study=reset_study,
         )
         best_params, _ = tune_hyperparameters(data=data, num_classes=num_classes, config=tuning_cfg)
         dropout_p = float(best_params.get("dropout", 0.2))
@@ -444,8 +537,12 @@ def run_training_pipeline(
     tune: bool = False,
     n_trials: int = 15,
     cache_path: Path | str | None = None,
+    train_embeddings: Path | str | None = None,
+    val_embeddings: Path | str | None = None,
     require_cache: bool = False,
     allow_synthetic: bool | None = None,
+    study_name: str | None = None,
+    reset_study: bool = False,
 ) -> dict[str, Any]:
     """Execute end-to-end classification head training on cached or synthetic embeddings.
 
@@ -473,8 +570,12 @@ def run_training_pipeline(
         tune: Whether to execute Optuna Bayesian hyperparameter search prior to final training.
         n_trials: Number of Optuna evaluation trials when `tune` is enabled.
         cache_path: Optional custom filesystem path to serialized `.pt` embedding cache.
+        train_embeddings: Optional custom path to train_embeddings.pt partition.
+        val_embeddings: Optional custom path to val_embeddings.pt partition.
         require_cache: Whether to strictly require real embedding cache and disable synthetic fallback.
         allow_synthetic: Explicit override to permit synthetic embeddings when cache is absent.
+        study_name: Optional custom Optuna study name identifier.
+        reset_study: Whether to purge prior trial history before tuning.
 
     Returns:
         Dictionary containing training metrics, checkpoint path, duration, and status.
@@ -513,6 +614,8 @@ def run_training_pipeline(
         dim,
         num_classes,
         cache_path=cache_path,
+        train_embeddings_path=train_embeddings,
+        val_embeddings_path=val_embeddings,
         allow_synthetic=resolved_allow_synthetic,
     )
     samples = data.samples_per_class or [1] * num_classes
@@ -530,6 +633,8 @@ def run_training_pipeline(
         data=data,
         extractor=resolved_extractor,
         applied_vram_fraction=applied_vram_fraction,
+        study_name=study_name,
+        reset_study=reset_study,
     )
 
     run_name = f"train_{extractor}_{int(time.time())}"
@@ -679,13 +784,11 @@ def _dispatch_remote_training(api_url: str, extractor: str, epochs: int, batch_s
 
 
 def train_cli(argv: list[str] | None = None) -> int:
-    """Entrypoint for the CLI training script.
+    """CLI entrypoint for training pipeline execution.
 
     Why:
-        Provides a unified command-line interface for human developers, automated Pixi tasks (`pixi run train`), and shell scripts to launch local or remote training pipelines with custom hyperparameters, backbones, and logging paths without modifying source code.
-
-    How:
-        Parses CLI flags using standard argparse, configures structured logging with optional file output, and routes execution either to `_dispatch_remote_training` (if `--api-url` is passed) or `run_training_pipeline` (for local execution), logging summary metrics upon completion.
+        Preserves backwards-compatibility for existing tests and callers while delegating
+        to the canonical implementation in taxon_vision.pipelines.train.
 
     Args:
         argv: Optional command line arguments list.
@@ -693,119 +796,10 @@ def train_cli(argv: list[str] | None = None) -> int:
     Returns:
         Exit code (0 for success, 1 for error).
     """
-    settings = get_settings()
-    parser = argparse.ArgumentParser(description="TaxonVision Model Head Training CLI")
-    parser.add_argument(
-        "--extractor",
-        type=str,
-        default=settings.model.default_extractor,
-        help=f"Backbone feature extractor (default: {settings.model.default_extractor})",
-    )
-    parser.add_argument(
-        "--epochs",
-        type=int,
-        default=settings.training.epochs,
-        help=f"Number of training epochs (default: {settings.training.epochs})",
-    )
-    parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=settings.training.batch_size,
-        help=f"Mini-batch size (default: {settings.training.batch_size})",
-    )
-    parser.add_argument(
-        "--lr",
-        type=float,
-        default=settings.training.learning_rate,
-        help=f"Learning rate (default: {settings.training.learning_rate})",
-    )
-    parser.add_argument(
-        "--checkpoint-path",
-        type=str,
-        default=None,
-        help=f"Output checkpoint file path (defaults to {settings.model.head_checkpoint_path})",
-    )
-    parser.add_argument("--api-url", type=str, default=None, help="Optional running API server URL to trigger remotely")
-    parser.add_argument("--log-file", type=str, default=None, help="Optional log file destination")
-    parser.add_argument(
-        "--cuda-memory-fraction",
-        type=float,
-        default=None,
-        help="Optional maximum fraction of GPU VRAM (0.0 to 1.0) for training under time-slicing (defaults to TAXON_CUDA_MEMORY_FRACTION or 0.7)",
-    )
-    parser.add_argument(
-        "--tune",
-        action="store_true",
-        help="Execute Optuna Bayesian hyperparameter search before final head training",
-    )
-    parser.add_argument(
-        "--n-trials",
-        type=int,
-        default=15,
-        help="Number of Optuna evaluation trials (when --tune is enabled)",
-    )
-    parser.add_argument(
-        "--cache-path",
-        type=str,
-        default=None,
-        help="Optional path to serialized .pt feature embedding cache file",
-    )
-    parser.add_argument(
-        "--require-cache",
-        action="store_true",
-        help="Disallow fallback to synthetic data if embedding cache is absent",
-    )
-    parser.add_argument(
-        "--allow-synthetic",
-        action="store_true",
-        default=settings.model.allow_untrained_fallback,
-        help="Permit fallback to synthetic Gaussian embeddings if cache is absent",
-    )
-    parser.add_argument(
-        "--require-promotion",
-        action="store_true",
-        help="Exit with non-zero status if trained model is tagged as Archived instead of Challenger/Production",
-    )
-    args = parser.parse_args(argv)
+    from taxon_vision.pipelines.train import train_cli as _train_cli
 
-    setup_logging(level=logging.INFO, log_file=args.log_file)
+    return _train_cli(argv)
 
-    if args.api_url:
-        return _dispatch_remote_training(args.api_url, args.extractor, args.epochs, args.batch_size, args.lr)
 
-    logger.info("Starting TaxonVision Training Pipeline [%s]", args.extractor)
-    logger.info(
-        "  Epochs: %d | Batch Size: %d | Learning Rate: %s | Tune: %s",
-        args.epochs,
-        args.batch_size,
-        args.lr,
-        args.tune,
-    )
-
-    result = run_training_pipeline(
-        extractor=args.extractor,
-        epochs=args.epochs,
-        batch_size=args.batch_size,
-        learning_rate=args.lr,
-        checkpoint_path=args.checkpoint_path,
-        log_file=args.log_file,
-        cuda_memory_fraction=args.cuda_memory_fraction,
-        tune=args.tune,
-        n_trials=args.n_trials,
-        cache_path=args.cache_path,
-        require_cache=args.require_cache,
-        allow_synthetic=args.allow_synthetic,
-    )
-
-    logger.info("Training Completed Successfully")
-    logger.info("  Duration:         %.3fs", result["duration_seconds"])
-    logger.info("  Final Train Loss: %s", result["final_train_loss"])
-    logger.info("  Final Val Loss:   %s", result["final_val_loss"])
-    logger.info("  Final Val Acc:    %.1f%%", result["final_val_accuracy"] * 100)
-    logger.info("  Saved Checkpoint: %s", result["checkpoint_path"])
-
-    if args.require_promotion and result.get("promotion_status") == "Archived":
-        logger.error("Model did not outperform production baseline (status: Archived). Failing promotion gate.")
-        return 1
-
-    return 0
+if __name__ == "__main__":
+    sys.exit(train_cli())

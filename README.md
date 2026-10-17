@@ -58,6 +58,72 @@ just run
 
 ---
 
+## Architectural Principles: The Epistemic Diamond DAG
+
+TaxonVision enforces an **Epistemic Diamond DAG** topology across its unified 7-stage DVC pipeline, governed by the canonical root `params.yaml`:
+
+```text
+                       +-----------+
+                       | ingestion |  (pipelines/ingest.py)
+                       +-----------+
+                             *
+                             * (data/manifests/raw_manifest.parquet)
+                             v
+                    +---------------+
+                    | audit_license |  (pipelines/audit_license.py) ---> [license_audit.json]
+                    +---------------+
+                             *
+                             * (data/manifests/dataset_manifest.parquet)
+                             v
+                  +------------------+
+                  | extract_features |  (pipelines/extract_features.py)
+                  +------------------+
+                   /        |         \
+  (train & val.pt)/         |          \ (test_embeddings.pt)
+                 /          |           \
+                v           |            \
+            +-------+       |             \
+            | train |       |              \
+            +-------+       | (cal.pt)      \
+                *           |                \
+         (head.pt)          |                 \
+                *           |                  \
+                v           |                   \
+            +--------+      |                    \
+            | export |      |                     \
+            +--------+      |                      \
+                *           |                       \
+        (model_int8.onnx)   |                        \
+                *           v                         \
+                *====>+-----------+                    \
+                *     | calibrate | (pipelines/        \
+                *     +-----------+  calibrate.py)      \
+                *           *                            \
+                *   (conformal_config.yaml)               \
+                *           *                              \
+                *           v                               v
+                *========>+------------------------------------+
+                          |                eval                | (pipelines/evaluate.py)
+                          +------------------------------------+
+                                            |
+                                            +---> [pareto_evaluation.json]
+                                            +---> [docs/assets/pareto_results.json]
+```
+
+### The 7 Canonical DVC Stages
+
+All stages are implemented as first-class CLI entrypoints under `src/taxon_vision/pipelines/`:
+
+* **Stage 1 (Ingestion):** `taxon_vision.pipelines.ingest` fetches DarwinCore observation metadata from iNaturalist into `data/manifests/raw_manifest.parquet`.
+* **Stage 2 (License Gatekeeper):** `taxon_vision.pipelines.audit_license` enforces strict open licensing (CC0, CC-BY, CC-BY-NC) and filters compliant records to `data/manifests/dataset_manifest.parquet`.
+* **Stage 3 (Feature Extraction):** `taxon_vision.pipelines.extract_features` streams images from S3 and partitions frozen representations into 4 stratified tensors: `train_embeddings.pt`, `val_embeddings.pt`, `cal_embeddings.pt`, and `test_embeddings.pt`.
+* **Stage 4 (Head Training):** `taxon_vision.pipelines.train` trains a classification head with Class-Balanced Loss on train and validation embeddings, producing `models/checkpoints/head.pt`.
+* **Stage 5 (ONNX Export & Quantization):** `taxon_vision.pipelines.export_onnx` compiles PyTorch weights to ONNX with INT8 dynamic/static quantization into `models/checkpoints/model_int8.onnx`.
+* **Stage 6 (Conformal & OOD Calibration):** `taxon_vision.pipelines.calibrate` calibrates Split Conformal quantiles ($\hat{q}$) and Helmholtz OOD energy thresholds ($\tau_{\text{ood}}$) on calibration embeddings, serializing to `config/conformal_config.yaml`.
+* **Stage 7 (Pareto Benchmark & Evaluation):** `taxon_vision.pipelines.evaluate` benchmarks accuracy, latency, and conformal coverage guarantees ($1 - \alpha = 0.95$) on holdout test embeddings, exporting `reports/pareto_evaluation.json`.
+
+---
+
 ## Repository Governance
 
-The architecture is governed by a 12-role agent matrix defined within `.agents/AGENTS.md` and standardises upon the Google Open Knowledge Format (OKF v0.2) across the `docs/` directory.
+The architecture is governed by a 12-role agent matrix defined within `.agents/AGENTS.md` and standardises upon the Google Open Knowledge Format (OKF v0.2) across the `docs/` directory. Configuration hyperparameters are canonically tracked in root `params.yaml`, with system runtime defaults defined in `config/default_config.yaml`.

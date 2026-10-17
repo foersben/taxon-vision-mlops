@@ -1,0 +1,17 @@
+{
+  "p50_latency_ms": 47.87,
+  "p95_latency_ms": 51.99,
+  "throughput_fps": 20.7,
+  "latency_sla_ms": 25.0,
+  "latency_sla_satisfied": false,
+  "cost_per_million_usd": 2.6,
+  "test_sample_count": 169,
+  "test_accuracy": 0.8935,
+  "nominal_coverage": 0.95,
+  "test_empirical_coverage": 0.9645,
+  "coverage_guarantee_satisfied": true,
+  "mean_set_size": 1.72,
+  "referral_rate": 0.6095,
+  "q_hat": 0.8405,
+  "alpha": 0.05
+}

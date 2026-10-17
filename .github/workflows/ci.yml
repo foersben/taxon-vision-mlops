@@ -44,7 +44,7 @@ jobs:
             AWS_SECRET_ACCESS_KEY="$DAGSHUB_TOKEN" \
             pixi run --frozen -e ci-dev dvc pull \
               models/checkpoints/head.pt \
-              models/checkpoints/model.onnx || true
+              models/checkpoints/model_int8.onnx || true
           else
             echo "::notice::DAGSHUB_TOKEN not set in GitHub Actions; running tests with offline fixtures."
           fi
@@ -53,7 +53,7 @@ jobs:
         run: SKIP=enforce-author-identity,openwiki-sync pixi run --frozen -e ci-dev pre-commit run --all-files
 
       - name: Validate Open Knowledge Format (OKF v0.2)
-        run: pixi run --frozen -e ci-dev python scripts/validate_okf.py
+        run: pixi run --frozen -e ci-dev python scripts/governance/validate_okf.py
 
       - name: Pass 1 - Unit Tests & Coverage
         run: |
@@ -114,7 +114,7 @@ jobs:
           environments: ci-dev
 
       - name: Generate OKF Knowledge Graph Visualization
-        run: pixi run --frozen -e ci-dev python scripts/visualize_okf.py
+        run: pixi run --frozen -e ci-dev python scripts/governance/visualize_okf.py
 
       - name: Build Docs with Zensical
         run: pixi run --frozen -e ci-dev zensical build --strict
@@ -157,7 +157,9 @@ jobs:
             echo ">>> Fetching latest model checkpoints from DagsHub DVC..."
             AWS_ACCESS_KEY_ID="$DAGSHUB_TOKEN" \
             AWS_SECRET_ACCESS_KEY="$DAGSHUB_TOKEN" \
-            pixi run --frozen -e ci-dev dvc pull models/checkpoints/head.pt models/checkpoints/model.onnx || true
+            pixi run --frozen -e ci-dev dvc pull \
+              models/checkpoints/head.pt \
+              models/checkpoints/model_int8.onnx || true
           fi
 
       - name: Set up Docker Buildx
@@ -184,6 +186,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: deploy/docker/Dockerfile
           push: ${{ !env.ACT }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

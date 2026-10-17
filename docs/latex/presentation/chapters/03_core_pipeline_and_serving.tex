@@ -106,7 +106,7 @@
     % Row 1: Offline Training Pipeline
     \node[box] (s3) {S3 Images\\(Zero-Copy)};
     \node[box, right=of s3] (vit) {Frozen ViT\\(DINOv2 / BioCLIP)};
-    \node[box, right=of vit] (embed) {Embeddings\\(Parquet / DVC)};
+    \node[box, right=of vit] (embed) {Embeddings\\(4x .pt / DVC)};
     \node[box, right=of embed] (linear) {Linear Head\\(Optuna / CB-Loss)};
     \node[box, right=of linear] (onnx) {ONNX Export\\(INT8 Quantized)};
 

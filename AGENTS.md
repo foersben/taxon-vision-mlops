@@ -11,8 +11,8 @@
 
 ```bash
 pixi run -e dev ruff check . && pixi run -e dev mypy src scripts
-pixi run -e dev python scripts/audit_license_compliance.py
-pixi run -e dev python scripts/validate_okf.py
+pixi run -e dev python -m taxon_vision.pipelines.audit_license
+pixi run -e dev python scripts/governance/validate_okf.py
 ```
 
 ## Fast Module & Test Routing Map
@@ -21,9 +21,9 @@ Read ONLY the files in your active task row:
 
 | Domain | Primary Source Files (`src/taxon_vision/`) | Targeted Test (`tests/`) | Role & Rule |
 | :--- | :--- | :--- | :--- |
-| **Config & Types** | `config.py`, `config/default_config.yaml` | `unit/test_config.py` | `@01`, `00-python` |
+| **Config & Types** | `config.py`, `params.yaml`, `config/default_config.yaml` | `unit/test_config.py` | `@01`, `00-python` |
 | **Data & S3** | `data/{s3_streamer,inat_client,license_filter}.py` | `unit/test_data_components.py` | `@03`, `05-license` |
-| **Pipelines** | `pipelines/{extract_features,train}.py` | `unit/test_pipelines.py` | `@03`, `01-mlops` |
+| **Pipelines** | `pipelines/{ingest,audit_license,extract_features,train,export_onnx,calibrate,evaluate}.py` | `unit/test_pipelines.py` | `@03`, `01-mlops` |
 | **Models & Loss** | `models/{factory,head,loss,trainer}.py` | `unit/test_models_components.py` | `@04`, `01-mlops` |
 | **Training & HPO** | `models/training/{runner,loops,embeddings,tuning,tracking,checkpoint,types}.py` | `unit/test_tuning.py`, `unit/test_tracking.py` | `@04`, `01-mlops` |
 | **ONNX & CAM** | `inference/{onnx_exporter,onnx_engine,quantizer,cam,calibration,cli}.py` | `unit/test_onnx_exporter.py`, `unit/test_quantizer.py` | `@05`, `02-latency` |
@@ -38,7 +38,7 @@ Read ONLY the files in your active task row:
 * **Fast Targeted Verify:** During iteration, execute fast test sweeps suppressing global coverage:
     `pixi run -e ci-dev pytest <targeted_test_file> -q -o "addopts="`
 * **Full Quality Gate:** Run the comprehensive test suite and gates once upon completing code changes:
-    `pixi run -e ci-dev ruff check . && pixi run -e ci-dev mypy src scripts && pixi run -e ci-dev python scripts/validate_okf.py && pixi run -e ci-dev python scripts/audit_license_compliance.py`
+    `pixi run -e ci-dev ruff check . && pixi run -e ci-dev mypy src scripts && pixi run -e ci-dev python scripts/governance/validate_okf.py && pixi run -e ci-dev python -m taxon_vision.pipelines.audit_license`
 
 <!-- JULES-SPECIFIC: session routing and token guardrail instructions. -->
 

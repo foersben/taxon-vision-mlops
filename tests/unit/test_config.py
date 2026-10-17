@@ -28,6 +28,9 @@ def test_default_settings_loading(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.conformal.k_max == 3
     assert settings.conformal.nominal_coverage == 0.95
     assert settings.conformal.min_confidence_threshold == 0.60
+    assert settings.conformal.min_confidence == 0.60
+    assert settings.conformal.ood_tpr == 0.95
+    assert settings.evaluation.latency_sla_ms == 25.0
     assert settings.ood.energy_threshold == -2.40
     assert settings.ood.entropy_threshold == 1.60
     assert settings.training.epochs == 5

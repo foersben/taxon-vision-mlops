@@ -8,17 +8,21 @@ import contextlib
 import logging
 import os
 import sqlite3
+import warnings
 from pathlib import Path
 from typing import Any
 
 import mlflow
 import optuna
+from optuna.exceptions import ExperimentalWarning
 from torch import nn, optim
 
 from taxon_vision.config import get_settings
 from taxon_vision.models.loss import ClassBalancedLoss
 from taxon_vision.models.training.embeddings import train_head_on_cached_embeddings
 from taxon_vision.models.training.types import EmbeddingSplit, HeadTrainingConfig, TuningConfig
+
+warnings.filterwarnings("ignore", category=ExperimentalWarning)
 
 logger = logging.getLogger(__name__)
 
@@ -240,6 +244,59 @@ def _setup_mlflow(cfg: TuningConfig) -> bool:
         return False
 
 
+def _apply_git_lineage_tags() -> None:
+    """Resolve and attach Git commit and branch tags to active MLflow run."""
+    try:
+        import os
+        import subprocess
+
+        git_sha = os.environ.get("GIT_COMMIT")
+        if not git_sha:
+            git_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+        git_branch = os.environ.get("GIT_BRANCH")
+        if not git_branch:
+            git_branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
+        mlflow.set_tag("git.commit_sha", git_sha)
+        mlflow.set_tag("git.branch", git_branch)
+    except Exception:
+        pass
+
+
+def _log_optuna_diagnostic_plots(study: optuna.Study | None) -> None:
+    """Render and log Optuna optimization history and parameter importance plots.
+
+    Args:
+        study: Optuna study instance containing completed evaluation trials.
+    """
+    if study is None or len(study.trials) == 0:
+        return
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import optuna.visualization.matplotlib as optuna_plt
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            ax_hist = optuna_plt.plot_optimization_history(study)
+            mlflow.log_figure(ax_hist.figure, "visualizations/optuna_optimization_history.png")
+            plt.close()
+        except Exception as err:
+            logger.debug("Failed to log Optuna optimization history plot: %s", err)
+
+        try:
+            completed_values = [
+                t.value for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE and t.value is not None
+            ]
+            if len(set(completed_values)) > 1:
+                ax_imp = optuna_plt.plot_param_importances(study)
+                mlflow.log_figure(ax_imp.figure, "visualizations/optuna_param_importances.png")
+                plt.close()
+        except Exception as err:
+            logger.debug("Failed to log Optuna parameter importance plot: %s", err)
+
+
 def _log_best_run(
     best_params: dict[str, Any],
     best_value: float,
@@ -269,37 +326,8 @@ def _log_best_run(
             if dvc_hash:
                 mlflow.log_param("dvc_dataset_hash", dvc_hash)
 
-            try:
-                import subprocess
-
-                git_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-                git_branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
-                mlflow.set_tag("git.commit_sha", git_sha)
-                mlflow.set_tag("git.branch", git_branch)
-            except Exception:
-                pass
-
-            if study is not None and len(study.trials) > 0:
-                import matplotlib
-
-                matplotlib.use("Agg")
-                import matplotlib.pyplot as plt
-                import optuna.visualization.matplotlib as optuna_plt
-
-                try:
-                    ax_hist = optuna_plt.plot_optimization_history(study)
-                    mlflow.log_figure(ax_hist.figure, "visualizations/optuna_optimization_history.png")
-                    plt.close()
-                except Exception as err:
-                    logger.debug("Failed to log Optuna optimization history plot: %s", err)
-
-                try:
-                    if len(study.trials) > 1:
-                        ax_imp = optuna_plt.plot_param_importances(study)
-                        mlflow.log_figure(ax_imp.figure, "visualizations/optuna_param_importances.png")
-                        plt.close()
-                except Exception as err:
-                    logger.debug("Failed to log Optuna parameter importance plot: %s", err)
+            _apply_git_lineage_tags()
+            _log_optuna_diagnostic_plots(study)
     except Exception as err:
         logger.debug("Failed to log best run to MLflow: %s", err)
 
@@ -382,13 +410,19 @@ def tune_hyperparameters(
 
     storage_uri = _resolve_optuna_storage(cfg.storage_url or settings.optuna.optuna_storage_uri)
     study_prefix = settings.optuna.optuna_study_prefix
+    study_name = cfg.study_name or f"{study_prefix}_{cfg.extractor_name}"
+
+    if cfg.reset_study and storage_uri:
+        with contextlib.suppress(Exception):
+            optuna.delete_study(study_name=study_name, storage=storage_uri)
+            logger.info("Deleted prior Optuna study '%s' to reset Bayesian history.", study_name)
 
     sampler = optuna.samplers.TPESampler(seed=cfg.seed)
     pruner = optuna.pruners.SuccessiveHalvingPruner(min_resource=2, reduction_factor=2)
     study = optuna.create_study(
-        study_name=f"{study_prefix}_{cfg.extractor_name}",
+        study_name=study_name,
         storage=storage_uri,
-        load_if_exists=True,  # Warm-starts from prior runs!
+        load_if_exists=not cfg.reset_study,
         direction="maximize",
         sampler=sampler,
         pruner=pruner,

@@ -97,5 +97,5 @@ class LicenseFilter:
             photographer_name=photographer,
             license_code=OpenLicense(license_str),
             license_url=str(raw.get("license_url", "https://creativecommons.org/licenses/")),
-            observation_uuid=str(raw.get("observation_id", "")),
+            observation_uuid=str(raw.get("observation_id") or raw.get("observation_uuid") or ""),
         )

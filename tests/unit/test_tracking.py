@@ -13,12 +13,18 @@ import numpy as np
 import pytest
 import torch
 import torch.nn as nn
+from mlflow.models import ModelSignature
+from mlflow.types.schema import Schema, TensorSpec
 
 from taxon_vision.models.training.tracking import (
+    MLflowTracker,
     _attach_mlflow_artifact_safely,
+    _determine_promotion_alias,
     _end_mlflow_run_safely,
     _get_dvc_dataset_hash,
     _log_mlflow_metrics,
+    _plot_confusion_matrix,
+    _prepare_model_signature_and_example,
     _promote_model_if_better,
     log_training_visualizations,
     mlflow_run_scope,
@@ -328,3 +334,166 @@ def test_log_training_visualizations(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "visualizations/confusion_matrix.png" in artifact_paths
     assert "visualizations/precision_recall_curves.png" in artifact_paths
     assert "visualizations/energy_distribution.png" in artifact_paths
+
+
+def test_determine_promotion_alias_tie_break() -> None:
+    """Verify promotion tie-breaking logic favors replacement on equal or better metrics."""
+    mock_client = MagicMock()
+
+    # Scenario 1: Initial model when no production exists -> Production
+    mock_client.get_model_version_by_alias.side_effect = Exception("No alias")
+    alias = _determine_promotion_alias(mock_client, "taxon_vision_classifier", version="1", pr_auc=0.8500)
+    assert alias == "Production"
+
+    # Scenario 2: Production exists at 0.85. Candidate achieves 0.85 (exact tie) -> Challenger
+    prod_mv = MagicMock()
+    prod_mv.run_id = "run_1"
+    prod_run = MagicMock()
+    prod_run.data.metrics = {"val_promotion_score": 0.8500}
+
+    mock_client.get_model_version_by_alias.side_effect = None
+    mock_client.get_model_version_by_alias.return_value = prod_mv
+    mock_client.get_run.return_value = prod_run
+
+    alias = _determine_promotion_alias(mock_client, "taxon_vision_classifier", version="2", pr_auc=0.8500)
+    assert alias == "Challenger"
+
+    # Scenario 3: Candidate below production (0.75 < 0.85) -> Archived
+    alias = _determine_promotion_alias(mock_client, "taxon_vision_classifier", version="3", pr_auc=0.7500)
+    assert alias == "Archived"
+
+
+def test_prepare_model_signature_and_example_cpu_isolation() -> None:
+    """Verify model is isolated on CPU and input example is NumPy array to prevent PT2 CUDA errors."""
+    model = nn.Sequential(nn.Linear(16, 4))
+    val_embeddings = torch.randn(20, 16)
+
+    signature, example = _prepare_model_signature_and_example(model, val_embeddings)
+
+    # Example must be numpy array with at most 5 rows
+    assert isinstance(example, np.ndarray)
+    assert example.shape == (5, 16)
+    assert signature is not None
+
+
+def test_plot_confusion_matrix_explicit_labels() -> None:
+    """Verify _plot_confusion_matrix builds K x K matrix even when validation split has single label."""
+    y_true = np.zeros(10, dtype=int)
+    y_pred = np.zeros(10, dtype=int)
+    class_names = ["Species 0", "Species 1", "Species 2"]
+
+    fig = _plot_confusion_matrix(y_true, y_pred, class_names)
+    assert fig is not None
+
+
+def test_build_embedding_and_onnx_signatures() -> None:
+    """Verify MLflowTracker signature builders create valid ModelSignature instances with TensorSpecs."""
+    emb_sig = MLflowTracker.build_embedding_signature(input_dim=512, num_classes=15)
+    assert isinstance(emb_sig, ModelSignature)
+    assert isinstance(emb_sig.inputs, Schema)
+    assert isinstance(emb_sig.outputs, Schema)
+    assert len(emb_sig.inputs.inputs) == 1
+    assert emb_sig.inputs.inputs[0].name == "backbone_embeddings"
+    assert emb_sig.inputs.inputs[0].shape == (-1, 512)
+    assert emb_sig.inputs.inputs[0].type == np.dtype(np.float32)
+
+    assert len(emb_sig.outputs.inputs) == 1
+    assert emb_sig.outputs.inputs[0].name == "taxonomic_logits"
+    assert emb_sig.outputs.inputs[0].shape == (-1, 15)
+    assert emb_sig.outputs.inputs[0].type == np.dtype(np.float32)
+
+    onnx_sig = MLflowTracker.build_onnx_signature(num_classes=15, image_size=224)
+    assert isinstance(onnx_sig, ModelSignature)
+    assert isinstance(onnx_sig.inputs, Schema)
+    assert isinstance(onnx_sig.outputs, Schema)
+    assert len(onnx_sig.inputs.inputs) == 1
+    assert onnx_sig.inputs.inputs[0].name == "input_images"
+    assert onnx_sig.inputs.inputs[0].shape == (-1, 3, 224, 224)
+    assert onnx_sig.inputs.inputs[0].type == np.dtype(np.float32)
+
+    assert len(onnx_sig.outputs.inputs) == 1
+    assert onnx_sig.outputs.inputs[0].name == "taxonomic_logits"
+    assert onnx_sig.outputs.inputs[0].shape == (-1, 15)
+    assert onnx_sig.outputs.inputs[0].type == np.dtype(np.float32)
+
+
+def test_log_model_with_explicit_schema(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify MLflowTracker.log_model invokes mlflow.pytorch.log_model with explicit ModelSignature and input example."""
+    mock_log_model = MagicMock()
+    monkeypatch.setattr(mlflow.pytorch, "log_model", mock_log_model)
+
+    model = nn.Sequential(nn.Dropout(0.2), nn.Linear(64, 8))
+
+    MLflowTracker.log_model(model=model, model_name="taxon_vision_classifier")
+
+    mock_log_model.assert_called_once()
+    kwargs = mock_log_model.call_args.kwargs
+    sig = kwargs.get("signature")
+    assert sig is not None
+    assert isinstance(sig, ModelSignature)
+
+    # Validate input schema
+    assert len(sig.inputs.inputs) == 1
+    input_spec = sig.inputs.inputs[0]
+    assert isinstance(input_spec, TensorSpec)
+    assert input_spec.name == "backbone_embeddings"
+    assert input_spec.shape == (-1, 64)
+    assert input_spec.type == np.dtype(np.float32)
+
+    # Validate output schema
+    assert len(sig.outputs.inputs) == 1
+    output_spec = sig.outputs.inputs[0]
+    assert isinstance(output_spec, TensorSpec)
+    assert output_spec.name == "taxonomic_logits"
+    assert output_spec.shape == (-1, 8)
+    assert output_spec.type == np.dtype(np.float32)
+
+    # Validate input example
+    example = kwargs.get("input_example")
+    assert example is not None
+    assert isinstance(example, np.ndarray)
+    assert example.shape == (1, 64)
+    assert example.dtype == np.float32
+
+
+def test_log_onnx_model_signature(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify MLflowTracker.log_onnx_model constructs valid ONNX image tensor signature."""
+    import mlflow.onnx
+
+    mock_log_onnx = MagicMock()
+    monkeypatch.setattr(mlflow.onnx, "log_model", mock_log_onnx)
+
+    dummy_onnx = MagicMock()
+    MLflowTracker.log_onnx_model(
+        onnx_model=dummy_onnx,
+        artifact_path="model",
+        num_classes=12,
+        image_size=224,
+    )
+
+    mock_log_onnx.assert_called_once()
+    kwargs = mock_log_onnx.call_args.kwargs
+    sig = kwargs.get("signature")
+    assert sig is not None
+    assert isinstance(sig, ModelSignature)
+
+    # Validate input image TensorSpec
+    input_spec = sig.inputs.inputs[0]
+    assert isinstance(input_spec, TensorSpec)
+    assert input_spec.name == "input_images"
+    assert input_spec.shape == (-1, 3, 224, 224)
+    assert input_spec.type == np.dtype(np.float32)
+
+    # Validate output logits TensorSpec
+    output_spec = sig.outputs.inputs[0]
+    assert isinstance(output_spec, TensorSpec)
+    assert output_spec.name == "taxonomic_logits"
+    assert output_spec.shape == (-1, 12)
+    assert output_spec.type == np.dtype(np.float32)
+
+    # Validate input example
+    example = kwargs.get("input_example")
+    assert example is not None
+    assert isinstance(example, np.ndarray)
+    assert example.shape == (1, 3, 224, 224)
+    assert example.dtype == np.float32

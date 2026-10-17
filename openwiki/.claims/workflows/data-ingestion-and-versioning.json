@@ -28,7 +28,7 @@
     },
     {
       "id": "claim_22f83a8e1ab146c0942c3076c8f0a434",
-      "statement": "The data ingestion script `scripts/ingest_data.py` retrieves observation metadata across configured catalog taxa using `INatAPIClient`, filters records through `LicenseFilter`, and writes compliant observation UUIDs, taxon IDs, image URLs, photographer names, and license details to an Arrow Parquet manifest at `data/manifests/dataset_manifest.parquet` using Polars.",
+      "statement": "The data ingestion and audit pipeline retrieves observation metadata across configured catalog taxa using `INatAPIClient` to produce `data/manifests/raw_manifest.parquet`, filters records through `LicenseFilter`, and writes compliant observation records to `data/manifests/dataset_manifest.parquet` using Polars.",
       "evidence": [
         {
           "resource": "repo://dvc.yaml#L2-L13",
@@ -62,7 +62,7 @@
     },
     {
       "id": "claim_38f8102d84a14538a3eb6f078d267f32",
-      "statement": "In the feature extraction pipeline, `build_taxon_index_map` projects external iNaturalist taxon IDs into dense zero-indexed class indices, and `create_stratified_embedding_split` partitions representations into stratified train and validation splits while computing empirical per-class sample frequencies for Class-Balanced Loss weighting.",
+      "statement": "In the feature extraction pipeline, `build_taxon_index_map` projects external iNaturalist taxon IDs into dense zero-indexed class indices, and `create_stratified_embedding_split` partitions representations into four stratified splits (train, validation, calibration, test) saved as discrete PyTorch tensor files while computing empirical per-class sample frequencies for Class-Balanced Loss weighting.",
       "evidence": [
         {
           "resource": "repo://src/taxon_vision/pipelines/extract_features.py#L27-L59",
@@ -76,7 +76,7 @@
     },
     {
       "id": "claim_791bbad5364848e9af9d87659ffe9d6c",
-      "statement": "The DVC pipeline stage `ingestion` in `dvc.yaml` tracks ingestion scripts, client dependencies, and parameters from `config/params.yaml`, generating `data/manifests` whose MD5 hash recorded in `dvc.lock` is read by the training runner and logged to MLflow as `dvc_dataset_hash` for dataset-to-checkpoint lineage.",
+      "statement": "The DVC pipeline stages `ingest` and `audit_license` in `dvc.yaml` track ingestion and audit scripts, client dependencies, and parameters from root `params.yaml`, generating `data/manifests/raw_manifest.parquet` and `data/manifests/dataset_manifest.parquet` whose hashes recorded in `dvc.lock` are tracked for end-to-end dataset-to-checkpoint lineage.",
       "evidence": [
         {
           "resource": "repo://dvc.lock#L1-L30",

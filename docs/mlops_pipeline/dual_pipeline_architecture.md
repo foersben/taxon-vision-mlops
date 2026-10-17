@@ -61,6 +61,41 @@ The necessity for architectural decoupling stems directly from the fundamentally
 
 Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely because an upstream provider updated an exemplar image or revised a taxonomic name wastes substantial GPU compute. Decoupling these domains guarantees **failure isolation**: if a malformed DarwinCore archive introduces a schema violation, Pipeline 2 halts safely while Pipeline 1 continues serving classifications.
 
+### 1.1 Epistemic Data Partitioning and Conformal Holdouts
+
+In biological taxa classification under long-tailed observation distributions, proper data stratification is mathematically essential. The system structures observation datasets into an immutable four-way stratified partition $\mathcal{D} = \mathcal{D}_{\text{train}} \cup \mathcal{D}_{\text{val}} \cup \mathcal{D}_{\text{cal}} \cup \mathcal{D}_{\text{test}}$ with fixed ratios:
+
+* **$\mathcal{D}_{\text{train}}$ ($70\%$):** Parametric optimization of the classification head weights $\mathbf{W} \in \mathbb{R}^{K \times d}$ and bias $\mathbf{b} \in \mathbb{R}^K$ via Class-Balanced Loss.
+* **$\mathcal{D}_{\text{val}}$ ($10\%$):** Hyperparameter optimization via Optuna (TPE sampling of learning rate, weight decay, batch size, and Gaussian embedding jitter) and early stopping evaluation on Macro PR-AUC.
+* **$\mathcal{D}_{\text{cal}}$ ($10\%$):** Non-parametric Split Conformal Prediction calibration and Helmholtz Out-of-Distribution (OOD) energy threshold computation on the INT8 ONNX compiled graph. Crucially, $\mathcal{D}_{\text{cal}}$ must be strictly exchangeable with runtime query distributions yet completely unexposed to head weight gradient updates or hyperparameter selection, preventing optimistic calibration bias.
+* **$\mathcal{D}_{\text{test}}$ ($10\%$):** Independent verification of the statistical coverage guarantee $\mathbb{P}(y \in \hat{C}(x)) \ge 1 - \alpha$ during the automated Pareto benchmark stage.
+
+### 1.2 Mathematical Formulation of the Cardinality Guard
+
+Biological datasets sampled from sparse citizen-science records may occasionally yield subsets exhibiting degenerate class cardinality ($K < 2$). Under single-class observation scenarios, categorical cross-entropy and Class-Balanced loss equations collapse:
+
+$$\mathcal{L}_{\text{CB}}(p, y) = - \frac{1 - \beta}{1 - \beta^{n_y}} \log p_y$$
+
+When $K=1$, $p_y = 1.0$ unconditionally, yielding identically zero gradients $\nabla_{\mathbf{W}} \mathcal{L} = \mathbf{0}$ and inducing numerical instabilities in softmax normalisation layers. To guarantee operational determinism, the feature extraction and training runners enforce an explicit cardinality guard:
+
+$$K = |\text{Unique}(\mathbf{y})| \ge 2$$
+
+If this condition is violated during dataset ingestion or embedding caching, the pipeline halts with an explicit `UncertaintyCalibrationError` rather than proceeding to degenerate weight optimization.
+
+### 1.3 The 7-Stage Unified DVC Execution Graph
+
+While conceptually decoupled, the execution lineage of Pipeline 1 and Pipeline 2 is unified through an unbroken seven-stage DVC Directed Acyclic Graph (`dvc.yaml`):
+
+* `ingestion`: Parses DarwinCore archives and synthesizes streaming manifests.
+* `audit_license`: Validates permissive licensing (CC0, CC-BY, CC-BY-NC) and extracts attribution metadata.
+* `extract_features`: Streams images from S3 and projects them through frozen vision transformers (DINOv3/BioCLIP-2) into high-dimensional embeddings.
+* `train`: Optimizes the linear head with Class-Balanced Loss and Optuna Bayesian sweeps.
+* `export`: Compiles PyTorch weights into dynamic INT8 ONNX graphs with static calibration.
+* `calibrate`: Computes conformal quantile thresholds $\hat{q}_\alpha$ and Helmholtz energy boundaries $\tau_{\text{OOD}}$.
+* `eval`: Executes Pareto benchmarking, verifying marginal coverage and latency budgets.
+
+High-throughput intermediate embeddings (`data/embeddings/*.pt`) and local model checkpoints are persisted to the in-cluster SeaweedFS object store (`s3://taxon-dvc-cache/`), whilst final production release artifacts are mirrored to DagsHub S3 (`s3://dvc`).
+
 ---
 
 ## 2. Automated CI/CD Orchestration and Model Promotion
@@ -80,7 +115,7 @@ flowchart TD
         J2 --> J3["GPU Feature Extraction: extract_features.py"]
         J3 --> J4["Optuna Head Training & ONNX Export"]
         J4 --> J5["Conformal Coverage & PR-AUC Promotion"]
-        J5 --> J6["DVC Commit & Push to DagsHub S3"]
+        J5 --> J6["DVC Commit & Push to SeaweedFS & DagsHub"]
         J6 --> J7["Zero-Downtime Rollout Restart in k3s"]
     end
 
@@ -88,7 +123,7 @@ flowchart TD
 ```
 
 * **GitHub Actions Plane:** Operates cloud-based quality gates on pull requests and pushes to `develop` and `main`. It enforces static typing, unit testing with 80% coverage minimums, open-license compliance, OKF frontmatter validation, and cognitive complexity analysis via `complexipy`. When code merges to `main`, GitHub Actions automatically builds the production container, pulls latest DVC model checkpoints from DagsHub, and publishes multi-tagged images to GitHub Container Registry (`ghcr.io/foersben/taxon-vision-mlops:latest` and `:sha-...`).
-* **Jenkins Bare-Metal Plane:** Receives authenticated webhooks on `hive-mind`, dispatching ephemeral Kubernetes pods into `k3s`. On `main`, the GPU agent claims 1 of 4 NVIDIA time-slicing slots, extracts ViT embeddings from S3 image observations via `taxon_vision.pipelines.extract_features`, executes Optuna hyperparameter sweeps, evaluates Split Conformal Prediction coverage, commits checkpoints to DagsHub DVC, and issues zero-downtime rolling restarts to the live deployment.
+* **Jenkins Bare-Metal Plane:** Receives authenticated webhooks on `hive-mind`, dispatching ephemeral Kubernetes pods into `k3s`. On `main`, the GPU agent claims 1 of 4 NVIDIA time-slicing slots, extracts ViT embeddings from S3 image observations via `taxon_vision.pipelines.extract_features`, executes Optuna hyperparameter sweeps, evaluates Split Conformal Prediction coverage, commits checkpoints to DVC storage, and issues zero-downtime rolling restarts to the live deployment.
 
 ### Cryptographic Provenance Binding
 
@@ -100,13 +135,16 @@ mlflow.set_tag("git.commit", os.environ.get("GITHUB_SHA"))
 
 This guarantees absolute cryptographic lineage connecting source code, DVC data hashes, and compiled ONNX model weights.
 
-### The Conformal Safety Gate
+### The Conformal Safety Gate and Pareto Test Verification
 
-Before any candidate model enters the production registry, an automated evaluation verifies the candidate ONNX graph against a holdout calibration dataset $\mathcal{D}_{\text{cal}}$. The gate formally asserts that the empirical marginal coverage of the Split Conformal Prediction set satisfies the mathematical bound:
+Before any candidate model enters the production registry, an automated evaluation pipeline executes two sequential epistemic verification gates:
 
-$$\text{Coverage}_{\text{empirical}} = \frac{1}{n} \sum_{i=1}^{n} \mathbb{I}\left(y_i \in \hat{C}(x_i)\right) \ge 1 - \alpha$$
+* **Post-Quantization Calibration (`src/taxon_vision/pipelines/calibrate.py`):** Calibrates the exact non-conformity threshold $\hat{q}_\alpha$ and Helmholtz OOD energy threshold $\tau_{\text{OOD}}$ on the holdout calibration partition $\mathcal{D}_{\text{cal}}$ ($10\%$ split via `data/embeddings/cal_embeddings.pt`) using the exported INT8 ONNX model (`models/checkpoints/model_int8.onnx`), serializing parameters to `config/conformal_config.yaml`.
+* **Holdout Coverage Verification (`src/taxon_vision/pipelines/evaluate.py`):** Formally asserts that the empirical marginal coverage on the holdout test partition $\mathcal{D}_{\text{test}}$ ($10\%$ split via `data/embeddings/test_embeddings.pt`) mathematically satisfies the nominal guarantee:
 
-If empirical coverage falls below $1 - \alpha$ (e.g., $95\%$ when $\alpha = 0.05$), the assertion fails, terminating the runner and preventing the uncalibrated model from reaching production.
+$$\text{Coverage}_{\text{empirical}} = \frac{1}{n_{\text{test}}} \sum_{i=1}^{n_{\text{test}}} \mathbb{I}\left(y_i \in \hat{C}(x_i)\right) \ge 1 - \alpha$$
+
+If empirical test coverage falls below $1 - \alpha$ (e.g., $95\%$ when $\alpha = 0.05$), the assertion fails, terminating the runner and preventing the uncalibrated model from reaching production.
 
 ---
 

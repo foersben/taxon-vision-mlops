@@ -78,8 +78,7 @@ The lightweight Parquet manifests feed directly into the feature extraction pipe
 
 * **Contiguous Taxonomic Mapping:** [`build_taxon_index_map`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/pipelines/extract_features.py#L67) scans the manifest and constructs an integer mapping from sparse biological `taxon_id` keys to contiguous target indices $[0, K-1]$.
 * **Zero-Disk S3 Batch Streaming:** [`S3ImageStreamer`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/data/s3_streamer.py#L16) fetches raw image objects from `s3://inaturalist-open-data/` in batches. Images are transformed into standardized evaluation tensors ($224 \times 224$ bicubic resize, ImageNet normalization) via torchvision transforms without writing intermediate image files to local storage.
-* **Frozen Backbone Inference:** Batched tensors pass through the frozen foundation vision backbone (such as DINOv3 or BioCLIP-2), emitting $D$-dimensional feature vectors.
-* **Stratified Cache Serialization:** [`create_stratified_embedding_split`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/pipelines/extract_features.py#L169) performs stratified train/validation partitioning (defaulting to 80% train and 20% validation) while guaranteeing minimum exemplar representation across long-tail taxa. The split is serialized to `data/embeddings/cached_features.pt`, enabling millisecond-speed classification head training.
+* **Stratified 4-Way Cache Serialization:** [`create_stratified_embedding_split`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/pipelines/extract_features.py) performs stratified 4-way partitioning (70% train, 10% validation, 10% conformal calibration, 10% holdout test) while enforcing a strict multi-class cardinality gate (>= 2 classes) and guaranteeing minimum exemplar representation across long-tail taxa. The split is serialized into four discrete physical files (`train_embeddings.pt`, `val_embeddings.pt`, `cal_embeddings.pt`, `test_embeddings.pt`) under `data/embeddings/`, enabling millisecond-speed classification head training, zero-leakage Bayesian optimization, and rigorous statistical coverage calibration.
 
 ---
 
@@ -109,68 +108,196 @@ Data Version Control (DVC) and DagsHub establish the data management control pla
 
 DagsHub provisions a unified cloud control plane that mirrors the primary GitHub repository and hosts an S3-compatible content-addressable storage bucket:
 
-* **Remote Endpoint Configuration:** The repository connects to DagsHub via `.dvc/config` targeting `s3://dvc` at `https://dagshub.com/foersben/taxon-vision-mlops.s3`. Remote storage is hosted on DagsHub and AWS S3/MinIO.
+* **Remote Endpoint Configuration:** The repository connects to DagsHub via `.dvc/config` targeting `s3://dvc` at `https://dagshub.com/foersben/taxon-vision-mlops.s3` (`remote = origin`), complemented by the in-cluster SeaweedFS cache at `http://seaweedfs.taxon-vision.svc.cluster.local:8333/taxon-dvc-cache` (`remote = local-seaweedfs`). Storage is partitioned into high-throughput cluster-internal caching and offsite cloud archival.
 * **Zero-Egress Data Archival:** Binary Parquet manifests, exemplar crops, and quantized model artifacts are pushed directly to this remote endpoint (`dvc push`), preventing Git LFS size bottlenecks and repository bloat. Data artifacts are immutable and tracked via SHA256 hashes.
 * **Zero-Leak Secret Management via Secret Service:** Rather than persisting sensitive cloud tokens to disk in `.dvc/config.local` or unencrypted `.env` files, local developers query authentication tokens directly from KeePassXC using `secret-tool`. The `just dvc-push` and `just dvc-pull` recipes retrieve the token in-memory and inject it ephemerally as `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` for the duration of the child process only.
 * **Unified Management Plane:** Alongside DVC remote caching, DagsHub hosts the centralized MLflow Tracking Server and experiment dashboard, linking Git commit SHAs, DVC dataset versions, and training run metrics within a single interface.
 
 ### 4.2 Pipeline DAG Specification (`dvc.yaml` & `dvc.lock`)
 
-Rather than relying on isolated shell scripts, data processing workflows are structured as a formal Directed Acyclic Graph (DAG) declared in [dvc.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/dvc.yaml):
+Rather than relying on isolated shell scripts or fragmented workflows, TaxonVision coordinates its end-to-end training and calibration lifecycle as an unbroken, 7-stage Directed Acyclic Graph (DAG) declared in [dvc.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/dvc.yaml):
 
 ```yaml
 stages:
   ingestion:
-    cmd: pixi run --frozen -e dev python scripts/ingest_data.py
+    cmd: >-
+      pixi run -e dev python -m taxon_vision.pipelines.ingest
+      --out data/manifests/raw_manifest.parquet
     deps:
-      - scripts/ingest_data.py
+      - config/taxa_catalog.yaml
       - src/taxon_vision/data/inat_client.py
-      - src/taxon_vision/data/license_filter.py
+      - src/taxon_vision/pipelines/ingest.py
     params:
-      - config/params.yaml:
-        - ingestion.taxa_to_fetch
-        - ingestion.per_page
+      - ingestion.per_page
+      - ingestion.taxa_to_fetch
     outs:
-      - data/manifests
+      - data/manifests/raw_manifest.parquet
+
+  audit_license:
+    cmd: >-
+      pixi run -e dev python -m taxon_vision.pipelines.audit_license
+      --manifest data/manifests/raw_manifest.parquet
+      --out-manifest data/manifests/dataset_manifest.parquet
+      --out reports/license_audit.json
+    deps:
+      - data/manifests/raw_manifest.parquet
+      - src/taxon_vision/data/license_filter.py
+      - src/taxon_vision/pipelines/audit_license.py
+    outs:
+      - data/manifests/dataset_manifest.parquet
+    metrics:
+      - reports/license_audit.json:
+          cache: false
+
+  extract_features:
+    cmd: >-
+      pixi run -e dev python -m taxon_vision.pipelines.extract_features
+      --extractor ${model.extractor}
+      --image-size ${model.image_size}
+      --batch-size ${feature_extraction.batch_size}
+      --val-split ${feature_extraction.val_split}
+      --cal-split ${feature_extraction.cal_split}
+      --test-split ${feature_extraction.test_split}
+      --manifest data/manifests/dataset_manifest.parquet
+      --out-dir data/embeddings
+    deps:
+      - config/taxa_catalog.yaml
+      - data/manifests/dataset_manifest.parquet
+      - src/taxon_vision/models/factory.py
+      - src/taxon_vision/pipelines/extract_features.py
+    params:
+      - feature_extraction.batch_size
+      - feature_extraction.cal_split
+      - feature_extraction.test_split
+      - feature_extraction.val_split
+      - model.extractor
+      - model.image_size
+    outs:
+      - data/embeddings/train_embeddings.pt:
+          remote: local-seaweedfs
+          push: true
+      - data/embeddings/val_embeddings.pt:
+          remote: local-seaweedfs
+          push: true
+      - data/embeddings/cal_embeddings.pt:
+          remote: local-seaweedfs
+          push: true
+      - data/embeddings/test_embeddings.pt:
+          remote: local-seaweedfs
+          push: true
+
+  train:
+    cmd: >-
+      pixi run -e dev python -m taxon_vision.pipelines.train
+      --extractor ${model.extractor}
+      --epochs ${training.epochs}
+      --batch-size ${training.batch_size}
+      --lr ${training.learning_rate}
+      --train-embeddings data/embeddings/train_embeddings.pt
+      --val-embeddings data/embeddings/val_embeddings.pt
+      --checkpoint-path models/checkpoints/head.pt
+      --metrics-out reports/train_metrics.json
+    deps:
+      - data/embeddings/train_embeddings.pt
+      - data/embeddings/val_embeddings.pt
+      - src/taxon_vision/models/loss.py
+      - src/taxon_vision/models/training/
+      - src/taxon_vision/pipelines/train.py
+    params:
+      - model.extractor
+      - training.batch_size
+      - training.cb_beta
+      - training.epochs
+      - training.learning_rate
+      - training.tune
+      - training.weight_decay
+    outs:
+      - models/checkpoints/head.pt:
+          remote: origin
+    metrics:
+      - reports/train_metrics.json:
+          cache: false
+
+  export:
+    cmd: >-
+      pixi run -e dev python -m taxon_vision.pipelines.export_onnx
+      --extractor ${model.extractor}
+      --image-size ${model.image_size}
+      --checkpoint models/checkpoints/head.pt
+      --quantize-int8
+      --quantize-mode dynamic
+      --quantized-output models/checkpoints/model_int8.onnx
+      --allow-untrained
+    deps:
+      - models/checkpoints/head.pt
+      - src/taxon_vision/inference/onnx_exporter.py
+      - src/taxon_vision/inference/quantizer.py
+      - src/taxon_vision/pipelines/export_onnx.py
+    params:
+      - export.quantize_int8
+      - model.extractor
+      - model.image_size
+    outs:
+      - models/checkpoints/model_int8.onnx:
+          remote: origin
+
+  calibrate:
+    cmd: >-
+      pixi run -e dev python -m taxon_vision.pipelines.calibrate
+      --onnx-model models/checkpoints/model_int8.onnx
+      --embeddings data/embeddings/cal_embeddings.pt
+      --out config/conformal_config.yaml
+      --metrics-out reports/conformal_metrics.json
+      --alpha ${conformal.alpha}
+      --ood-tpr ${conformal.ood_tpr}
+    deps:
+      - data/embeddings/cal_embeddings.pt
+      - models/checkpoints/model_int8.onnx
+      - src/taxon_vision/pipelines/calibrate.py
+    params:
+      - conformal.alpha
+      - conformal.min_confidence
+      - conformal.ood_tpr
+    outs:
+      - config/conformal_config.yaml:
+          cache: false
+    metrics:
+      - reports/conformal_metrics.json:
+          cache: false
+
+  eval:
+    cmd: >-
+      pixi run -e dev python -m taxon_vision.pipelines.evaluate
+      --onnx-model models/checkpoints/model_int8.onnx
+      --embeddings data/embeddings/test_embeddings.pt
+      --conformal-config config/conformal_config.yaml
+      --out docs/assets/pareto_results.json
+      --metrics-out reports/pareto_evaluation.json
+      --latency-sla-ms ${evaluation.latency_sla_ms}
+    deps:
+      - config/conformal_config.yaml
+      - data/embeddings/test_embeddings.pt
+      - models/checkpoints/model_int8.onnx
+      - src/taxon_vision/pipelines/evaluate.py
+    params:
+      - conformal.alpha
+      - evaluation.latency_sla_ms
+    outs:
+      - docs/assets/pareto_results.json:
+          cache: false
+    metrics:
+      - reports/pareto_evaluation.json:
+          cache: false
 ```
 
-The pipeline topology enforces cryptographic lineage across three elements:
+### 4.3 Multi-Remote Routing & Lineage Guarantees
 
-* **Inputs and Dependencies (`deps`):** DVC DAG execution requires detailed dependency tracking for source scripts, configuration, and data artifacts. Source scripts and library modules responsible for observation retrieval and validation must be declared.
-* **Configuration Parameters (`params`):** Parameter subsets in `config/params.yaml` defining target taxon IDs and ingestion volume.
-* **Outputs (`outs`):** Destination directories containing generated dataset manifests (`data/manifests`), tracked by content hashes in [dvc.lock](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/dvc.lock).
+The unified pipeline topology establishes a strict dual-remote distribution strategy:
 
-### 4.3 Why DVC Tracks Code Dependencies
-
-A primary design principle of DVC is that it does not duplicate Git's responsibilities, but extends them to maintain mathematical data-to-code lineage:
-
-* **Separation of Responsibilities:**
-    * Git manages source code revision history, file diffs, branches, and author identity.
-    * DVC does not version or store source code copies. Instead, it computes and records cryptographic MD5 checksums over designated source files inside `dvc.lock`.
-* **Code-to-Data Lineage Guarantee:**
-    * A dataset manifest (`data/manifests/dataset_manifest.parquet`) is the deterministic mathematical output of the ingestion code executed against external API inputs.
-    * If the HTTP query logic in `inat_client.py` changes, or if the license acceptance rules in `license_filter.py` are altered, the downstream dataset is no longer valid for that pipeline state.
-    * Tracking code modules as stage dependencies guarantees that modifications to transformation logic immediately invalidate the cached stage output.
-
-### 4.4 Status Evaluation & Lifecycle Semantics
-
-When developers modify source files declared in the `deps` block, DVC detects hash discrepancies between the active filesystem and the recorded state in `dvc.lock`:
-
-```text
-ingestion:
-    changed deps:
-        modified: src/taxon_vision/data/inat_client.py
-        modified: src/taxon_vision/data/license_filter.py
-```
-
-This diagnostic indicates that the pipeline DAG has entered an unverified state:
-
-* **Stage Reproduction (`dvc repro`):**
-    * Re-executes the ingestion command, runs the updated client and filter logic, produces a fresh `data/manifests` directory, and writes updated dependency and output hashes into `dvc.lock`.
-    * Utilized when code changes intentionally modify data ingestion semantics or filtering rules.
-* **Checksum Synchronization (`dvc commit`):**
-    * Updates the MD5 checksums of the modified source files in `dvc.lock` without re-running the ingestion command or overwriting existing manifests.
-    * Utilized when source modifications are cosmetic or structural (such as type annotations, docstrings, or logging tweaks) that do not alter the underlying data output.
+* **Ephemeral High-Throughput Cache (`local-seaweedfs`):** Intermediate representations (`data/embeddings/*.pt`) are routed to the in-cluster S3 cache pod deployed in `namespace: taxon-vision` on the bare-metal `hive-mind` host (`http://seaweedfs.taxon-vision.svc.cluster.local:8333`), powered by SeaweedFS (Apache 2.0). SeaweedFS's Haystack/Needle architecture prevents disk-seek degradation and optimizes throughput for both large feature tensors and small observation crops for Pipeline 2 (100,000 exemplar crops). This ensures zero cloud egress costs, multi-gigabyte local NVMe throughput, and eliminates re-streaming images across Optuna HPO trials.
+* **Cryptographic Release Remote (`origin` DagsHub S3):** Serialized checkpoints (`models/checkpoints/head.pt`) and quantized runtime artifacts (`models/checkpoints/model_int8.onnx`) are pushed to DagsHub S3 for immutable version tracking and team distribution.
+* **Native DVC Metrics Integration:** Evaluation reports (`reports/train_metrics.json`, `reports/conformal_metrics.json`, `reports/pareto_evaluation.json`, `reports/license_audit.json`) are tagged as uncached DVC metrics, enabling direct comparison, visualization, and diffing in both CLI (`dvc metrics diff`) and web dashboards (DagsHub Magenta nodes).
+* **Code-to-Data Lineage Guarantee:** Tracking source code modules, scripts, and `params.yaml` directly in `deps` ensures that any modification to preprocessing, model architecture, or calibration logic immediately invalidates downstream stages upon running `dvc repro`.
 
 ---
 

@@ -283,6 +283,37 @@ just dvc-push
 * **CI/CD Pipelines:** GitHub Actions (`.github/workflows/ci.yml`) triggers on pushes or pull requests to `main` and `develop`. It runs automated quality gates (Ruff, MyPy, pytest coverage with an 80% threshold, license compliance, OKF frontmatter validation, and cognitive complexity via `complexipy`). Upon merging to `main`, GitHub Actions automatically builds and publishes the production container to GitHub Container Registry (`ghcr.io/foersben/taxon-vision-mlops:latest` and `:sha-...`), pulling model checkpoints from DagsHub DVC. All legacy manual deployment approvals and phantom environments have been removed.
 * **Data Versioning & Tracking:** We rely on DVC for dataset immutability and MLflow (hosted on DagsHub) for experiment tracking.
 
+## In-Cluster Storage Architecture: SeaweedFS Object Store
+
+Rather than relying on legacy MinIO or remote-only S3 endpoints, the cluster hosts **SeaweedFS** (`chrislusf/seaweedfs:latest`) in `namespace: taxon-vision`. SeaweedFS provides a high-throughput, S3-compatible object tier engineered under the **Apache 2.0** licence:
+
+* **Haystack/Needle Mechanics for Vision Workloads:** Traditional POSIX filesystems suffer severe I/O degradation (*"disk-seek death"*) when handling hundreds of thousands of small files (such as the 100,000 exemplar observation crops in Pipeline 2, $\approx 45\text{ KiB}$ each). SeaweedFS solves this by sequentially packing needles into contiguous 32 GB volume files (`.dat`) and maintaining an in-memory offset index (`.idx`), reducing random disk read complexity to $O(1)$ and sustaining sub-2ms latency on NVMe.
+* **Consolidated Cluster Deployment:** Deployed via [`deploy/k8s/mlops-storage-and-optuna.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/mlops-storage-and-optuna.yaml), SeaweedFS runs in `server` mode (`weed server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -s3.allowEmptyFolder=true -volume.max=20`), unifying:
+    * **Master Service** (port `9333`): coordinates volume allocation and topology.
+    * **Volume Server** (port `8080`): writes and reads sequential needles.
+    * **Filer Engine** (port `8888`): provides POSIX directory hierarchy and HTTP web browsing.
+    * **S3 Gateway** (port `8333`): provides full AWS S3 SigV4 compatibility.
+* **Declarative S3 Credentials (`seaweedfs-s3-config`):** Authenticated access is governed by an in-cluster `ConfigMap` providing `/etc/seaweedfs/s3.json` with user `taxonadmin` possessing `Admin`, `Read`, `Write`, `List`, and `Tagging` capabilities.
+* **Zero-Sidecar Dynamic Bucket Provisioning:** Unlike MinIO, which required an auxiliary `mc` container running an endless loop to create buckets, SeaweedFS dynamically auto-creates bucket directories under the Filer catalog (`/buckets/<bucket_name>`) upon receiving standard S3 `CreateBucket` API requests or pre-creates them via container lifecycle hooks:
+
+    ```bash
+    wget -q -O - --post-data="" "http://127.0.0.1:8888/buckets/taxon-dvc-cache/?op=mkdir"
+    wget -q -O - --post-data="" "http://127.0.0.1:8888/buckets/triage-queue/?op=mkdir"
+    ```
+
+* **Persistent Host Tier & NOCOW Subvolumes:** SeaweedFS persists data to `/var/lib/taxon-vision/seaweedfs` on the host NVMe drive, mounted onto a dedicated BTRFS subvolume configured with the `NOCOW` (`chattr +C`) attribute to eliminate filesystem block fragmentation.
+
+---
+
+## Persistent Bayesian Telemetry Plane: Optuna & SQLite WAL
+
+To optimize hyperparameters across candidate vision backbones without volatile state loss, the cluster hosts a dedicated Optuna telemetry plane:
+
+* **ACID-Compliant SQLite in WAL Mode:** Hyperparameter trials executed by `taxon_vision.models.training.runner` persist their search histories directly into an SQLite database (`/workspace/optuna/optuna_studies.db`) configured with Write-Ahead Logging (`WAL`). WAL mode permits concurrent, non-blocking reads by the web dashboard while background GPU workers write trial losses and PR-AUC scores.
+* **Cluster Optuna Dashboard:** Deployed alongside SeaweedFS in [`deploy/k8s/mlops-storage-and-optuna.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/mlops-storage-and-optuna.yaml) (`ghcr.io/optuna/optuna-dashboard:latest`), the dashboard mounts `/workspace/optuna` from host path `/var/lib/taxon-vision/optuna` and exposes port `8080` cluster-wide via NodePort `30081`. Operators can monitor Bayesian convergence, ASHA trial pruning, and parameter importance plots in real time.
+
+---
+
 ## Production CI/CD Architecture: GitHub Actions + Jenkins Hybrid
 
 The system implements a production two-layer CI/CD architecture:
@@ -290,26 +321,19 @@ The system implements a production two-layer CI/CD architecture:
 * **Layer 1 - GitHub Actions (quality gates & container publishing):** Lint, type checks, unit tests (CPU), license audit, OKF validation, conformal audit, cognitive complexity scans (`complexipy`), and automated Docker container builds pushing to GHCR on `main`.
 * **Layer 2 - Jenkins (bare-metal compute & continuous delivery):** A self-hosted Jenkins controller on `hive-mind` receives webhooks through a zero-open-ports Cloudflare Tunnel. Jenkins dispatches ephemeral agent pods inside `k3s` via the `jenkins-agent` ServiceAccount across isolated pipeline stages:
     * `Prepare Toolchain` - Provisions standalone `git` and `kubernetes-client` via Pixi, mounting the host NVMe Rattler cache for sub-second dependency resolution.
-    * `Static Quality & Invariants` - Executes Ruff linting, MyPy type checks, license compliance auditing, and OKF graph validation concurrently.
-    * `Unit Tests` - Runs pytest unit test suite against `src/taxon_vision`.
-    * `Integration & Conformal Invariants` - Verifies integration endpoints and asserts split conformal prediction empirical coverage bounds ($1 - \alpha \ge 0.95$).
+    * `Static Quality & Invariants` - Executes Ruff linting, MyPy strict type checks across 61 files, license compliance auditing, and OKF graph validation concurrently.
+    * `Unit Tests` - Runs the comprehensive pytest unit test suite against `tests/unit/`.
+    * `Integration & Conformal Invariants` - Verifies integration endpoints and asserts split conformal prediction empirical coverage bounds ($1 - \alpha \ge 0.90$).
     * `Documentation Strict Build` - Validates OKF knowledge graph and verifies documentation integrity via `zensical build --strict`.
-    * `Model Training & Checkpoint (GPU)` - Runs on `main` within a dedicated GPU agent pod requesting `nvidia.com/gpu: 1` on `hive-mind`. Pulls DVC manifests, streams real image observations from AWS S3 via `taxon_vision.pipelines.extract_features` into `cached_features.pt`, trains the head via Optuna sweeps, exports the ONNX graph, and pushes updated checkpoints to DagsHub DVC.
-    * `Deploy to Kubernetes` - Automatically applies [deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) (`imagePullPolicy: Always`) and monitors zero-downtime rolling update status in the `taxon-vision` namespace.
-
-## Outstanding Implementation Tasks
-
-* **Large-Scale Data Scaling:** Scaling the DarwinCore ingestion pipeline from pilot observation partitions (518 exemplars) to regional and global horizons (50,000+ observations).
-* **Multi-Backbone Pareto Benchmarking:** Implementation of empirical Pareto sweeps comparing DINOv3 against BioCLIP-2, DINOv2, and MobileNetV4.
-* **Static INT8 ONNX Quantization:** Calibration of static INT8 ONNX Post-Training Quantization (PTQ) for ultra-low latency serving.
-* **Unscheduled Drift and Active Learning Integration:** Automating scheduled DAG triggers for Evidently feature drift detection and BADGE active learning acquisition loops.
+    * `Model Training & Checkpoint (GPU)` - Runs on `develop` or `main` within a dedicated GPU agent pod requesting `nvidia.com/gpu: 1` on `hive-mind`. Pulls DVC manifests, streams real image observations from AWS S3 via `extract_features.py` into 4 stratified embedding splits on SeaweedFS, trains the head via Optuna sweeps, exports the ONNX graph, and pushes updated release checkpoints to DagsHub DVC.
+    * `Deploy to Kubernetes` - Automatically injects SeaweedFS credentials, hydrates models (with fallback to host-volume checkpoints), applies [`deploy/k8s/api-deployment.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) (`imagePullPolicy: Always`), executes a zero-downtime rolling restart, and runs the automated verification smoke test ([`scripts/ci/verify_deployment.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/ci/verify_deployment.sh)).
 
 ## Local Development Stack
 
-For local development and debugging, a `docker-compose.local.yaml` is provided at the
-repository root. It spins up the infrastructure components that cannot run inside Pixi:
+For local development and debugging, a `docker-compose.local.yaml` is provided in
+`deploy/compose/docker-compose.local.yaml`. It spins up the infrastructure components that cannot run inside Pixi:
 
-* **MinIO** (ports `9000` / `9001`) - S3-compatible local object store for DVC remotes
+* **SeaweedFS** (ports `8333` / `9333` / `8888`) - S3-compatible local object store for DVC remotes
   and S3 streamer development without hitting real AWS.
 * **Prometheus** (port `9090`) - scrapes the local FastAPI `/metrics` endpoint at
   `host.docker.internal:8000`. Configuration lives in `config/prometheus.yaml`.
@@ -319,7 +343,7 @@ repository root. It spins up the infrastructure components that cannot run insid
 Start the stack with:
 
 ```bash
-docker compose -f docker-compose.local.yaml up -d
+docker compose -f deploy/compose/docker-compose.local.yaml up -d
 ```
 
 The MLflow local tracking server is managed via Pixi (not Docker) to keep it inside the

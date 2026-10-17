@@ -1,40 +1,178 @@
 stages:
   ingestion:
-    cmd: pixi run --frozen -e dev python scripts/ingest_data.py
+    cmd: >-
+      pixi run -e dev python -m taxon_vision.pipelines.ingest
+      --out data/manifests/raw_manifest.parquet
     deps:
-      - scripts/ingest_data.py
+      - config/taxa_catalog.yaml
       - src/taxon_vision/data/inat_client.py
+      - src/taxon_vision/pipelines/ingest.py
+    params:
+      - ingestion.per_page
+      - ingestion.taxa_to_fetch
+    outs:
+      - data/manifests/raw_manifest.parquet
+
+  audit_license:
+    cmd: >-
+      pixi run -e dev python -m taxon_vision.pipelines.audit_license
+      --manifest data/manifests/raw_manifest.parquet
+      --out-manifest data/manifests/dataset_manifest.parquet
+      --out reports/license_audit.json
+    deps:
+      - data/manifests/raw_manifest.parquet
       - src/taxon_vision/data/license_filter.py
-    params:
-      - config/params.yaml:
-        - ingestion.taxa_to_fetch
-        - ingestion.per_page
+      - src/taxon_vision/domain/license.py
+      - src/taxon_vision/pipelines/audit_license.py
     outs:
-      - data/manifests
+      - data/manifests/dataset_manifest.parquet
+    metrics:
+      - reports/license_audit.json:
+          cache: false
+
   extract_features:
-    cmd: pixi run --frozen -e dev python -m taxon_vision.pipelines.extract_features --extractor dinov3 --manifest data/manifests/dataset_manifest.parquet --out data/embeddings/cached_features.pt
+    cmd: >-
+      pixi run -e dev python -m taxon_vision.pipelines.extract_features
+      --extractor ${model.extractor}
+      --image-size ${model.image_size}
+      --batch-size ${feature_extraction.batch_size}
+      --val-split ${feature_extraction.val_split}
+      --cal-split ${feature_extraction.cal_split}
+      --test-split ${feature_extraction.test_split}
+      --manifest data/manifests/dataset_manifest.parquet
+      --out-dir data/embeddings
     deps:
-      - data/manifests
+      - config/taxa_catalog.yaml
+      - data/manifests/dataset_manifest.parquet
+      - src/taxon_vision/data/s3_streamer.py
+      - src/taxon_vision/models/factory.py
       - src/taxon_vision/pipelines/extract_features.py
-    outs:
-      - data/embeddings/cached_features.pt:
-          remote: local-minio
-          push: false
-  train:
-    cmd: pixi run --frozen -e dev python -m taxon_vision.models.trainer --epochs 5 --extractor dinov3
-    deps:
-      - data/manifests
-      - src/taxon_vision/models/
     params:
-      - config/params.yaml:
-        - training.epochs
-        - training.extractor
+      - feature_extraction.batch_size
+      - feature_extraction.cal_split
+      - feature_extraction.test_split
+      - feature_extraction.val_split
+      - model.extractor
+      - model.image_size
     outs:
-      - models/checkpoints/head.pt
-  export_onnx:
-    cmd: pixi run --frozen -e dev python -m taxon_vision.inference.onnx_exporter
+      - data/embeddings/train_embeddings.pt:
+          remote: local-seaweedfs
+          push: true
+      - data/embeddings/val_embeddings.pt:
+          remote: local-seaweedfs
+          push: true
+      - data/embeddings/cal_embeddings.pt:
+          remote: local-seaweedfs
+          push: true
+      - data/embeddings/test_embeddings.pt:
+          remote: local-seaweedfs
+          push: true
+
+  train:
+    cmd: >-
+      pixi run -e dev python -m taxon_vision.pipelines.train
+      --extractor ${model.extractor}
+      --epochs ${training.epochs}
+      --batch-size ${training.batch_size}
+      --lr ${training.learning_rate}
+      --train-embeddings data/embeddings/train_embeddings.pt
+      --val-embeddings data/embeddings/val_embeddings.pt
+      --checkpoint-path models/checkpoints/head.pt
+      --metrics-out reports/train_metrics.json
+    deps:
+      - data/embeddings/train_embeddings.pt
+      - data/embeddings/val_embeddings.pt
+      - src/taxon_vision/models/loss.py
+      - src/taxon_vision/models/training/
+      - src/taxon_vision/pipelines/train.py
+    params:
+      - model.extractor
+      - training.batch_size
+      - training.cb_beta
+      - training.epochs
+      - training.learning_rate
+      - training.tune
+      - training.weight_decay
+    outs:
+      - models/checkpoints/head.pt:
+          remote: origin
+    metrics:
+      - reports/train_metrics.json:
+          cache: false
+
+  export:
+    cmd: >-
+      pixi run -e dev python -m taxon_vision.pipelines.export_onnx
+      --extractor ${model.extractor}
+      --image-size ${model.image_size}
+      --checkpoint models/checkpoints/head.pt
+      --quantize-int8
+      --quantize-mode dynamic
+      --quantized-output models/checkpoints/model_int8.onnx
+      --allow-untrained
     deps:
       - models/checkpoints/head.pt
       - src/taxon_vision/inference/onnx_exporter.py
+      - src/taxon_vision/inference/quantizer.py
+      - src/taxon_vision/pipelines/export_onnx.py
+    params:
+      - export.quantize_int8
+      - model.extractor
+      - model.image_size
     outs:
-      - models/checkpoints/model.onnx
+      - models/checkpoints/model_int8.onnx:
+          remote: origin
+
+  calibrate:
+    cmd: >-
+      pixi run -e dev python -m taxon_vision.pipelines.calibrate
+      --onnx-model models/checkpoints/model_int8.onnx
+      --embeddings data/embeddings/cal_embeddings.pt
+      --out config/conformal_config.yaml
+      --metrics-out reports/conformal_metrics.json
+      --alpha ${conformal.alpha}
+      --ood-tpr ${conformal.ood_tpr}
+    deps:
+      - data/embeddings/cal_embeddings.pt
+      - models/checkpoints/model_int8.onnx
+      - src/taxon_vision/inference/onnx_engine.py
+      - src/taxon_vision/pipelines/calibrate.py
+      - src/taxon_vision/uncertainty/conformal.py
+      - src/taxon_vision/uncertainty/ood_detector.py
+    params:
+      - conformal.alpha
+      - conformal.min_confidence
+      - conformal.ood_tpr
+    outs:
+      - config/conformal_config.yaml:
+          cache: false
+    metrics:
+      - reports/conformal_metrics.json:
+          cache: false
+
+  eval:
+    cmd: >-
+      pixi run -e dev python -m taxon_vision.pipelines.evaluate
+      --onnx-model models/checkpoints/model_int8.onnx
+      --embeddings data/embeddings/test_embeddings.pt
+      --conformal-config config/conformal_config.yaml
+      --out docs/assets/pareto_results.json
+      --metrics-out reports/pareto_evaluation.json
+      --latency-sla-ms ${evaluation.latency_sla_ms}
+    deps:
+      - config/conformal_config.yaml
+      - data/embeddings/test_embeddings.pt
+      - models/checkpoints/model_int8.onnx
+      - src/taxon_vision/inference/onnx_engine.py
+      - src/taxon_vision/pipelines/evaluate.py
+      - src/taxon_vision/uncertainty/conformal.py
+      - src/taxon_vision/uncertainty/ood_detector.py
+    params:
+      - conformal.alpha
+      - evaluation.latency_sla_ms
+    outs:
+      - docs/assets/pareto_results.json:
+          cache: false
+    metrics:
+      - reports/pareto_evaluation.json:
+          cache: false

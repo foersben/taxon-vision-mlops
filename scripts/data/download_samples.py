@@ -4,8 +4,8 @@
 """Download verified open-license sample images for taxa in config/taxa_catalog.yaml.
 
 Usage:
-    pixi run -e dev python scripts/download_samples.py
-    pixi run -e dev python scripts/download_samples.py --per-taxon 2
+    pixi run -e dev python scripts/data/download_samples.py
+    pixi run -e dev python scripts/data/download_samples.py --per-taxon 2
 """
 
 from __future__ import annotations

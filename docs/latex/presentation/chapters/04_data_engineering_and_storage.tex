@@ -23,7 +23,7 @@
         \begin{itemize}\small
             \item \textbf{The Storage Bottleneck:} Storing multi-terabyte citizen-science imagery locally quickly exhausts developer workstation NVMe storage.
             \item \textbf{Zero-Copy S3 Streaming:} Direct chunked streaming from AWS Open Data / iNaturalist S3 mirrors.
-            \item \textbf{Columnar Parquet Manifests:} Lightweight \texttt{observations.parquet} indexes millions of records with sub-millisecond predicate filtering.
+            \item \textbf{Columnar Parquet Manifests:} Lightweight \texttt{dataset\_manifest.parquet} (filtered from \texttt{raw\_manifest.parquet}) indexes millions of records with sub-millisecond predicate filtering.
             \item \textbf{Architectural Decoupling:} Complete separation between immutable remote pixel assets and local structured metadata.
         \end{itemize}
     \end{block}
@@ -108,7 +108,7 @@
             ]
 
                 % Nodes
-                \node[block] (disk) {observations.parquet\\(On Disk)};
+                \node[block] (disk) {dataset\_manifest.parquet\\(On Disk)};
                 \node[block, below=of disk] (arrow_c) {Arrow C Data Interface\\(Zero-Copy)};
                 \node[block, draw=TaxonSecondary, fill=TaxonSecondary!10, below=of arrow_c] (duckdb) {DuckDB Vectorized Pipeline\\(In-Process)};
                 \node[block, draw=TaxonAccent, fill=TaxonAccent!10, below=of duckdb] (results) {Sub-millisecond SQL Results};
@@ -137,8 +137,8 @@
         \begin{column}{0.48\textwidth}
             \begin{block}{Zero-RAM Bloat Feature Loading}
                 \begin{itemize}\small
-                    \item \textbf{Exact 1:1 Invariant:} Row $i$ in \texttt{observations.parquet} maps deterministically to vector $i$ in disk-backed \texttt{embeddings.npy}.
-                    \item \textbf{Memory-Mapped Slicing:} PyTorch dataloaders slice multi-gigabyte embedding arrays on-demand via \texttt{np.memmap} without RAM saturation.
+                    \item \textbf{Exact 1:1 Invariant:} Row $i$ in \texttt{dataset\_manifest.parquet} maps deterministically to vector $i$ in disk-backed split tensors (\texttt{train\_embeddings.pt}, etc.).
+                    \item \textbf{Memory-Mapped Slicing:} PyTorch dataloaders slice multi-gigabyte embedding arrays on-demand via zero-copy tensor buffers without RAM saturation.
                 \end{itemize}
             \end{block}
         \end{column}
@@ -155,16 +155,16 @@
                 label_text/.style={font=\small\sffamily\bfseries, color=TaxonDark}
             ]
 
-                % Left Node: observations.parquet
+                % Left Node: dataset_manifest.parquet
                 \node[table_node] (parquet) {
-                    \textbf{observations.parquet}\\
-                    \scriptsize \texttt{row\_id, hash, taxon\_id, url}
+                    \textbf{dataset\_manifest.parquet}\\
+                    \scriptsize \texttt{uuid, hash, taxon\_id, url}
                 };
 
-                % Right Node: embeddings.npy
+                % Right Node: Split Embeddings (.pt)
                 \node[array_node, right=3cm of parquet] (memmap) {
-                    \textbf{embeddings.npy}\\
-                    \scriptsize $z \in \mathbb{R}^{768}$ (np.memmap)
+                    \textbf{Split Tensors (.pt)}\\
+                    \scriptsize $z \in \mathbb{R}^{768}$ (PyTorch / CUDA)
                 };
 
                 % Draw rows
@@ -188,14 +188,14 @@
 
     \statusdone
 
-    \script{Once features are extracted, how do we load them without eating 30 gigabytes of RAM? We enforce an exact 1:1 row alignment between our Parquet manifest and a disk-backed NumPy memmap file. Row 500 in Parquet corresponds precisely to vector 500 in embeddings.npy. PyTorch dataloaders can slice any batch directly from NVMe storage with zero RAM allocation overhead.}
-    \qa{What happens if an observation is deleted or filtered out?}{The entire split is re-indexed deterministically during feature extraction, guaranteeing that Parquet rows and memmap indices never fall out of synchronization.}
+    \script{Once features are extracted, how do we load them without eating 30 gigabytes of RAM? We enforce an exact 1:1 row alignment between our Parquet manifest and our stratified embedding tensors. Row 500 corresponds precisely to vector 500 in the split embedding tensor. PyTorch dataloaders can slice any batch directly from NVMe storage with zero RAM allocation overhead.}
+    \qa{What happens if an observation is deleted or filtered out?}{The entire split is re-indexed deterministically during feature extraction, guaranteeing that Parquet rows and tensor indices never fall out of synchronization.}
 \end{frame}
 
 \begin{frame}{Feature Engineering}{Persistent Feature Caching: Mechanics \& Speedup}
     \begin{block}{Visual Data Flow}
         \centering\vspace{0.2cm}
-        Raw S3 Image $\to$ Frozen Backbone Forward Pass $\to$ \texttt{embeddings.npy} (\texttt{np.memmap}) $\leftrightarrow$ \texttt{observations.parquet}
+        Raw S3 Image $\to$ Frozen Backbone Forward Pass $\to$ \texttt{data/embeddings/*.pt} $\leftrightarrow$ \texttt{dataset\_manifest.parquet}
         \vspace{0.2cm}
     \end{block}
 
@@ -243,7 +243,7 @@
 \begin{frame}{Storage Engineering}{Object Storage Topology: MinIO vs. DagsHub vs. AWS S3}
     \begin{block}{Three-Tier Object Storage Breakdown}
         \begin{itemize}\small
-            \item \textbf{Tier 1: MinIO Local Offline Mock (\texttt{docker-compose.local.yaml}):}
+            \item \textbf{Tier 1: MinIO Local Offline Mock (\texttt{deploy/compose/docker-compose.local.yaml}):}
             Runs S3-compatible service locally on developer workstation (\texttt{http://localhost:9000}). Used strictly to unit-test S3 streaming connectors and verify DVC operations offline with zero cloud latency and zero AWS egress fees.
             \item \textbf{Tier 2: DagsHub S3 Endpoint (\texttt{s3://dvc}):}
             Remote Content-Addressed Storage (CAS) for tracked dataset manifests and model checkpoints, authenticated via unified HMAC tokens.
@@ -260,11 +260,11 @@
     \qa{How do we handle credentials for all these buckets?}{\footnotesize Tier 1 uses local mock credentials. Tier 3 is publicly readable, requiring no authentication. Tier 2 utilizes short-lived HMAC tokens injected by our CI agent or local environment variables.}
 \end{frame}
 
-\begin{frame}{Version Control}{DVC Master Tracking \& Git Pointer Decoupling (.dvc)}
-    \begin{block}{DVC Pointer Decoupling Principle}
+\begin{frame}{Version Control}{DVC Pipeline DAG Tracking \& Git Pointer Decoupling}
+    \begin{block}{DVC Pipeline Decoupling Principle}
         \begin{itemize}\small
-            \item \textbf{Text Pointers in Git:} Git tracks only lightweight pointer files (\texttt{.dvc}) containing MD5 content hashes.
-            \item \textbf{Remote Storage Offload:} DVC pushes and pulls heavy Parquet manifests directly to/from DagsHub S3 storage.
+            \item \textbf{Declarative DAG in Git:} Git tracks lightweight pipeline definitions (\texttt{dvc.yaml}) and cryptographic content hashes (\texttt{dvc.lock}).
+            \item \textbf{Remote Storage Offload:} DVC pushes and pulls heavy Parquet manifests and split embedding tensors directly to/from DagsHub S3 storage.
         \end{itemize}
     \end{block}
     \vspace{-0.1cm}
@@ -281,17 +281,18 @@
 
         % Nodes
         \node[artifact] (parquet) {
-            \textbf{observations.parquet}\\
-            \scriptsize Heavy Data Manifest
+            \textbf{dataset\_manifest.parquet}\\
+            \scriptsize Heavy Data Manifests \& Tensors
         };
 
         \node[pointer, right=2cm of parquet] (dvc_ptr) {
-            \textbf{sample.dvc}
+            \textbf{dvc.lock}\\
+            \scriptsize DAG Stage Hashes
         };
 
         \node[remote, above=1.2cm of dvc_ptr] (git_repo) {
             \textbf{Git Repo}\\
-            \scriptsize Code \& Pointers
+            \scriptsize Code, \texttt{params.yaml}, \texttt{dvc.lock}
         };
 
         \node[remote, fill=TaxonPrimary!20, draw=TaxonPrimary, above=1.2cm of parquet] (s3_remote) {
@@ -300,8 +301,8 @@
         };
 
         % Arrows
-        \draw[arrow, color=TaxonAccent] (parquet) -- node[above=0.1cm, label_text, color=TaxonAccent] {DVC MD5 Hash} node[above=0.6cm, font=\scriptsize\sffamily, color=TaxonDark] {md5: f546...aac.dir} (dvc_ptr);
-        \draw[arrow] (dvc_ptr) -- node[right, label_text] {Commits pointer} (git_repo);
+        \draw[arrow, color=TaxonAccent] (parquet) -- node[above=0.1cm, label_text, color=TaxonAccent] {DVC MD5 Hash} node[above=0.6cm, font=\scriptsize\sffamily, color=TaxonDark] {md5: 8a4c...1234} (dvc_ptr);
+        \draw[arrow] (dvc_ptr) -- node[right, label_text] {Commits lockfile} (git_repo);
         \draw[arrow, color=TaxonPrimary] (parquet) -- node[left, label_text, color=TaxonPrimary] {DVC push} (s3_remote);
 
         % MLflow Lineage
@@ -317,7 +318,7 @@
 
     \statusdone
 
-    \script{At the version control level, we never put Parquet files or embeddings into Git. DVC computes a master MD5 hash of the entire Parquet manifest and saves it in a tiny text file like data/sample.dvc. Git commits the text file, and DVC syncs the heavy Parquet file to our DagsHub S3 remote. When a developer switches Git branches, DVC automatically pulls the exact matching manifest.}
+    \script{At the version control level, we never put Parquet files or embeddings into Git. DVC computes MD5 hashes of all pipeline outputs and records them in dvc.lock. Git commits the code, params.yaml, and dvc.lock, while DVC syncs the heavy Parquet manifests and embedding tensors to our DagsHub S3 remote. When a developer switches Git branches, DVC automatically pulls the exact matching artifacts.}
     \qa{Can MLflow link training runs to the DVC commit hash?}{Yes. Our training runner logs the active Git commit hash and DVC data hash directly into MLflow run metadata, providing an unbreakable audit trail from model weights back to exact dataset rows.}
 \end{frame}
 
@@ -334,6 +335,6 @@
     \vspace{0.1cm}
     \statusdone
 
-    \script{In \texttt{extract\_features.py}, we execute our batch feature extraction. It connects to S3, loads batches of images through our frozen vision backbone, normalizes the embeddings, and writes them out into compact columnar Parquet files. Crucially, it builds a global taxon index map that deterministically assigns each species an integer index across all train, validation, and test splits. This guarantees that class 42 is always identical across all experiments.}
-    \qa{Why use Parquet format for storing numerical feature embeddings?}{Parquet is a compressed columnar format with zero-copy deserialization in Python. Loading a 1 GB Parquet file into memory takes milliseconds compared to slow JSON or CSV parsing.}
+    \script{In \texttt{extract\_features.py}, we execute our batch feature extraction. It connects to S3, loads batches of images through our frozen vision backbone, normalizes the embeddings, and writes them out into four stratified embedding tensors (\texttt{train\_embeddings.pt}, \texttt{val\_embeddings.pt}, \texttt{cal\_embeddings.pt}, \texttt{test\_embeddings.pt}) and \texttt{taxa\_mapping.json}. Crucially, it builds a global taxon index map that deterministically assigns each species an integer index across all train, validation, and test splits. This guarantees that class 42 is always identical across all experiments.}
+    \qa{Why use discrete PyTorch tensors for embedding splits instead of a monolithic file?}{Discrete tensors for train, val, cal, and test splits prevent cross-split data leakage, allow direct CUDA pin-memory transfer without indexing overhead, and feed downstream DAG stages independently.}
 \end{frame}

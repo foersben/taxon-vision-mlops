@@ -1,4 +1,21 @@
-# TaxonVision-MLOps Default Application Configuration
+# ==============================================================================
+# TaxonVision-MLOps System & Infrastructure Configuration
+#
+# ARCHITECTURAL CONFIGURATION BOUNDARY:
+# - `/params.yaml` (Repository Root): Single source of truth for all DVC-tracked
+#   machine learning hyperparameters, data splits, and statistical guarantees:
+#     * ingestion: taxa_to_fetch, per_page
+#     * model: extractor, image_size
+#     * feature_extraction: batch_size, val_split, cal_split, test_split
+#     * training: epochs, batch_size, learning_rate, weight_decay, cb_beta, tune
+#     * export: quantize_int8
+#     * conformal: alpha (0.05 / 95% coverage), min_confidence, ood_tpr
+#     * evaluation: latency_sla_ms (25.0 ms fast-path SLA)
+# - `config/default_config.yaml` (This File): Governs system runtime defaults,
+#   HTTP service parameters, paths, model registry mappings, telemetry, and
+#   external database infrastructure. Any overlapping keys defined in root `/params.yaml`
+#   automatically override these defaults via `Settings._deep_merge`.
+# ==============================================================================
 service:
   name: "TaxonVision Service"
   version: "0.1.0"
@@ -43,7 +60,9 @@ training:
   epochs: 5
   batch_size: 32
   learning_rate: 0.001
-  val_split: 0.2
+  val_split: 0.10
+  cal_split: 0.10
+  test_split: 0.10
   random_seed: 42
   extractor: "dinov3"
 
@@ -89,3 +108,6 @@ streaming:
 optuna:
   optuna_storage_uri: "sqlite:///data/optuna/optuna_studies.db"
   optuna_study_prefix: "taxon_vision"
+
+evaluation:
+  latency_sla_ms: 25.0
