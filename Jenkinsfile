@@ -75,7 +75,15 @@ spec:
             pixi --version
             pixi install --frozen -e ci-dev
             echo ">>> Pulling DVC tracked datasets and model checkpoints from DagsHub..."
-            pixi run --frozen -e ci-dev dvc pull -f || echo "WARNING: DVC pull skipped or failed; continuing with workspace cache."
+            pixi run --frozen -e ci-dev dvc pull \
+              data/manifests/raw_manifest.parquet \
+              data/manifests/dataset_manifest.parquet \
+              data/embeddings/train_embeddings.pt \
+              data/embeddings/val_embeddings.pt \
+              data/embeddings/cal_embeddings.pt \
+              data/embeddings/test_embeddings.pt \
+              models/checkpoints/head.pt \
+              models/checkpoints/model_int8.onnx || echo "WARNING: DVC pull skipped or failed; continuing with workspace cache."
           '''
         }
       }
@@ -244,15 +252,23 @@ spec:
             pixi run --frozen -e dev dvc config --local remote.local-seaweedfs.access_key_id taxonadmin
             pixi run --frozen -e dev dvc config --local remote.local-seaweedfs.secret_access_key taxonadmin
 
-            # Prime cached embeddings from host volume tier if available
-            mkdir -p data/embeddings
+            # Prime cached embeddings and manifests from host volume tier if available
+            mkdir -p data/embeddings data/manifests
             if [ ! -f "data/embeddings/train_embeddings.pt" ]; then
               if [ -f "/var/lib/taxon-vision/embeddings/train_embeddings.pt" ]; then
                 echo ">>> Found cached features on host tier; priming data/embeddings/*.pt..."
                 cp -f /var/lib/taxon-vision/embeddings/*.pt data/embeddings/ 2>/dev/null || true
               elif kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
                 echo ">>> Attempting feature cache retrieval from in-cluster SeaweedFS (local-seaweedfs)..."
-                pixi run --frozen -e dev dvc pull -r local-seaweedfs data/embeddings/train_embeddings.pt data/embeddings/val_embeddings.pt data/embeddings/cal_embeddings.pt data/embeddings/test_embeddings.pt || echo "Cache pull from local-seaweedfs skipped; will generate via DVC pipeline."
+                pixi run --frozen -e dev dvc pull -r local-seaweedfs \
+                  data/manifests/raw_manifest.parquet \
+                  data/manifests/dataset_manifest.parquet \
+                  data/embeddings/train_embeddings.pt \
+                  data/embeddings/val_embeddings.pt \
+                  data/embeddings/cal_embeddings.pt \
+                  data/embeddings/test_embeddings.pt \
+                  models/checkpoints/head.pt \
+                  models/checkpoints/model_int8.onnx || echo "Cache pull from local-seaweedfs skipped; will generate via DVC pipeline."
               fi
             fi
 
@@ -274,15 +290,35 @@ spec:
               cp -f data/embeddings/*.pt /var/lib/taxon-vision/embeddings/ 2>/dev/null || true
             fi
 
-            # Push embedding cache to local SeaweedFS if reachable
+            # Push embedding cache and manifests to local SeaweedFS if reachable
             if kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
-              echo ">>> Synchronizing feature cache to in-cluster SeaweedFS (local-seaweedfs)..."
-              pixi run --frozen -e dev dvc push -r local-seaweedfs data/embeddings/train_embeddings.pt data/embeddings/val_embeddings.pt data/embeddings/cal_embeddings.pt data/embeddings/test_embeddings.pt
+              echo ">>> Synchronizing Epistemic Diamond artifacts to in-cluster SeaweedFS (local-seaweedfs)..."
+              pixi run --frozen -e dev dvc push -r local-seaweedfs \
+                data/manifests/raw_manifest.parquet \
+                data/manifests/dataset_manifest.parquet \
+                data/embeddings/train_embeddings.pt \
+                data/embeddings/val_embeddings.pt \
+                data/embeddings/cal_embeddings.pt \
+                data/embeddings/test_embeddings.pt \
+                models/checkpoints/head.pt \
+                models/checkpoints/model_int8.onnx || echo "DVC push to local-seaweedfs skipped."
             fi
 
             # Push release checkpoints and INT8 models to DagsHub S3 remote (origin)
             echo ">>> Pushing release checkpoints and INT8 models to DagsHub S3 remote (origin)..."
-            pixi run --frozen -e dev dvc push -r origin models/checkpoints/head.pt models/checkpoints/model_int8.onnx
+            pixi run --frozen -e dev dvc push -r origin \
+              models/checkpoints/head.pt \
+              models/checkpoints/model_int8.onnx
+
+            # Stage and commit updated DVC lockfile and evaluation reports to Git
+            echo ">>> Committing updated pipeline lockfile and evaluation reports to Git..."
+            git add dvc.lock config/conformal_config.yaml docs/assets/pareto_results.json reports/*.json
+            if ! git diff --staged --quiet; then
+              git commit -m "chore(pipeline): update dvc.lock and evaluation reports [skip ci]" || echo "Git commit skipped."
+              git push origin HEAD:${BRANCH_NAME} || echo "Git push skipped."
+            else
+              echo "No pipeline artifact changes to commit."
+            fi
           '''
         }
       }
@@ -310,16 +346,17 @@ spec:
 
             # Hydrate model checkpoints from DVC
             echo ">>> Hydrating model checkpoints from DVC remotes..."
-            pixi run --frozen -e ci-dev dvc pull -r origin models/checkpoints/head.pt models/checkpoints/model.onnx models/model_int8.onnx || \
-            pixi run --frozen -e ci-dev dvc pull models/checkpoints/head.pt models/checkpoints/model.onnx models/model_int8.onnx || \
+            pixi run --frozen -e ci-dev dvc pull -r origin \
+              models/checkpoints/head.pt \
+              models/checkpoints/model_int8.onnx || \
+            pixi run --frozen -e ci-dev dvc pull \
+              models/checkpoints/head.pt \
+              models/checkpoints/model_int8.onnx || \
             echo ">>> Warning: Remote checkpoints not found in DVC; falling back to existing host volume checkpoints."
 
             # Synchronize checkpoints to host volume if available
             if [ -d "/home/benni/taxon-vision-mlops/models/checkpoints" ] && [ -f "models/checkpoints/head.pt" ]; then
               cp -f models/checkpoints/* /home/benni/taxon-vision-mlops/models/checkpoints/
-            fi
-            if [ -d "/home/benni/taxon-vision-mlops/models" ] && [ -f "models/model_int8.onnx" ]; then
-              cp -f models/model_int8.onnx /home/benni/taxon-vision-mlops/models/
             fi
 
             # Apply API deployment and service manifests
