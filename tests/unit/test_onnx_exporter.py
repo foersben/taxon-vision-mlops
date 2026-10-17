@@ -231,3 +231,31 @@ def test_export_classifier_cli_quantize_int8(tmp_path: Path) -> None:
     session = onnxruntime.InferenceSession(str(int8_file), providers=["CPUExecutionProvider"])
     assert len(session.get_inputs()) == 1
     assert len(session.get_outputs()) == 2
+
+
+def test_onnx_inference_engine_embedding_projections(tmp_path: Path) -> None:
+    """Test project_embeddings and predict_from_embeddings directly on ONNX linear head."""
+    int8_file = tmp_path / "model_int8.onnx"
+    ret = export_classifier_cli(
+        [
+            "--quantize-int8",
+            "--quantize-mode",
+            "dynamic",
+            "--quantized-output",
+            str(int8_file),
+            "--extractor",
+            "mobilenetv4_conv_small",
+            "--allow-untrained",
+        ]
+    )
+    assert ret == 0
+
+    engine = ONNXInferenceEngine(int8_file)
+    dummy_embs = np.random.randn(4, 1280).astype(np.float32)
+    logits = engine.project_embeddings(dummy_embs)
+    assert logits.shape[0] == 4
+    assert logits.shape[1] == 10
+
+    probs = engine.predict_from_embeddings(dummy_embs)
+    assert probs.shape == (4, 10)
+    assert np.allclose(probs.sum(axis=-1), 1.0, atol=1e-5)

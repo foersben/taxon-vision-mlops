@@ -1,12 +1,12 @@
 stages:
   ingestion:
     cmd: >-
-      pixi run -e dev python scripts/ingest_data.py
+      pixi run -e dev python -m taxon_vision.pipelines.ingest
       --out data/manifests/raw_manifest.parquet
     deps:
       - config/taxa_catalog.yaml
-      - scripts/ingest_data.py
       - src/taxon_vision/data/inat_client.py
+      - src/taxon_vision/pipelines/ingest.py
     params:
       - ingestion.per_page
       - ingestion.taxa_to_fetch
@@ -15,14 +15,14 @@ stages:
 
   audit_license:
     cmd: >-
-      pixi run -e dev python scripts/audit_license_compliance.py
+      pixi run -e dev python -m taxon_vision.pipelines.audit_license
       --manifest data/manifests/raw_manifest.parquet
       --out-manifest data/manifests/dataset_manifest.parquet
       --out reports/license_audit.json
     deps:
       - data/manifests/raw_manifest.parquet
-      - scripts/audit_license_compliance.py
       - src/taxon_vision/data/license_filter.py
+      - src/taxon_vision/pipelines/audit_license.py
     outs:
       - data/manifests/dataset_manifest.parquet
     metrics:
@@ -68,7 +68,7 @@ stages:
 
   train:
     cmd: >-
-      pixi run -e dev python -m taxon_vision.models.training.runner
+      pixi run -e dev python -m taxon_vision.pipelines.train
       --extractor ${model.extractor}
       --epochs ${training.epochs}
       --batch-size ${training.batch_size}
@@ -82,6 +82,7 @@ stages:
       - data/embeddings/val_embeddings.pt
       - src/taxon_vision/models/loss.py
       - src/taxon_vision/models/training/
+      - src/taxon_vision/pipelines/train.py
     params:
       - model.extractor
       - training.batch_size
@@ -99,7 +100,7 @@ stages:
 
   export:
     cmd: >-
-      pixi run -e dev python -m taxon_vision.inference.onnx_exporter
+      pixi run -e dev python -m taxon_vision.pipelines.export_onnx
       --extractor ${model.extractor}
       --image-size ${model.image_size}
       --checkpoint models/checkpoints/head.pt
@@ -111,6 +112,7 @@ stages:
       - models/checkpoints/head.pt
       - src/taxon_vision/inference/onnx_exporter.py
       - src/taxon_vision/inference/quantizer.py
+      - src/taxon_vision/pipelines/export_onnx.py
     params:
       - export.quantize_int8
       - model.extractor
@@ -121,7 +123,7 @@ stages:
 
   calibrate:
     cmd: >-
-      pixi run -e dev python scripts/calibrate_conformal.py
+      pixi run -e dev python -m taxon_vision.pipelines.calibrate
       --onnx-model models/checkpoints/model_int8.onnx
       --embeddings data/embeddings/cal_embeddings.pt
       --out config/conformal_config.yaml
@@ -131,7 +133,7 @@ stages:
     deps:
       - data/embeddings/cal_embeddings.pt
       - models/checkpoints/model_int8.onnx
-      - scripts/calibrate_conformal.py
+      - src/taxon_vision/pipelines/calibrate.py
     params:
       - conformal.alpha
       - conformal.min_confidence
@@ -145,7 +147,7 @@ stages:
 
   eval:
     cmd: >-
-      pixi run -e dev python scripts/benchmark_pareto.py
+      pixi run -e dev python -m taxon_vision.pipelines.evaluate
       --onnx-model models/checkpoints/model_int8.onnx
       --embeddings data/embeddings/test_embeddings.pt
       --conformal-config config/conformal_config.yaml
@@ -156,7 +158,7 @@ stages:
       - config/conformal_config.yaml
       - data/embeddings/test_embeddings.pt
       - models/checkpoints/model_int8.onnx
-      - scripts/benchmark_pareto.py
+      - src/taxon_vision/pipelines/evaluate.py
     params:
       - conformal.alpha
       - evaluation.latency_sla_ms

@@ -78,7 +78,7 @@ The lightweight Parquet manifests feed directly into the feature extraction pipe
 
 * **Contiguous Taxonomic Mapping:** [`build_taxon_index_map`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/pipelines/extract_features.py#L67) scans the manifest and constructs an integer mapping from sparse biological `taxon_id` keys to contiguous target indices $[0, K-1]$.
 * **Zero-Disk S3 Batch Streaming:** [`S3ImageStreamer`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/data/s3_streamer.py#L16) fetches raw image objects from `s3://inaturalist-open-data/` in batches. Images are transformed into standardized evaluation tensors ($224 \times 224$ bicubic resize, ImageNet normalization) via torchvision transforms without writing intermediate image files to local storage.
-* **Stratified 4-Way Cache Serialization:** [`create_stratified_embedding_split`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/pipelines/extract_features.py) performs stratified 4-way partitioning (70% train, 10% validation, 10% conformal calibration, 10% holdout test) while enforcing a strict multi-class cardinality gate (>= 2 classes) and guaranteeing minimum exemplar representation across long-tail taxa. The split is serialized to `data/embeddings/cached_features.pt`, enabling millisecond-speed classification head training, zero-leakage Bayesian optimization, and rigorous statistical coverage calibration.
+* **Stratified 4-Way Cache Serialization:** [`create_stratified_embedding_split`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/pipelines/extract_features.py) performs stratified 4-way partitioning (70% train, 10% validation, 10% conformal calibration, 10% holdout test) while enforcing a strict multi-class cardinality gate (>= 2 classes) and guaranteeing minimum exemplar representation across long-tail taxa. The split is serialized into four discrete physical files (`train_embeddings.pt`, `val_embeddings.pt`, `cal_embeddings.pt`, `test_embeddings.pt`) under `data/embeddings/`, enabling millisecond-speed classification head training, zero-leakage Bayesian optimization, and rigorous statistical coverage calibration.
 
 ---
 
@@ -120,56 +120,97 @@ Rather than relying on isolated shell scripts or fragmented workflows, TaxonVisi
 ```yaml
 stages:
   ingestion:
-    cmd: python scripts/ingest_data.py
+    cmd: >-
+      pixi run -e dev python -m taxon_vision.pipelines.ingest
+      --out data/manifests/raw_manifest.parquet
     deps:
-      - scripts/ingest_data.py
+      - config/taxa_catalog.yaml
       - src/taxon_vision/data/inat_client.py
-      - src/taxon_vision/data/license_filter.py
+      - src/taxon_vision/pipelines/ingest.py
     params:
-      - ingestion.taxa_to_fetch
       - ingestion.per_page
+      - ingestion.taxa_to_fetch
     outs:
-      - data/manifests
+      - data/manifests/raw_manifest.parquet
 
   audit_license:
-    cmd: python scripts/audit_license_compliance.py --manifest data/manifests/dataset_manifest.parquet --out reports/license_audit.json
+    cmd: >-
+      pixi run -e dev python -m taxon_vision.pipelines.audit_license
+      --manifest data/manifests/raw_manifest.parquet
+      --out-manifest data/manifests/dataset_manifest.parquet
+      --out reports/license_audit.json
     deps:
-      - data/manifests
-      - scripts/audit_license_compliance.py
+      - data/manifests/raw_manifest.parquet
+      - src/taxon_vision/data/license_filter.py
+      - src/taxon_vision/pipelines/audit_license.py
+    outs:
+      - data/manifests/dataset_manifest.parquet
     metrics:
       - reports/license_audit.json:
           cache: false
 
   extract_features:
-    cmd: python -m taxon_vision.pipelines.extract_features --extractor ${model.extractor} --image-size ${model.image_size} --batch-size ${feature_extraction.batch_size} --val-split ${feature_extraction.val_split} --cal-split ${feature_extraction.cal_split} --test-split ${feature_extraction.test_split} --manifest data/manifests/dataset_manifest.parquet --out data/embeddings/cached_features.pt
+    cmd: >-
+      pixi run -e dev python -m taxon_vision.pipelines.extract_features
+      --extractor ${model.extractor}
+      --image-size ${model.image_size}
+      --batch-size ${feature_extraction.batch_size}
+      --val-split ${feature_extraction.val_split}
+      --cal-split ${feature_extraction.cal_split}
+      --test-split ${feature_extraction.test_split}
+      --manifest data/manifests/dataset_manifest.parquet
+      --out-dir data/embeddings
     deps:
-      - data/manifests
+      - config/taxa_catalog.yaml
+      - data/manifests/dataset_manifest.parquet
+      - src/taxon_vision/models/factory.py
       - src/taxon_vision/pipelines/extract_features.py
     params:
-      - model.extractor
-      - model.image_size
       - feature_extraction.batch_size
-      - feature_extraction.val_split
       - feature_extraction.cal_split
       - feature_extraction.test_split
+      - feature_extraction.val_split
+      - model.extractor
+      - model.image_size
     outs:
-      - data/embeddings/cached_features.pt:
+      - data/embeddings/train_embeddings.pt:
+          remote: local-seaweedfs
+          push: true
+      - data/embeddings/val_embeddings.pt:
+          remote: local-seaweedfs
+          push: true
+      - data/embeddings/cal_embeddings.pt:
+          remote: local-seaweedfs
+          push: true
+      - data/embeddings/test_embeddings.pt:
           remote: local-seaweedfs
           push: true
 
   train:
-    cmd: python -m taxon_vision.models.training.runner --extractor ${model.extractor} --epochs ${training.epochs} --batch-size ${training.batch_size} --lr ${training.learning_rate} --cache-path data/embeddings/cached_features.pt --checkpoint-path models/checkpoints/head.pt --require-cache --metrics-out reports/train_metrics.json
+    cmd: >-
+      pixi run -e dev python -m taxon_vision.pipelines.train
+      --extractor ${model.extractor}
+      --epochs ${training.epochs}
+      --batch-size ${training.batch_size}
+      --lr ${training.learning_rate}
+      --train-embeddings data/embeddings/train_embeddings.pt
+      --val-embeddings data/embeddings/val_embeddings.pt
+      --checkpoint-path models/checkpoints/head.pt
+      --metrics-out reports/train_metrics.json
     deps:
-      - data/embeddings/cached_features.pt
-      - src/taxon_vision/models/training/
+      - data/embeddings/train_embeddings.pt
+      - data/embeddings/val_embeddings.pt
       - src/taxon_vision/models/loss.py
+      - src/taxon_vision/models/training/
+      - src/taxon_vision/pipelines/train.py
     params:
       - model.extractor
-      - training.epochs
       - training.batch_size
-      - training.learning_rate
-      - training.weight_decay
       - training.cb_beta
+      - training.epochs
+      - training.learning_rate
+      - training.tune
+      - training.weight_decay
     outs:
       - models/checkpoints/head.pt:
           remote: origin
@@ -178,28 +219,45 @@ stages:
           cache: false
 
   export:
-    cmd: python -m taxon_vision.inference.onnx_exporter --extractor ${model.extractor} --image-size ${model.image_size} --checkpoint models/checkpoints/head.pt --output models/checkpoints/model.onnx --quantize-int8 --quantize-mode dynamic --quantized-output models/model_int8.onnx
+    cmd: >-
+      pixi run -e dev python -m taxon_vision.pipelines.export_onnx
+      --extractor ${model.extractor}
+      --image-size ${model.image_size}
+      --checkpoint models/checkpoints/head.pt
+      --quantize-int8
+      --quantize-mode dynamic
+      --quantized-output models/checkpoints/model_int8.onnx
+      --allow-untrained
     deps:
       - models/checkpoints/head.pt
       - src/taxon_vision/inference/onnx_exporter.py
       - src/taxon_vision/inference/quantizer.py
+      - src/taxon_vision/pipelines/export_onnx.py
     params:
+      - export.quantize_int8
       - model.extractor
       - model.image_size
-      - export.quantize_int8
     outs:
-      - models/checkpoints/model.onnx:
-          remote: origin
-      - models/model_int8.onnx:
+      - models/checkpoints/model_int8.onnx:
           remote: origin
 
   calibrate:
-    cmd: python scripts/calibrate_conformal.py --cache-path data/embeddings/cached_features.pt --checkpoint models/checkpoints/head.pt --split cal --out config/conformal_config.yaml --metrics-out reports/conformal_metrics.json
+    cmd: >-
+      pixi run -e dev python -m taxon_vision.pipelines.calibrate
+      --onnx-model models/checkpoints/model_int8.onnx
+      --embeddings data/embeddings/cal_embeddings.pt
+      --out config/conformal_config.yaml
+      --metrics-out reports/conformal_metrics.json
+      --alpha ${conformal.alpha}
+      --ood-tpr ${conformal.ood_tpr}
     deps:
-      - data/embeddings/cached_features.pt
-      - models/checkpoints/head.pt
-      - models/model_int8.onnx
-      - scripts/calibrate_conformal.py
+      - data/embeddings/cal_embeddings.pt
+      - models/checkpoints/model_int8.onnx
+      - src/taxon_vision/pipelines/calibrate.py
+    params:
+      - conformal.alpha
+      - conformal.min_confidence
+      - conformal.ood_tpr
     outs:
       - config/conformal_config.yaml:
           cache: false
@@ -208,12 +266,22 @@ stages:
           cache: false
 
   eval:
-    cmd: python scripts/benchmark_pareto.py --cache-path data/embeddings/cached_features.pt --checkpoint models/checkpoints/head.pt --conformal-config config/conformal_config.yaml --split test --out docs/assets/pareto_results.json --metrics-out reports/pareto_evaluation.json
+    cmd: >-
+      pixi run -e dev python -m taxon_vision.pipelines.evaluate
+      --onnx-model models/checkpoints/model_int8.onnx
+      --embeddings data/embeddings/test_embeddings.pt
+      --conformal-config config/conformal_config.yaml
+      --out docs/assets/pareto_results.json
+      --metrics-out reports/pareto_evaluation.json
+      --latency-sla-ms ${evaluation.latency_sla_ms}
     deps:
-      - data/embeddings/cached_features.pt
-      - models/checkpoints/head.pt
       - config/conformal_config.yaml
-      - scripts/benchmark_pareto.py
+      - data/embeddings/test_embeddings.pt
+      - models/checkpoints/model_int8.onnx
+      - src/taxon_vision/pipelines/evaluate.py
+    params:
+      - conformal.alpha
+      - evaluation.latency_sla_ms
     outs:
       - docs/assets/pareto_results.json:
           cache: false
@@ -226,7 +294,7 @@ stages:
 
 The unified pipeline topology establishes a strict dual-remote distribution strategy:
 
-* **Ephemeral High-Throughput Cache (`local-seaweedfs`):** Intermediate representations (`data/embeddings/cached_features.pt`) are routed to the in-cluster S3 cache pod deployed in `namespace: taxon-vision` on the bare-metal `hive-mind` host (`http://seaweedfs.taxon-vision.svc.cluster.local:8333`), powered by SeaweedFS (Apache 2.0). SeaweedFS's Haystack/Needle architecture prevents disk-seek degradation and optimizes throughput for both large feature tensors and small observation crops for Pipeline 2 (100,000 exemplar crops). This ensures zero cloud egress costs, multi-gigabyte local NVMe throughput, and eliminates re-streaming images across Optuna HPO trials.
+* **Ephemeral High-Throughput Cache (`local-seaweedfs`):** Intermediate representations (`data/embeddings/*.pt`) are routed to the in-cluster S3 cache pod deployed in `namespace: taxon-vision` on the bare-metal `hive-mind` host (`http://seaweedfs.taxon-vision.svc.cluster.local:8333`), powered by SeaweedFS (Apache 2.0). SeaweedFS's Haystack/Needle architecture prevents disk-seek degradation and optimizes throughput for both large feature tensors and small observation crops for Pipeline 2 (100,000 exemplar crops). This ensures zero cloud egress costs, multi-gigabyte local NVMe throughput, and eliminates re-streaming images across Optuna HPO trials.
 * **Cryptographic Release Remote (`origin` DagsHub S3):** Serialized checkpoints (`models/checkpoints/head.pt`), base ONNX graphs (`models/checkpoints/model.onnx`), and quantized runtime artifacts (`models/model_int8.onnx`) are pushed to DagsHub S3 for immutable version tracking and team distribution.
 * **Native DVC Metrics Integration:** Evaluation reports (`reports/train_metrics.json`, `reports/conformal_metrics.json`, `reports/pareto_evaluation.json`, `reports/license_audit.json`) are tagged as uncached DVC metrics, enabling direct comparison, visualization, and diffing in both CLI (`dvc metrics diff`) and web dashboards (DagsHub Magenta nodes).
 * **Code-to-Data Lineage Guarantee:** Tracking source code modules, scripts, and `params.yaml` directly in `deps` ensures that any modification to preprocessing, model architecture, or calibration logic immediately invalidates downstream stages upon running `dvc repro`.

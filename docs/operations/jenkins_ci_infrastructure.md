@@ -517,13 +517,13 @@ spec:
 
             # Prime cached embeddings from host volume tier if available
             mkdir -p data/embeddings
-            if [ ! -f "data/embeddings/cached_features.pt" ]; then
-              if [ -f "/var/lib/taxon-vision/embeddings/cached_features.pt" ]; then
-                echo ">>> Found cached features on host tier; priming data/embeddings/cached_features.pt..."
-                cp -f /var/lib/taxon-vision/embeddings/cached_features.pt data/embeddings/cached_features.pt
+            if [ ! -f "data/embeddings/train_embeddings.pt" ]; then
+              if [ -f "/var/lib/taxon-vision/embeddings/train_embeddings.pt" ]; then
+                echo ">>> Found cached features on host tier; priming data/embeddings/*.pt..."
+                cp -f /var/lib/taxon-vision/embeddings/*.pt data/embeddings/ 2>/dev/null || true
               elif kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
                 echo ">>> Attempting feature cache retrieval from in-cluster SeaweedFS (local-seaweedfs)..."
-                pixi run --frozen -e dev dvc pull -r local-seaweedfs data/embeddings/cached_features.pt || echo "Cache pull from local-seaweedfs skipped; will generate via DVC pipeline."
+                pixi run --frozen -e dev dvc pull -r local-seaweedfs data/embeddings/train_embeddings.pt data/embeddings/val_embeddings.pt data/embeddings/cal_embeddings.pt data/embeddings/test_embeddings.pt || echo "Cache pull from local-seaweedfs skipped; will generate via DVC pipeline."
               fi
             fi
 
@@ -539,18 +539,18 @@ spec:
             pixi run --frozen -e dev dvc repro ${EXTRA_DVC_OPTS}
 
             # Persist generated features to host volume cache
-            if [ -d "/var/lib/taxon-vision/embeddings" ] && [ -f "data/embeddings/cached_features.pt" ]; then
-              cp -f data/embeddings/cached_features.pt /var/lib/taxon-vision/embeddings/cached_features.pt
+            if [ -d "/var/lib/taxon-vision/embeddings" ] && [ -f "data/embeddings/train_embeddings.pt" ]; then
+              cp -f data/embeddings/*.pt /var/lib/taxon-vision/embeddings/ 2>/dev/null || true
             fi
 
             # Push embedding cache to local SeaweedFS if reachable
             if kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
               echo ">>> Synchronizing feature cache to in-cluster SeaweedFS (local-seaweedfs)..."
-              pixi run --frozen -e dev dvc push -r local-seaweedfs data/embeddings/cached_features.pt
+              pixi run --frozen -e dev dvc push -r local-seaweedfs data/embeddings/train_embeddings.pt data/embeddings/val_embeddings.pt data/embeddings/cal_embeddings.pt data/embeddings/test_embeddings.pt
             fi
 
             # Push release checkpoints and INT8 models to DagsHub S3 remote (origin)
-            pixi run --frozen -e dev dvc push -r origin models/checkpoints/head.pt models/checkpoints/model.onnx models/model_int8.onnx
+            pixi run --frozen -e dev dvc push -r origin models/checkpoints/head.pt models/checkpoints/model_int8.onnx
           '''
         }
       }
@@ -643,7 +643,7 @@ The provisioned Kubernetes pod instantiates two containers sharing network and f
 * **Unit Tests & Coverage:** Executes the full unit test suite against `tests/unit/`, enforcing a strict 80% line coverage threshold (`--cov-fail-under=80`).
 * **Integration & Conformal Invariants:** Validates FastAPI service endpoints and evaluates mathematical error bounds for split conformal prediction (asserting empirical coverage $1 - \alpha \ge 0.90$).
 * **Documentation Strict Build:** Generates the OKF knowledge graph visualizer (`docs/viz.html`) and executes `zensical build --strict` to verify syntax and reference integrity (strict Zensical MkDocs compilation).
-* **Model Training & Checkpoint (GPU - develop & main):** When triggered by module changesets or manual parameter `RETRAIN_MODEL = true`, the stage defines an ephemeral GPU agent pod requesting `nvidia.com/gpu: 1`, securing 1 of the 4 NVIDIA time-slicing partitions on `hive-mind`. It connects to in-cluster SeaweedFS (`http://seaweedfs.taxon-vision.svc.cluster.local:8333`) to retrieve or cache `data/embeddings/cached_features.pt`. It then executes the unified 7-stage DVC pipeline (`dvc repro`), training the head with Class-Balanced focal loss and Optuna Bayesian optimization when enabled (`TUNE_HYPERPARAMETERS=true`). It exports the dual-output ONNX graph, calibrates conformal prediction thresholds, runs the Pareto quantization benchmark, and pushes updated checkpoints to DagsHub S3 (`origin`).
+* **Model Training & Checkpoint (GPU - develop & main):** When triggered by module changesets or manual parameter `RETRAIN_MODEL = true`, the stage defines an ephemeral GPU agent pod requesting `nvidia.com/gpu: 1`, securing 1 of the 4 NVIDIA time-slicing partitions on `hive-mind`. It connects to in-cluster SeaweedFS (`http://seaweedfs.taxon-vision.svc.cluster.local:8333`) to retrieve or cache stratified embedding partitions (`data/embeddings/*.pt`). It then executes the unified 7-stage DVC pipeline (`dvc repro`), training the head with Class-Balanced focal loss and Optuna Bayesian optimization when enabled (`TUNE_HYPERPARAMETERS=true`). It exports the dual-output ONNX graph, calibrates conformal prediction thresholds, runs the Pareto quantization benchmark, and pushes updated checkpoints to DagsHub S3 (`origin`).
 * **Deployment Rollout & Smoke Verification:** Injects SeaweedFS credentials, hydrates model checkpoints from DVC with a resilient fallback to the host volume tier, applies [`deploy/k8s/api-deployment.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml), triggers `kubectl rollout restart deployment/taxon-vision-api -n taxon-vision`, and validates health endpoints and Prometheus counters via [`scripts/verify_deployment.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/verify_deployment.sh).
 * **Workspace Cleanup (`cleanWs()`):** Wipes the temporary checkout directory before pod termination.
 

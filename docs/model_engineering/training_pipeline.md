@@ -62,7 +62,7 @@ tracks all experiments with MLflow, and automatically promotes the best model us
 | `tracking.py` | `mlflow_run_scope()` | RAII context manager that opens parent MLflow run and logs training parameters |
 | `tracking.py` | `_promote_model_if_better()` | Compares PR-AUC and assigns Production / Challenger alias |
 | `extract_features.py` | `FeatureExtractionConfig` | S3 image streaming, ViT embedding extraction, and index mapping |
-| `extract_features.py` | `extract_features_cli()` | CLI extracting representations to `cached_features.pt` |
+| `extract_features.py` | `extract_features_cli()` | CLI extracting representations into stratified partition splits |
 | `train.py` | `main()` | Production training pipeline CLI supporting `--cache-path` |
 
 ## Pipeline Lifecycle & MLflow RAII Strategy
@@ -137,7 +137,7 @@ The inner loop incorporates three convergence callbacks and one tuning hook:
 
 ## Optimal Training Dynamics & Hyperparameters
 
-The following defaults are design guidelines for linear probing on frozen foundation embeddings. The training pipeline operates on pre-extracted feature representations cached at `data/embeddings/cached_features.pt` by `taxon_vision.pipelines.extract_features`. When no cached embeddings file exists and `--cache-path` is omitted, the runner falls back gracefully to a deterministic synthetic Gaussian split (seed 42) for offline integration testing:
+The following defaults are design guidelines for linear probing on frozen foundation embeddings. The training pipeline operates on pre-extracted feature representations partitioned at `data/embeddings/` by `taxon_vision.pipelines.extract_features` (`train_embeddings.pt`, `val_embeddings.pt`). When no cached embeddings files exist and feature paths are omitted, the runner falls back gracefully to a deterministic synthetic Gaussian split (seed 42) for offline integration testing:
 
 * **Epoch Budget (10-15 Epochs):** Linear probes on frozen embeddings typically converge within 10-15 epochs. Early stopping (patience 4) bounds the effective budget and limits memorisation of long-tail noise.
 * **Batch Size Budgeting:**
@@ -280,7 +280,7 @@ During Stage 6, the runner interacts directly with the cluster's physical topolo
 
 * **Blackwell Toolchain & CUDA 13.4 Forward Compatibility:** The bare-metal host `hive-mind` operates an NVIDIA GeForce RTX 5080 (Blackwell architecture, SM 120, 16 GB GDDR7) powered by NVIDIA Driver 615.71.09 establishing a CUDA 13.4 User-Mode Driver (UMD) boundary. Container runtimes and Pixi environments compile kernels using PyTorch 2.7.0 targeting CUDA 12.8 (`cu128`), executing natively via driver forward-compatibility.
 * **GPU Time-Slicing Slot Allocation:** The physical GPU is partitioned into 4 virtual GPU slots via the NVIDIA Kubernetes Device Plugin. The ephemeral GPU training agent pod (`taxon-vision-jenkins-gpu-agent`) requests `nvidia.com/gpu: 1` in both resource limits and requests, guaranteeing non-preemptive access to hardware tensor cores.
-* **In-Cluster SeaweedFS Feature Caching:** The runner injects credentials for the in-cluster SeaweedFS remote (`local-seaweedfs` at `http://seaweedfs.taxon-vision.svc.cluster.local:8333`). Feature tensors (`data/embeddings/cached_features.pt`) are retrieved or populated at NVMe wire speed, eliminating redundant Vision Transformer forward passes during hyperparameter tuning.
+* **In-Cluster SeaweedFS Feature Caching:** The runner injects credentials for the in-cluster SeaweedFS remote (`local-seaweedfs` at `http://seaweedfs.taxon-vision.svc.cluster.local:8333`). Feature tensors (`data/embeddings/*.pt`) are retrieved or populated at NVMe wire speed, eliminating redundant Vision Transformer forward passes during hyperparameter tuning.
 * **Persistent Optuna Bayesian Telemetry:** When hyperparameter tuning is activated (`TUNE_HYPERPARAMETERS=true`), trials record their trajectory into an ACID-compliant SQLite database configured in Write-Ahead Logging (WAL) mode (`/workspace/optuna/optuna_studies.db`). The study is rendered in real time on the cluster Optuna Dashboard (`http://<server-ip>:30081`), tracking Tree-structured Parzen Estimator (TPE) parameter importances and ASHA pruning.
 * **Cryptographic Release Remote (`origin` DagsHub S3):** Upon convergence, the pipeline pushes the trained head (`models/checkpoints/head.pt`), base ONNX graph (`models/checkpoints/model.onnx`), and quantized runtime (`models/model_int8.onnx`) to DagsHub S3, extracting true dataset MD5 digests directly from `dvc.lock` for MLflow lineage.
 * **Zero-Downtime Rolling Update & Health Verification:** Jenkins applies the updated deployment and executes `kubectl rollout restart deployment/taxon-vision-api -n taxon-vision`. Once the deployment achieves ready status, the automated smoke test script ([`scripts/verify_deployment.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/verify_deployment.sh)) probes `/health`, `/health/ready`, and dispatches a test prediction to verify that Prometheus counter `taxon_predictions_total` increments properly.

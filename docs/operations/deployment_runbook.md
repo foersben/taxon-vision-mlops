@@ -170,11 +170,10 @@ When commits are pushed to `main` or release tags, the declarative pipeline in [
 * **Step 2 (Verification Gates):** Executes Ruff linting, MyPy type checks, License compliance audits, OKF validation, unit tests (with 78% line coverage threshold), integration tests, and strict Zensical build.
 * **Step 3 (GPU Model Training & Checkpoint - main branch only):**
     * Targets 1 of the 4 NVIDIA time-slicing partitions on `hive-mind` using the dedicated GPU agent pod requesting `nvidia.com/gpu: 1` in `Jenkinsfile`.
-    * Pulls the latest versioned dataset and manifests from the DagsHub DVC remote (`s3://dvc`).
-    * Extracts ViT feature representations from S3 images: `pixi run -e dev python -m taxon_vision.pipelines.extract_features --extractor dinov3 --manifest data/manifests/dataset_manifest.parquet --out data/embeddings/cached_features.pt`.
+    * Extracts ViT feature representations from S3 images into 4-way partitions: `pixi run -e dev python -m taxon_vision.pipelines.extract_features --extractor dinov3 --manifest data/manifests/dataset_manifest.parquet --out-dir data/embeddings`.
     * Caps VRAM at 70% (`--cuda-memory-fraction 0.7`) to reserve headroom for live services.
-    * Executes classification head training with Optuna tuning: `pixi run -e dev python -m taxon_vision.models.trainer --extractor dinov3 --epochs 15 --tune --n-trials 10 --cuda-memory-fraction 0.7`.
-    * Re-exports the ONNX graph (`taxon_vision.inference.onnx_exporter`) and pushes `models/checkpoints/head.pt` and `models/checkpoints/model.onnx` to the DagsHub DVC remote.
+    * Executes classification head training with Optuna tuning: `pixi run -e dev python -m taxon_vision.pipelines.train --extractor dinov3 --epochs 15 --train-embeddings data/embeddings/train_embeddings.pt --val-embeddings data/embeddings/val_embeddings.pt`.
+    * Re-exports and quantizes the ONNX graph (`taxon_vision.pipelines.export_onnx`) and pushes `models/checkpoints/head.pt` and `models/checkpoints/model_int8.onnx` to the DagsHub DVC remote.
     * Logs metrics and registry aliases to DagsHub MLflow.
 * **Step 4 (Deployment Rollout):**
     * Applies [deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) using `jenkins-deployer-role` permissions. `imagePullPolicy: Always` ensures the pod pulls the fresh container published by GitHub Actions.

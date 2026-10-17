@@ -94,7 +94,7 @@ While conceptually decoupled, the execution lineage of Pipeline 1 and Pipeline 2
 * `calibrate`: Computes conformal quantile thresholds $\hat{q}_\alpha$ and Helmholtz energy boundaries $\tau_{\text{OOD}}$.
 * `eval`: Executes Pareto benchmarking, verifying marginal coverage and latency budgets.
 
-High-throughput intermediate embeddings (`cached_features.pt`) and local model checkpoints are persisted to the in-cluster SeaweedFS object store (`s3://taxon-dvc-cache/`), whilst final production release artifacts are mirrored to DagsHub S3 (`s3://dvc`).
+High-throughput intermediate embeddings (`data/embeddings/*.pt`) and local model checkpoints are persisted to the in-cluster SeaweedFS object store (`s3://taxon-dvc-cache/`), whilst final production release artifacts are mirrored to DagsHub S3 (`s3://dvc`).
 
 ---
 

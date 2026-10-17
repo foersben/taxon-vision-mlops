@@ -1,4 +1,14 @@
-# TaxonVision-MLOps Default Application Configuration
+# ==============================================================================
+# TaxonVision-MLOps System & Infrastructure Configuration
+#
+# ARCHITECTURAL CONFIGURATION BOUNDARY:
+# - `/params.yaml` (Repository Root): Canonical owner for all DVC-tracked
+#   machine learning hyperparameters, data splits, and statistical guarantees
+#   (ingestion, model backbone, feature_extraction, training, export, conformal, evaluation).
+# - `config/default_config.yaml` (This File): Governs system runtime defaults,
+#   HTTP service parameters, paths, telemetry, and external database infrastructure.
+#   Values in `/params.yaml` automatically take precedence at runtime.
+# ==============================================================================
 service:
   name: "TaxonVision Service"
   version: "0.1.0"

@@ -125,30 +125,45 @@ ci-test:
 fetch-sample:
 	pixi run --frozen -e dev python -m taxon_vision.data.s3_streamer --limit 100 --out data/sample/
 
-# Ingest citizen-science observations from iNaturalist to Parquet manifest
+# Ingest citizen-science observations from iNaturalist to Parquet manifest (Stage 1)
 [group("mlops")]
 ingest-data:
-	pixi run --frozen -e dev python scripts/ingest_data.py
+	pixi run --frozen -e dev python -m taxon_vision.pipelines.ingest
 
-# Train baseline classification head with Class-Balanced Loss
+# Audit open licenses and filter compliant observations to dataset manifest (Stage 2)
 [group("mlops")]
-train-baseline extractor="bioclip-2":
+audit-license:
+	pixi run --frozen -e dev python -m taxon_vision.pipelines.audit_license
+
+# Stream representations from S3 open data into 4-way embedding split (Stage 3)
+[group("mlops")]
+extract-features:
+	pixi run --frozen -e dev python -m taxon_vision.pipelines.extract_features
+
+# Train baseline classification head with Class-Balanced Loss (Stage 4)
+[group("mlops")]
+train epochs="5" extractor="dinov3":
 	@TOKEN=$(secret-tool lookup Title DagsHub 2>/dev/null || secret-tool lookup service dagshub 2>/dev/null || true); \
 	if [ -n "$TOKEN" ]; then \
 		export MLFLOW_TRACKING_USERNAME="foersben"; \
 		export MLFLOW_TRACKING_PASSWORD="$TOKEN"; \
 	fi; \
-	pixi run --frozen -e dev python -m taxon_vision.models.trainer --extractor {{extractor}} --epochs 5
+	pixi run --frozen -e dev python -m taxon_vision.pipelines.train --epochs {{epochs}} --extractor {{extractor}}
 
-# Run CLI training script (Phase 1 Baseline)
+# Export trained classification head to ONNX computational graph (Stage 5)
 [group("mlops")]
-train epochs="5" extractor="mobilenetv4_conv_small":
-	@TOKEN=$(secret-tool lookup Title DagsHub 2>/dev/null || secret-tool lookup service dagshub 2>/dev/null || true); \
-	if [ -n "$TOKEN" ]; then \
-		export MLFLOW_TRACKING_USERNAME="foersben"; \
-		export MLFLOW_TRACKING_PASSWORD="$TOKEN"; \
-	fi; \
-	pixi run --frozen -e dev python -m taxon_vision.models.trainer --epochs {{epochs}} --extractor {{extractor}}
+export-onnx:
+	pixi run --frozen -e dev python -m taxon_vision.pipelines.export_onnx
+
+# Calibrate Split Conformal Prediction quantiles and OOD energy thresholds (Stage 6)
+[group("mlops")]
+calibrate:
+	pixi run --frozen -e dev python -m taxon_vision.pipelines.calibrate
+
+# Evaluate Pareto trade-offs and holdout test set with conformal bounds (Stage 7)
+[group("mlops")]
+pareto:
+	pixi run --frozen -e dev python -m taxon_vision.pipelines.evaluate
 
 # Run CLI prediction script on an observation image
 [group("mlops")]
@@ -159,23 +174,6 @@ predict image="data/sample/406185885_taxon_47120.jpg":
 [group("mlops")]
 download-samples per_taxon="1":
 	pixi run --frozen -e dev python scripts/download_samples.py --per-taxon {{per_taxon}}
-
-
-
-# Export trained PyTorch model to ONNX computational graph
-[group("mlops")]
-export-onnx:
-	pixi run --frozen -e dev python -m taxon_vision.inference.onnx_exporter
-
-# Evaluate Pareto trade-offs (Accuracy vs Latency vs Cost) across backbones
-[group("mlops")]
-pareto:
-	pixi run --frozen -e dev python scripts/benchmark_pareto.py
-
-# Calibrate Split Conformal Prediction quantiles on holdout validation data
-[group("mlops")]
-calibrate:
-	pixi run --frozen -e dev python scripts/calibrate_conformal.py --alpha 0.05
 
 # Push tracked datasets & models to DagsHub using in-memory Secret Service credentials
 [group("mlops")]
