@@ -34,3 +34,7 @@ flowchart TD
 * **Production Chain Over Notebook Glory:** A versioned, audited, and automated DVC pipeline where code, parameters, and tensor hashes guarantee end-to-end reproducibility.
 * **Mathematical Safety Invariants:** Predictions are accompanied by distribution-free **Split Conformal Prediction** sets guaranteeing a user-specified coverage bound ($1 - \alpha = 0.95$) alongside Helmholtz OOD energy gating.
 * **Open Licensing & Attribution:** Adheres to DarwinCore and Creative Commons standards, strictly filtering open licenses (CC0, CC-BY, CC-BY-NC) and preserving photographer attribution.
+
+## System Reference
+
+For detailed subsystem architecture diagrams, storage technology selections, and complete parameter matrices, consult the [Architecture, Storage & Parameter Reference](foundations/system_reference.md).

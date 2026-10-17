@@ -61,6 +61,7 @@ Home = "index.md"
     { "Taxonomy & DarwinCore" = "foundations/taxonomy_and_darwincore.md" },
     { "iNaturalist Data Ecosystem" = "foundations/inaturalist_data_ecosystem.md" },
     { "Curriculum vs. Production Strategy" = "foundations/architectural_comparison.md" },
+    { "Architecture & Reference" = "foundations/system_reference.md" },
 ]
 
 [[project.nav]]

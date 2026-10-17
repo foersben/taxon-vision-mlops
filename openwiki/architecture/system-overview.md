@@ -20,7 +20,7 @@ sources:
   - id: openwiki-source-cfa03d5d7ac7270f0bb1bf28
     resource: repo://dvc.yaml
   - id: openwiki-source-7079947a60e14bc71bc44a0e
-    resource: repo://src/taxon_vision/config.py
+    resource: repo://src/taxon_vision/config/__init__.py
   - id: openwiki-source-ac488275ac5aaa7af4bd13ca
     resource: repo://src/taxon_vision/inference/onnx_exporter.py
   - id: openwiki-source-e4ad8e996f2c9027ac79d217
@@ -95,7 +95,7 @@ flowchart TD
         end
 
         subgraph S_P2["Pipeline 2: Linear Head Training & Optimization"]
-            TRN["taxon_vision.pipelines.train<br/>(taxon_vision.models.trainer)"]
+            TRN["taxon_vision.pipelines.train<br/>(taxon_vision.models.training)"]
             OPT["Hyperparameter Optimization<br/>(Optuna)"]
             CBL["Class-Balanced Loss<br/>(Effective Number of Samples)"]
             MLF["MLflow / DagsHub Tracking<br/>(Metrics, Artifacts, Registry)"]
@@ -254,7 +254,7 @@ The resulting embedding files store `embeddings`, `labels`, `indices`, and `clas
 
 ### Pipeline 2: Rapid Linear Head Training & Optimization
 
-The classification head training pipeline (`taxon_vision.pipelines.train`, backed by `taxon_vision.models.trainer` and `taxon_vision.models.training.runner`) loads the serialized embeddings and trains a linear classification head (`TaxonClassifierHead`):
+The classification head training pipeline (`taxon_vision.pipelines.train`, backed by `taxon_vision.models.training` and `taxon_vision.models.training.runner`) loads the serialized embeddings and trains a linear classification head (`TaxonClassifierHead`):
 
 1. **In-Memory Training Loop**: Because the backbone is frozen and representations are pre-computed, mini-batch forward and backward passes execute directly on memory-resident embedding tensors ($N \times D$, where $D=1280$ for MobileNetV4 or $D=768$ for ViT-S/BioCLIP). A full 5-epoch training run completes in seconds on commodity hardware.
 2. **Class-Balanced Loss**: Biological observation distributions suffer from severe power-law class imbalance. Training utilizes `ClassBalancedLoss` (`src/taxon_vision/models/loss.py`), which weights cross-entropy or focal loss dynamically by the effective number of samples $E_n = (1 - \beta^n) / (1 - \beta)$, preventing majority species from dominating gradient updates.

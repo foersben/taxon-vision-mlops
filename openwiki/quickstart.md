@@ -16,7 +16,7 @@ sources:
   - id: openwiki-source-12914d3b78b4a80693643804
     resource: repo://scripts/ci/local_ci.sh
   - id: openwiki-source-7079947a60e14bc71bc44a0e
-    resource: repo://src/taxon_vision/config.py
+    resource: repo://src/taxon_vision/config/__init__.py
   - id: openwiki-source-f0a6e7dc03522b2682f88655
     resource: repo://tests/conftest.py
   - id: openwiki-source-60b001159f253a7d5bdf9f0f

@@ -72,9 +72,9 @@ def test_configure_cuda_memory_budget_cuda_mocked(monkeypatch: pytest.MonkeyPatc
 
 
 def test_training_module_execution() -> None:
-    """Verify execution of taxon_vision.models.trainer module via subprocess."""
+    """Verify execution of taxon_vision.pipelines.train module via subprocess."""
     proc = subprocess.run(
-        [sys.executable, "-m", "taxon_vision.models.trainer", "--epochs", "1", "--batch-size", "16"],
+        [sys.executable, "-m", "taxon_vision.pipelines.train", "--epochs", "1", "--batch-size", "16"],
         capture_output=True,
         text=True,
         check=False,

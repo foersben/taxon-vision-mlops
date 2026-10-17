@@ -161,7 +161,7 @@ Optuna explores hyperparameter search spaces using the Tree-structured Parzen Es
 * **CLI Trigger:**
 
 ```bash
-pixi run -e dev python -m taxon_vision.models.trainer --tune --n-trials 15
+pixi run -e dev python -m taxon_vision.pipelines.train --tune --n-trials 15
 ```
 
 ```mermaid

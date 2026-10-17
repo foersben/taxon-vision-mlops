@@ -96,7 +96,7 @@ if torch.cuda.is_available():
 CLI execution also exposes `--cuda-memory-fraction`:
 
 ```bash
-pixi run -e dev python -m taxon_vision.models.trainer --cuda-memory-fraction 0.7
+pixi run -e dev python -m taxon_vision.pipelines.train --cuda-memory-fraction 0.7
 ```
 
 On CPU-only development environments, `configure_cuda_memory_budget()` gracefully degrades to a no-op, preserving portability across Darwin, Linux CPU, and CUDA workstations.

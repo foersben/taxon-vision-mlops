@@ -22,16 +22,15 @@ from taxon_vision.models.factory import (
 )
 from taxon_vision.models.head import TaxonClassifier
 from taxon_vision.models.loss import ClassBalancedLoss
-from taxon_vision.models.trainer import (
+from taxon_vision.models.training.checkpoint import _save_checkpoint
+from taxon_vision.models.training.embeddings import train_head_on_cached_embeddings
+from taxon_vision.models.training.loops import evaluate_head, train_head_epoch
+from taxon_vision.models.training.tuning import tune_hyperparameters
+from taxon_vision.models.training.types import (
     EmbeddingSplit,
     HeadTrainingConfig,
     TuningConfig,
-    evaluate_head,
-    train_head_epoch,
-    train_head_on_cached_embeddings,
-    tune_hyperparameters,
 )
-from taxon_vision.models.training.checkpoint import _save_checkpoint
 
 
 def test_feature_extractor_factory_and_caching() -> None:

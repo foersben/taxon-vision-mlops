@@ -14,3 +14,7 @@ Before delving into neural networks and inference optimization, it is critical t
     * Licensing compliance, automated open data pipelines, and research-grade consensus structures.
 * **Curriculum vs. Production Strategy**
     * Deep comparative analysis of monolithic academic pipelines versus the high-throughput, decoupled dual-pipeline production architecture.
+* **[Architecture, Storage & Parameter Reference](system_reference.md)**
+    * Comprehensive Mermaid call and subsystem dependency topology.
+    * Database and storage technology matrix across all pipeline stages.
+    * Full parameter reference across all configuration manifests.
