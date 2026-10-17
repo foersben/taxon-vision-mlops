@@ -1,0 +1,481 @@
+% Chapter 3: Repository Architecture, File Topology & Configuration Encyclopedia
+
+\begin{frame}[plain]
+    \vfill
+    \centering
+    {\footnotesize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
+    {\large \textbf{\textcolor{signalorange}{CHAPTER 03}}} \\[0.25cm]
+    {\huge \textbf{Repository Architecture \& Configurations}} \\[0.35cm]
+    {\normalsize \textcolor{black!70}{Monorepo Topology, Unified Parameters \& Agentic Governance}} \\[0.5cm]
+    \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
+    \statusdone
+    \vfill
+    \script{In Chapter 3, we dive into the physical repository architecture: examining how our monorepo is cleanly organized into specialized domains, how parameters are hierarchically resolved, and how automated governance guarantees software quality.}
+    \qa{Why maintain a monorepo for an MLOps pipeline?}{A monorepo eliminates distributed version drift between data schemas, PyTorch models, ONNX engines, Kubernetes manifests, and documentation, binding code, parameters, and tensor hashes into a single cryptographic commit lineage.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 2: Repository Directory Tree (Part 1: Core Systems)
+% ---------------------------------------------------------------------
+\begin{frame}{Repository Architecture}{Directory Tree Topology: Core Governance \& Infrastructure}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Governance \& Workspace Domains}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{.agents/}}: AI agent persona routing, 12 specialized roles, 7 behavioral rules, and 6 executable workflows.
+                    \item \textbf{\texttt{.dvc/}}: Content-addressable dataset cache configurations, local SeaweedFS S3 endpoints, and DagsHub remotes.
+                    \item \textbf{\texttt{.github/workflows/}}: Declarative CI/CD pipeline (\texttt{ci.yml}) with multi-pass pre-commit, coverage, and OKF gates.
+                    \item \textbf{\texttt{config/}}: Declarative YAML parameters (\texttt{params.yaml}, \texttt{default\_config.yaml}, \texttt{taxa\_catalog.yaml}).
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Data, Deployment \& Documentation}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{data/}}: Versioned Parquet manifests (\texttt{data/manifests/}) and 4-way stratified embedding tensors (\texttt{data/embeddings/}).
+                    \item \textbf{\texttt{deploy/}}: Production Dockerfile (\texttt{deploy/docker/}), local Compose stack (\texttt{deploy/compose/}), and k3s manifests (\texttt{deploy/k8s/}).
+                    \item \textbf{\texttt{docs/}}: Zensical MkDocs markdown specifications and complete LaTeX Beamer/Article source trees.
+                    \item \textbf{\texttt{openwiki/}}: Open Knowledge Format (OKF v0.2) concept documents and cryptographic evidence claim graphs.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \vspace{0.1cm}
+    \statusdone
+
+    \script{Here we inspect the core system directories. Notice how operational concerns are cleanly segregated: agentic instructions in dot-agents, storage configurations in dot-dvc, deployment manifests in deploy, and our living knowledge base in openwiki.}
+    \qa{What is the function of the .agents directory?}{It provides deterministic operational constraints, preventing AI assistants from executing bare pip or non-Pixi commands and routing tasks to narrow domain roles.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 3: Repository Directory Tree (Part 2: Execution & Tests)
+% ---------------------------------------------------------------------
+\begin{frame}{Repository Architecture}{Directory Tree Topology: Application Source, Tests \& Scripts}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Application Core (\texttt{src/taxon\_vision/})}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{config/}}: Typed Pydantic schemas \& YAML loader.
+                    \item \textbf{\texttt{data/}}: S3 streaming, iNaturalist client, license gates.
+                    \item \textbf{\texttt{models/}}: Backbone factory, Class-Balanced focal loss.
+                    \item \textbf{\texttt{inference/}}: ONNX Runtime engine, head projector, Grad-CAM.
+                    \item \textbf{\texttt{uncertainty/}}: Split Conformal predictor \& OOD energy.
+                    \item \textbf{\texttt{service/}}: FastAPI routes, Jinja2/HTMX dashboard.
+                    \item \textbf{\texttt{pipelines/}}: 7 canonical DVC stage CLI entrypoints.
+                    \item \textbf{\texttt{monitoring/}}: Prometheus telemetry and drift detectors.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Quality, Automation \& Reports}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{tests/unit/}}: Granular component tests for configs, pipelines, models, quantizers, and conformal engines.
+                    \item \textbf{\texttt{tests/integration/}}: Full FastAPI endpoint simulations and HTMX interaction sweeps.
+                    \item \textbf{\texttt{tests/invariants/}}: Mathematical coverage tests and pure Pixi toolchain assertions.
+                    \item \textbf{\texttt{scripts/}}: Automation utilities grouped into \texttt{ci/}, \texttt{data/}, and \texttt{governance/}.
+                    \item \textbf{\texttt{reports/}}: Machine-readable JSON metrics for training, license audits, and Pareto benchmarks.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \vspace{0.1cm}
+    \statusdone
+
+    \script{On the execution side, taxon-vision is modularized into high-cohesion, low-coupling subpackages under src. Every single function maintains a cognitive complexity score strictly below 15, verified by complexipy, while our comprehensive test suite guarantees coverage above 80 percent.}
+    \qa{How is cognitive complexity enforced across the codebase?}{We run complexipy across the entire src directory in pre-commit hooks and CI pipelines, rejecting any function exceeding a score of 15.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 4: Root Governance & Build Specifications
+% ---------------------------------------------------------------------
+\begin{frame}{Root Governance}{Build Specifications, Dependency Lockfiles \& Task Runners}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Hermetic Build Specifications}
+                \begin{itemize}\footnotesize
+                    \item \textbf{\texttt{pyproject.toml}}: Declares multi-target Pixi environments (\texttt{default}, \texttt{dev}, \texttt{ci-dev}) across \texttt{conda-forge}, \texttt{pytorch}, and \texttt{nvidia} channels. Configures Ruff, Mypy, and Pytest.
+                    \item \textbf{\texttt{pixi.lock}}: Cryptographically pinned binary lockfile guaranteeing bit-for-bit reproducible environments across workstations, CI nodes, and Kubernetes pods.
+                    \item \textbf{\texttt{zensical.toml}}: Configuration for the Zensical MkDocs documentation compiler with KaTeX and Mermaid.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Orchestration \& Pipeline Graphs}
+                \begin{itemize}\footnotesize
+                    \item \textbf{\texttt{Justfile}}: Polyglot task runner automating developer workflows (\texttt{just check}, \texttt{just test}, \texttt{just repro}, \texttt{just optuna-k8s}, \texttt{just audit-license}).
+                    \item \textbf{\texttt{dvc.yaml}}: Declarative 7-stage Epistemic Diamond DAG defining explicit parameter, code, and data dependencies.
+                    \item \textbf{\texttt{dvc.lock}}: Immutable state tracking content hashes (SHA-256 / MD5) for all intermediate tensors and ONNX binaries.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \vspace{0.1cm}
+    \statusdone
+
+    \script{The root of the repository houses our build specifications. Notice that we completely ban virtual environments and raw pip. Instead, Pixi and pyproject.toml define hermetic environments, while Justfile provides standardized recipes across all environments.}
+    \qa{Why does the project use Justfile instead of a traditional Makefile?}{Justfile provides cross-platform recipe execution, strict error handling, built-in parameterization, and seamless integration with Pixi environments without confusing tab/space syntax traps.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 5: Parameter Encyclopedia (Ingestion & Model)
+% ---------------------------------------------------------------------
+\begin{frame}{Parameter Encyclopedia}{\texttt{params.yaml}: Data Ingestion \& Vision Backbone Architecture}
+    \begin{center}\scriptsize
+        \begin{tabular}{p{3.4cm} p{1.0cm} p{2.2cm} p{4.8cm}}
+            \toprule
+            \textbf{Parameter Key} & \textbf{Default} & \textbf{Consuming Stage} & \textbf{Engineering \& Mathematical Purpose} \\
+            \midrule
+            \texttt{ingestion.taxa\_to\_fetch} & \texttt{10} & \texttt{ingest}, \texttt{audit} & Number of target species catalog entries queried from iNaturalist. \\
+            \texttt{ingestion.per\_page} & \texttt{30} & \texttt{ingest} & Observation batch size per API page during catalog ingestion. \\
+            \texttt{model.extractor} & \texttt{dinov3} & \texttt{extract\_features}, \texttt{train}, \texttt{export} & Foundation vision backbone (\texttt{dinov3}, \texttt{bioclip2}, \texttt{dinov2}, \texttt{mobilenetv4}). \\
+            \texttt{model.image\_size} & \texttt{224} & \texttt{extract\_features}, \texttt{export} & Spatial input resolution ($224 \times 224 \times 3$) for backbone resizing. \\
+            \texttt{model.num\_classes} & \texttt{10} & \texttt{train}, \texttt{export} & Dimension of linear classification head output logit vector. \\
+            \bottomrule
+        \end{tabular}
+    \end{center}
+
+    \vspace{0.05cm}
+    \begin{block}{Architecture Invariant: Parameter Centrality}
+        Parameters defined in \texttt{params.yaml} drive the DVC execution graph; changing any key automatically invalidates downstream stages and forces a deterministic recalculation of affected stages.
+    \end{block}
+
+    \script{Here is the first slice of our parameter encyclopedia. Ingestion parameters control the scale of citizen-science observation queries, while model parameters dictate our vision foundation extractor and target resolution.}
+    \qa{What happens if model.extractor is changed from dinov3 to mobilenetv4?}{DVC detects the parameter modification, invalidates feature extraction, head training, and ONNX export, and automatically re-executes the downstream pipeline with the new backbone.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 6: Parameter Encyclopedia (Feature Extraction & Training)
+% ---------------------------------------------------------------------
+\begin{frame}{Parameter Encyclopedia}{\texttt{params.yaml}: Feature Extraction \& Head Training Parameters}
+    \begin{center}\scriptsize
+        \begin{tabular}{p{3.5cm} p{0.9cm} p{2.1cm} p{4.9cm}}
+            \toprule
+            \textbf{Parameter Key} & \textbf{Default} & \textbf{Consuming Stage} & \textbf{Engineering \& Mathematical Purpose} \\
+            \midrule
+            \texttt{feature\_extraction.} \texttt{batch\_size} & \texttt{64} & \texttt{extract\_features} & Batch size for batched forward passes through frozen backbones. \\
+            \texttt{feature\_extraction.} \texttt{val\_split} & \texttt{0.15} & \texttt{extract\_features} & Stratified validation split ratio for early stopping \& tuning. \\
+            \texttt{feature\_extraction.} \texttt{cal\_split} & \texttt{0.15} & \texttt{extract\_features} & Independent calibration split for Split Conformal Prediction. \\
+            \texttt{feature\_extraction.} \texttt{test\_split} & \texttt{0.10} & \texttt{extract\_features} & Holdout Pareto benchmark test partition ($60\%$ train remainder). \\
+            \texttt{training.epochs} & \texttt{5} & \texttt{train} & Epoch count for training linear classification heads on cached tensors. \\
+            \texttt{training.learning\_rate} & \texttt{0.001} & \texttt{train} & Initial learning rate for AdamW optimization. \\
+            \texttt{training.cb\_beta} & \texttt{0.999} & \texttt{train} & Effective sample weighting hyperparameter $\beta$ for Class-Balanced loss. \\
+            \texttt{training.tune} & \texttt{false} & \texttt{train} & Toggle for Optuna Bayesian hyperparameter optimization sweeps. \\
+            \bottomrule
+        \end{tabular}
+    \end{center}
+
+    \vspace{0.05cm}
+    \statusdone
+
+    \script{This slide documents our feature extraction and training parameters. Notice the explicit cal split and test split: by allocating dedicated calibration and holdout partitions before training, we guarantee zero epistemic data leakage.}
+    \qa{Why does training require so few epochs (5 epochs default)?}{Because self-supervised foundation backbones extract highly linearly-separable embeddings, allowing convex linear heads to converge in seconds without lengthy gradient descent loops.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 7: Parameter Encyclopedia (Export, Conformal & Evaluation)
+% ---------------------------------------------------------------------
+\begin{frame}{Parameter Encyclopedia}{\texttt{params.yaml}: Export, Conformal Bounds \& Pareto Evaluation}
+    \begin{center}\scriptsize
+        \begin{tabular}{p{3.6cm} p{0.9cm} p{1.9cm} p{5.0cm}}
+            \toprule
+            \textbf{Parameter Key} & \textbf{Default} & \textbf{Consuming Stage} & \textbf{Engineering \& Mathematical Purpose} \\
+            \midrule
+            \texttt{export.quantize\_int8} & \texttt{true} & \texttt{export\_onnx} & Enables ONNX dynamic INT8 quantization for $4\times$ smaller model weight size. \\
+            \texttt{export.opset\_version} & \texttt{17} & \texttt{export\_onnx} & ONNX specification operator set version for export compatibility. \\
+            \texttt{conformal.alpha} & \texttt{0.05} & \texttt{calibrate} & Target error rate, guaranteeing $1 - \alpha = 95\%$ statistical coverage. \\
+            \texttt{conformal.temperature} & \texttt{1.0} & \texttt{calibrate} & Post-hoc logit temperature scaling parameter prior to conformal scoring. \\
+            \texttt{evaluation.} \texttt{latency\_benchmark\_runs} & \texttt{100} & \texttt{evaluate} & Iteration count for p95 execution latency profiling under ONNX Runtime. \\
+            \texttt{evaluation.} \texttt{p95\_latency\_budget\_ms} & \texttt{15.0} & \texttt{evaluate} & Maximum allowable p95 inference latency threshold for production gating. \\
+            \bottomrule
+        \end{tabular}
+    \end{center}
+
+    \vspace{0.05cm}
+    \begin{block}{Zero-Allocation Latency Gate}
+        The evaluate stage verifies that the quantized INT8 model satisfies both the $95\%$ coverage guarantee and the $15\text{ ms}$ latency budget before marking the pipeline as green.
+    \end{block}
+
+    \script{Here we see the parameters governing the terminal stages of the pipeline: dynamic INT8 quantization, conformal error budgets, and our strict 15 millisecond latency SLA.}
+    \qa{How does the evaluate stage enforce production gates?}{It compares empirical coverage against 1 minus alpha and p95 latency against the 15 millisecond budget, exiting with code 1 if either mathematical bound is violated.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 8: Centralized Configuration Engine (default_config.yaml)
+% ---------------------------------------------------------------------
+\begin{frame}{Configuration Engine}{\texttt{config/default\_config.yaml}: Centralized Settings Engine}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Declarative Service \& Storage Defaults}
+                \begin{itemize}\footnotesize
+                    \item \textbf{Service Binding:} \texttt{service.host: "0.0.0.0"}, \texttt{service.port: 8000}, \texttt{service.workers: 4}.
+                    \item \textbf{Filesystem Layout:} \texttt{data\_dir: "data"}, \texttt{artifacts\_dir: "models/checkpoints"}, \texttt{reports\_dir: "reports"}.
+                    \item \textbf{MLflow Registry:} \texttt{mlflow.tracking\_uri: "https://dagshub.com/.../mlflow"}.
+                    \item \textbf{Active Learning:} \texttt{active\_learning.uncertainty\_threshold: 0.75}.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Hierarchical Resolution Architecture}
+                \begin{enumerate}\footnotesize
+                    \item \textbf{Tier 1 (Base):} \texttt{config/default\_config.yaml} defines typed defaults for every operational field.
+                    \item \textbf{Tier 2 (Pipeline):} \texttt{params.yaml} selectively overrides algorithmic parameters for active DVC runs.
+                    \item \textbf{Tier 3 (Runtime):} Environment variables with \texttt{TAXON\_} prefix override parameters dynamically without file modifications.
+                \end{enumerate}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \vspace{0.1cm}
+    \statusdone
+
+    \script{TaxonVision enforces a zero-magic-number rule. Every operational constant resides in config/default\_config.yaml and is statically validated via Pydantic v2 schemas in src/taxon\_vision/config.}
+    \qa{How do environment variables interact with YAML configuration files?}{Environment variables using the TAXON double-underscore pattern take highest precedence, allowing containerized deployments to override settings without modifying tracked YAML files.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 9: Specialized Manifests Matrix
+% ---------------------------------------------------------------------
+\begin{frame}{Specialized Manifests}{Domain Catalogs, Conformal Calibration \& Prometheus Scrapes}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Calibration \& Catalog Declarations}
+                \begin{itemize}\footnotesize
+                    \item \textbf{\texttt{config/conformal\_config.yaml}}: Serializes empirical calibration outputs:
+                        \begin{itemize}\scriptsize
+                            \item Quantile threshold: $\hat{q} = 0.8405$
+                            \item OOD energy gate: $\tau_{\text{ood}} = -2.2792$
+                            \item Nominal coverage: $1 - \alpha = 0.95$
+                            \item Calibrated sample size: $N_{\text{cal}} = 169$
+                        \end{itemize}
+                    \item \textbf{\texttt{config/taxa\_catalog.yaml}}: Authoritative DarwinCore definitions for target species, resolving GBIF taxonomy and class indices.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Telemetry \& Formatting Governance}
+                \begin{itemize}\footnotesize
+                    \item \textbf{\texttt{config/prometheus.yaml}}: Defines Prometheus scrape daemon targets, $15\text{ s}$ intervals, and metric paths (\texttt{/metrics}) for the API.
+                    \item \textbf{\texttt{config/lint/.markdownlint.yaml}}: Strict Markdown style rules (standard hyphens, 4-space indented asterisks, blank lines surrounding fences).
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \vspace{0.1cm}
+    \statusdone
+
+    \script{Here we review specialized configurations: conformal calibration artifacts that store mathematically proven uncertainty thresholds, DarwinCore taxonomic catalogs, and Prometheus scrape rules.}
+    \qa{Why is conformal\_config.yaml versioned under config/?}{Because calibration thresholds are versioned pipeline artifacts. Saving them in YAML allows the production web service to load pre-calculated quantiles without executing expensive online calibration loops.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 10: Automation Tooling (scripts/)
+% ---------------------------------------------------------------------
+\begin{frame}{Automation Tooling}{\texttt{scripts/}: Continuous Integration, Data Ingestion \& Governance}
+    \begin{columns}[T]
+        \begin{column}{0.32\textwidth}
+            \begin{block}{\texttt{scripts/ci/}}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{local\_ci.sh}}: Native host reproduction of GitHub Actions CI sweeps without Docker overhead.
+                    \item \textbf{\texttt{jenkins\_gpu\_train.sh}}: Modular script executed in the Jenkins k3s GPU agent pod.
+                    \item \textbf{\texttt{verify\_deployment.sh}}: Post-deploy smoke test asserting pod readiness and metrics.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.32\textwidth}
+            \begin{block}{\texttt{scripts/data/}}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{download\_samples.py}}: Fetches verified open-license sample photographs for catalog taxa from iNaturalist S3.
+                \end{itemize}
+                \vspace{0.2cm}
+                \textbf{Compatibility Shims:}
+                \begin{itemize}\scriptsize
+                    \item \texttt{scripts/validate\_okf.py}
+                    \item \texttt{scripts/visualize\_okf.py}
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.32\textwidth}
+            \begin{block}{\texttt{scripts/governance/}}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{validate\_okf.py}}: Google Open Knowledge Format linter verifying frontmatter and links.
+                    \item \textbf{\texttt{visualize\_okf.py}}: Standalone D3/SVG knowledge graph compiler (\texttt{docs/viz.html}).
+                    \item \textbf{\texttt{verify\_markdown\_rules.py}}: Enforces Markdown Rule 04 formatting.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \vspace{0.1cm}
+    \statusdone
+
+    \script{Our scripts directory is structured into three clean functional domains: CI deployment automation, data sample hydration, and repository governance linters.}
+    \qa{Why do backward-compatible shims exist in scripts/?}{To support external GitHub Actions and legacy CI configurations that call root scripts while maintaining clean subpackage organization under scripts/governance.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 11: Deployment Topology (deploy/)
+% ---------------------------------------------------------------------
+\begin{frame}{Deployment Topology}{\texttt{deploy/}: Containers, Compose Stacks \& Kubernetes Manifests}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Containerization Architecture}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{deploy/docker/Dockerfile}}: Multi-stage production container based on Pixi. Strips build tooling, runs as non-root user \texttt{taxon}, and installs ONNX Runtime CPU.
+                    \item \textbf{\texttt{deploy/compose/} \texttt{docker-compose.local.yaml}}: Complete standalone local deployment running FastAPI, SeaweedFS S3, Prometheus, and Grafana.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Kubernetes Cluster Manifests (\texttt{deploy/k8s/})}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{api-deployment.yaml}}: Rolling-update Deployment, ConfigMap, ClusterIP Service, and HTTP probes.
+                    \item \textbf{\texttt{jenkins-gpu-pod.yaml}}: Ephemeral GPU runner pod requesting \texttt{nvidia.com/gpu: "1"} and host caches.
+                    \item \textbf{\texttt{jenkins-agent-rbac.yaml}}: Least-privilege ServiceAccount and RoleBinding for CI runners.
+                    \item \textbf{\texttt{mlops-storage-and-optuna.yaml}}: PVC for SQLite and Optuna web dashboard.
+                    \item \textbf{\texttt{nvidia-time-slicing-config.yaml}}: 4-way time-slicing plugin config for RTX 5070 Ti.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \vspace{0.1cm}
+    \statusdone
+
+    \script{Here we see our deployment topology. All container definitions and Kubernetes manifests reside under deploy, separating application source from cluster orchestration.}
+    \qa{How does the production container guarantee security?}{The Dockerfile uses a dedicated non-root user (taxon, UID 10001), drops all Linux capabilities, and includes a built-in healthcheck probing /health/ready.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 12: Multi-Agent Governance Framework (Roles)
+% ---------------------------------------------------------------------
+\begin{frame}{Agentic Governance}{\texttt{.agents/roles/}: 12 Path-Scoped AI Roles \& Responsibilities}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Core ML \& Pipeline Roles}
+                \begin{itemize}\scriptsize
+                    \item \textbf{@orchestrator}: PM, milestone coordinator, OKF guardian.
+                    \item \textbf{@taxonomic-architect}: DarwinCore schemas, GBIF tree mappings.
+                    \item \textbf{@mlops-data-engineer}: S3 streaming, DVC hashes, licensing.
+                    \item \textbf{@model-engineer}: Timm factory, Class-Balanced loss, training.
+                    \item \textbf{@inference-optimizer}: ONNX export, INT8 quantization, CAM.
+                    \item \textbf{@uncertainty-safety-engineer}: Conformal prediction, energy OOD.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Platform, Safety \& Ops Roles}
+                \begin{itemize}\scriptsize
+                    \item \textbf{@active-learning-engineer}: BADGE, CoreSet, human triage queue.
+                    \item \textbf{@observability-engineer}: Prometheus metrics, drift telemetry.
+                    \item \textbf{@api-and-ui-developer}: FastAPI endpoints, Jinja2/HTMX dashboard.
+                    \item \textbf{@qa-automator}: Unit, integration, invariant test fixtures.
+                    \item \textbf{@docs-librarian}: Zensical docs, KaTeX equations, OKF graph.
+                    \item \textbf{@git-operator}: Signed GPG commits, releases, branch health.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \vspace{0.1cm}
+    \statusdone
+
+    \script{Our multi-agent governance system in dot-agents routes tasks to twelve specialized roles, cleanly partitioned between core ML engineering and platform operations.}
+    \qa{Why use path-scoped roles instead of a single general assistant?}{Path-scoped roles restrict context loading to strictly relevant domain files, preventing token waste, namespace hallucinations, and unintended cross-domain modifications.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 13: Invariant Rules & Canonical Workflows (.agents/)
+% ---------------------------------------------------------------------
+\begin{frame}{Agentic Governance}{\texttt{.agents/}: Invariant Guardrails \& Canonical Automation Workflows}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{7 Core Invariant Rules}
+                \begin{itemize}\scriptsize
+                    \item \textbf{Rule 00 (Python):} Pure Pixi, no bare pip/venv, complexity $< 15$.
+                    \item \textbf{Rule 01 (MLOps):} Deterministic PRNG seeding, DVC immutability.
+                    \item \textbf{Rule 02 (Latency):} Zero-allocation hot path, p95 $< 15\text{ ms}$.
+                    \item \textbf{Rule 03 (Git):} Mandatory GPG/SSH commit signatures.
+                    \item \textbf{Rule 04 (Markdown):} Hyphens only, 4-space list indentation.
+                    \item \textbf{Rule 05 (License):} CC0, CC-BY, CC-BY-NC compliance only.
+                    \item \textbf{Rule 06 (Conformal):} Empirical coverage $\ge 1 - \alpha$.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{6 Canonical Automated Workflows}
+                \begin{itemize}\scriptsize
+                    \item \textbf{/active-learning-cycle}: Sample ranking \& triage queue.
+                    \item \textbf{/conformal-uncertainty-audit}: $1-\alpha$ coverage assertions.
+                    \item \textbf{/doc-synchronization-pipeline}: Zensical sync \& auditing.
+                    \item \textbf{/full-pipeline-validation}: Lint, types, tests, 7-stage DAG.
+                    \item \textbf{/jules-session-triage}: Automated triage for cloud agents.
+                    \item \textbf{/model-benchmark-pareto}: Accuracy vs latency vs cost.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \vspace{0.1cm}
+    \statusdone
+
+    \script{Every AI agent operation is bound by seven non-negotiable invariant rules and automated through six canonical slash-command workflows.}
+    \qa{What happens if an agent violates an invariant rule?}{Pre-commit gates reject the change immediately in local hooks and GitHub Actions, preventing merge until all rules are satisfied.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 14: Open Knowledge Format & Evidence Citations (openwiki/)
+% ---------------------------------------------------------------------
+\begin{frame}{Open Knowledge Format}{\texttt{openwiki/}: Cryptographic Evidence Claims \& Verified Graphs}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{OKF v0.2 Knowledge Architecture}
+                \begin{itemize}\footnotesize
+                    \item \textbf{Structured YAML Frontmatter:} Every concept document declares \texttt{type}, \texttt{status}, \texttt{version}, \texttt{stale\_after}, and \texttt{trust\_tier}.
+                    \item \textbf{Trust Tiers:} Documents are classified as \emph{Human-Reviewed}, \emph{Machine-Confirmed}, or \emph{Unverified}.
+                    \item \textbf{Freshness Enforcement:} Automated CI checks reject documentation bundles with expired \texttt{stale\_after} timestamps.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Cryptographic Line-Range Evidence}
+                \begin{itemize}\footnotesize
+                    \item \textbf{Evidence Claims (\texttt{.claims/*.json}):} Machine-extracted factual claims linking documentation statements to exact line ranges in active source code files.
+                    \item \textbf{Broken Citation Detection:} If code refactoring shifts or deletes referenced source files, \texttt{validate\_okf.py} fails the build.
+                    \item \textbf{Interactive Cytoscape Visualizer:} Compiles 63 concept nodes and relational edges into \texttt{docs/viz.html}.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \vspace{0.1cm}
+    \statusdone
+
+    \script{In openwiki, we treat documentation as a compiled, verified software asset. Conforming to Google Open Knowledge Format v0.2, our evidence graph links documentation assertions to exact source code line ranges.}
+    \qa{How does OKF prevent documentation drift?}{If a refactor moves or deletes a source file referenced in a claims file or frontmatter source, validate\_okf.py catches the broken link in CI and rejects the commit.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 15: Summary & Architectural Takeaways
+% ---------------------------------------------------------------------
+\begin{frame}{Chapter Summary}{Repository Topology \& Configuration Takeaways}
+    \begin{block}{Core Architectural Takeaways}
+        \begin{itemize}\small
+            \item \textbf{Monorepo Modularity:} Explicit domain boundaries isolate application logic (\texttt{src/}), operational scripts (\texttt{scripts/}), deployment topology (\texttt{deploy/}), and governance (\texttt{.agents/}, \texttt{openwiki/}).
+            \item \textbf{Zero Magic Numbers:} Centralized YAML parameters with strict 3-tier precedence ensure all tolerances, thresholds, and endpoints are audited, versioned, and configurable.
+            \item \textbf{Hermetic Toolchain:} Pure Pixi environment locking and Justfile recipes eliminate environmental variance across bare-metal hosts and CI agents.
+            \item \textbf{Agentic Accountability:} 12 specialized AI personas governed by 7 invariant rules maintain code quality, security signing, and mathematical safety.
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.2cm}
+    \begin{center}
+        \textcolor{deepblue}{\textbf{Next: Chapter 04 --- MLOps Toolchain, Databases \& Multi-Tier Storage Architecture}}
+    \end{center}
+
+    \script{To summarize Chapter 3: by enforcing clean directory boundaries, centralized configuration schemas, and strict agentic governance, TaxonVision bridges research machine learning and mission-critical production systems.}
+    \qa{What is the primary benefit of our configuration architecture?}{It establishes a single source of truth across all 7 pipeline stages, eliminating configuration drift and enabling reproducible execution from raw data to Kubernetes deployment.}
+\end{frame}

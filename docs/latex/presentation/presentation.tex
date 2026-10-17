@@ -69,24 +69,26 @@
         \begin{column}{0.48\textwidth}
             \begin{itemize}\small
                 \item \textbf{Ch 1:} Problem \& Operational Maturity
-                \item \textbf{Ch 2:} Hardware Architecture \& Topography
-                \item \textbf{Ch 3:} Pipeline Architecture \& Fast-Path Serving
-                \item \textbf{Ch 4:} Data Engineering \& Storage (Parquet/DVC)
-                \item \textbf{Ch 5:} Model Engineering \& Bayesian Tuning
+                \item \textbf{Ch 2:} Hardware Architecture \& Infrastructure
+                \item \textbf{Ch 3:} Repository Topology \& Configurations
+                \item \textbf{Ch 4:} MLOps Stack, Databases \& Storage
+                \item \textbf{Ch 5:} Pipeline Architecture \& Fast-Path Serving
+                \item \textbf{Ch 6:} Data Engineering \& Storage (Parquet/DVC)
             \end{itemize}
         \end{column}
         \begin{column}{0.48\textwidth}
             \begin{itemize}\small
-                \item \textbf{Ch 6:} Epistemic Safety \& Conformal Bounds
-                \item \textbf{Ch 7:} CI/CD, Containers \& Kubernetes (k3s)
-                \item \textbf{Ch 8:} Observability, Drift \& Active Learning
-                \item \textbf{Ch 9:} Delivery Roadmap \& Core Principles
-                \item \textbf{Ch 10:} Multimodal Knowledge Graph \& Vision-RAG
+                \item \textbf{Ch 7:} Model Engineering \& Bayesian Tuning
+                \item \textbf{Ch 8:} Epistemic Safety \& Conformal Bounds
+                \item \textbf{Ch 9:} CI/CD, Containers \& Kubernetes (k3s)
+                \item \textbf{Ch 10:} Observability, Drift \& Active Learning
+                \item \textbf{Ch 11:} Delivery Roadmap \& Core Principles
+                \item \textbf{Ch 12:} Multimodal Knowledge Graph \& Vision-RAG
             \end{itemize}
         \end{column}
     \end{columns}
-    \script{Here is our roadmap for the presentation. We progress systematically from real-world biodiversity problems and bare-metal hardware through data engineering, model optimization, mathematical uncertainty guarantees, CI/CD, and active learning, culminating in our cutting-edge Multimodal Knowledge Graph and Vision-RAG architecture.}
-    \qa{How is this curriculum organized?}{It is structured into 10 modular chapters, moving from bare-metal foundations and reproducible training through mathematical calibration and deployment, concluding with deep multimodal reasoning and Vision-RAG.}
+    \script{Here is our roadmap for the presentation. We progress systematically from real-world biodiversity problems and bare-metal hardware through repository architecture, multi-tier storage, data engineering, model optimization, mathematical uncertainty guarantees, CI/CD, and active learning, culminating in our cutting-edge Multimodal Knowledge Graph and Vision-RAG architecture.}
+    \qa{How is this curriculum organized?}{It is structured into 12 modular chapters, moving from bare-metal foundations, repository topology, and reproducible training through mathematical calibration and deployment, concluding with deep multimodal reasoning and Vision-RAG.}
 \end{frame}
 
 % =====================================================================
@@ -98,28 +100,34 @@
 \section{Hardware Architecture \& Infrastructure}
 \input{chapters/02_hardware_and_infrastructure}
 
+\section{Repository Architecture \& Configurations}
+\input{chapters/03_repository_topology_and_configs}
+
+\section{MLOps Toolchain \& Storage Architecture}
+\input{chapters/04_mlops_stack_databases_and_storage}
+
 \section{Pipeline Architecture \& Serving}
-\input{chapters/03_core_pipeline_and_serving}
+\input{chapters/05_core_pipeline_and_serving}
 
 \section{Data Engineering \& Storage}
-\input{chapters/04_data_engineering_and_storage}
+\input{chapters/06_data_engineering_and_storage}
 
 \section{Model Engineering \& Optimization}
-\input{chapters/05_model_engineering_and_optimization}
+\input{chapters/07_model_engineering_and_optimization}
 
 \section{Epistemic Safety \& Uncertainty}
-\input{chapters/06_epistemic_safety_and_uncertainty}
+\input{chapters/08_epistemic_safety_and_uncertainty}
 
 \section{CI/CD \& Kubernetes Deployment}
-\input{chapters/07_cicd_and_kubernetes_deployment}
+\input{chapters/09_cicd_and_kubernetes_deployment}
 
 \section{Observability \& Active Learning}
-\input{chapters/08_observability_and_active_learning}
+\input{chapters/10_observability_and_active_learning}
 
 \section{Roadmap \& Engineering Lessons}
-\input{chapters/09_roadmap_and_engineering_lessons}
+\input{chapters/11_roadmap_and_engineering_lessons}
 
 \section{Multimodal Knowledge Graph \& Vision-RAG}
-\input{chapters/10_multimodal_knowledge_graph_and_vision_rag}
+\input{chapters/12_multimodal_knowledge_graph_and_vision_rag}
 
 \end{document}
