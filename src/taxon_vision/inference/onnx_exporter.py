@@ -429,15 +429,8 @@ def export_classifier_cli(argv: list[str] | None = None) -> int:
     """CLI entrypoint for exporting the trained TaxonClassifier to ONNX format.
 
     Why:
-        Automation pipelines (e.g., Jenkins CI/CD, DVC) require a deterministic CLI tool to trace and serialize PyTorch checkpoints into high-performance ONNX computational graphs with optional INT8 quantization.
-
-    How:
-        1. Parses command-line flags (--checkpoint, --output, --extractor, --image-size, --allow-untrained, --quantize-int8, --quantize-mode, --quantized-output, --calibration-dir, --calibration-samples).
-        2. Resolves configuration defaults from application settings.
-        3. Instantiates the TaxonClassifier using the pretrained backbone (unless --allow-untrained is set).
-        4. Restores trained weights from checkpoint using _load_head_checkpoint (failing if missing unless --allow-untrained).
-        5. Traces and exports the model to ONNX via export_to_onnx.
-        6. Optionally applies dynamic INT8 quantization via quantize_onnx_model.
+        Preserves backwards-compatibility for existing tests and callers while delegating
+        to the canonical implementation in taxon_vision.pipelines.export_onnx.
 
     Args:
         argv: Optional list of command-line argument strings.
@@ -445,46 +438,9 @@ def export_classifier_cli(argv: list[str] | None = None) -> int:
     Returns:
         Exit code: 0 for success, 1 on failure.
     """
-    parser = _build_arg_parser()
-    args = parser.parse_args(argv)
+    from taxon_vision.pipelines.export_onnx import export_onnx_cli
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-        stream=sys.stdout,
-    )
-
-    output_file, temp_fp32_path = _resolve_export_output(args.output, args.quantize_int8)
-
-    try:
-        settings = get_settings()
-        image_dim = args.image_size or settings.model.image_size
-
-        classifier = _build_and_restore_classifier(args, settings)
-        if classifier is None:
-            return 1
-
-        logger.info(
-            "Exporting computational graph to ONNX (%s) with input shape (1, 3, %d, %d)...",
-            output_file,
-            image_dim,
-            image_dim,
-        )
-        export_to_onnx(classifier, output_file, input_shape=(1, 3, image_dim, image_dim))
-
-        target_artifact = output_file
-        if args.quantize_int8:
-            target_artifact = _quantize_exported_graph(output_file, args, settings)
-
-        return _finalize_export_artifacts(target_artifact, args.output, args.quantize_int8)
-
-    except Exception as err:
-        logger.exception("Fatal error during ONNX export: %s", err)
-        return 1
-    finally:
-        if temp_fp32_path is not None and temp_fp32_path.exists():
-            temp_fp32_path.unlink()
+    return export_onnx_cli(argv)
 
 
 if __name__ == "__main__":

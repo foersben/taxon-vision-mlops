@@ -22,6 +22,7 @@ stages:
     deps:
       - data/manifests/raw_manifest.parquet
       - src/taxon_vision/data/license_filter.py
+      - src/taxon_vision/domain/license.py
       - src/taxon_vision/pipelines/audit_license.py
     outs:
       - data/manifests/dataset_manifest.parquet
@@ -43,6 +44,7 @@ stages:
     deps:
       - config/taxa_catalog.yaml
       - data/manifests/dataset_manifest.parquet
+      - src/taxon_vision/data/s3_streamer.py
       - src/taxon_vision/models/factory.py
       - src/taxon_vision/pipelines/extract_features.py
     params:
@@ -133,7 +135,10 @@ stages:
     deps:
       - data/embeddings/cal_embeddings.pt
       - models/checkpoints/model_int8.onnx
+      - src/taxon_vision/inference/onnx_engine.py
       - src/taxon_vision/pipelines/calibrate.py
+      - src/taxon_vision/uncertainty/conformal.py
+      - src/taxon_vision/uncertainty/ood_detector.py
     params:
       - conformal.alpha
       - conformal.min_confidence
@@ -158,7 +163,10 @@ stages:
       - config/conformal_config.yaml
       - data/embeddings/test_embeddings.pt
       - models/checkpoints/model_int8.onnx
+      - src/taxon_vision/inference/onnx_engine.py
       - src/taxon_vision/pipelines/evaluate.py
+      - src/taxon_vision/uncertainty/conformal.py
+      - src/taxon_vision/uncertainty/ood_detector.py
     params:
       - conformal.alpha
       - evaluation.latency_sla_ms

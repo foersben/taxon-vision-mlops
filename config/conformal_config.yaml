@@ -2,8 +2,9 @@ calibration:
   method: split-conformal
   nominal_coverage: 0.95
   alpha: 0.05
-  q_hat: 0.8381
-  tau_ood: -2.2268
+  q_hat: 0.8405
+  tau_ood: -2.2792
+  ood_energy_threshold: -2.2792
   max_set_size_for_auto_accept: 3
   empty_set_action: route_to_human_triage
   min_confidence_threshold: 0.6

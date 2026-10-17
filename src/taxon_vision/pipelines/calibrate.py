@@ -72,6 +72,7 @@ def _save_calibration_artifacts(
             "alpha": round(alpha, 4),
             "q_hat": round(q_hat, 4),
             "tau_ood": round(tau_ood, 4) if tau_ood is not None else None,
+            "ood_energy_threshold": round(tau_ood, 4) if tau_ood is not None else None,
             "max_set_size_for_auto_accept": 3,
             "empty_set_action": "route_to_human_triage",
             "min_confidence_threshold": 0.60,
@@ -90,6 +91,7 @@ def _save_calibration_artifacts(
             "empirical_calibration_coverage": round(empirical_coverage, 4),
             "q_hat": round(q_hat, 4),
             "tau_ood": round(tau_ood, 4) if tau_ood is not None else None,
+            "ood_energy_threshold": round(tau_ood, 4) if tau_ood is not None else None,
             "num_calibration_samples": sample_size,
         }
         with metrics_path.open("w", encoding="utf-8") as f:
