@@ -24,8 +24,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.15cm}
-    \statusdone
 
     \script{This slide represents the core architectural breakthrough of our system: decoupling representation from classification. In naïve computer vision, you take an image, pass it through an end-to-end network, and output 1,000 class probabilities. But in biodiversity, labels and taxonomy evolve constantly. By decoupling representation from downstream heads, our heavy foundation model stays entirely frozen, while lightweight linear probes train in seconds and deploy instantly.}
     \qa{What is a foundation model backbone?}{A vision transformer (BioCLIP, DINOv2) pre-trained on vast imagery using self-supervised learning, yielding rich morphological representations without task-specific retraining.}
@@ -43,8 +41,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.15cm}
-    \statusdone
 
     \script{This is our offline training engine. Instead of feeding raw images directly into training loops every epoch, we pass them through our frozen backbone once and store the resulting numerical embeddings on disk. Once those embeddings are saved, training a new classification head takes literally ten seconds. We can run 50 hyperparameter optimization trials with Optuna in five minutes on a single GPU—something that would take days with full end-to-end fine-tuning.}
     \qa{Does training a linear head hurt accuracy?}{Self-supervised backbones produce features where linear probes achieve within 1--2\% of full fine-tuning, while saving orders of magnitude in compute and preventing catastrophic forgetting.}
@@ -61,8 +57,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.15cm}
-    \statusdone
 
     \script{In production APIs, speed and determinism are everything. We implement a strict zero-allocation fast-path serving boundary: incoming images are processed through pre-allocated tensor buffers in ONNX Runtime. The quantized linear probe executes in under 15 milliseconds, immediately paired with conformal prediction intervals to guarantee statistical coverage.}
     \qa{What is ONNX Runtime and why do we use it instead of native PyTorch?}{ONNX Runtime optimizes the computation graph, fuses operations, and performs strict memory reuse. It eliminates Python interpreter overhead, resulting in 2x to 4x lower latency and rigorously enforces zero memory allocations on the hot inference path.}
@@ -79,8 +73,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.15cm}
-    \statusdone
 
     \script{We export PyTorch models using Opset 17 for advanced graph fusions. Batch size is dynamic, allowing the same artifact to serve single API requests or bulk offline embeddings. However, we strictly freeze spatial dimensions ($3 \times 224 \times 224$). This enables ONNX Runtime to perform ahead-of-time memory planning. Combined with pre-allocated \texttt{IOBinding} buffers, we bypass dynamic heap allocations on the hot path. Finally, INT8 Post-Training Quantization inserts QDQ operators to shrink weights from 340 MB to 86 MB, fitting in cache while maintaining accuracy and sub-15ms latency.}
     \qa{Why are spatial dimensions kept static?}{Dynamic dimensions force the runtime to compute offsets and allocate heap buffers per request. Static dimensions allow ahead-of-time memory planning and safe reuse of \texttt{IOBinding} buffers, eliminating overhead.}

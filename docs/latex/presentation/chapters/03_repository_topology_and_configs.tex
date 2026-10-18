@@ -41,9 +41,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
-
     \script{Here we inspect the core system directories. Notice how operational concerns are cleanly segregated: agentic instructions in dot-agents, storage configurations in dot-dvc, deployment manifests in deploy, and our living knowledge base in openwiki.}
     \qa{What is the function of the .agents directory?}{It provides deterministic operational constraints, preventing AI assistants from executing bare pip or non-Pixi commands and routing tasks to narrow domain roles.}
 \end{frame}
@@ -52,6 +49,7 @@
 % Slide 3: Repository Directory Tree (Part 2: Execution & Tests)
 % ---------------------------------------------------------------------
 \begin{frame}{Repository Architecture}{Directory Tree Topology: Application Source, Tests \& Scripts}
+    \vspace{-0.15cm}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
             \begin{block}{Application Core (\texttt{src/taxon\_vision/})}
@@ -79,9 +77,6 @@
             \end{block}
         \end{column}
     \end{columns}
-
-    \vspace{0.1cm}
-    \statusdone
 
     \script{On the execution side, taxon-vision is modularized into high-cohesion, low-coupling subpackages under src. Every single function maintains a cognitive complexity score strictly below 15, verified by complexipy, while our comprehensive test suite guarantees coverage above 80 percent.}
     \qa{How is cognitive complexity enforced across the codebase?}{We run complexipy across the entire src directory in pre-commit hooks and CI pipelines, rejecting any function exceeding a score of 15.}
@@ -112,9 +107,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
-
     \script{The root of the repository houses our build specifications. Notice that we completely ban virtual environments and raw pip. Instead, Pixi and pyproject.toml define hermetic environments, while Justfile provides standardized recipes across all environments.}
     \qa{Why does the project use Justfile instead of a traditional Makefile?}{Justfile provides cross-platform recipe execution, strict error handling, built-in parameterization, and seamless integration with Pixi environments without confusing tab/space syntax traps.}
 \end{frame}
@@ -123,22 +115,24 @@
 % Slide 5: Parameter Encyclopedia (Ingestion & Model)
 % ---------------------------------------------------------------------
 \begin{frame}{Parameter Encyclopedia}{\texttt{params.yaml}: Data Ingestion \& Vision Backbone Architecture}
-    \begin{center}\scriptsize
-        \begin{tabular}{p{3.4cm} p{1.0cm} p{2.2cm} p{4.8cm}}
+    \vspace{-0.15cm}
+    \begin{center}\scriptsize\renewcommand{\arraystretch}{0.88}
+        \begin{tabular}{>{\raggedright\arraybackslash}p{3.4cm} >{\centering\arraybackslash}p{1.0cm} >{\raggedright\arraybackslash}p{2.2cm} >{\raggedright\arraybackslash}p{4.8cm}}
             \toprule
             \textbf{Parameter Key} & \textbf{Default} & \textbf{Consuming Stage} & \textbf{Engineering \& Mathematical Purpose} \\
             \midrule
             \texttt{ingestion.taxa\_to\_fetch} & \texttt{10} & \texttt{ingest}, \texttt{audit} & Number of target species catalog entries queried from iNaturalist. \\
             \texttt{ingestion.per\_page} & \texttt{30} & \texttt{ingest} & Observation batch size per API page during catalog ingestion. \\
-            \texttt{model.extractor} & \texttt{dinov3} & \texttt{extract\_features}, \texttt{train}, \texttt{export} & Foundation vision backbone (\texttt{dinov3}, \texttt{bioclip2}, \texttt{dinov2}, \texttt{mobilenetv4}). \\
-            \texttt{model.image\_size} & \texttt{224} & \texttt{extract\_features}, \texttt{export} & Spatial input resolution ($224 \times 224 \times 3$) for backbone resizing. \\
+            \texttt{model.extractor} & \texttt{dinov3} & \texttt{extract\_} \newline \texttt{features}, \newline \texttt{train}, \texttt{export} & Foundation vision backbone (\texttt{dinov3}, \texttt{bioclip2}, \texttt{dinov2}, \texttt{mobilenetv4}). \\
+            \texttt{model.image\_size} & \texttt{224} & \texttt{extract\_} \newline \texttt{features}, \newline \texttt{export} & Spatial input resolution ($224 \times 224 \times 3$) for backbone resizing. \\
             \texttt{model.num\_classes} & \texttt{10} & \texttt{train}, \texttt{export} & Dimension of linear classification head output logit vector. \\
             \bottomrule
         \end{tabular}
     \end{center}
 
-    \vspace{0.05cm}
+    \vspace{-0.1cm}
     \begin{block}{Architecture Invariant: Parameter Centrality}
+        \scriptsize
         Parameters defined in \texttt{params.yaml} drive the DVC execution graph; changing any key automatically invalidates downstream stages and forces a deterministic recalculation of affected stages.
     \end{block}
 
@@ -150,15 +144,16 @@
 % Slide 6: Parameter Encyclopedia (Feature Extraction & Training)
 % ---------------------------------------------------------------------
 \begin{frame}{Parameter Encyclopedia}{\texttt{params.yaml}: Feature Extraction \& Head Training Parameters}
-    \begin{center}\scriptsize
-        \begin{tabular}{p{3.5cm} p{0.9cm} p{2.1cm} p{4.9cm}}
+    \vspace{-0.15cm}
+    \begin{center}\scriptsize\renewcommand{\arraystretch}{0.85}
+        \begin{tabular}{>{\raggedright\arraybackslash}p{3.5cm} >{\centering\arraybackslash}p{1.0cm} >{\raggedright\arraybackslash}p{2.1cm} >{\raggedright\arraybackslash}p{4.8cm}}
             \toprule
             \textbf{Parameter Key} & \textbf{Default} & \textbf{Consuming Stage} & \textbf{Engineering \& Mathematical Purpose} \\
             \midrule
-            \texttt{feature\_extraction.} \texttt{batch\_size} & \texttt{64} & \texttt{extract\_features} & Batch size for batched forward passes through frozen backbones. \\
-            \texttt{feature\_extraction.} \texttt{val\_split} & \texttt{0.15} & \texttt{extract\_features} & Stratified validation split ratio for early stopping \& tuning. \\
-            \texttt{feature\_extraction.} \texttt{cal\_split} & \texttt{0.15} & \texttt{extract\_features} & Independent calibration split for Split Conformal Prediction. \\
-            \texttt{feature\_extraction.} \texttt{test\_split} & \texttt{0.10} & \texttt{extract\_features} & Holdout Pareto benchmark test partition ($60\%$ train remainder). \\
+            \texttt{feature\_extraction.} \newline \texttt{batch\_size} & \texttt{64} & \texttt{extract\_} \newline \texttt{features} & Batch size for batched forward passes through frozen backbones. \\
+            \texttt{feature\_extraction.} \newline \texttt{val\_split} & \texttt{0.15} & \texttt{extract\_} \newline \texttt{features} & Stratified validation split ratio for early stopping \& tuning. \\
+            \texttt{feature\_extraction.} \newline \texttt{cal\_split} & \texttt{0.15} & \texttt{extract\_} \newline \texttt{features} & Independent calibration split for Split Conformal Prediction. \\
+            \texttt{feature\_extraction.} \newline \texttt{test\_split} & \texttt{0.10} & \texttt{extract\_} \newline \texttt{features} & Holdout Pareto benchmark test partition ($60\%$ train remainder). \\
             \texttt{training.epochs} & \texttt{5} & \texttt{train} & Epoch count for training linear classification heads on cached tensors. \\
             \texttt{training.learning\_rate} & \texttt{0.001} & \texttt{train} & Initial learning rate for AdamW optimization. \\
             \texttt{training.cb\_beta} & \texttt{0.999} & \texttt{train} & Effective sample weighting hyperparameter $\beta$ for Class-Balanced loss. \\
@@ -166,9 +161,6 @@
             \bottomrule
         \end{tabular}
     \end{center}
-
-    \vspace{0.05cm}
-    \statusdone
 
     \script{This slide documents our feature extraction and training parameters. Notice the explicit cal split and test split: by allocating dedicated calibration and holdout partitions before training, we guarantee zero epistemic data leakage.}
     \qa{Why does training require so few epochs (5 epochs default)?}{Because self-supervised foundation backbones extract highly linearly-separable embeddings, allowing convex linear heads to converge in seconds without lengthy gradient descent loops.}
@@ -178,8 +170,9 @@
 % Slide 7: Parameter Encyclopedia (Export, Conformal & Evaluation)
 % ---------------------------------------------------------------------
 \begin{frame}{Parameter Encyclopedia}{\texttt{params.yaml}: Export, Conformal Bounds \& Pareto Evaluation}
-    \begin{center}\scriptsize
-        \begin{tabular}{p{3.6cm} p{0.9cm} p{1.9cm} p{5.0cm}}
+    \vspace{-0.25cm}
+    \begin{center}\scriptsize\renewcommand{\arraystretch}{0.76}
+        \begin{tabular}{>{\raggedright\arraybackslash}p{3.5cm} >{\centering\arraybackslash}p{1.0cm} >{\raggedright\arraybackslash}p{2.0cm} >{\raggedright\arraybackslash}p{4.9cm}}
             \toprule
             \textbf{Parameter Key} & \textbf{Default} & \textbf{Consuming Stage} & \textbf{Engineering \& Mathematical Purpose} \\
             \midrule
@@ -187,14 +180,15 @@
             \texttt{export.opset\_version} & \texttt{17} & \texttt{export\_onnx} & ONNX specification operator set version for export compatibility. \\
             \texttt{conformal.alpha} & \texttt{0.05} & \texttt{calibrate} & Target error rate, guaranteeing $1 - \alpha = 95\%$ statistical coverage. \\
             \texttt{conformal.temperature} & \texttt{1.0} & \texttt{calibrate} & Post-hoc logit temperature scaling parameter prior to conformal scoring. \\
-            \texttt{evaluation.} \texttt{latency\_benchmark\_runs} & \texttt{100} & \texttt{evaluate} & Iteration count for p95 execution latency profiling under ONNX Runtime. \\
-            \texttt{evaluation.} \texttt{p95\_latency\_budget\_ms} & \texttt{15.0} & \texttt{evaluate} & Maximum allowable p95 inference latency threshold for production gating. \\
+            \texttt{evaluation.} \newline \texttt{benchmark\_runs} & \texttt{100} & \texttt{evaluate} & Iteration count for p95 execution latency profiling under ONNX Runtime. \\
+            \texttt{evaluation.} \newline \texttt{p95\_budget\_ms} & \texttt{15.0} & \texttt{evaluate} & Maximum allowable p95 inference latency threshold for production gating. \\
             \bottomrule
         \end{tabular}
     \end{center}
 
-    \vspace{0.05cm}
+    \vspace{-0.15cm}
     \begin{block}{Zero-Allocation Latency Gate}
+        \scriptsize
         The evaluate stage verifies that the quantized INT8 model satisfies both the $95\%$ coverage guarantee and the $15\text{ ms}$ latency budget before marking the pipeline as green.
     \end{block}
 
@@ -206,7 +200,7 @@
 % Slide 8: Centralized Configuration Engine (default_config.yaml)
 % ---------------------------------------------------------------------
 \begin{frame}{Configuration Engine}{\texttt{config/default\_config.yaml}: Centralized Settings Engine}
-    \begin{columns}[T]
+    \begin{columns}[c]
         \begin{column}{0.48\textwidth}
             \begin{block}{Declarative Service \& Storage Defaults}
                 \begin{itemize}\footnotesize
@@ -218,18 +212,37 @@
             \end{block}
         \end{column}
         \begin{column}{0.48\textwidth}
-            \begin{block}{Hierarchical Resolution Architecture}
-                \begin{enumerate}\footnotesize
-                    \item \textbf{Tier 1 (Base):} \texttt{config/default\_config.yaml} defines typed defaults for every operational field.
-                    \item \textbf{Tier 2 (Pipeline):} \texttt{params.yaml} selectively overrides algorithmic parameters for active DVC runs.
-                    \item \textbf{Tier 3 (Runtime):} Environment variables with \texttt{TAXON\_} prefix override parameters dynamically without file modifications.
-                \end{enumerate}
-            \end{block}
+            \centering
+            \resizebox{0.96\linewidth}{!}{
+            \begin{tikzpicture}[
+                font=\sffamily,
+                tier3/.style={rectangle, draw=herbired!90, fill=herbired!15, thick, rounded corners=2pt, minimum width=4.0cm, minimum height=0.65cm, align=center, font=\scriptsize\bfseries},
+                tier2/.style={rectangle, draw=signalorange!90, fill=signalorange!15, thick, rounded corners=2pt, minimum width=4.6cm, minimum height=0.65cm, align=center, font=\scriptsize\bfseries},
+                tier1/.style={rectangle, draw=deepblue!90, fill=deepblue!15, thick, rounded corners=2pt, minimum width=5.2cm, minimum height=0.65cm, align=center, font=\scriptsize\bfseries},
+                arr/.style={->, >=stealth, thick, draw=black!70}
+            ]
+                % Apex: Tier 3
+                \node[tier3] (t3) {Tier 3: \texttt{TAXON\_\_*} Env Vars\\[-2pt]{\tiny (Runtime Container Overrides)}};
+
+                % Middle: Tier 2
+                \node[tier2, below=0.28cm of t3] (t2) {Tier 2: \texttt{params.yaml}\\[-2pt]{\tiny (Active DVC Pipeline Overrides)}};
+
+                % Base: Tier 1
+                \node[tier1, below=0.28cm of t2] (t1) {Tier 1: \texttt{config/default\_config.yaml}\\[-2pt]{\tiny (Typed Pydantic Base Defaults)}};
+
+                % Arrows
+                \draw[arr] (t1) -- node[right, font=\tiny\bfseries, text=black!70] {Overridden by} (t2);
+                \draw[arr] (t2) -- node[right, font=\tiny\bfseries, text=black!70] {Overridden by} (t3);
+
+            \end{tikzpicture}
+            }
+            \vspace{0.1cm}
+            \begin{itemize}\scriptsize
+                \item \textbf{Precedence Rule:} Tier 3 $\succ$ Tier 2 $\succ$ Tier 1.
+                \item \textbf{Zero Magic Numbers:} Statically validated by Pydantic schemas in \texttt{config.py}.
+            \end{itemize}
         \end{column}
     \end{columns}
-
-    \vspace{0.1cm}
-    \statusdone
 
     \script{TaxonVision enforces a zero-magic-number rule. Every operational constant resides in config/default\_config.yaml and is statically validated via Pydantic v2 schemas in src/taxon\_vision/config.}
     \qa{How do environment variables interact with YAML configuration files?}{Environment variables using the TAXON double-underscore pattern take highest precedence, allowing containerized deployments to override settings without modifying tracked YAML files.}
@@ -263,9 +276,6 @@
             \end{block}
         \end{column}
     \end{columns}
-
-    \vspace{0.1cm}
-    \statusdone
 
     \script{Here we review specialized configurations: conformal calibration artifacts that store mathematically proven uncertainty thresholds, DarwinCore taxonomic catalogs, and Prometheus scrape rules.}
     \qa{Why is conformal\_config.yaml versioned under config/?}{Because calibration thresholds are versioned pipeline artifacts. Saving them in YAML allows the production web service to load pre-calculated quantiles without executing expensive online calibration loops.}
@@ -309,9 +319,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
-
     \script{Our scripts directory is structured into three clean functional domains: CI deployment automation, data sample hydration, and repository governance linters.}
     \qa{Why do backward-compatible shims exist in scripts/?}{To support external GitHub Actions and legacy CI configurations that call root scripts while maintaining clean subpackage organization under scripts/governance.}
 \end{frame}
@@ -341,9 +348,6 @@
             \end{block}
         \end{column}
     \end{columns}
-
-    \vspace{0.1cm}
-    \statusdone
 
     \script{Here we see our deployment topology. All container definitions and Kubernetes manifests reside under deploy, separating application source from cluster orchestration.}
     \qa{How does the production container guarantee security?}{The Dockerfile uses a dedicated non-root user (taxon, UID 10001), drops all Linux capabilities, and includes a built-in healthcheck probing /health/ready.}
@@ -379,9 +383,6 @@
             \end{block}
         \end{column}
     \end{columns}
-
-    \vspace{0.1cm}
-    \statusdone
 
     \script{Our multi-agent governance system in dot-agents routes tasks to twelve specialized roles, cleanly partitioned between core ML engineering and platform operations.}
     \qa{Why use path-scoped roles instead of a single general assistant?}{Path-scoped roles restrict context loading to strictly relevant domain files, preventing token waste, namespace hallucinations, and unintended cross-domain modifications.}
@@ -419,9 +420,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
-
     \script{Every AI agent operation is bound by seven non-negotiable invariant rules and automated through six canonical slash-command workflows.}
     \qa{What happens if an agent violates an invariant rule?}{Pre-commit gates reject the change immediately in local hooks and GitHub Actions, preventing merge until all rules are satisfied.}
 \end{frame}
@@ -450,9 +448,6 @@
             \end{block}
         \end{column}
     \end{columns}
-
-    \vspace{0.1cm}
-    \statusdone
 
     \script{In openwiki, we treat documentation as a compiled, verified software asset. Conforming to Google Open Knowledge Format v0.2, our evidence graph links documentation assertions to exact source code line ranges.}
     \qa{How does OKF prevent documentation drift?}{If a refactor moves or deletes a source file referenced in a claims file or frontmatter source, validate\_okf.py catches the broken link in CI and rejects the commit.}

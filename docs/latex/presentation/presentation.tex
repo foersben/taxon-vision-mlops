@@ -9,6 +9,7 @@
 \usepackage{amssymb}
 \usepackage{graphicx}
 \usepackage{booktabs}
+\usepackage{array}
 \usepackage{tikz}
 \usetikzlibrary{shapes,arrows,positioning,fit,calc,decorations.pathreplacing,backgrounds}
 \usepackage{smartdiagram}
@@ -64,29 +65,47 @@
 % =====================================================================
 % Curriculum Overview / TOC
 % =====================================================================
-\begin{frame}{Curriculum Overview}{Structure of the Presentation}
+\begin{frame}{Curriculum Overview}{Four-Pillar Architectural Taxonomy}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
-            \begin{itemize}\small
-                \item \textbf{Ch 1:} Problem \& Operational Maturity
-                \item \textbf{Ch 2:} Hardware Architecture \& Infrastructure
-                \item \textbf{Ch 3:} Repository Topology \& Configurations
-                \item \textbf{Ch 4:} MLOps Stack, Databases \& Storage
-                \item \textbf{Ch 5:} Epistemic Diamond DVC DAG \& DagsHub
-                \item \textbf{Ch 6:} Software Architecture \& Subpackages
-                \item \textbf{Ch 7:} Pipeline Architecture \& Fast-Path Serving
-            \end{itemize}
+            \setbeamercolor{block title}{bg=deepblue,fg=white}
+            \setbeamercolor{block body}{bg=deepblue!8,fg=black}
+            \begin{block}{\textbf{Part I: Domain, Hardware \& Repo Topology}}
+                \scriptsize
+                \textbf{Ch 01:} Problem \& Operational Maturity \\
+                \textbf{Ch 02:} Hardware Architecture \& Infrastructure \\
+                \textbf{Ch 03:} Repository Topology \& Configurations
+            \end{block}
+            \vspace{0.15cm}
+            \setbeamercolor{block title}{bg=plantgreen,fg=white}
+            \setbeamercolor{block body}{bg=plantgreen!8,fg=black}
+            \begin{block}{\textbf{Part II: MLOps Stack, DVC DAG \& Code Architecture}}
+                \scriptsize
+                \textbf{Ch 04:} MLOps Stack, Databases \& Storage \\
+                \textbf{Ch 05:} Epistemic Diamond DVC DAG \& DagsHub \\
+                \textbf{Ch 06:} Software Architecture \& Subpackages
+            \end{block}
         \end{column}
         \begin{column}{0.48\textwidth}
-            \begin{itemize}\small
-                \item \textbf{Ch 8:} Data Engineering \& Storage (Parquet/DVC)
-                \item \textbf{Ch 9:} Model Engineering \& Bayesian Tuning
-                \item \textbf{Ch 10:} Epistemic Safety \& Conformal Bounds
-                \item \textbf{Ch 11:} CI/CD, Containers \& Kubernetes (k3s)
-                \item \textbf{Ch 12:} Observability, Drift \& Active Learning
-                \item \textbf{Ch 13:} Delivery Roadmap \& Core Principles
-                \item \textbf{Ch 14:} Multimodal Knowledge Graph \& Vision-RAG
-            \end{itemize}
+            \setbeamercolor{block title}{bg=signalorange,fg=white}
+            \setbeamercolor{block body}{bg=signalorange!8,fg=black}
+            \begin{block}{\textbf{Part III: Fast-Path Serving, Data \& Model Engineering}}
+                \scriptsize
+                \textbf{Ch 07:} Pipeline Architecture \& Fast-Path Serving \\
+                \textbf{Ch 08:} Data Engineering \& Storage (Parquet/DVC) \\
+                \textbf{Ch 09:} Model Engineering \& Bayesian Tuning
+            \end{block}
+            \vspace{0.15cm}
+            \setbeamercolor{block title}{bg=herbired,fg=white}
+            \setbeamercolor{block body}{bg=herbired!8,fg=black}
+            \begin{block}{\textbf{Part IV: Epistemic Safety, CI/CD, Observability \& Vision-RAG}}
+                \scriptsize
+                \textbf{Ch 10:} Epistemic Safety \& Conformal Bounds \\
+                \textbf{Ch 11:} CI/CD, Containers \& Kubernetes (k3s) \\
+                \textbf{Ch 12:} Observability, Drift \& Active Learning \\
+                \textbf{Ch 13:} Delivery Roadmap \& Core Principles \\
+                \textbf{Ch 14:} Multimodal Knowledge Graph \& Vision-RAG
+            \end{block}
         \end{column}
     \end{columns}
     \script{Here is our roadmap for the presentation. We progress systematically from real-world biodiversity problems and bare-metal hardware through repository architecture, multi-tier storage, our Epistemic Diamond DVC DAG, modular software architecture, data engineering, model optimization, mathematical uncertainty guarantees, CI/CD, and active learning, culminating in our cutting-edge Multimodal Knowledge Graph and Vision-RAG architecture.}

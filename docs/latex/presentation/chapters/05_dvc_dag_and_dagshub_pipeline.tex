@@ -1,20 +1,16 @@
 % Chapter 5: The Epistemic Diamond DVC DAG & DagsHub Data Pipeline
 % ---------------------------------------------------------------------
 
-\begin{frame}
-    \begin{center}
-        \vspace{0.8cm}
-        {\Huge\textbf{\textcolor{deepblue}{Chapter 05}}}\\[0.3cm]
-        {\LARGE\textbf{The Epistemic Diamond DVC DAG \& DagsHub Pipeline}}\\[0.2cm]
-        {\normalsize\textcolor{darkgray}{Reproducible Lineage, Content-Addressable Storage \& Seven Canonical Stages}}
-    \end{center}
-
-    \vspace{0.6cm}
-    \begin{block}{Curriculum Focus}
-        \footnotesize
-        Deconstructing the 7-stage DVC execution graph: analyzing every Git-tracked code dependency, DVC-cached artifact, hyperparameter override, and mathematical verification metric from citizen-science ingestion to production evaluation.
-    \end{block}
-
+\begin{frame}[plain]
+    \vfill
+    \centering
+    {\footnotesize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
+    {\large \textbf{\textcolor{signalorange}{CHAPTER 05}}} \\[0.25cm]
+    {\huge \textbf{The Epistemic Diamond DVC DAG \& DagsHub Pipeline}} \\[0.35cm]
+    {\normalsize \textcolor{black!70}{Reproducible Lineage, Content-Addressable Storage \& Seven Canonical Stages}} \\[0.5cm]
+    \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
+    \statusdone
+    \vfill
     \script{Welcome to Chapter 5. In this chapter, we explore the heartbeat of our MLOps system: the Epistemic Diamond DVC pipeline. We will trace every single stage, file, parameter, and metric that guarantees mathematical safety and total reproducibility across our data tier.}
     \qa{Why do we refer to our pipeline as the Epistemic Diamond?}{Because it expands from a single raw dataset manifest into four strictly isolated split tensors for feature caching, and then contracts into a single validated, calibrated ONNX runtime package without data leakage.}
 \end{frame}
@@ -121,9 +117,6 @@
         }
     \end{center}
 
-    \vspace{0.05cm}
-    \statusdone
-
     \script{Here we see the full visual topology of the Epistemic Diamond DAG as tracked in DagsHub. Notice the clear color taxonomy: teal for Git code and config dependencies, grey for execution stages, blue for DVC content-addressable artifacts, and magenta for metrics.}
     \qa{How does the visual topology reflect distribution-free statistical safety?}{The calibration split (cal\_embeddings.pt) completely bypasses Stage 4 (train) and Stage 5 (export), only encountering the compiled ONNX model at Stage 6 (calibrate) to compute non-conformity quantiles without data snooping.}
 \end{frame}
@@ -148,9 +141,6 @@
             \bottomrule
         \end{tabular}
     \end{center}
-    \vspace{-0.2cm}
-
-    \statusdone
 
     \script{This slide documents our foundational dataset manifests and high-dimensional embedding tensors. Large embedding tensors are pushed to SeaweedFS S3 to enable zero-egress, microsecond reads during model training.}
     \qa{Why do we push embedding tensors to SeaweedFS rather than DagsHub?}{Embeddings can exceed several gigabytes across large catalogs. Caching them in bare-metal SeaweedFS avoids multi-gigabyte internet egress and enables microsecond reads during training.}
@@ -176,9 +166,6 @@
             \bottomrule
         \end{tabular}
     \end{center}
-    \vspace{-0.2cm}
-
-    \statusdone
 
     \script{Here we catalog our downstream model artifacts and metrics. Checkpoints and quantized ONNX graphs are synchronized to DagsHub, while calibration thresholds and summary metrics are version-controlled alongside application code.}
     \qa{Why is conformal\_config.yaml committed to Git instead of DVC?}{Because runtime inference services require the calibration thresholds to execute conformal guarantees. Committing the YAML to Git allows Docker serving containers to build without pulling multi-gigabyte DVC remotes.}
@@ -214,8 +201,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{DVC allows fine-grained parameter tracking. In dvc.yaml, stages depend on individual parameter keys inside params.yaml. In the DagsHub visualizer, this renders params.yaml as an overarching root dependency badge.}
     \qa{What is the primary advantage of key-level parameter tracking?}{It isolates changes. If an engineer modifies training epochs, DVC knows that feature extraction does not depend on epochs and skips the entire multi-minute feature extraction stage.}
@@ -259,8 +244,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{Stage 1 handles raw data ingestion. It takes our taxonomic catalog and queries iNaturalist for research-grade citizen-science observations, packaging raw URLs and license metadata into Parquet without downloading image files to disk.}
     \qa{Why does the ingestion stage store image URLs rather than downloading JPEG files?}{Storing URLs keeps the manifest lightweight (under 500 KB) and delays image byte fetching to the feature extraction stage, avoiding the 50-terabyte disk trap.}
@@ -307,8 +290,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{Stage 2 is our legal compliance gate. It filters the raw manifest against our strict open-license policy, discarding non-compliant observations and producing dataset\_manifest.parquet alongside a full audit report.}
     \qa{What happens if an observation lacks photographer attribution?}{LicenseFilter flags the record as non-compliant and discards it from dataset\_manifest.parquet, preventing un-attributed images from polluting training datasets.}
@@ -355,8 +336,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{Stage 3 is the expansion phase of the Epistemic Diamond. Images stream from AWS Open Data directly into GPU memory, and extracted embeddings are partitioned into four strictly isolated PyTorch tensors.}
     \qa{Why do we partition embeddings into four sets instead of the standard three?}{Because conformal prediction mathematically requires an independent calibration set (cal\_embeddings.pt) that was never seen during head training or validation tuning.}
@@ -402,8 +381,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{Stage 4 trains the linear classification head. Because foundation embeddings are pre-computed, training completes in under two seconds on host GPUs, allowing rapid experimentation and Bayesian tuning.}
     \qa{How does Class-Balanced Loss mitigate extreme taxonomic class imbalance?}{By weighting each class inversely proportional to its effective volume of samples, preventing dominant common species from overpowering rare endemic taxa.}
@@ -449,8 +426,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{Stage 5 fuses our backbone and head into a unified ONNX model. We apply dynamic INT8 quantization, compressing model weights by 75 percent and preparing the artifact for zero-allocation runtime serving.}
     \qa{Why use dynamic INT8 quantization instead of static quantization?}{Dynamic quantization quantizes weights ahead of time while computing activation scale factors dynamically, avoiding the need for extensive calibration datasets while achieving 3x CPU speedups.}
@@ -497,8 +472,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{Stage 6 calculates our rigorous mathematical safety thresholds. Using the strictly isolated calibration split, it derives the conformal quantile q-hat and the free energy OOD threshold, persisting them to conformal\_config.yaml.}
     \qa{How is the quantile threshold computed mathematically?}{We compute the ceiling of N plus 1 times 1 minus alpha, divided by N, ensuring that finite-sample distribution-free coverage holds unconditionally.}
@@ -543,8 +516,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{Stage 7 is our final production gatekeeper. It evaluates the holdout test set to verify that empirical coverage satisfies the 95 percent bound, while running latency profiling to ensure sub-15ms compliance.}
     \qa{What happens if empirical coverage drops below 1 minus alpha on the test set?}{The evaluate pipeline stage exits with code 1, causing DVC to fail and blocking the Jenkins CI deployment pipeline from promoting the model to production.}
@@ -582,8 +553,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{Here we inspect the machine-readable metrics produced by Stages 2 and 4. The license audit report certifies legal compliance, while the training metrics capture loss convergence and training latency.}
     \qa{Why is duration\_seconds so short (under 2 seconds)?}{Because linear convex heads train directly on cached floating-point embeddings, completely bypassing convolutional or transformer backpropagation loops.}
@@ -619,8 +588,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{Stages 6 and 7 generate our epistemic safety metrics. We verify that empirical coverage satisfies the 95 percent bound, measure prediction set efficiency, and calculate human triage referral rates.}
     \qa{What does a mean set size of 1.72 indicate?}{It demonstrates that for typical ambiguous test specimens, the model narrows thousands of possibilities down to less than two plausible candidate species while maintaining a 95 percent ground truth guarantee.}
@@ -654,8 +621,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{This slide details DVC's caching intelligence. By comparing SHA256 hashes in dvc.lock, DVC skips expensive stages whose code and parameters have not changed, allowing our CI pipelines to validate commits in seconds.}
     \qa{How does DVC detect that a stage needs re-execution?}{It computes a combined hash of all declared code dependencies, input files, and parameter values. If this hash differs from dvc.lock, the stage is re-executed.}

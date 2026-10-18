@@ -65,6 +65,9 @@
     }
     \end{center}
 
+    \vspace{0.25cm}
+    \statuspartial
+
     \script{Let's review our progress transparently. Phase 1 and Phase 2 are complete and battle-tested in our repository today: our reproducible Pixi environment, S3 zero-copy streaming, Class-Balanced Loss runner, conformal safety bounds, Jenkins container builds, and Kubernetes manifests are live. Phase 3—connecting the Milvus vector database into our active learning webhook loop—is our ongoing target architecture roadmap.}
     \qa{How do we ensure that new feature development does not regress existing Phase 1 and 2 capabilities?}{Every commit is protected by our pre-commit gates, automated test fixtures in \texttt{tests/}, and CI pipeline validation including license and complexity audits.}
 \end{frame}
@@ -123,8 +126,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.5cm}
-    \statusdone
 
     \script{A model registry is not merely a storage bucket; it is a governance boundary. Our promotion lifecycle moves candidates from study runs to staging only after they pass an automated conformal gate. This ensures mathematical safety before human review. For audit integrity, the final production model is cryptographically tied to an immutable DVC commit and a signed Git release tag. This prevents the nightmare scenario of deploying uncalibrated models that have silently drifted from their original training distributions.}
     \qa{How does the automated conformal gate prevent bad deployments?}{The gate strictly tests the model on a holdout calibration set. If the empirical coverage falls below $1-\alpha$ or the set size exceeds a usability threshold, the promotion script halts and rejects the candidate automatically.}

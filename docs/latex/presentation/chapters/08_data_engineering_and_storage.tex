@@ -28,8 +28,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{In large-scale biological vision, downloading 50 terabytes of raw images is impossible for individual developers. Instead of downloading JPEGs, TaxonVision uses lightweight Apache Parquet index manifests. The images remain on remote AWS Open Data S3 buckets, while our local system works with columnar metadata that can be filtered and sliced in milliseconds.}
     \qa{Why use Apache Parquet instead of an SQLite or PostgreSQL database?}{Parquet provides columnar compression, partitioned scanning, and native zero-copy integration with Apache Arrow, PyTorch, and Polars, making it ideal for distributed MLOps pipelines without database server overhead.}
@@ -45,8 +43,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{How do we ensure that an image on S3 hasn't been corrupted or altered over time? Inside our Parquet manifest, every single observation has a cryptographic SHA-256 validation hash stored alongside its S3 URL. When our S3Streamer module streams the image into memory, it checks the SHA-256 hash immediately before decoding. If a single byte is corrupted, the observation is caught and logged instantly.}
     \qa{Does on-the-fly hash verification introduce CPU bottlenecks?}{SHA-256 hashing in hardware-accelerated CPU instructions takes microseconds per image buffer, which is entirely hidden behind network transfer and image decoding latency.}
@@ -72,8 +68,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{Let's break down the difference between how data is stored on disk and how it exists in memory. Parquet is an on-disk format: instead of storing data row-by-row like a CSV, it stores data column-by-column, allowing us to read only the columns we need, like taxon ID, while skipping the rest. Arrow, on the other hand, is an in-memory layout. It standardizes how tabular data sits in RAM, eliminating costly serialization when we pass data between Python and C++.}
     \qa{What is predicate pushdown in Parquet?}{It is an optimization where the query engine checks the min/max statistics in the Parquet metadata. If our filter is outside that range, the engine skips the entire row group without ever reading the actual data blocks.}
@@ -124,8 +118,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{To query this Parquet and Arrow data, we embed DuckDB directly into our Python process. Think of DuckDB as SQLite for analytics. It doesn't run as a separate server, which means there is no network overhead. DuckDB consumes our Arrow buffers natively with zero memory copies. It processes data in morsels of 2048 tuples, keeping everything perfectly sized for the CPU's L1 and L2 caches, resulting in sub-millisecond taxonomic filtering.}
     \qa{Why not use PostgreSQL for filtering observations?}{PostgreSQL requires a separate daemon process, meaning data must be serialized, sent over a network socket, and deserialized. DuckDB runs in-process and queries Arrow buffers directly via shared memory pointers.}
@@ -184,8 +176,6 @@
         \end{column}
     \end{columns}
 
-    \statusdone
-
     \script{Once features are extracted, how do we load them without eating 30 gigabytes of RAM? We enforce an exact 1:1 row alignment between our Parquet manifest and our stratified embedding tensors. Row 500 corresponds precisely to vector 500 in the split embedding tensor. PyTorch dataloaders can slice any batch directly from NVMe storage with zero RAM allocation overhead.}
     \qa{What happens if an observation is deleted or filtered out?}{The entire split is re-indexed deterministically during feature extraction, guaranteeing that Parquet rows and tensor indices never fall out of synchronization.}
 \end{frame}
@@ -205,8 +195,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{By caching features persistently, we eliminate the need to repeatedly download and decompress JPEGs from S3 after the first epoch. More importantly, our computational complexity plummets. Instead of passing images through an 86-million parameter backbone every epoch, we perform a simple convex linear projection. This optimization reduces our training runtime from 4 hours down to just 10 seconds.}
     \qa{Why not cache images locally instead of feature embeddings?}{Caching images avoids S3 egress but still incurs JPEG decompression and the massive $\mathcal{O}(N \cdot P_{\text{backbone}})$ forward pass cost per epoch. Caching embeddings eliminates both.}
@@ -230,8 +218,6 @@
         \end{enumerate}
     \end{block}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{Because we cache features, any change to the extraction pipeline necessitates a new cache. We formalise this using a SHA-256 cryptographic invariant that hashes the backbone identity, resolution, transforms, DVC split hash, and chunking mode. This multi-cache invalidation matrix dictates exactly when independent caches must be built---such as when switching from DINOv3 to BioCLIP-2, changing input resolution, or updating dataset partitions.}
     \qa{Why include the DVC Split Hash in the cache key?}{The DVC hash ensures that if the underlying dataset rows or their partition assignments change, the cache is automatically invalidated, preventing data leaks or stale features.}
@@ -250,8 +236,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.15cm}
-    \statusdone
 
     \script{\footnotesize Our object storage architecture spans three distinct tiers to balance cost, speed, and immutability. Tier 1 is our local MinIO mock, which lets developers test S3 streaming and DVC sync operations offline without hitting real AWS egress fees. Tier 2 is the DagsHub S3 endpoint, acting as our content-addressed storage for heavy Parquet manifests and model checkpoints. Finally, Tier 3 is the public AWS Open Data Registry, which hosts the massive citizen-science image archives we stream directly during feature extraction.}
     \qa{Why not use AWS S3 for Tier 1 and Tier 2?}{\footnotesize Tier 1 uses MinIO to ensure offline developer autonomy and zero latency during rapid unit-testing. Tier 2 uses DagsHub because it automatically syncs with our MLflow tracking server and provides generous free-tier storage for ML artifacts compared to standard AWS S3 buckets.}
@@ -314,8 +298,6 @@
     }
     \end{center}
 
-    \statusdone
-
     \script{At the version control level, we never put Parquet files or embeddings into Git. DVC computes MD5 hashes of all pipeline outputs and records them in dvc.lock. Git commits the code, params.yaml, and dvc.lock, while DVC syncs the heavy Parquet manifests and embedding tensors to our DagsHub S3 remote. When a developer switches Git branches, DVC automatically pulls the exact matching artifacts.}
     \qa{Can MLflow link training runs to the DVC commit hash?}{Yes. Our training runner logs the active Git commit hash and DVC data hash directly into MLflow run metadata, providing an unbreakable audit trail from model weights back to exact dataset rows.}
 \end{frame}
@@ -330,8 +312,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{In \texttt{extract\_features.py}, we execute our batch feature extraction. It connects to S3, loads batches of images through our frozen vision backbone, normalizes the embeddings, and writes them out into four stratified embedding tensors (\texttt{train\_embeddings.pt}, \texttt{val\_embeddings.pt}, \texttt{cal\_embeddings.pt}, \texttt{test\_embeddings.pt}) and \texttt{taxa\_mapping.json}. Crucially, it builds a global taxon index map that deterministically assigns each species an integer index across all train, validation, and test splits. This guarantees that class 42 is always identical across all experiments.}
     \qa{Why use discrete PyTorch tensors for embedding splits instead of a monolithic file?}{Discrete tensors for train, val, cal, and test splits prevent cross-split data leakage, allow direct CUDA pin-memory transfer without indexing overhead, and feed downstream DAG stages independently.}

@@ -62,8 +62,6 @@
         }
     \end{center}
 
-    \vspace{0.2cm}
-    \statustarget
 
     \script{This diagram maps the full data flow of the MMKG pipeline. Raw data flows through strict quality filters ensuring research-grade, open-license images over 1024 pixels. Then we extract the child organism. The isolated vector is searched in our single-stage filtered HNSW index. Retrieved candidates are fused using Reciprocal Rank Fusion, and finally passed to our local VLM to emit a structured diagnosis card.}
 \end{frame}
@@ -78,8 +76,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.2cm}
-    \statustarget
 
     \script{In nature photography, the actual insect or wildflower often takes up less than 10 percent of the frame. The rest is dirt, grass, or human fingers. If you embed the whole image, your vector captures dirt rather than biology. We use YOLO-World or OWL-ViT to detect the specimen and isolate a clean child bounding box crop for fine-grained BioCLIP-2 embedding, while preserving the parent scene image to verify environmental habitat.}
     \qa{What happens if the zero-shot detector finds multiple organisms in one image?}{Each detected child entity generates an independent bounding box and child embedding, allowing multi-organism observations to be analysed separately.}
@@ -129,8 +125,6 @@
         }
     \end{center}
 
-    \vspace{0.15cm}
-    \statustarget
 
     \script{This diagram visually summarises the Parent-Child Visual Chunking process. We take the full parent scene containing background noise, and pass it through a zero-shot detector like YOLO-World or OWL-ViT. This extracts the child bounding box crop, separating the organism from environmental noise, which is then fed to BioCLIP-2 to compute our clean morphological embedding vector of size 768.}
 \end{frame}
@@ -145,8 +139,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.2cm}
-    \statustarget
 
     \script{Nature is full of convergent evolution: two insects on opposite sides of the globe may look identical even though they diverged 50 million years ago. If you only look at pixels, you will misclassify a European wasp as an American cicada killer. In our HNSW vector graph, we evaluate GPS coordinates and seasonal observation month directly inside the graph traversal. If an exemplar is outside a 500-kilometre radius or wrong season, it is pruned instantly before similarity scores are computed.}
     \qa{Why not perform vector search first and filter out GPS locations afterward?}{Post-filtering suffers from candidate starvation: if your top-50 visual neighbours are all from the wrong continent, post-filtering discards all of them and leaves you with zero valid results. Native single-stage filtering guarantees high recall among geographically valid candidates.}
@@ -164,8 +156,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.2cm}
-    \statustarget
 
     \script{Once we retrieve candidate species, how do we combine visual similarity with ecological reality? We use Reciprocal Rank Fusion. We assign a 65 percent weight to visual similarity and a 35 percent weight to historical GBIF occurrence density. Even if an exotic species looks slightly closer visually, a high local occurrence density for the native sibling species correctly tilts the ranking towards the true ecological observation.}
     \qa{What is the parameter $k$ in the RRF formula?}{The constant $k$ (typically set to 60) dampens the impact of extreme outliers at top ranks, preventing a single high rank from disproportionately dominating the final ensemble score.}
@@ -181,8 +171,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.2cm}
-    \statustarget
 
     \script{When a human taxonomist is asked to review an ambiguous specimen, we don't just dump raw images on their screen. We pass the query crop and the top-3 reference exemplars into a local Vision-Language Model like Qwen2-VL-2B. Constrained by grammar-based decoding, the VLM generates a structured JSON differential diagnosis card: it details specific anatomical discriminators, shows CAM overlays, and allows the expert to confirm the species in seconds.}
     \qa{Why use grammar-based sampling with the Vision-Language Model?}{Unconstrained VLMs hallucinate text and output unpredictable schemas. Grammar-based sampling forces the model to emit strictly valid JSON conforming to our differential diagnosis schema.}
@@ -198,8 +186,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.2cm}
-    \statustarget
 
     \script{In real biology, taxonomy is not static. Scientists frequently merge two species into one, or split one species into three. In a standard deep learning model, every split or merge requires retraining the entire neural network from scratch. Because our architecture decouples HNSW vector storage from DuckDB relational metadata, a taxonomic merge is an instant O(1) database update. Our vectors remain untouched with zero GPU compute cost.}
     \qa{What happens during a taxonomic split when one species becomes two?}{Historical observation nodes for that taxon in DuckDB are flagged with \texttt{requires\_reannotation = true} and purged from active traversal. Their crops are routed to Label Studio for expert re-sorting, after which they are re-registered under their new respective taxon keys.}
@@ -215,8 +201,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.4cm}
-    \statusdone
 
     \script{To conclude our complete presentation: MLOps is not just about using trendy tools like Kubernetes or Docker. It is a systems engineering mindset. It means building models that are reproducible down to the exact commit, mathematically honest about what they don't know, and engineered to run reliably on physical hardware within budget. TaxonVision proves that with the right architecture, we can tackle the most complex biodiversity challenges on Earth with mathematical confidence and operational excellence. Thank you!}
     \qa{Where can students inspect the source code and documentation?}{The entire repository, including Zensical documentation, LaTeX strategy reports, and CI/CD pipelines, is maintained under strict version control in the taxon-vision-mlops repository.}

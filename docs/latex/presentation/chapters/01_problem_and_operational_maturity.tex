@@ -24,8 +24,6 @@
                     \item \textbf{High Intra-Class Variance:} Extreme visual changes due to life stages, sexual dimorphism, lighting, and foliage occlusion.
                 \end{itemize}
             \end{block}
-            \vspace{0.05cm}
-            \statusdone
         \end{column}
         \begin{column}{0.4\textwidth}
             \begin{figure}
@@ -37,9 +35,10 @@
                             width=5.4cm, height=3.4cm,
                             ymin=1, ymax=100000,
                             xmin=1, xmax=1000,
+                            xtick={200, 500, 800},
                             xlabel={Species Rank},
                             ylabel={Observations},
-                            ylabel style={yshift=0.15cm},
+                            ylabel style={yshift=-4pt},
                             ymode=log,
                             log basis y=10,
                             grid=major,
@@ -47,8 +46,8 @@
                             title style={font=\bfseries}
                         ]
                         \addplot[domain=1:1000, samples=100, signalorange, thick] {100000/(x^1.3) + 1};
-                        \node[anchor=south west, fill=white, inner sep=1.5pt, text=plantgreen, font=\footnotesize] at (axis cs: 8, 25000) {Common ($10k+$)};
-                        \node[anchor=south east, fill=white, inner sep=1.5pt, text=red, font=\footnotesize, yshift=4pt] at (axis cs: 800, 8) {Rare ($<5$)};
+                        \node[anchor=south west, text=plantgreen, font=\footnotesize\bfseries] at (axis cs: 15, 12000) {Common ($10k+$)};
+                        \node[anchor=south, text=red, font=\footnotesize\bfseries] at (axis cs: 700, 25) {Rare ($<5$)};
                         \end{axis}
                     \end{tikzpicture}
                 }
@@ -74,9 +73,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.4cm}
-    \statusdone
-
     \script{Here is the most common mistake made by data scientists transitioning from bootcamps to industry: they run a script to download the entire dataset onto their local SSD. At 50 terabytes, your drive fills up in minutes, your network bandwidth is choked for days, and your coworker cannot reproduce your experiment without repeating the download. We call this the '50 TB Trap'. In TaxonVision, we enforce zero-copy streaming directly from object storage and cache immutable high-dimensional embeddings instead of raw pixels.}
     \qa{Does streaming images directly from S3 slow down model training?}{If you train an end-to-end model on raw pixels from S3, network bandwidth becomes your bottleneck. That is why our architecture decouples feature extraction from classifier training: backbones process images in batch streams once, and classifiers train in seconds from pre-cached numerical embeddings.}
 \end{frame}
@@ -96,19 +92,16 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.4cm}
-    \statusdone
-
     \script{Many engineers believe data pipelines are purely technical, but legal compliance is a hard engineering requirement. If your training set accidentally absorbs proprietary or copyrighted images, your entire model weights can become legally toxic and subject to deletion orders. We built an automated license audit script directly into our CI gate that inspects DarwinCore metadata and guarantees that only CC0, CC-BY, and CC-BY-NC images ever enter our pipelines.}
     \qa{What happens if an ingested image has no license field in its metadata?}{The audit script rejects it by default under a strict zero-trust policy. Unlicensed data is treated as copyrighted until explicit open licensing is proven.}
 \end{frame}
 
 \begin{frame}{Operational Maturity: 5-Tier Framework (Adapted from Google MLOps)}{Extending Standard Google MLOps Levels 0--2 with Epistemic Safety Tiers}
-    \begin{columns}[T]
+    \begin{columns}[c]
         \begin{column}{0.54\textwidth}
             \begin{block}{5-Tier Operational Maturity Spectrum}
                 \begin{itemize}\scriptsize
-                    \setlength{\itemsep}{1.5pt}
+                    \setlength{\itemsep}{2.5pt}
                     \item \textbf{Level 0 (Manual):} Notebooks, unversioned state, manual handoffs \textcolor{black!60}{\textit{(Google Baseline)}}
                     \item \textbf{Level 1 (Pipeline):} Automated ML DAGs, continuous training baseline \textcolor{black!60}{\textit{(Google Baseline)}}
                     \item \textbf{Level 2 (CI/CD):} CI/CD pipelines, dynamic ONNX export \textcolor{black!60}{\textit{(Google Baseline Ceiling)}}
@@ -116,7 +109,7 @@
                     \item \textbf{Level 4 (Epistemic Safety):} Split Conformal ($1 - \alpha \ge 0.95$) \& Energy OOD rejection \textcolor{plantgreen}{\textit{(TaxonVision)}}
                 \end{itemize}
             \end{block}
-            \vspace{0.02cm}
+            \vspace{0.15cm}
             \statuspartial
         \end{column}
         \begin{column}{0.44\textwidth}

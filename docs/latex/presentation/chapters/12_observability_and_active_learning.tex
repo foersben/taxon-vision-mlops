@@ -55,8 +55,6 @@
     }
     \end{center}
 
-    \vspace{0.05cm}
-    \statustarget
 
     \script{This diagram illustrates our target telemetry architecture. In the target state, ONNX Runtime passes statistics to FastAPI, Prometheus scrapes them every 15 seconds, and Grafana renders dashboards. Today, the FastAPI /metrics plumbing is in place, while the full Prometheus and Grafana cluster deployment is our next milestone.}
     \qa{Is this telemetry pipeline currently running live in production?}{The FastAPI endpoint and ONNX runtime are active, but the Prometheus collector daemon and Grafana dashboard nodes are target architecture currently being set up.}
@@ -108,8 +106,6 @@
         \end{enumerate}
     \end{block}
 
-    \vspace{0.15cm}
-    \statustarget
 
     \script{This slide lists our target metric inventory. Currently in telemetry.py, only the prediction counter is wired up to FastAPI routes. Epistemic metrics like conformal set size and OOD free energy gauges, as well as human referral queue tracking, are defined as constants or design targets awaiting end-to-end integration.}
     \qa{Which metrics are actively collected today?}{Only prediction counts grouped by status in predict.py. Conformal set size, latency histograms, and referral rate metrics are defined as constants but await end-to-end wiring.}
@@ -127,8 +123,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.15cm}
-    \statustarget
 
     \script{Machine learning models degrade over time because the real world changes—we call this data drift. We want to be completely open with our teammates about where this system stands: Evidently AI is not yet installed or set up, MMD is not yet coded, and automated drift-triggered retraining is an architectural design on our Phase 3 roadmap. There is significant, impactful engineering work left to build here.}
     \qa{Is Evidently AI currently operational in TaxonVision?}{No. Evidently AI is our planned tool for drift reports and visual dashboards, but it has not been configured or integrated into our repository yet.}
@@ -204,8 +198,6 @@
     }
     \end{center}
 
-    \vspace{0.05cm}
-    \statustarget
 
     \script{\footnotesize This flow shows our target architecture for active learning in production. While streaming observations and conformal filtering are active, and BADGE sampling math is implemented in badge.py, automated Label Studio dispatch and closed-loop retraining webhooks remain roadmap goals.}
     \qa{Which parts of this 5-step loop are implemented today?}{\footnotesize Steps 1 and 2 (streaming data and conformal filtering) and step 3 math (BADGE) are ready. Steps 4 and 5 (Label Studio annotation and automated retraining webhook) are roadmap items.}

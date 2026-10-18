@@ -23,8 +23,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{Here is an enterprise DevOps pattern every student must learn: how do you connect cloud GitHub to private bare-metal servers securely? You never allow GitHub Actions to SSH directly into your private GPU cluster. Instead, GitHub Actions runs fast cloud checks on public runners. Once code is approved, a Cloudflare Zero Trust webhook securely bridges the gap. Jenkins running inside our private network pulls the signed commit, injects secrets, and executes the GPU deployment locally with zero inbound ports exposed.}
     \qa{Why not use GitHub Self-Hosted Runners directly on hive-mind?}{Self-hosted runners can execute untrusted code from malicious PRs directly on your machine. Our pipeline ensures only trusted code reaches bare-metal.}
@@ -49,8 +47,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{On our public cloud perimeter, GitHub Actions serves as the first line of defense. The primary CI workflow executes five decoupled jobs: static code quality with strict eighty percent coverage enforcement, SARIF-based cognitive complexity scanning with Complexipy, code profiling, Zensical documentation builds deployed to GitHub Pages, and container image publishing to GHCR. Two auxiliary workflows handle automated OpenWiki knowledge graphs every Monday and semantic release packaging whenever a tag is pushed. Crucially, public cloud runners never touch private bare-metal servers or production credentials.}
     \qa{Why split the test suite into two passes in ci.yml?}{Pass 1 runs fast unit tests and fails immediately if total branch coverage falls below eighty percent. Pass 2 executes heavier integration and conformal invariant tests in fail-fast mode.}
@@ -69,8 +65,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.2cm}
-    \statusdone
 
     \script{Once the webhook triggers Jenkins, the declarative Jenkinsfile executes our six-stage pipeline. It starts by hydrating the workspace and injecting credentials. Stage 2 is crucial: by mounting the NVMe Rattler cache, Pixi avoids re-downloading hundreds of megabytes of Conda packages. The pipeline then pulls DVC data, runs Optuna tuning with strict VRAM limits, exports the ONNX models with dynamic batching, and finally pushes the built artifacts to GHCR. Unbuffered logging ensures we see real-time output even during long 150-minute GPU training stages.}
     \qa{Why do we need a 5.0 GB VRAM boundary in Stage 4?}{Our bare-metal RTX 5070 Ti uses NVIDIA time-slicing to share its 16 GB VRAM across different workloads. Enforcing a strict 5.0 GB ceiling for the Jenkins training pod prevents CI pipelines from crashing the live production FastAPI inference server.}
@@ -98,8 +92,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.02cm}
-    \statusdone
 
     \script{When code merges to develop or main, on-premise Jenkins takes over via declarative pipeline with dynamic parameters. It runs on an ephemeral k3s agent, mounting an emptyDir Rattler cache for fast dependency hydration across seven stages: toolchain setup, parallel quality audits, unit tests, conformal invariants, documentation builds, GPU training in an isolated pod, and rolling production deployment.}
     \qa{Why mount an emptyDir volume for the Rattler package cache in the agent?}{Pixi uses the Rattler package solver and cache. Without an ephemeral cache mount, every build would re-download Conda packages from scratch.}
@@ -125,8 +117,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{For the GPU training stage, Jenkins dynamically schedules an ephemeral pod defined in jenkins-gpu-pod.yaml. This pod requests one virtual time-sliced GPU slice and mounts host directories for Hugging Face models, Optuna study databases, and pre-extracted embeddings. The script jenkins\_gpu\_train.sh bootstraps the environment, primes embeddings from the local host tier or SeaweedFS, runs dvc repro with any requested Optuna overrides, synchronizes fresh checkpoints across local and remote S3 tiers, and finally commits the updated dvc.lock and evaluation reports back to Git with a skip-ci annotation.}
     \qa{Why do we prime embeddings from a host directory before running dvc repro?}{Feature extraction over large image manifests is computationally expensive. If embeddings have not changed, copying pre-computed tensors from the host SSD saves hours of GPU compute.}
@@ -143,8 +133,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.2cm}
-    \statusdone
 
     \script{Why do so many data science projects fail when moving to production? Code complexity. In Jupyter notebooks, people write 300-line functions with 6 nested loops and zero type annotations. In TaxonVision, our CI gate uses \texttt{complexipy} to measure cognitive complexity. If any function scores higher than 15, the build fails instantly. This forces engineers to write modular, single-responsibility functions that are easy to unit test and maintain.}
     \qa{What was an example of a refactoring forced by this complexity rule?}{In \texttt{runner.py}, our embedding split preparation and index mapping functions originally scored above 20 due to combined dictionary parsing and tensor slicing. We decomposed them into dedicated helper methods, bringing complexity down to 6.}
@@ -163,8 +151,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{Let us examine how our containers transition from local development to production. We employ a multi-stage Dockerfile that compiles everything in a heavy builder stage, but only copies the minimal compiled environment into the runtime stage, shrinking our image from 10 gigabytes to under 1.5 gigabytes. Locally, developers use Docker Compose to mock cloud services like MinIO and DagsHub for offline debugging. In production on our bare-metal server, we orchestrate these same containers using Kubernetes manifests.}
     \qa{How does the multi-stage build securely handle credentials during the build process?}{By building in Stage 1 and copying compiled artifacts to Stage 2, any build-time secrets or SSH keys are absent from the final runtime image layer.}
@@ -181,8 +167,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.2cm}
-    \statusdone
 
     \script{Imagine updating your model in production: if you kill the old container before the new one finishes loading its 500-megabyte neural network into GPU memory, all incoming user requests fail with 500 errors. We configure Kubernetes rolling updates with readiness probes. The ingress keeps sending traffic to the old model until the new model reports that its weights are warmed up and ready. The switch happens seamlessly with zero dropped requests.}
     \qa{What is the difference between a liveness probe and a readiness probe?}{A liveness probe checks if the process is alive; if it fails, Kubernetes restarts the pod. A readiness probe checks if the pod is ready to accept HTTP traffic; if it fails, traffic is diverted without killing the container.}
@@ -206,8 +190,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.02cm}
-    \statusdone
 
     \script{Our Kubernetes deployment on bare-metal k3s is governed by declarative manifests in deploy/k8s. The API runs two replicas with rolling update semantics, non-root user isolation, and liveness/readiness probes. RBAC policies enforce boundaries between jenkins-ci and taxon-vision. SeaweedFS provides in-cluster S3 storage for DVC and Optuna. NVIDIA time-slicing partitions our RTX 5070 Ti into four virtual GPU slices, preventing device deadlocks.}
     \qa{How does the readiness probe prevent 502 errors during rollouts?}{The readiness probe queries /health/ready, confirming ONNX Runtime sessions are fully initialized. Traefik routes zero traffic to new pods until it returns HTTP 200.}

@@ -63,8 +63,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.15cm}
-    \statusdone
 
     \script{We manage our vision backbones through a unified Backbone Factory. On this slide, we present our three foundation Vision Transformers: BioCLIP-2, pre-trained on domain-specific biological taxonomy, DINOv3 with four register tokens to eliminate visual artifacts, and DINOv2 trained on the curated LVD-142M dataset. Each transformer outputs dense embeddings ready for downstream linear probing.}
     \qa{Why do DINO models use register tokens instead of a standard CLS token?}{Register tokens allow the vision transformer to store global image information and discard uninformative background patches without corrupting the semantic representation.}
@@ -90,8 +88,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.05cm}
-    \statusdone
 
     \script{In addition to heavy Vision Transformers, our factory supports lightweight Edge CNNs like MobileNetV4 and EfficientNet-B0. MobileNetV4 uses Universal Inverted Bottlenecks to deliver sub-10ms inference on commodity CPUs. Across all six backbones, we enforce two critical invariants: trunks are strictly frozen to allow persistent embedding caching, and all output vectors are L2-normalized onto a unit hypersphere, turning classifier training into a convex optimization problem with guaranteed global convergence.}
     \qa{How does freezing the trunk ($\nabla_\theta = 0$) impact our deployment cycle?}{A frozen trunk allows us to pre-extract and cache features once, reducing training from four hours to ten seconds and enabling exhaustive hyperparameter tuning.}
@@ -146,8 +142,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{-0.2cm}
-    \statusdone
     \script{When selecting an architecture, we face a fundamental tradeoff. Vision Transformers, like BioCLIP-2 and DINO, offer a global receptive field from the very first layer, capturing long-range dependencies across the image, but suffer from quadratic memory scaling due to self-attention. Conversely, modern CNNs like MobileNetV4 provide native translation invariance and scale linearly, making them ideal for edge CPU deployment, though they require much deeper networks to understand global context.}
     \qa{If ViTs lack translation invariance, how do they learn to recognize a bird regardless of its position in the image?}{ViTs compensate for the lack of native translation invariance through massive scale pre-training, learning the necessary spatial relationships directly from the web-scale data rather than relying on structural priors.}
     \qa{Why does MobileNetV4 scale linearly with image size while ViTs scale quadratically?}{CNN memory scales linearly because convolutional filters operate on local neighborhoods. ViT memory scales quadratically because the self-attention mechanism computes the relationship between every patch and every other patch.}
@@ -272,7 +266,7 @@
         \end{itemize}
     \end{block}
 
-    \statusdone
+    \statuspartial
 
     \script{Currently, our MLflow tracking captures the fundamental metrics and hyperparameters necessary to evaluate basic model performance, such as Class-Balanced Loss and the $\beta$ parameter. However, our target architecture demands rigorous lineage invariants. We need to track conformal prediction metrics like empirical coverage and average set size to mathematically guarantee safety. We also require strict cryptographic binding via DVC hashes and Git SHAs to ensure that the deployed model exactly matches its source code and training data.}
     \qa{Why do we need to track the average prediction set size $|\hat{C}|$?}{The average set size measures the epistemic efficiency of the model. A high coverage ($1-\alpha$) with a massive set size is mathematically safe but practically useless. We track $|\hat{C}|$ to ensure the model remains informative.}

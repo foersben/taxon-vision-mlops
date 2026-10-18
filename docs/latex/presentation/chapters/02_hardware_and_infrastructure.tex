@@ -31,22 +31,19 @@
         \item \textbf{Decoupled Environments:} Prevents developer experiments from starving production inference of GPU memory or crashing background training jobs.
     \end{itemize}
 
-    \vspace{0.4cm}
-    \statusdone
-
     \script{In cloud-centric courses, instructors often assume you have an unlimited AWS budget. In reality, renting multiple A100 GPUs 24/7 costs thousands of dollars every month. We designed an on-premise dual-node topology: 'flagship' is our local development workstation where engineers develop with fast iteration loops, and 'hive-mind' is a 24/7 bare-metal server that hosts our k3s Kubernetes cluster, Jenkins automation, and production workloads.}
     \qa{Why not run everything on a single powerful machine?}{Decoupling development from production prevents developer experiments from starving production inference of GPU memory or crashing background pipeline jobs.}
 \end{frame}
 
 
-\begin{frame}[fragile]{Infrastructure Topology}{Dual-Node Diagram}
+\begin{frame}{Infrastructure Topology}{Dual-Node Diagram}
     \providecolor{TaxonPrimary}{RGB}{34, 139, 34}      % Forest Green
     \providecolor{TaxonSecondary}{RGB}{215, 110, 0}    % Amber / Orange
     \providecolor{TaxonDark}{RGB}{0, 51, 102}          % Deep Navy Blue
 
     \begin{center}
     \vspace{-0.1cm}
-    \resizebox{0.92\textwidth}{!}{
+    \resizebox{0.90\textwidth}{!}{
     \begin{tikzpicture}[
         box/.style={draw, rounded corners=4pt, align=center, font=\sffamily},
         flagship/.style={box, fill=TaxonSecondary!10, draw=TaxonSecondary!80!black, thick},
@@ -135,7 +132,7 @@
         % Gap from 3.2 to 6.35 is 3.15cm - plenty of space for labels
         % =========================================================================
         \draw[dasharrow] (git.east) -- node[above=2pt, lbl] {Push / PR Webhook} (cf.west |- git.east);
-        \draw[darrow] (ide.east) -- node[below=2pt, lbl] {HTTPS / SSH\\[-2pt]{\tiny (Zero-Trust)}} (cf.west |- ide.east);
+        \draw[darrow] (ide.east) -- node[above=1pt, lbl] {HTTPS / SSH} node[below=1pt, lbl] {{\tiny (Zero-Trust)}} (cf.west |- ide.east);
 
         % =========================================================================
         % INTERNAL ROUTING (Inside hive-mind)
@@ -168,9 +165,6 @@
         \item \textbf{Frozen Backbones:} Requires pre-compiled backbones and robust ONNX optimizations to prevent CUDA Out of Memory (OOM) errors.
     \end{itemize}
 
-    \vspace{0.2cm}
-    \statusdone
-
     \script{Our bare-metal compute engine is powered by an NVIDIA RTX 5070 Ti based on the cutting-edge Blackwell SM 120 architecture. While it delivers extraordinary compute throughput with 4th-generation Tensor Cores and GDDR7 bandwidth, it has exactly 16 gigabytes of VRAM. If your model allocates 16.1 gigabytes, your job crashes instantly with a CUDA Out of Memory error. This physical constraint dictates our entire architectural design.}
     \qa{Why not use distributed multi-GPU training with cloud instances?}{A single modern GPU on bare metal is more than capable of handling enterprise-scale classification if you engineer your pipelines correctly. Bounding ourselves to 16 GB forces disciplined, efficient engineering rather than brute-force cloud spending.}
 \end{frame}
@@ -186,51 +180,62 @@
         \item \textbf{Concurrency:} Enables active learning inference, feature extraction, background testing, and the web API to run safely on the same hardware.
     \end{itemize}
 
-    \vspace{0.2cm}
-    \statusdone
-
     \script{In enterprise Kubernetes, allocating an entire physical GPU to a single API pod is massively wasteful because inference only uses the GPU intermittently. We implemented 4-slot GPU time-slicing, allowing our cluster to share the RTX 5070 Ti across multiple microservices. To ensure that one runaway job doesn't crash the entire GPU, we enforce an ironclad 70 percent VRAM cap—11.2 gigabytes—giving us a safety margin against memory fragmentation.}
     \qa{Does GPU time-slicing isolate memory between containers?}{Time-slicing shares compute cycles in temporal slices, but does not provide hardware-enforced memory partitioning like MIG (Multi-Instance GPU). That is exactly why our 70\% software cap and zero-allocation inference invariants are critical to prevent crashes.}
 \end{frame}
 
-\begin{frame}[fragile]{GPU Memory Allocation}{Time-Sliced VRAM Partitioning Diagram}
-    \begin{center}
-    \resizebox{0.85\textwidth}{!}{
-    \begin{tikzpicture}[
-        font=\sffamily,
-        bar/.style={draw=TaxonDark, thick, minimum height=1.2cm},
-        label/.style={font=\scriptsize\bfseries, text=white}
-    ]
-        % Total Capacity Bar Background
-        \node[bar, minimum width=16cm, fill=gray!20, label=center:\textcolor{black!60}{16.0 GB Total Physical VRAM (RTX 5070 Ti GDDR7)}] (total) {};
+\begin{frame}{GPU Memory Allocation}{Time-Sliced VRAM Partitioning \& Process Capping}
+    \begin{columns}[c]
+        \begin{column}{0.44\textwidth}
+            \centering
+            \resizebox{0.88\linewidth}{!}{
+            \begin{tikzpicture}[
+                font=\sffamily,
+                slot/.style={draw=TaxonDark, thick, minimum width=2.4cm, align=center, font=\scriptsize\bfseries}
+            ]
+                % Physical VRAM Vertical Stack (Scale: 1 GB = 0.30cm; 16 GB = 4.80cm)
+                % Slot 1: FastAPI (3.5 GB -> 1.05cm)
+                \node[slot, fill=plantgreen!75, text=white, minimum height=1.05cm, anchor=south] at (0, 0) (s1) {Slot 1: FastAPI\\{\tiny 3.5 GB Serving}};
 
-        % Time-Sliced Slots overlay
-        % Slot 1: FastAPI (3.5 GB) -> 3.5cm
-        \node[bar, fill=TaxonPrimary, minimum width=3.5cm, anchor=west] at (total.west) (s1) {};
-        \node[label, font=\scriptsize\bfseries, yshift=-2mm] at (s1.center) {Slot 1: FastAPI (3.5G)};
+                % Slot 2: Jenkins (3.5 GB -> 1.05cm)
+                \node[slot, fill=signalorange!85, text=white, minimum height=1.05cm, anchor=south] at (s1.north) (s2) {Slot 2: Jenkins CI\\{\tiny 3.5 GB Runner}};
 
-        % Slot 2: Jenkins CI (3.5 GB) -> 3.5cm
-        \node[bar, fill=TaxonSecondary, minimum width=3.5cm, anchor=west] at (s1.east) (s2) {};
-        \node[label, font=\scriptsize\bfseries, text=TaxonDark, yshift=-2mm] at (s2.center) {Slot 2: Jenkins (3.5G)};
+                % Slot 3: PyTorch/Optuna (5.0 GB -> 1.50cm)
+                \node[slot, fill=deepblue!85, text=white, minimum height=1.50cm, anchor=south] at (s2.north) (s3) {Slot 3: PyTorch / Optuna\\{\tiny 5.0 GB HPO / Probing}};
 
-        % Slot 3: Optuna/PyTorch (5.0 GB) -> 5.0cm
-        \node[bar, fill=TaxonAccent, minimum width=5.0cm, anchor=west] at (s2.east) (s3) {};
-        \node[label, font=\scriptsize\bfseries, yshift=-2mm] at (s3.center) {Slot 3: PyTorch/Optuna (5.0G)};
+                % Slot 4: Elastic Headroom (4.0 GB -> 1.20cm)
+                \node[slot, fill=gray!35, text=TaxonDark, minimum height=1.20cm, anchor=south] at (s3.north) (s4) {Slot 4: Headroom\\{\tiny 4.0 GB Buffer}};
 
-        % The 70% Limit Line at 11.2 GB
-        \draw[thick, dashed, red] ([xshift=11.2cm]total.south west) -- ([xshift=11.2cm]total.north west) node[above=0.35cm, text=red, font=\small\bfseries, align=center, fill=white, inner sep=1.5pt] {11.2 GB (70\%) Hard Ceiling per Container};
+                % 70% Hard Container Ceiling at 11.2 GB (3.36cm)
+                \draw[thick, dashed, red] (-1.35, 3.36) -- (1.55, 3.36);
+                \node[anchor=west, text=red, font=\tiny\bfseries] at (1.55, 3.36) {11.2 GB (70\% Cap)};
 
-        % Slot 4: Headroom (4.0 GB) -> 4.0cm
-        \node[bar, fill=gray!50, minimum width=4.0cm, anchor=west] at (s3.east) (s4) {};
-        \node[font=\scriptsize\bfseries, text=TaxonDark, yshift=-2mm] at (s4.center) {Slot 4: Elastic Headroom};
+                % Total VRAM bracket on left
+                \draw[decorate,decoration={brace,amplitude=4pt},thick] (-1.35, 4.8) -- (-1.35, 0) node[midway,left=0.15cm, font=\tiny\bfseries, align=center] {16 GB\\Total};
 
-        \draw[decorate,decoration={brace,amplitude=5pt,mirror},thick] ([xshift=0.1cm]s1.south west) -- ([xshift=-0.1cm]s4.south east) node[midway,below=0.25cm, font=\small\bfseries] {Kubernetes 4-Slot GPU Time-Slicing Configuration};
+            \end{tikzpicture}
+            }
+        \end{column}
+        \begin{column}{0.52\textwidth}
+            \begin{block}{Temporal Time-Slicing}
+                \scriptsize
+                \texttt{replicas: 4} in \texttt{nvidia-time-slicing-} \newline \texttt{config.yaml} virtualizes the RTX 5070 Ti for concurrent container pods without context thrashing.
+            \end{block}
+            \vspace{0.08cm}
+            \begin{block}{Process-Level Memory Capping}
+                \scriptsize
+                \texttt{torch.cuda.set\_per\_process\_} \newline \texttt{memory\_fraction(0.3125)} explicitly restricts PyTorch/Optuna to exactly 5.0 GB of physical VRAM.
+            \end{block}
+            \vspace{0.08cm}
+            \begin{block}{OOM Isolation Invariants}
+                \scriptsize
+                The 70\% container ceiling (11.2 GB) prevents memory fragmentation and protects production FastAPI endpoints from background CI spikes.
+            \end{block}
+        \end{column}
+    \end{columns}
 
-    \end{tikzpicture}
-    }
-    \end{center}
     \script{This diagram shows the 16 GB VRAM physical capacity broken down into our 4 time-sliced slots. Slot 1 runs our FastAPI serving at up to 3.5 GB. Slot 2 is our Jenkins CI agent. Slot 3 is gated for PyTorch training at 5 GB. We deliberately leave Slot 4 as elastic headroom. The red dashed line illustrates our 70\% container software ceiling, ensuring no single pod can monopolize the card and cause OOM cascading failures.}
-    \qa{How is the 5.0 GB limit for PyTorch enforced?}{We use \texttt{torch.cuda.set\_per\_process\_memory\_fraction(0.3125)} to explicitly restrict PyTorch to exactly 5.0 GB of the 16.0 GB total, guaranteeing it respects its designated slot bounds.}
+    \qa{How is the 5.0 GB limit for PyTorch enforced?}{We invoke \texttt{torch.cuda.set\_per\_process\_}\allowbreak\texttt{memory\_fraction(0.3125)} to explicitly restrict PyTorch to exactly 5.0 GB of the 16.0 GB total, guaranteeing it respects its designated slot bounds.}
 \end{frame}
 
 \begin{frame}{Network Security}{Cloudflare Zero Trust Tunnel \& Ingress Decoupling}
@@ -243,9 +248,6 @@
         \item \textbf{Zero Exposed Host Ports:} The router blocks all inbound traffic. Traffic routing and TLS termination happen internally via Traefik.
         \item \textbf{Identity Verification:} Operator traffic is authenticated at the Cloudflare edge before ever reaching the on-premise infrastructure.
     \end{itemize}
-
-    \vspace{0.2cm}
-    \statusdone
 
     \script{How do we safely access our on-premise cluster from anywhere in the world without exposing it to internet hackers? We do not open any ports on our router. Instead, a lightweight daemon called cloudflared establishes an outbound encrypted tunnel to Cloudflare's global edge network. When an operator connects, Cloudflare authenticates their identity and proxies the traffic securely into our internal Kubernetes ingress controller.}
     \qa{What happens if the local internet connection resets its dynamic IP address?}{The tunnel daemon maintains persistent outbound connections. If the local public IP changes, the daemon automatically reconnects without any downtime or manual DNS reconfiguration.}

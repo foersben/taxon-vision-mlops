@@ -29,8 +29,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{Softmax outputs aren't probabilities. Networks can be 98\% confident on random noise. If an app calls a deadly mushroom edible with 98\% confidence, it's fatal. We must prevent uncalibrated overconfidence.}
     \qa{Can temperature scaling fix softmax overconfidence?}{Temperature scaling adjusts the global calibration across the dataset, but it cannot provide rigorous mathematical guarantees for individual predictions or handle out-of-distribution inputs.}
@@ -49,8 +47,6 @@
                     \item \textbf{Calibration:} Uses a held-out calibration set to compute non-conformity scores ($s_i = 1 - \hat{f}(x_i)_{y_i}$) and determine the empirical quantile threshold $\hat{q}$.
                 \end{itemize}
             \end{block}
-            \vspace{0.1cm}
-            \statusdone
         \end{column}
         \begin{column}{0.45\textwidth}
             \begin{center}
@@ -96,8 +92,6 @@
                     \item \textbf{Operational Mechanics:} By measuring set size, we seamlessly integrate machine learning into human workflows, balancing autonomous efficiency with expert oversight to eliminate silent model errors.
                 \end{itemize}
             \end{block}
-            \vspace{0.2cm}
-            \statusdone
         \end{column}
         \begin{column}{0.5\textwidth}
             \begin{center}
@@ -147,8 +141,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{What if someone points the camera at a parked car? A standard classifier might force it into a biological class like 'Black Bear'. To prevent this, we run an Energy-Based OOD detector on raw logits. Low energy indicates in-distribution, high energy flags anomalies.}
     \qa{Why energy vs. max softmax?}{Softmax normalization destroys logit magnitude due to the denominator sum. Energy aligns with the true data density.}
@@ -163,8 +155,6 @@
         \end{itemize}
     \end{block}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{Models often learn wrong shortcuts (e.g. husky vs snow). To prove our model looks at biological traits, we generate CAMs using forward hooks in <2ms on GPU, bypassing heavy backward passes.}
     \qa{Can CAM be served in real-time?}{Yes. Because it takes <2 ms, the heatmap overlay is returned in the exact same HTTP response as the classification set.}

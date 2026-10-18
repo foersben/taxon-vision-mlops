@@ -1,20 +1,16 @@
 % Chapter 6: Software Architecture: Packages, Modules, Classes & Call Graph
 % ---------------------------------------------------------------------
 
-\begin{frame}
-    \begin{center}
-        \vspace{0.8cm}
-        {\Huge\textbf{\textcolor{deepblue}{Chapter 06}}}\\[0.3cm]
-        {\LARGE\textbf{Software Architecture: Packages, Modules \& Call Graph}}\\[0.2cm]
-        {\normalsize\textcolor{darkgray}{High-Cohesion Subpackages, Domain Modeling \& Zero-Allocation Serving Hot Path}}
-    \end{center}
-
-    \vspace{0.6cm}
-    \begin{block}{Curriculum Focus}
-        \footnotesize
-        Deep-dive into the \texttt{src/taxon\_vision/} software architecture: examining all 10 packages, typed Pydantic models, domain entities, inference engines, conformal bounds, and FastAPI serving endpoints.
-    \end{block}
-
+\begin{frame}[plain]
+    \vfill
+    \centering
+    {\footnotesize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
+    {\large \textbf{\textcolor{signalorange}{CHAPTER 06}}} \\[0.25cm]
+    {\huge \textbf{Software Architecture: Packages, Modules \& Call Graph}} \\[0.35cm]
+    {\normalsize \textcolor{black!70}{High-Cohesion Subpackages, Domain Modeling \& Zero-Allocation Serving Hot Path}} \\[0.5cm]
+    \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
+    \statusdone
+    \vfill
     \script{Welcome to Chapter 6. In this chapter, we unpack the internal software architecture of taxon-vision: exploring how domain modeling, frozen backbone factories, ONNX runtime engines, and conformal predictors are decoupled into modular, low-complexity subpackages.}
     \qa{How is high maintainability enforced across the software package hierarchy?}{By strictly adhering to Rule 00: zero dynamic reflection, zero circular imports, pure Pixi environments, and an enforced cognitive complexity score strictly below 15 for every function.}
 \end{frame}
@@ -75,8 +71,6 @@
         }
     \end{center}
 
-    \vspace{0.05cm}
-    \statusdone
 
     \script{This diagram visualizes our master software dependency architecture. Notice the clean separation of concerns: pipelines and service sit at the top as consumers, delegating to specialized engines without circular dependencies.}
     \qa{Why are pipelines and service isolated into separate top-level orchestration packages?}{Because pipelines execute offline, batch-oriented DVC DAG steps, whereas service handles low-latency, real-time HTTP requests. Separating them prevents batch dependencies from bloating the serving container.}
@@ -118,8 +112,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{The config subpackage is our single source of truth for runtime settings. We use Pydantic v2 schemas in schemas.py and a layered loader in loader.py, enforcing a strict ban on magic numbers across the codebase.}
     \qa{How does load\_config handle nested environment variables?}{It maps double-underscore environment variable keys, such as TAXON\_\_TRAINING\_\_LEARNING\_RATE, directly into nested Pydantic models with automatic type casting.}
@@ -167,8 +159,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{The domain package houses our core business entities: DarwinCore taxonomic nodes, Creative Commons legal licenses, and immutable observation records that link specimen IDs with photographer attribution.}
     \qa{Why do domain entities use frozen Pydantic models?}{Immutability guarantees thread safety across concurrent data loaders and ensures that records cannot be accidentally corrupted during multi-stage pipeline transformations.}
@@ -211,8 +201,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{The data package implements our high-throughput data tier. It queries the iNaturalist API asynchronously, filters observations against strict legal licenses, and streams images from AWS Open Data directly into memory.}
     \qa{How does S3ImageStreamer prevent memory leaks during long streaming runs?}{It manages memory using reusable byte buffers and context-managed HTTP sessions, guaranteeing that decoded PIL images are promptly garbage-collected after feature extraction.}
@@ -262,8 +250,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{The models package defines our neural architectures. The backbone factory instantiates frozen self-supervised foundation extractors, while TaxonClassifier provides the linear head trained with Class-Balanced Loss.}
     \qa{Why does the backbone factory freeze feature extractor weights by default?}{Freezing backbone weights eliminates the need for expensive backpropagation through hundreds of transformer layers, allowing training to converge in seconds on pre-computed feature vectors.}
@@ -309,8 +295,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{The models.training subpackage provides our training engine. It cleanly separates optimization loops, Optuna Bayesian tuning, and MLflow experiment tracking into modular, low-complexity source files.}
     \qa{How does MLflowTracker prevent model input shape mismatches in production?}{By attaching explicit ModelSignatures with float32 TensorSpecs during log\_model, MLflow validates tensor dimensions before permitting model registration.}
@@ -358,8 +342,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{The inference package powers our low-latency runtime. It executes ONNX Runtime sessions, provides specialized embedding projection utilities, performs INT8 dynamic quantization, and generates visual explanations.}
     \qa{Why extract linear head weights using head\_projector.py?}{Extracting head initializers allows calibration and active learning pipelines to evaluate cached embedding tensors directly in milliseconds without re-running full visual graphs.}
@@ -404,8 +386,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{The uncertainty package is our mathematical safety layer. SplitConformalPredictor guarantees statistical coverage, while EnergyOODDetector filters out out-of-distribution inputs prior to taxonomic classification.}
     \qa{Why use Free Energy instead of maximum softmax probability for OOD detection?}{Because softmax probabilities suffer from overconfidence on distant anomalous inputs, whereas free energy is theoretically aligned with input density and exhibits superior out-of-distribution discrimination.}
@@ -451,8 +431,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{Here we see our active learning and monitoring packages. Margin sampling ranks ambiguous observations for human triage, while Prometheus telemetry and Wasserstein drift calculations monitor production performance.}
     \qa{How does the triage queue feed continuous retraining?}{Human-reviewed triage items are ingested into the active learning loop, appending verified labels to raw\_manifest.parquet and triggering DVC pipeline re-execution.}
@@ -499,8 +477,6 @@
         \end{column}
     \end{columns}
 
-    \vspace{0.1cm}
-    \statusdone
 
     \script{The service package unifies our machine API and operator dashboard. Built on FastAPI, it exposes high-performance prediction and explanation endpoints while serving an interactive Jinja2 and HTMX web interface.}
     \qa{How does the web service maintain low latency during heavy concurrent traffic?}{By initializing the ONNX Runtime session once at startup and executing pure CPU-bound NumPy operations without dynamic PyTorch graph instantiations on the request hot path.}
