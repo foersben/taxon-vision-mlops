@@ -501,9 +501,13 @@ function initCodebaseExplorer() {
     renderList();
 }
 
-    if (typeof document$ !== "undefined") {
-        document$.subscribe(initCodebaseExplorer);
-    } else {
+    if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", initCodebaseExplorer);
+    } else {
+        initCodebaseExplorer();
+    }
+
+    if (typeof document$ !== "undefined" && typeof document$.subscribe === "function") {
+        document$.subscribe(initCodebaseExplorer);
     }
 })();

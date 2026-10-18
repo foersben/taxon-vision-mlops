@@ -55,9 +55,13 @@
         updateSimulation();
     }
 
-    if (typeof document$ !== "undefined") {
-        document$.subscribe(initConformalSimulators);
-    } else {
+    if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", initConformalSimulators);
+    } else {
+        initConformalSimulators();
+    }
+
+    if (typeof document$ !== "undefined" && typeof document$.subscribe === "function") {
+        document$.subscribe(initConformalSimulators);
     }
 })();

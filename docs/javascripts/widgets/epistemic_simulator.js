@@ -403,9 +403,13 @@ function initEpistemicSimulator() {
     updateSimulation();
 }
 
-    if (typeof document$ !== "undefined") {
-        document$.subscribe(initEpistemicSimulator);
-    } else {
+    if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", initEpistemicSimulator);
+    } else {
+        initEpistemicSimulator();
+    }
+
+    if (typeof document$ !== "undefined" && typeof document$.subscribe === "function") {
+        document$.subscribe(initEpistemicSimulator);
     }
 })();

@@ -349,9 +349,13 @@ function initDVCExplorer() {
     renderStage();
 }
 
-    if (typeof document$ !== "undefined") {
-        document$.subscribe(initDVCExplorer);
-    } else {
+    if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", initDVCExplorer);
+    } else {
+        initDVCExplorer();
+    }
+
+    if (typeof document$ !== "undefined" && typeof document$.subscribe === "function") {
+        document$.subscribe(initDVCExplorer);
     }
 })();
