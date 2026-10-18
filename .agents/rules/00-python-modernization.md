@@ -1,6 +1,6 @@
 ---
 type: Agent Rule
-title: Mandates
+title: "Rule 00: Python Modernization"
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
 version: 1.0

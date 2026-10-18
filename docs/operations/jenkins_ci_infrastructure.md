@@ -6,6 +6,8 @@ stale_after: "2027-01-01T00:00:00Z"
 version: 1.0
 description: Comprehensive architecture, security design, and operational record of the zero-open-ports Jenkins controller, Cloudflare Tunnel ingress, and k3s ephemeral agent topology.
 tags: [jenkins, cicd, k3s, cloudflare, pixi, infrastructure, docker]
+generated: {by: "process:docs-librarian", at: "2026-10-18T18:00:00Z"}
+verified: {by: "process:docs-librarian", at: "2026-10-18T18:00:00Z"}
 ---
 
 # Jenkins CI/CD Architecture & Ephemeral Runner Topology

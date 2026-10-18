@@ -6,6 +6,8 @@ stale_after: "2027-01-01T00:00:00Z"
 version: 1.1
 description: Details of the server setup, k3s cluster, ARC runners, and step-by-step configuration runbook.
 tags: [infrastructure, mlops, state, k3s, arc]
+generated: {by: "process:docs-librarian", at: "2026-10-18T18:00:00Z"}
+verified: {by: "process:docs-librarian", at: "2026-10-18T18:00:00Z"}
 ---
 
 # Current Infrastructure & MLOps State

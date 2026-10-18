@@ -6,6 +6,8 @@ stale_after: "2027-01-01T00:00:00Z"
 version: 1.0
 description: Architectural strategies for managing single-GPU scheduling conflicts between Training, CI/CD, and Web Inference workloads.
 tags: [infrastructure, gpu, k3s, scheduling]
+generated: {by: "process:docs-librarian", at: "2026-10-18T18:00:00Z"}
+verified: {by: "process:docs-librarian", at: "2026-10-18T18:00:00Z"}
 ---
 
 # GPU Resource Scheduling & Multiplexing

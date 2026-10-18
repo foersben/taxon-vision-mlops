@@ -1023,7 +1023,7 @@
       <!-- Main View Switcher -->
       <div class="view-tabs">
         <button class="tab-btn active" data-view="graph-view">
-          <i class="fa-solid fa-diagram-project"></i> 1. Architecture Graph (27
+          <i class="fa-solid fa-diagram-project"></i> 1. Architecture Graph (30
           Nodes)
         </button>
         <button class="tab-btn" data-view="pareto-view">
@@ -1191,11 +1191,11 @@
       <div id="pareto-view" class="view-container">
         <div class="kpi-strip">
           <div class="kpi-card">
-            <span class="kpi-label">Hot Path Latency Budget</span>
+            <span class="kpi-label">Dual Latency SLA</span>
             <span class="kpi-val" style="color: var(--accent-cyan)"
-              >&le; 25.0 ms</span
+              >&le; 15.0 ms</span
             >
-            <span class="kpi-sub">p95 ONNX Runtime INT8/FP16 SLA</span>
+            <span class="kpi-sub">GPU Fast-Path Target (&le; 25ms CPU Gate)</span>
           </div>
           <div class="kpi-card">
             <span class="kpi-label">Recommended Server Backbone</span>
@@ -1261,7 +1261,7 @@
                 ></i>
                 Pareto Frontier: Accuracy vs. Latency
               </div>
-              <span class="badge sla-badge">SLA Invariant: 25ms p95</span>
+              <span class="badge sla-badge">Dual SLA: &le;15ms GPU / &le;25ms CPU</span>
             </div>
             <div id="plotly-pareto-main" class="chart-canvas"></div>
           </div>
@@ -1463,9 +1463,9 @@
       }
 
       /* ==========================================================================
-       1. DATA: PARETO BENCHMARKS & 27 ARCHITECTURAL NODES
+       1. DATA: PARETO BENCHMARKS & 30 ARCHITECTURAL NODES
        ========================================================================== */
-      const PARETO_RAW = [
+      let PARETO_RAW = [
         {
           extractor: "bioclip-2",
           displayName: "BioCLIP-2 [Projected]",
@@ -1587,7 +1587,7 @@
               description:
                 "High-throughput endpoint receiving observation image uploads. Executes zero-copy preprocessing, cached TaxonClassifier forward pass, Helmholtz energy OOD scoring, and Split Conformal Prediction sets.",
               invariants:
-                "Hot inference path p95 latency <= 25ms SLA. Zero dynamic memory allocation.",
+                "Dual SLA: <= 15.0ms bare-metal GPU target, <= 25.0ms CPU/CI ceiling (Rule 02). Zero dynamic memory allocation.",
               formula:
                 "\\text{Card}(C(x)) \\le k_{\\max} \\implies \\text{Auto-Assign}, \\quad \\text{else} \\implies \\text{Refer}",
               config:
@@ -1711,7 +1711,7 @@
               role: "@uncertainty-safety-engineer",
               path: "src/taxon_vision/uncertainty/conformal.py",
               description:
-                "Computes finite-sample distribution-free prediction sets with guaranteed marginal coverage 1 - alpha >= 95% using Split Conformal calibration (`scripts/calibrate_conformal.py`).",
+                "Computes finite-sample distribution-free prediction sets with guaranteed marginal coverage 1 - alpha >= 95% using Split Conformal calibration (`src/taxon_vision/pipelines/calibrate.py`).",
               invariants:
                 "Empirical coverage P(Y in C(X)) >= 1 - alpha verified by invariant test suite.",
               formula:
@@ -1900,33 +1900,50 @@
           {
             data: {
               id: "dvc_ingestion",
-              label: "DVC Stage: ingestion\ns3_streamer & license_filter",
-              subtitle: "Zero-Copy S3 & Open License Gate",
+              label: "DVC Stage: ingest\ns3_streamer & inat_client",
+              subtitle: "Raw Ingestion & S3 Manifest",
               layer: "pipeline",
               col: 3,
               row: 1,
               role: "@mlops-data-engineer",
-              path: "scripts/ingest_data.py",
+              path: "src/taxon_vision/pipelines/ingest.py",
               description:
-                "Streams iNaturalist imagery (`inat_client.py`, `s3_streamer.py`) and enforces strict Creative Commons license filtering (`license_filter.py`).",
+                "Streams iNaturalist observation metadata and image assets from S3 Open Data into raw_manifest.parquet.",
               invariants:
-                "Admits strictly CC0, CC-BY, CC-BY-NC. Rejects all proprietary assets.",
-              config: "Tested in tests/unit/test_license_filter.py",
+                "Zero-copy streaming with SHA-256 asset verification.",
+              config: "Pipeline: src/taxon_vision/pipelines/ingest.py",
+            },
+          },
+          {
+            data: {
+              id: "dvc_audit_license",
+              label: "DVC Stage: audit_license\nlicense_filter.py",
+              subtitle: "Strict Open-License Compliance Gate",
+              layer: "pipeline",
+              col: 3,
+              row: 2,
+              role: "@mlops-data-engineer",
+              path: "src/taxon_vision/pipelines/audit_license.py",
+              description:
+                "Audits observation licenses and photographer attribution metadata, filtering out proprietary and non-commercial assets.",
+              invariants:
+                "Admits strictly CC0, CC-BY, CC-BY-NC observations into dataset_manifest.parquet.",
+              config: "Pipeline: src/taxon_vision/pipelines/audit_license.py",
             },
           },
           {
             data: {
               id: "pipeline_extract",
-              label: "Pipeline: extract_features\nBackbone Factory Cache",
-              subtitle: "DINOv3 / BioCLIP-2 Embeddings",
+              label: "DVC Stage: extract_features\nBackbone Factory Cache",
+              subtitle: "DINOv3 / BioCLIP-2 4-Way Splits",
               layer: "pipeline",
               col: 3,
-              row: 2,
+              row: 3,
               role: "@model-engineer",
               path: "src/taxon_vision/pipelines/extract_features.py",
               description:
-                "Extracts and caches feature tensors (`embeddings.py`) from frozen vision backbones (`models/factory.py`) so head training runs in seconds.",
-              invariants: "Deterministic split caching (train/val/calib/test).",
+                "Extracts and caches 4-way stratified zero-leakage feature tensors (train, val, cal, test) from frozen vision backbones.",
+              invariants: "Deterministic 4-way stratified zero-leakage split caching.",
               config: "Factory: src/taxon_vision/models/factory.py",
             },
           },
@@ -1937,7 +1954,7 @@
               subtitle: "Effective Sample Number Weighting",
               layer: "pipeline",
               col: 3,
-              row: 3,
+              row: 4,
               role: "@model-engineer",
               path: "src/taxon_vision/models/loss.py",
               description:
@@ -1946,7 +1963,7 @@
                 "Prevents majority taxa from dominating gradient updates.",
               formula:
                 "E_n = \\frac{1 - \\beta^n}{1 - \\beta}, \\quad \\mathcal{L}_{\\text{CB}} = -\\frac{1-\\beta}{1-\\beta^{n_y}} \\log(p_y)",
-              config: "Tested in tests/unit/test_class_balanced_loss.py",
+              config: "Tested in tests/unit/test_models_components.py",
             },
           },
           {
@@ -1956,7 +1973,7 @@
               subtitle: "Bayesian Hyperparameter Search",
               layer: "pipeline",
               col: 3,
-              row: 4,
+              row: 5,
               role: "@model-engineer",
               path: "src/taxon_vision/models/training/tuning.py",
               description:
@@ -1973,14 +1990,14 @@
               subtitle: "Classification Head Training",
               layer: "pipeline",
               col: 3,
-              row: 5,
+              row: 6,
               role: "@model-engineer",
-              path: "src/taxon_vision/models/training/runner.py",
+              path: "src/taxon_vision/pipelines/train.py",
               description:
-                "Trains the taxonomic classification head (`models/head.py`) with deterministic seeding and early stopping (`loops.py`, `checkpoint.py`).",
+                "Trains the taxonomic classification head (`models/head.py`) with Class-Balanced Loss, deterministic seeding, and early stopping.",
               invariants:
-                "Reproducible PRNG seeds locked in config/params.yaml.",
-              config: "Stage defined in dvc.yaml & dvc.lock",
+                "Produces calibrated head.pt checkpoint with locked PRNG seeds.",
+              config: "Stage defined in dvc.yaml & params.yaml",
             },
           },
           {
@@ -1990,7 +2007,7 @@
               subtitle: "Lineage, Metrics & Artifacts",
               layer: "pipeline",
               col: 3,
-              row: 6,
+              row: 7,
               role: "@mlops-data-engineer",
               path: "src/taxon_vision/models/training/tracking.py",
               description:
@@ -2004,31 +2021,67 @@
             data: {
               id: "dvc_export_onnx",
               label: "DVC Stage: export_onnx\nonnx_exporter & quantizer",
-              subtitle: "ONNX Graph & INT8 PTQ",
+              subtitle: "Dual-Output ONNX & INT8 PTQ",
               layer: "pipeline",
               col: 3,
-              row: 7,
+              row: 8,
               role: "@inference-optimizer",
-              path: "src/taxon_vision/inference/onnx_exporter.py",
+              path: "src/taxon_vision/pipelines/export_onnx.py",
               description:
-                "Exports trained PyTorch head and backbone to ONNX and applies static INT8 Post-Training Quantization (`quantizer.py`).",
-              invariants: "Verified numerical parity and static tensor shapes.",
-              config: "Modules: onnx_exporter.py & quantizer.py",
+                "Exports dual-output ONNX graph (logits + embeddings) with static INT8 QDQ Post-Training Quantization.",
+              invariants: "Verified numerical parity and logit-protecting hybrid quantization.",
+              config: "Pipeline: src/taxon_vision/pipelines/export_onnx.py",
+            },
+          },
+          {
+            data: {
+              id: "dvc_calibrate",
+              label: "DVC Stage: calibrate\nuncertainty/conformal.py",
+              subtitle: "Conformal & OOD Threshold Calibration",
+              layer: "pipeline",
+              col: 3,
+              row: 9,
+              role: "@uncertainty-safety-engineer",
+              path: "src/taxon_vision/pipelines/calibrate.py",
+              description:
+                "Calibrates Split Conformal prediction threshold q_hat, temperature scaling T, and thermodynamic OOD energy cutoff tau_ood.",
+              invariants:
+                "Computes finite-sample distribution-free prediction sets with guaranteed 1 - alpha coverage.",
+              formula:
+                "\\hat{q}_\\alpha = \\text{Quantile}\\left(s_1, \\dots, s_n; \\frac{\\lceil(n+1)(1-\\alpha)\\rceil}{n}\\right)",
+              config: "Pipeline: src/taxon_vision/pipelines/calibrate.py",
+            },
+          },
+          {
+            data: {
+              id: "dvc_evaluate",
+              label: "DVC Stage: evaluate\nreports/pareto_evaluation.json",
+              subtitle: "Holdout Metrics & Latency SLA Audit",
+              layer: "pipeline",
+              col: 3,
+              row: 10,
+              role: "@qa-automator",
+              path: "src/taxon_vision/pipelines/evaluate.py",
+              description:
+                "Evaluates Top-1/Top-3 accuracy, macro PR-AUC, empirical conformal coverage, and validates p95 latency against SLA gate.",
+              invariants:
+                "Guarantees empirical coverage >= 1 - alpha and p95 latency <= 25.0ms on test holdout.",
+              config: "Pipeline: src/taxon_vision/pipelines/evaluate.py",
             },
           },
           {
             data: {
               id: "artifact_onnx",
-              label: "ONNX Runtime Engine\nonnx_engine.py (model.onnx)",
+              label: "ONNX Runtime Engine\nonnx_engine.py (model_int8.onnx)",
               subtitle: "Zero-Allocation Production Artifact",
               layer: "pipeline",
               col: 3,
-              row: 8,
+              row: 11,
               role: "@inference-optimizer",
               path: "src/taxon_vision/inference/onnx_engine.py",
               description:
-                "Production C++ ONNX Runtime session delivering sub-25ms p95 inference latency back to the FastAPI serving layer.",
-              invariants: "p95 latency <= 25ms verified prior to deployment.",
+                "Production C++ ONNX Runtime session delivering <= 15ms p95 latency on GPU (<= 25ms p95 on CPU) back to the FastAPI serving layer.",
+              invariants: "Dual SLA: <= 15.0ms p95 bare-metal GPU target, <= 25.0ms CPU CI ceiling.",
               config: "Consumed by: src/taxon_vision/service/inference.py",
             },
           },
@@ -2221,8 +2274,16 @@
             data: {
               id: "e23",
               source: "dvc_ingestion",
+              target: "dvc_audit_license",
+              label: "raw_manifest.parquet",
+            },
+          },
+          {
+            data: {
+              id: "e_audit_extract",
+              source: "dvc_audit_license",
               target: "pipeline_extract",
-              label: "CC-licensed S3",
+              label: "dataset_manifest.parquet",
             },
           },
           {
@@ -2238,7 +2299,7 @@
               id: "e25",
               source: "pipeline_extract",
               target: "dvc_train",
-              label: "Cached splits",
+              label: "train/val splits",
             },
           },
           {
@@ -2279,6 +2340,46 @@
               source: "dvc_train",
               target: "dvc_export_onnx",
               label: "head.pt",
+            },
+          },
+          {
+            data: {
+              id: "e_cal_onnx",
+              source: "dvc_export_onnx",
+              target: "dvc_calibrate",
+              label: "model_int8.onnx",
+            },
+          },
+          {
+            data: {
+              id: "e_cal_extract",
+              source: "pipeline_extract",
+              target: "dvc_calibrate",
+              label: "cal_embeddings.pt",
+            },
+          },
+          {
+            data: {
+              id: "e_cal_conformal",
+              source: "dvc_calibrate",
+              target: "conformal_engine",
+              label: "q_hat cutoff",
+            },
+          },
+          {
+            data: {
+              id: "e_eval_cal",
+              source: "dvc_calibrate",
+              target: "dvc_evaluate",
+              label: "Thresholds",
+            },
+          },
+          {
+            data: {
+              id: "e_eval_test",
+              source: "pipeline_extract",
+              target: "dvc_evaluate",
+              label: "test_embeddings.pt",
             },
           },
           {
@@ -2920,6 +3021,45 @@
         initCytoscape();
         renderModelCards();
         updateSimulatorWorkbench();
+
+        // Dynamic fetch of assets/pareto_results.json (fallback to PARETO_RAW)
+        const fetchParetoData = () => {
+          const tryFetch = (url) =>
+            fetch(url).then((res) => {
+              if (!res.ok) throw new Error("HTTP " + res.status);
+              return res.json();
+            });
+
+          tryFetch("assets/pareto_results.json")
+            .catch(() => tryFetch("../assets/pareto_results.json"))
+            .catch(() => tryFetch("/taxon-vision-mlops/assets/pareto_results.json"))
+            .then((jsonData) => {
+              if (Array.isArray(jsonData) && jsonData.length > 0) {
+                jsonData.forEach((item) => {
+                  const match = PARETO_RAW.find((d) => d.extractor === item.extractor);
+                  if (match) {
+                    if (item.p50_latency_ms !== undefined) match.p50_latency_ms = item.p50_latency_ms;
+                    if (item.p95_latency_ms !== undefined) match.p95_latency_ms = item.p95_latency_ms;
+                    if (item.throughput_fps !== undefined) match.throughput_fps = item.throughput_fps;
+                    if (item.cost_per_million_usd !== undefined) match.cost_per_million_usd = item.cost_per_million_usd;
+                    if (item.vram_peak_mb !== undefined) match.vram_peak_mb = item.vram_peak_mb;
+                    if (item.parameters_m !== undefined) match.parameters_m = item.parameters_m;
+                    if (item.accuracy_score !== undefined) match.accuracy_score = item.accuracy_score;
+                    if (item.canonical_baseline !== undefined) match.canonical_baseline = item.canonical_baseline;
+                  }
+                });
+                renderModelCards();
+                const paretoView = document.getElementById("pareto-view");
+                if (paretoView && paretoView.classList.contains("active")) {
+                  renderPlotlyCharts();
+                }
+              }
+            })
+            .catch((err) => {
+              console.debug("pareto_results.json not fetched, using PARETO_RAW fallback", err);
+            });
+        };
+        fetchParetoData();
 
         // Default populate inspector data without covering the canvas initially
         const defaultNode = cy ? cy.$("#route_predict") : null;

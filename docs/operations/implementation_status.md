@@ -1,80 +1,76 @@
 ---
 type: Report
 title: Implementation Status & Roadmap
-status: draft
-stale_after: "2026-11-01T00:00:00Z"
-version: 1.0
-description: Tracking the progress and remaining effort for the MLOps Project Phases 1-3.
-tags: [roadmap, status, project-management, mlops]
-generated: {by: process:okf-updater, at: "2026-10-06T19:50:00Z"}
-verified: {by: process:okf-updater, at: "2026-10-11T00:30:00Z"}
+status: stable
+stale_after: "2027-01-01T00:00:00Z"
+version: "1.2"
+description: Three-tier implementation status, code-verified capabilities, and architectural roadmap for TaxonVision-MLOps.
+tags: [roadmap, status, project-management, mlops, verification]
+generated: {by: "process:docs-librarian", at: "2026-10-18T18:00:00Z"}
+verified: {by: "process:docs-librarian", at: "2026-10-18T18:00:00Z"}
 ---
 
-# Implementation Status: MLOps Roadmap
+# Implementation Status & Roadmap
 
-This document tracks the current implementation status of the project against the formal academic requirements, along with estimated engineering effort for the remaining items.
-
-## Current Progress
-
-### Phase 1 (Foundations): 100% Done
-
-* ✅ Project objectives & reproducible environment (`pixi`, `just`).
-* ✅ Collect data & database initialization (DuckDB & Parquet streaming).
-* ✅ Build baseline model & inference API (`/api/v1/predict`, `/api/v1/train`, and `/api/v1/explain` endpoints).
-
-### Phase 2 (Microservices, Tracking & Versioning): 100% Done
-
-* ✅ S3 streaming feature extraction pipeline (`extract_features.py`) and cached representation training.
-* ✅ DVC pipeline foundation: unified 7-stage DAG (`dvc.yaml` & `dvc.lock`) with dual remotes (`local-seaweedfs` and `origin`).
-* ✅ In-Cluster High-Throughput Storage: SeaweedFS (Apache 2.0) object store with sub-2ms Haystack needle lookups and dynamic bucket provisioning.
-* ✅ Ephemeral in-memory secret retrieval via KeePassXC and Linux Secret Service (`just dvc-push`).
-* ✅ MLflow integration on DagsHub (logging run metrics, compound PR-AUC scores, and registry promotion).
-* ✅ Persistent Bayesian Telemetry: Optuna SQLite WAL backend with real-time web dashboard on NodePort `30081`.
-* ✅ Containerization & Publishing: Multi-stage non-root `Dockerfile` with automated GHCR publication (`ghcr.io/foersben/taxon-vision-mlops:latest`).
-* ✅ Kubernetes Deployment: `k3s` manifests with 4-replica NVIDIA GPU time-slicing and live ingress at `https://taxon.benjamin-foerster.eu/`.
-* ✅ Automated Continuous Delivery: Jenkins pipeline on `hive-mind` with ephemeral k3s agent pods, GPU time-slicing slot, NVMe Rattler caching, rolling rollout, and post-deployment smoke test.
-
-### Phase 3 (Monitoring & Maintenance): ~60% Done
-
-* ✅ Prometheus metrics instrumentation (`/metrics`) exposing latency histograms, conformal set distributions, and referral counts.
-* ✅ Split Conformal Prediction engine guaranteeing marginal error bounds ($1 - \alpha$).
-* ✅ Out-of-Distribution (OOD) energy score gating and human triage routing.
-* ✅ Server-rendered Jinja2 & HTMX operator dashboard for live image verification.
-* ❌ **Future Enhancements:** Automated Evidently drift alarms in scheduled DAGs and standalone Grafana alert webhooks.
+This document records the exact implementation state of the TaxonVision-MLOps platform on `develop`, categorizing platform capabilities across three rigorous operational tiers: production-verified pipelines, implemented standalone modules, and planned Phase 3 architectural targets.
 
 ---
 
-## Remaining Implementation Effort & Strategy
+## 1. Verified Implementation Matrix
 
-If the project requires strictly adhering to the remaining requirements, here is the estimated effort and technical approach:
+### Tier A: Production-Complete & Verified on `develop` (Phase 1 & Core Phase 2)
 
-### 1. DVC to version datasets and store hashes in MLflow (1-2 Hours)
+All components in Tier A are fully integrated into continuous testing, governed by DVC or Kubernetes manifests, and tested against genuine biological data.
 
-* ✅ **Completed:** The `_init_mlflow_run` method in the training pipeline now directly parses `dvc.lock` (bypassing Git entirely as required) to extract the true DVC `md5` dataset hash and logs it as `dvc_dataset_hash` in MLflow.
-* ✅ **Completed (Phase 3 DAG Modernization):** Modernized `dvc.yaml` into an unbroken 7-stage single-trunk DAG (`ingestion`, `audit_license`, `extract_features`, `train`, `export`, `calibrate`, `eval`) with multi-remote storage (`local-seaweedfs` for high-throughput embedding caches and `origin` DagsHub S3 for model releases), declarative S3 ConfigMap in Kubernetes (`deploy/k8s/mlops-storage-and-optuna.yaml`), uncached metrics tracking, and root symlinked `params.yaml`.
-
-### 2. Docker-based microservices using `docker-compose` (2-3 Hours)
-
-* **Work:** Straightforward. We need to write a cleanly segregated `docker-compose.yml` that orchestrates:
-    1. The FastAPI Serving container.
-    2. An MLflow tracking server container (with a local SQLite backend).
-    3. (Optionally) the Airflow scheduler/webserver containers.
-
-### 3. Scheduled training via Airflow (3-4 Hours)
-
-* **Work:** Moderate. Airflow is resource-intensive, but we can use the official lightweight Docker-compose setup. We would write a simple Python DAG (`dags/model_training_dag.py`) that runs on a `schedule_interval='@weekly'`. The DAG would contain a `BashOperator` that triggers our `training.py` script inside the designated container.
-
-### 4. Drift Detection with Evidently in Airflow (2-4 Hours)
-
-* **Work:** Moderate. We would add an evaluation task to the Airflow DAG. Before kicking off an expensive training run, the DAG pulls the recent inference data from DuckDB, compares it to the reference training dataset using `evidently.Report`, and logs the resulting HTML dashboard as an artifact to MLflow. If statistical drift is detected, it triggers the downstream training task; if not, the DAG gracefully skips the training step.
+| Subsystem | Primary Source Files | Verification Target & Artifacts | Operational Status |
+| :--- | :--- | :--- | :--- |
+| **7-Stage Epistemic Diamond DVC DAG** | `src/taxon_vision/pipelines/{ingest,audit_license,extract_features,train,export_onnx,calibrate,evaluate}.py` | `dvc.yaml`, `dvc.lock`, `params.yaml`, `tests/unit/test_pipelines.py` | **Production:** Single-trunk deterministic DAG running automated hash checks and metric tracking. |
+| **Three-Tier S3 Topology & Zero-Leakage Splits** | `src/taxon_vision/data/{s3_streamer,license_filter}.py` | `deploy/k8s/mlops-storage-and-optuna.yaml`, `data/embeddings/*.pt` | **Production:** Anonymous Arrow streaming from AWS Open Data, SeaweedFS in-cluster cache (`s3://taxon-dvc-cache`), and DagsHub S3 model release storage. 4-way stratified partitions (`train`, `val`, `cal`, `test`). |
+| **Model Factory & Imbalance Loss** | `src/taxon_vision/models/{factory,head,loss}.py` | `tests/unit/test_models_components.py`, `models/checkpoints/head.pt` | **Production:** Frozen `BackboneFactory` supporting `dinov3_vits14`, `bioclip-2`, `dinov2_vits14`, `mobilenetv4_conv_small`, and `efficientnet_b0`. Optimized via `ClassBalancedLoss` ($\beta \in [0.9, 0.9999]$). |
+| **Persistent Bayesian Telemetry & HPO** | `src/taxon_vision/models/training/{tuning,runner,loops,checkpoint}.py` | `tests/unit/test_tuning.py`, persistent SQLite WAL on k3s PVC (`NodePort 30081`) | **Production:** Optuna TPE with ASHA early stopping pruning underperforming trials on cached embeddings without GPU thrashing. |
+| **MLflow Model Registry & Lineage** | `src/taxon_vision/models/training/tracking.py` | `reports/train_metrics.json`, DagsHub MLflow remote | **Production:** Automated model registration with `Production`/`Challenger`/`Archived` aliases, explicit `TensorSpec` `ModelSignature`, and DVC dataset MD5 hash extraction. |
+| **Dual-Output ONNX & Static INT8 PTQ** | `src/taxon_vision/inference/{onnx_exporter,quantizer,calibration}.py` | `models/checkpoints/model_int8.onnx`, `tests/unit/test_quantizer.py` | **Production:** Exports fused `logits` $[N, K]$ and `embeddings` $[N, D]$ graph. Static INT8 QDQ PTQ calibrated via `TaxonCalibrationDataReader` strictly banning synthetic noise. |
+| **Four Calibration Layers** | `src/taxon_vision/inference/{calibration,head_projector}.py`, `pipelines/calibrate.py` | `config/conformal_config.yaml`, `reports/conformal_metrics.json` | **Production:** Layer 1 (INT8 activation range), Layer 2 (Temperature $T$), Layer 3 (Split Conformal quantile $\hat{q}_\alpha$), Layer 4 (Thermodynamic energy cutoff $\tau_{\text{OOD}}$). |
+| **Thermodynamic OOD & Shannon Clutter Gating** | `src/taxon_vision/uncertainty/{ood_detector,conformal}.py` | `tests/unit/test_ood_energy.py`, `tests/unit/test_conformal_bounds.py` | **Production:** Gated by Helmholtz Free Energy ($E(x; T) \le \tau_{\text{OOD}}$) and Normalized Shannon Entropy ($\bar{H} \ge 0.82$) to reject non-biological inputs and camera-trap clutter. |
+| **FastAPI Service & HTMX Operator Dashboard** | `src/taxon_vision/service/{api,inference,schemas}.py`, `service/routes/views.py` | `tests/integration/test_api_endpoints.py`, `tests/integration/test_views_and_routes.py` | **Production:** Zero-allocation ONNX `IOBinding` engine, multipart image upload, server-rendered HTMX verification portal (`/`, `/ui`, `/triage`), and OpenAPI schema. |
+| **Forward-Hooked Linear CAM** | `src/taxon_vision/inference/cam.py` | `tests/unit/test_cam.py`, `/api/v1/explain` | **Production:** Analytical Class Activation Mapping computed directly on linear probe weights in $< 5\text{ ms}$ without backward-pass graph overhead. |
+| **Prometheus Telemetry & Online Drift** | `src/taxon_vision/monitoring/{telemetry,drift}.py` | `/metrics`, `tests/unit/test_monitoring.py` | **Production:** Prometheus 5s scrape counters and histograms (`taxon_predictions_total`, latency histograms, conformal set sizes) and online 1D Wasserstein-1 scalar norm drift detection. |
+| **Bare-Metal k3s & Jenkins CI/CD** | `deploy/k8s/*.yaml`, `Jenkinsfile`, `docker-compose.local.yaml` | `https://taxon.benjamin-foerster.eu/`, host `hive-mind` | **Production:** 4-replica NVIDIA GPU time-slicing on RTX 5070 Ti, non-root multi-stage Docker container (`ghcr.io/foersben/taxon-vision-mlops:latest`), and automated rolling rollouts. |
 
 ---
 
-## Automated Model Promotion Strategy
+### Tier B: Implemented & Unit-Tested Standalone, Pending Live Route Wiring
+
+Components in Tier B have verified algorithmic implementations and high unit test coverage in `tests/`, but operate offline or are scheduled for subsequent route integration:
+
+| Module / Component | Implementation Location | Test Coverage & Verification | Pending Integration Task |
+| :--- | :--- | :--- | :--- |
+| **BADGE Active Learning Query** | `src/taxon_vision/active_learning/query.py` (`compute_badge_embeddings`, `badge_query_sampling`) | `tests/unit/test_active_learning.py` (tested with mock embedding and gradient topologies) | Wire live triage sampling endpoint `/api/v1/active-learning/query` into the operator HTMX UI. Currently, `/api/v1/predict` marks `requires_human_review = True` and increments Prometheus metrics without triggering batch BADGE ranking. |
+| **Parquet Triage Queue Manager** | `src/taxon_vision/active_learning/triage_queue.py` (`TriageQueueManager`) | `tests/unit/test_active_learning.py` (tested with atomic schema mutations and DuckDB queries) | Connect `service/inference.py` triage branching to asynchronously write ambiguous specimens ($\lvert \mathcal{C}(x) \rvert \ge 4$) directly to `data/triage/triage_queue.parquet`. |
+| **Offline Full-Manifold $\text{MMD}^2$ Drift** | `src/taxon_vision/monitoring/drift.py` (`compute_mmd_feature_drift`) | `tests/unit/test_monitoring.py` (verified with RBF Gaussian kernel embeddings) | Schedule automated recurring cron evaluations against baseline validation tensors in Jenkins CI/CD; online serving currently uses fast 1D Wasserstein-1 scalar norm drift. |
+
+---
+
+### Tier C: Phase 3 Architectural Targets (Vision-RAG & MMKG Roadmap)
+
+Tier C encapsulates the future multimodal retrieval roadmap detailed in Chapter 5 of the Technical Strategy Report:
+
+| Architecture Capability | Specification & Target Components | Planned Technologies | Roadmap Objective |
+| :--- | :--- | :--- | :--- |
+| **Parent-Child Visual Chunking** | Open-vocabulary zero-shot organism detector isolates specimen crop $I_{\text{child}}$ from parent environmental scene $I_{\text{parent}}$. | YOLO-World / OWL-ViT v2 + BioCLIP-2 ($d=512$) | Eliminates background host plant and soil bias on Batesian mimicry pairs. |
+| **Biogeographically Filtered Vector Retrieval** | Single-stage vector search combining geographical radius and temporal emergence filters. | LanceDB / embedded HNSW with Haversine spherical distance ($\le 100\text{ km}$) and Julian day phenology masks | Prunes biologically impossible taxa before nearest-neighbor evaluation. |
+| **Reciprocal Rank Fusion (RRF)** | Rank-based aggregation combining visual similarity and taxonomic taxonomy graph distance. | RRF ($k=60$) rank aggregation engine | Combines specimen morphological embeddings with museum exemplar metadata. |
+| **Grammar-Constrained VLM Differential Diagnosis** | Structured diagnosis card comparing sister taxa using morphological keys. | Qwen2-VL-7B-Instruct with strict JSON Schema BNF grammar decoding | Generates verifiable diagnostic cards highlighting diagnostic anatomy (wing venation, spur length). |
+| **$O(1)$ DuckDB Catalog Mutations** | Instant biological taxonomy mutations (splits and lumps) without re-embedding datasets. | DuckDB vectorized relational mapping tables | Guarantees zero re-computation when taxonomic checklists split or lump species. |
+| **Label Studio Bidirectional Sync** | Synchronizing human expert corrections from DagsHub Label Studio into training partitions. | DagsHub REST API + DVC pipeline webhooks | Closes the active learning loop from human taxonomist verification to automated retraining. |
+
+---
+
+## 2. Automated Model Promotion Strategy
 
 To protect the core identification service against regression-especially on rare, long-tail taxa where standard accuracy is misleading-we implement a **PR-AUC Safe Promotion** strategy via the MLflow Model Registry.
 
-### 1. The Core Metric
+### The Core Metric
 
 Models are evaluated strictly on a robust, imbalance-aware metric rather than raw accuracy:
 
@@ -82,18 +78,18 @@ $$ \text{Promotion Score} = \text{Macro PR-AUC} $$
 
 * **Macro PR-AUC (Precision-Recall AUC):** Heavily penalizes false positives on rare classes. By relying exclusively on this metric for automated promotion decisions, we ensure that performance gains are true across all taxa, not just the most common ones.
 
-### 2. Registry Promotion Logic
+### Registry Promotion Logic
 
 When a new classification head finishes training, it is automatically logged to the `taxon_vision_classifier` registry. The pipeline then compares its Macro PR-AUC score against the model currently tagged as `@Production`:
 
-* **Outperforms Production:** The new model is automatically tagged as **`@Challenger`** (or `@Staging`). It is **not** immediately pushed to `@Production`. This ensures we keep at most two competing models active, and stages the new model for deeper human review (or integration tests).
-* **Underperforms Production:** The new model is tagged as **`@Archived`** (or `@Rejected`), ensuring poor models never pollute the deployment pipeline.
+* **Outperforms Production:** The new model is automatically tagged as **`@Challenger`** (or `@Staging`). It is **not** immediately pushed to `@Production`. This ensures we keep at most two competing models active, and stages the new model for deeper human review or automated integration canary sweeps.
+* **Underperforms Production:** The new model is tagged as **`@Archived`** (or `@Rejected`), ensuring underperforming checkpoints never pollute the deployment pipeline.
 
 ---
 
-## Verified Implementation Gaps & Technical Debt
+## 3. Verified Technical Debt & Implementation Resolutions
 
-To maintain absolute scientific and engineering integrity, the following implementation discrepancies between target architecture and active repository state are documented:
+To maintain scientific and engineering integrity, the following implementation discrepancies between target architecture and active repository state have been resolved:
 
 * **Synthetic Placeholder Training Split:** Resolved. Real foundation vision feature extraction is implemented in `taxon_vision.pipelines.extract_features` (`build_taxon_index_map`, `stream_and_extract_representations`, `create_stratified_embedding_split`), streaming observations from AWS S3 and partitioning into stratified embedding tensors (`train_embeddings.pt`, `val_embeddings.pt`, `cal_embeddings.pt`, `test_embeddings.pt`) under `data/embeddings/`. The training pipeline (`taxon_vision.pipelines.train`) and training runner ingest these physical splits directly, retaining the synthetic Gaussian split strictly as a graceful offline fallback.
 * **Container Registry Publishing:** Resolved. GitHub Actions automatically packages the production container and publishes multi-tagged images (`latest`, `sha-<short_sha>`) to `ghcr.io/foersben/taxon-vision-mlops`, hydrated with promoted checkpoints from DagsHub DVC. The Kubernetes deployment continuously pulls releases via `imagePullPolicy: Always`.
@@ -103,5 +99,4 @@ To maintain absolute scientific and engineering integrity, the following impleme
 * **Error Masking in CI Pipeline:** Resolved. Removed all illegitimate `|| true` suppressions from `Jenkinsfile` across training and deployment stages (`dvc repro`, `dvc push`, `rollout restart`, and `rollout status`), replacing them with explicit service availability checks and fail-fast assertions.
 * **Coverage Gate Inconsistency:** Resolved. Harmonized coverage thresholds between `Jenkinsfile` and `.github/workflows/ci.yml` at 80% (active global test suite achieves 89% line coverage across 124 passing tests).
 * **Optuna Evaluation Objective & Search Space:** Resolved. In `taxon_vision.models.training.tuning`, the objective function returns $\max(\text{val\_pr\_auc})$ matching peak restored checkpoint weights, and Optuna samples categorical batch sizes (`[32, 64, 128]`) and embedding noise jitter regularisation (`noise_std`).
-* **Unscheduled Drift and Active Learning Modules:** MMD feature drift (`monitoring/drift.py`) and BADGE acquisition (`active_learning/query.py`) exist as standalone modules, but lack recurring cron jobs, webhook triggers, or automated retraining invocations.
 * **Local In-Cluster S3 Storage Engine (SeaweedFS):** Migrated from MinIO/Silo to SeaweedFS (`docker.io/chrislusf/seaweedfs:latest`), licensed under Apache 2.0. Eliminates AGPLv3 compliance risks and sidecar bucket provisioning loops. Its Haystack/Needle architecture prevents disk-seek bottlenecks, providing sub-2ms random read access for the 100,000 exemplar observation crops and LanceDB vector partitions planned in Pipeline 2.

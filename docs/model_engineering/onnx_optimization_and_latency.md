@@ -18,7 +18,10 @@ sources:
 
 # ONNX Runtime Optimization & Latency Invariants
 
-Operating an interactive biodiversity identification platform requires strict adherence to latency Service Level Agreements (SLAs). While unoptimized PyTorch forward passes on general-purpose CPUs often exceed 100 to 200 ms depending on batch size and architecture, TaxonVision enforces a **fast-path p95 latency budget strictly under 25 milliseconds**.
+Operating an interactive biodiversity identification platform requires strict adherence to latency Service Level Agreements (SLAs). While unoptimized PyTorch forward passes on general-purpose CPUs often exceed 100 to 200 ms depending on batch size and architecture, TaxonVision enforces a dual-target latency SLA:
+
+* **Bare-Metal GPU / INT8 Fast-Path Target:** Target p95 latency strictly **$\le 15.0\text{ ms}$** under quantized ONNX Runtime execution on bare-metal production nodes (`params.yaml`).
+* **General-Purpose CPU / CI Testbed Ceiling:** Hard ceiling p95 latency **$\le 25.0\text{ ms}$** enforced by project mandate `Rule 02` (`02-inference-latency-invariants.md`) and automated CI regression gates.
 
 This latency bound is achieved through Open Neural Network Exchange (ONNX) graph compilation, static Post-Training Quantization (PTQ), zero-allocation hot paths, and forward-hooked interpretability.
 
@@ -36,7 +39,7 @@ flowchart LR
     subgraph Serving["Production Inference Engine (FastAPI)"]
         S1["Pre-allocated C Buffers<br/>Zero Dynamic Allocation"] --> S2["ONNX Runtime VNNI / AVX-512<br/>Execution on CPU P-Cores"]
         S2 --> S3["Forward-Hooked CAM<br/>Spatial Heatmap Overhead (<5ms Budget)"]
-        S3 --> S4["Sub-25ms End-to-End Latency"]
+        S3 --> S4["Dual SLA: &le;15ms GPU / &le;25ms CPU"]
     end
 
     PyTorch --> Compilation --> Serving
@@ -76,7 +79,7 @@ Dynamic quantization evaluates $S$ and $Z$ on-the-fly for every forward pass bas
 
 The ONNX Runtime engine executes the graph utilizing hardware-specific Execution Providers (EP). When deploying on x86-64 CPUs, the OpenVINO or default CPU EP accelerates operations via AVX-512 VNNI instructions. On GPU targets, the TensorRT EP compiles the ONNX graph into FP16 or INT8 engines. Crucially, ONNX Runtime aggressively performs **operator fusion** (e.g., fusing Convolution, BatchNorm, and ReLU into a single kernel execution). This minimizes memory bandwidth bottlenecks by keeping intermediate activations in fast L1/L2 cache rather than writing them back to main memory.
 
-Combined with the zero-allocation hot inference path, these optimizations ensure deterministic sub-25ms latency on production infrastructure.
+Combined with the zero-allocation hot inference path, these optimizations ensure deterministic sub-15ms latency on bare-metal GPU and sub-25ms latency on CPU production infrastructure.
 
 Quantizing to INT8 yields immediate computational benefits:
 

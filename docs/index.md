@@ -12,13 +12,13 @@ verified: {by: process:docs-librarian, at: "2026-10-18T12:00:00Z"}
 
 # TaxonVision-MLOps Platform Overview
 
-TaxonVision-MLOps is an automated, end-to-end machine learning operations platform and production service designed for biodiversity species identification from citizen-science photographs. The system bridges cloud-based GitHub Actions quality gates with private bare-metal NVIDIA GPU training clusters, enforcing distribution-free **Split Conformal Prediction** guarantees and sub-15ms inference latency.
+TaxonVision-MLOps is an automated, end-to-end machine learning operations platform and production service designed for biodiversity species identification from citizen-science photographs. The system bridges cloud-based GitHub Actions quality gates with private bare-metal NVIDIA GPU training clusters, enforcing distribution-free **Split Conformal Prediction** guarantees and dual-target inference latency SLA ($\le 15.0\text{ ms}$ p95 bare-metal GPU target, $\le 25.0\text{ ms}$ p95 CPU/CI ceiling).
 
 <div class="metric-grid">
     <div class="metric-card">
         <div class="metric-header">Inference SLA</div>
-        <div class="metric-value">&lt; 15 ms</div>
-        <div class="metric-desc">Sub-15ms p95 latency on bare-metal hardware via zero-allocation ONNX Runtime INT8 engines.</div>
+        <div class="metric-value">&le; 15 ms</div>
+        <div class="metric-desc">Dual-target SLA: &le; 15.0ms p95 on bare-metal GPU/INT8 engines; &le; 25.0ms p95 CPU/CI ceiling.</div>
     </div>
     <div class="metric-card">
         <div class="metric-header">Conformal Coverage</div>
