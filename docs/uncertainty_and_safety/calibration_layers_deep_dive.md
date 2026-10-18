@@ -18,7 +18,7 @@ A common architectural vulnerability in applied machine learning is treating "mo
 flowchart TD
     subgraph L4["Layer 4: Integer Quantization Range Calibration"]
         direction TB
-        Q["TaxonCalibrationDataReader<br/>(inference.calibration)"] -->|Calibrates [r_min, r_max]| QDQ["Quantize-Dequantize Operators<br/>(Scale S & Zero-Point Z)"]
+        Q["TaxonCalibrationDataReader<br/>(inference.calibration)"] -->|"Calibrates [r_min, r_max]"| QDQ["Quantize-Dequantize Operators<br/>(Scale S & Zero-Point Z)"]
         QDQ --> ONNX["Static INT8 ONNX Engine<br/>(Sub-25ms Zero-Overflow Latency)"]
     end
 
@@ -29,7 +29,7 @@ flowchart TD
 
     subgraph L3["Layer 3: Thermodynamic Helmholtz Free-Energy OOD Cutoff"]
         direction TB
-        E["Energy Threshold tau_OOD<br/>(uncertainty.ood_detector)"] -->|Anchors 95% In-Dist TPR| FILTER["Rejects Non-Biological Artefacts<br/>E(x; T) > tau_OOD -> Human Triage"]
+        E["Energy Threshold tau_OOD<br/>(uncertainty.ood_detector)"] -->|Anchors 95% In-Dist TPR| FILTER["Rejects Non-Biological Artefacts<br/>E(x; T) > tau_OOD &rarr; Human Triage"]
     end
 
     subgraph L2["Layer 2: Split Conformal Non-Conformity Quantile"]

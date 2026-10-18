@@ -70,11 +70,11 @@ flowchart TD
 
     subgraph S3["Routing Engine"]
         FREE -->|E > tau_OOD| OOD["Semantic OOD Triage Queue"]
-        CONF -->||C| = 0| EMPTY["Empty Set Triage Queue"]
+        CONF -->|"|C| = 0"| EMPTY["Empty Set Triage Queue"]
         ENT -->|H_bar >= 0.82| CLUTTER["Empty Frame / Clutter Rejection"]
-        CONF -->||C| = 1| FAST["Zero-Allocation Fast Path (< 15 ms)"]
-        CONF -->||C| in [2, 3]| RAG["Sister-Taxa Vision-RAG Engine"]
-        CONF -->||C| >= 4| ESC["Taxonomic Escalation Queue"]
+        CONF -->|"|C| = 1"| FAST["Zero-Allocation Fast Path (< 15 ms)"]
+        CONF -->|"|C| in [2, 3]"| RAG["Sister-Taxa Vision-RAG Engine"]
+        CONF -->|"|C| >= 4"| ESC["Taxonomic Escalation Queue"]
     end
 ```
 

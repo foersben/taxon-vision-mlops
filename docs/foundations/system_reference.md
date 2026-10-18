@@ -21,35 +21,35 @@ The following diagram maps the execution flow of all 7 stages in `src/taxon_visi
 flowchart TD
     subgraph S1["Stage 1: Ingestion"]
         P1["pipelines.ingest"]
-        C1["data.inat_client.INatClient"]
-        A1["data/manifests/raw_manifest.parquet"]
+        C1["data.inat_client<br/>.INatClient"]
+        A1["data/manifests/<br/>raw_manifest.parquet"]
         P1 --> C1 --> A1
     end
 
     subgraph S2["Stage 2: License Audit"]
         P2["pipelines.audit_license"]
-        C2["data.license_filter.filter_compliant_observations"]
-        A2["data/manifests/dataset_manifest.parquet"]
+        C2["data.license_filter<br/>.filter_compliant_observations"]
+        A2["data/manifests/<br/>dataset_manifest.parquet"]
         A1 --> P2 --> C2 --> A2
     end
 
     subgraph S3["Stage 3: Feature Extraction"]
         P3["pipelines.extract_features"]
-        C3A["data.s3_streamer.S3ImageStreamer"]
-        C3B["models.factory.create_feature_extractor"]
-        C3C["models.factory.extract_and_cache_features"]
-        A3["data/embeddings/{train,val,cal,test}_embeddings.pt"]
+        C3A["data.s3_streamer<br/>.S3ImageStreamer"]
+        C3B["models.factory<br/>.create_feature_extractor"]
+        C3C["models.factory<br/>.extract_and_cache_features"]
+        A3["data/embeddings/<br/>{train,val,cal,test}_embeddings.pt"]
         A2 --> P3 --> C3A
         P3 --> C3B --> C3C --> A3
     end
 
     subgraph S4["Stage 4: Head Training"]
         P4["pipelines.train"]
-        C4A["models.training.runner.run_training_pipeline"]
-        C4B["models.loss.ClassBalancedLoss"]
-        C4C["models.training.tuning.tune_hyperparameters"]
-        C4D["models.training.tracking.MLflowTracker"]
-        A4["models/checkpoints/head.pt"]
+        C4A["models.training.runner<br/>.run_training_pipeline"]
+        C4B["models.loss<br/>.ClassBalancedLoss"]
+        C4C["models.training.tuning<br/>.tune_hyperparameters"]
+        C4D["models.training.tracking<br/>.MLflowTracker"]
+        A4["models/checkpoints/<br/>head.pt"]
         A3 --> P4 --> C4A
         C4A --> C4B
         C4A --> C4C
@@ -58,20 +58,20 @@ flowchart TD
 
     subgraph S5["Stage 5: ONNX Export & Quantization"]
         P5["pipelines.export_onnx"]
-        C5A["models.head.TaxonClassifier"]
-        C5B["inference.onnx_exporter.export_to_onnx"]
-        C5C["inference.quantizer.quantize_onnx_model"]
-        A5["models/checkpoints/model_int8.onnx"]
+        C5A["models.head<br/>.TaxonClassifier"]
+        C5B["inference.onnx_exporter<br/>.export_to_onnx"]
+        C5C["inference.quantizer<br/>.quantize_onnx_model"]
+        A5["models/checkpoints/<br/>model_int8.onnx"]
         A4 --> P5 --> C5A --> C5B --> C5C --> A5
     end
 
     subgraph S6["Stage 6: Conformal & OOD Calibration"]
         P6["pipelines.calibrate"]
-        C6A["inference.onnx_engine.ONNXInferenceEngine"]
-        C6B["inference.head_projector.compute_onnx_logits"]
-        C6C["uncertainty.conformal.ConformalCalibrator"]
-        C6D["uncertainty.ood_detector.EnergyOODDetector"]
-        A6["config/conformal_config.yaml"]
+        C6A["inference.onnx_engine<br/>.ONNXInferenceEngine"]
+        C6B["inference.head_projector<br/>.compute_onnx_logits"]
+        C6C["uncertainty.conformal<br/>.ConformalCalibrator"]
+        C6D["uncertainty.ood_detector<br/>.EnergyOODDetector"]
+        A6["config/<br/>conformal_config.yaml"]
         A3 --> P6
         A5 --> P6 --> C6A --> C6B
         P6 --> C6C --> A6
@@ -80,9 +80,9 @@ flowchart TD
 
     subgraph S7["Stage 7: Multi-Objective Evaluation"]
         P7["pipelines.evaluate"]
-        C7A["uncertainty.conformal.ConformalPredictor"]
-        C7B["monitoring.telemetry.ModelLatencyBenchmark"]
-        A7["reports/pareto_evaluation.json"]
+        C7A["uncertainty.conformal<br/>.ConformalPredictor"]
+        C7B["monitoring.telemetry<br/>.ModelLatencyBenchmark"]
+        A7["reports/<br/>pareto_evaluation.json"]
         A3 --> P7
         A5 --> P7
         A6 --> P7 --> C7A --> A7
@@ -90,10 +90,10 @@ flowchart TD
     end
 
     subgraph S_SRV["Runtime Serving Subsystem"]
-        SRV_API["service.api (FastAPI HTTP Server)"]
-        SRV_INF["service.inference.TaxonClassifierService"]
-        SRV_CAM["inference.cam.generate_heatmap"]
-        SRV_STR["service.storage.LocalFlaggedStorage"]
+        SRV_API["service.api<br/>(FastAPI HTTP Server)"]
+        SRV_INF["service.inference<br/>.TaxonClassifierService"]
+        SRV_CAM["inference.cam<br/>.generate_heatmap"]
+        SRV_STR["service.storage<br/>.LocalFlaggedStorage"]
         A5 --> SRV_INF
         A6 --> SRV_INF
         SRV_API --> SRV_INF

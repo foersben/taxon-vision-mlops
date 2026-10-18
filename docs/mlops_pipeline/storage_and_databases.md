@@ -113,10 +113,10 @@ flowchart TD
     C --> C_PT["cal_embeddings.pt<br/>(Conformal Quantile & OOD)"]
     E --> E_PT["test_embeddings.pt<br/>(Pareto SLA Evaluation)"]
 
-    style T_PT fill:#e0f2f1,stroke:#00897b,stroke-width:2px;
-    style V_PT fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
-    style C_PT fill:#fff3e0,stroke:#f57c00,stroke-width:2px;
-    style E_PT fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px;
+    style T_PT fill:#004d40,stroke:#26a69a,stroke-width:2px,color:#ffffff;
+    style V_PT fill:#01579b,stroke:#29b6f6,stroke-width:2px,color:#ffffff;
+    style C_PT fill:#e65100,stroke:#ff9800,stroke-width:2px,color:#ffffff;
+    style E_PT fill:#4a148c,stroke:#ab47bc,stroke-width:2px,color:#ffffff;
 ```
 
 ### Mathematical Zero-Leakage Invariant

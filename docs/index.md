@@ -27,8 +27,8 @@ TaxonVision-MLOps is an automated, end-to-end machine learning operations platfo
     </div>
     <div class="metric-card">
         <div class="metric-header">Feature Extraction</div>
-        <div class="metric-value">768-D</div>
-        <div class="metric-desc">Dense, L2-normalized morphological representations extracted via frozen ViT foundation backbones.</div>
+        <div class="metric-value">384-D</div>
+        <div class="metric-desc">Dense, L2-normalized DINOv3 ViT-S representations (384-D), with multi-backbone support spanning 384-D to 1280-D.</div>
     </div>
     <div class="metric-card">
         <div class="metric-header">License Compliance</div>

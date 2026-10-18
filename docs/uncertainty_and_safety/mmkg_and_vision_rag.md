@@ -21,9 +21,9 @@ flowchart TD
     subgraph S1["Conformal Decision Gate"]
         X["Observation Photograph x"] --> ENGINE["ONNX Runtime Inference Engine"]
         ENGINE --> CONF["Split Conformal Admission<br/>C(x) = {k : pi_k >= 1 - q_hat_alpha}"]
-        CONF -->||C| = 1| FAST["Zero-Allocation Fast-Path<br/>(< 15 ms Latency SLA)"]
-        CONF -->||C| in [2, 3]| RAG["Lazy Vision-RAG Trigger"]
-        CONF -->||C| >= 4| HUMAN["Human Taxonomic Triage Queue"]
+        CONF -->|"|C| = 1"| FAST["Zero-Allocation Fast-Path<br/>(< 15 ms Latency SLA)"]
+        CONF -->|"|C| in [2, 3]"| RAG["Lazy Vision-RAG Trigger"]
+        CONF -->|"|C| >= 4"| HUMAN["Human Taxonomic Triage Queue"]
     end
 
     subgraph S2["Parent-Child Visual Chunking"]
