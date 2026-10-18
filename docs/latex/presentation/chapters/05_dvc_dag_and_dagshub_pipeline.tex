@@ -16,118 +16,204 @@
 \end{frame}
 
 % ---------------------------------------------------------------------
-% Slide 2: Visual TikZ Diagram of the Complete 7-Stage DAG
+% Slide 2A: Pipeline Topology (1/3): Macro Architecture
 % ---------------------------------------------------------------------
-\begin{frame}{Pipeline Topology}{The 7-Stage Epistemic Diamond DVC Execution DAG}
+\begin{frame}{Pipeline Topology (1/3)}{The 7-Stage Epistemic Diamond Macro Architecture}
     \begin{center}
-        \resizebox{!}{0.62\textheight}{%
+        \resizebox{0.96\textwidth}{!}{%
         \begin{tikzpicture}[
             >=stealth, thick,
-            gitnode/.style={rectangle, rounded corners=3pt, fill=teal!15, draw=teal!80, text=teal!70!black, font=\tiny\ttfamily, inner sep=2pt},
-            stagenode/.style={rectangle, rounded corners=2pt, fill=gray!25, draw=gray!75, text=black, font=\scriptsize\bfseries, inner sep=3pt},
-            dvcnode/.style={rectangle, rounded corners=4pt, fill=deepblue!15, draw=deepblue!70, text=deepblue!80!black, font=\tiny\ttfamily, inner sep=2pt},
-            metricnode/.style={rectangle, rounded corners=3pt, fill=magenta!15, draw=magenta!70, text=magenta!80!black, font=\tiny\ttfamily, inner sep=2pt},
-            edge/.style={->, draw=gray!70, thin}
+            stg/.style={rectangle, rounded corners=3pt, fill=signalorange!15, draw=signalorange!85, text=black, font=\scriptsize\bfseries, inner sep=3.5pt, align=center},
+            art/.style={rectangle, rounded corners=3pt, fill=deepblue!12, draw=deepblue!75, text=deepblue!90!black, font=\tiny\ttfamily, inner sep=2.5pt, align=center},
+            tns/.style={rectangle, rounded corners=3pt, fill=plantgreen!12, draw=plantgreen!80, text=plantgreen!80!black, font=\tiny\ttfamily, inner sep=2.5pt, align=center},
+            arr/.style={->, draw=gray!70, semithick}
         ]
-            % Root parameters badge
-            \node[gitnode] (params) at (0.0, 2.2) {params.yaml};
+            % Upstream Ingestion & Invariant Audit
+            \node[stg] (s1) at (-5.8, 0.0) {Stage 1: Ingestion\\[1pt]\tiny\texttt{pipelines.ingest}};
+            \node[art] (raw) at (-4.0, 0.0) {raw\_manifest\\[1pt].parquet};
+            \node[stg] (s2) at (-2.2, 0.0) {Stage 2: Audit\\[1pt]\tiny\texttt{pipelines.audit\_license}};
+            \node[art] (clean) at (-0.4, 0.0) {dataset\_manifest\\[1pt].parquet};
+            \node[stg] (s3) at (1.4, 0.0) {Stage 3: Feature Extr.\\[1pt]\tiny\texttt{pipelines.extract\_features}};
 
-            % Stage 1: Ingestion
-            \node[gitnode] (taxa) at (-5.6, 1.4) {taxa\_catalog.yaml};
-            \node[stagenode] (s1) at (-5.6, 0.4) {ingestion};
-            \node[dvcnode] (rawman) at (-5.6, -0.6) {raw\_manifest.parquet};
+            % Diamond Fan-Out: 4 Split Tensors
+            \node[tns] (tr) at (3.8, 1.65) {train\_embeddings.pt};
+            \node[tns] (val) at (3.8, 0.55) {val\_embeddings.pt};
+            \node[tns] (cal) at (3.8, -0.55) {cal\_embeddings.pt};
+            \node[tns] (tst) at (3.8, -1.65) {test\_embeddings.pt};
 
-            \draw[edge] (taxa) -- (s1);
-            \draw[edge] (s1) -- (rawman);
+            % Downstream Training & Convergence
+            \node[stg] (s4) at (6.5, 1.1) {Stage 4: Train\\[1pt]\tiny\texttt{pipelines.train}};
+            \node[art] (head) at (8.3, 1.1) {head.pt};
+            \node[stg] (s5) at (6.5, 0.0) {Stage 5: Export\\[1pt]\tiny\texttt{pipelines.export\_onnx}};
+            \node[art] (onnx) at (8.3, 0.0) {model\_int8\\[1pt].onnx};
+            \node[stg] (s6) at (6.5, -0.9) {Stage 6: Calibrate\\[1pt]\tiny\texttt{pipelines.calibrate}};
+            \node[stg] (s7) at (6.5, -1.8) {Stage 7: Eval\\[1pt]\tiny\texttt{pipelines.evaluate}};
 
-            % Stage 2: Audit License
-            \node[gitnode] (licf) at (-3.4, 1.4) {license\_filter.py};
-            \node[stagenode] (s2) at (-3.4, 0.4) {audit\_license};
-            \node[dvcnode] (dataman) at (-3.4, -0.6) {dataset\_manifest.parquet};
-            \node[metricnode] (mlic) at (-3.4, -1.5) {license\_audit.json};
+            % Connectors Upstream
+            \draw[arr] (s1) -- (raw);
+            \draw[arr] (raw) -- (s2);
+            \draw[arr] (s2) -- (clean);
+            \draw[arr] (clean) -- (s3);
 
-            \draw[edge] (rawman) -- (s2);
-            \draw[edge] (licf) -- (s2);
-            \draw[edge] (s2) -- (dataman);
-            \draw[edge] (s2) -- (mlic);
+            % Connectors Fan-out (Diamond)
+            \draw[arr] (s3.east) -- ++(0.3,0) |- (tr.west);
+            \draw[arr] (s3.east) -- ++(0.3,0) |- (val.west);
+            \draw[arr] (s3.east) -- ++(0.3,0) |- (cal.west);
+            \draw[arr] (s3.east) -- ++(0.3,0) |- (tst.west);
 
-            % Stage 3: Extract Features
-            \node[gitnode] (s3st) at (-1.2, 1.4) {s3\_streamer.py};
-            \node[stagenode] (s3) at (-1.2, 0.4) {extract\_features};
-
-            \draw[edge] (dataman) -- (s3);
-            \draw[edge] (s3st) -- (s3);
-
-            % Embedding splits (Diamond Fan-Out)
-            \node[dvcnode] (tr_emb) at (1.1, 1.6) {train\_embeddings.pt};
-            \node[dvcnode] (val_emb) at (1.1, 0.7) {val\_embeddings.pt};
-            \node[dvcnode] (cal_emb) at (1.1, -0.4) {cal\_embeddings.pt};
-            \node[dvcnode] (tst_emb) at (1.1, -1.3) {test\_embeddings.pt};
-
-            \draw[edge] (s3) to[out=40, in=180] (tr_emb);
-            \draw[edge] (s3) to[out=15, in=180] (val_emb);
-            \draw[edge] (s3) to[out=-20, in=180] (cal_emb);
-            \draw[edge] (s3) to[out=-50, in=180] (tst_emb);
-
-            % Stage 4: Train & Head
-            \node[stagenode] (s4) at (3.2, 1.1) {train};
-            \node[dvcnode] (headpt) at (4.5, 1.6) {head.pt};
-            \node[metricnode] (mtrn) at (4.5, 0.8) {train\_metrics.json};
-
-            \draw[edge] (tr_emb) to[out=0, in=160] (s4);
-            \draw[edge] (val_emb) to[out=0, in=200] (s4);
-            \draw[edge] (s4) -- (headpt);
-            \draw[edge] (s4) -- (mtrn);
-
-            % Stage 5: Export ONNX
-            \node[stagenode] (s5) at (5.8, 1.6) {export};
-            \node[dvcnode] (onnxmdl) at (5.8, 0.3) {model\_int8.onnx};
-
-            \draw[edge] (headpt) -- (s5);
-            \draw[edge] (s5) -- (onnxmdl);
-
-            % Stage 6: Calibrate
-            \node[stagenode] (s6) at (3.2, -0.4) {calibrate};
-            \node[gitnode] (confcfg) at (4.5, -0.1) {conformal\_config.yaml};
-            \node[metricnode] (mconf) at (4.5, -0.7) {conformal\_metrics.json};
-
-            \draw[edge] (cal_emb) -- (s6);
-            \draw[edge] (onnxmdl) to[out=230, in=30] (s6);
-            \draw[edge] (s6) -- (confcfg);
-            \draw[edge] (s6) -- (mconf);
-
-            % Stage 7: Evaluate
-            \node[stagenode] (s7) at (3.2, -1.5) {eval};
-            \node[metricnode] (meval) at (5.2, -1.3) {pareto\_eval.json};
-            \node[gitnode] (assetres) at (5.2, -1.9) {pareto\_results.json};
-
-            \draw[edge] (tst_emb) -- (s7);
-            \draw[edge] (onnxmdl) to[out=270, in=20] (s7);
-            \draw[edge] (confcfg) to[out=270, in=70] (s7);
-            \draw[edge] (s7) -- (meval);
-            \draw[edge] (s7) -- (assetres);
-
-            % Global params connections
-            \draw[edge, dashed] (params) to[out=180, in=90] (s1);
-            \draw[edge, dashed] (params) to[out=200, in=90] (s2);
-            \draw[edge, dashed] (params) to[out=230, in=90] (s3);
-            \draw[edge, dashed] (params) to[out=320, in=90] (s4);
-            \draw[edge, dashed] (params) to[out=350, in=90] (s5);
-        \end{tikzpicture}
+            % Connectors Downstream
+            \draw[arr] (tr.east) -| ++(0.3,-0.3) -- (s4.west);
+            \draw[arr] (val.east) -| ++(0.3,0.3) -- (s4.west);
+            \draw[arr] (s4) -- (head);
+            \draw[arr] (head.south) -- ++(0,-0.2) -| (s5.north);
+            \draw[arr] (s5) -- (onnx);
+            \draw[arr] (cal.east) -- (s6.west);
+            \draw[arr] (tst.east) -- (s7.west);
+            \draw[arr] (onnx.south) -- ++(0,-0.2) -| (s6.north);
+            \draw[arr] (onnx.south) -- ++(0,-1.0) -| (s7.north);
+        \end{tikzpicture}%
         }
     \end{center}
-
-    \script{Here we see the full visual topology of the Epistemic Diamond DAG as tracked in DagsHub. Notice the clear color taxonomy: teal for Git code and config dependencies, grey for execution stages, blue for DVC content-addressable artifacts, and magenta for metrics.}
-    \qa{How does the visual topology reflect distribution-free statistical safety?}{The calibration split (cal\_embeddings.pt) completely bypasses Stage 4 (train) and Stage 5 (export), only encountering the compiled ONNX model at Stage 6 (calibrate) to compute non-conformity quantiles without data snooping.}
+    \vspace{-0.1cm}
+    \script{Here is the macro architecture of the Epistemic Diamond DVC pipeline. Notice the distinctive expansion-contraction diamond topology: single-stream ingestion expands into four strictly partitioned embedding tensors, and then converges into our validated, calibrated ONNX runtime package without data leakage.}
+    \qa{Why do we refer to our pipeline as the Epistemic Diamond?}{Because it expands from a single raw dataset manifest into four strictly isolated split tensors for feature caching, and then contracts into a single validated, calibrated ONNX runtime package without data leakage.}
 \end{frame}
 
 % ---------------------------------------------------------------------
-% Slide 3: Artifact Inventory (1/2): Manifests & Feature Tensors
+% Slide 2B: Pipeline Topology (2/3): Upstream Lineage (Stages 1–3)
+% ---------------------------------------------------------------------
+\begin{frame}{Pipeline Topology (2/3)}{Upstream Data \& Feature Extraction Lineage (Stages 1--3)}
+    \begin{center}
+        \resizebox{0.96\textwidth}{!}{%
+        \begin{tikzpicture}[
+            >=stealth, thick,
+            gitnode/.style={rectangle, rounded corners=3pt, fill=teal!15, draw=teal!80, text=teal!70!black, font=\tiny\ttfamily, inner sep=2.5pt, align=center},
+            stagenode/.style={rectangle, rounded corners=3pt, fill=signalorange!15, draw=signalorange!85, text=black, font=\scriptsize\bfseries, inner sep=3.5pt, align=center},
+            dvcnode/.style={rectangle, rounded corners=3pt, fill=deepblue!12, draw=deepblue!75, text=deepblue!90!black, font=\tiny\ttfamily, inner sep=2.5pt, align=center},
+            metricnode/.style={rectangle, rounded corners=3pt, fill=magenta!15, draw=magenta!75, text=magenta!80!black, font=\tiny\ttfamily, inner sep=2.5pt, align=center},
+            tnsnode/.style={rectangle, rounded corners=3pt, fill=plantgreen!12, draw=plantgreen!80, text=plantgreen!80!black, font=\tiny\ttfamily, inner sep=2.5pt, align=center},
+            edge/.style={->, draw=gray!70, semithick}
+        ]
+            % Stage 1: Ingestion
+            \node[gitnode] (g1) at (-4.2, 1.5) {taxa\_catalog.yaml\\inat\_client.py\\pipelines/ingest.py};
+            \node[gitnode] (p1) at (-4.2, 0.4) {params.yaml\\[1pt]\tiny\texttt{ingestion.*}};
+            \node[stagenode] (s1) at (-4.2, -0.6) {Stage 1: Ingestion\\[1pt]\tiny\texttt{pipelines.ingest}};
+            \node[dvcnode] (raw) at (-4.2, -1.7) {data/manifests/\\[1pt]\textbf{raw\_manifest.parquet}};
+
+            \draw[edge] (g1) -- (p1);
+            \draw[edge] (p1) -- (s1);
+            \draw[edge] (s1) -- (raw);
+
+            % Stage 2: Audit License
+            \node[gitnode] (g2) at (0.0, 1.5) {license\_filter.py\\domain/license.py\\pipelines/audit\_license.py};
+            \node[stagenode] (s2) at (0.0, -0.6) {Stage 2: Audit License\\[1pt]\tiny\texttt{pipelines.audit\_license}};
+            \node[dvcnode] (clean) at (0.0, -1.7) {data/manifests/\\[1pt]\textbf{dataset\_manifest.parquet}};
+            \node[metricnode] (m2) at (0.0, -2.7) {reports/\\[1pt]\textbf{license\_audit.json}};
+
+            \draw[edge] (raw.east) -- ++(0.4,0) |- (s2.west);
+            \draw[edge] (g2) -- (s2);
+            \draw[edge] (s2) -- (clean);
+            \draw[edge] (clean) -- (m2);
+
+            % Stage 3: Feature Extraction
+            \node[gitnode] (g3) at (4.5, 1.5) {s3\_streamer.py\\models/factory.py\\pipelines/extract\_features.py};
+            \node[gitnode] (p3) at (4.5, 0.4) {params.yaml\\[1pt]\tiny\texttt{feature\_extraction.*}};
+            \node[stagenode] (s3) at (4.5, -0.6) {Stage 3: Extract Features\\[1pt]\tiny\texttt{pipelines.extract\_features}};
+
+            \draw[edge] (clean.east) -- ++(0.4,0) |- (s3.west);
+            \draw[edge] (g3) -- (p3);
+            \draw[edge] (p3) -- (s3);
+
+            % Stage 3 Outputs: 4 Split Tensors
+            \node[tnsnode] (t_tr) at (8.0, 0.6) {train\_embeddings.pt};
+            \node[tnsnode] (t_val) at (8.0, -0.2) {val\_embeddings.pt};
+            \node[tnsnode] (t_cal) at (8.0, -1.0) {cal\_embeddings.pt};
+            \node[tnsnode] (t_tst) at (8.0, -1.8) {test\_embeddings.pt};
+
+            \draw[edge] (s3.east) -- ++(0.4,0) |- (t_tr.west);
+            \draw[edge] (s3.east) -- ++(0.4,0) |- (t_val.west);
+            \draw[edge] (s3.east) -- ++(0.4,0) |- (t_cal.west);
+            \draw[edge] (s3.east) -- ++(0.4,0) |- (t_tst.west);
+        \end{tikzpicture}%
+        }
+    \end{center}
+    \vspace{-0.1cm}
+    \script{In this upstream lineage view, we trace Stages 1 through 3. Ingestion queries iNaturalist without downloading images, packaging URLs into raw\_manifest.parquet. Stage 2 enforces our strict open-license whitelist, producing dataset\_manifest.parquet. Stage 3 then streams image bytes into GPU memory, caching 768-dimensional embeddings across four isolated splits in SeaweedFS S3.}
+    \qa{Why are raw images not downloaded to disk during ingestion?}{Storing URLs keeps raw\_manifest.parquet under 500 KB and delays image streaming directly to feature extraction, avoiding the massive disk overhead of storing thousands of intermediate JPEG files.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 2C: Pipeline Topology (3/3): Downstream Lineage (Stages 4–7)
+% ---------------------------------------------------------------------
+\begin{frame}{Pipeline Topology (3/3)}{Downstream Training, Export, Calibration \& Eval Lineage (Stages 4--7)}
+    \begin{center}
+        \resizebox{0.96\textwidth}{!}{%
+        \begin{tikzpicture}[
+            >=stealth, thick,
+            gitnode/.style={rectangle, rounded corners=3pt, fill=teal!15, draw=teal!80, text=teal!70!black, font=\tiny\ttfamily, inner sep=2.5pt, align=center},
+            stagenode/.style={rectangle, rounded corners=3pt, fill=signalorange!15, draw=signalorange!85, text=black, font=\scriptsize\bfseries, inner sep=3.5pt, align=center},
+            dvcnode/.style={rectangle, rounded corners=3pt, fill=deepblue!12, draw=deepblue!75, text=deepblue!90!black, font=\tiny\ttfamily, inner sep=2.5pt, align=center},
+            metricnode/.style={rectangle, rounded corners=3pt, fill=magenta!15, draw=magenta!75, text=magenta!80!black, font=\tiny\ttfamily, inner sep=2.5pt, align=center},
+            tnsnode/.style={rectangle, rounded corners=3pt, fill=plantgreen!12, draw=plantgreen!80, text=plantgreen!80!black, font=\tiny\ttfamily, inner sep=2.5pt, align=center},
+            edge/.style={->, draw=gray!70, semithick}
+        ]
+            % Split Tensors on Left
+            \node[tnsnode] (in_tr) at (-4.8, 1.8) {train\_embeddings.pt};
+            \node[tnsnode] (in_val) at (-4.8, 0.9) {val\_embeddings.pt};
+            \node[tnsnode] (in_cal) at (-4.8, -0.6) {cal\_embeddings.pt};
+            \node[tnsnode] (in_tst) at (-4.8, -1.9) {test\_embeddings.pt};
+
+            % Stage 4: Train
+            \node[stagenode] (s4) at (-1.8, 1.35) {Stage 4: Train\\[1pt]\tiny\texttt{pipelines.train}};
+            \node[dvcnode] (head) at (0.8, 1.8) {models/checkpoints/\\[1pt]\textbf{head.pt}};
+            \node[metricnode] (m4) at (0.8, 0.9) {reports/\\[1pt]\textbf{train\_metrics.json}};
+
+            \draw[edge] (in_tr.east) -- ++(0.3,0) |- (s4.west);
+            \draw[edge] (in_val.east) -- ++(0.3,0) |- (s4.west);
+            \draw[edge] (s4.east) -- ++(0.3,0) |- (head.west);
+            \draw[edge] (s4.east) -- ++(0.3,0) |- (m4.west);
+
+            % Stage 5: Export ONNX
+            \node[stagenode] (s5) at (3.6, 1.8) {Stage 5: Export\\[1pt]\tiny\texttt{pipelines.export\_onnx}};
+            \node[dvcnode] (onnx) at (6.2, 1.8) {models/checkpoints/\\[1pt]\textbf{model\_int8.onnx}};
+
+            \draw[edge] (head.east) -- (s5.west);
+            \draw[edge] (s5.east) -- (onnx.west);
+
+            % Stage 6: Calibrate
+            \node[stagenode] (s6) at (-1.8, -0.6) {Stage 6: Calibrate\\[1pt]\tiny\texttt{pipelines.calibrate}};
+            \node[gitnode] (conf) at (0.8, -0.2) {config/\\[1pt]\textbf{conformal\_config.yaml}};
+            \node[metricnode] (m6) at (0.8, -1.0) {reports/\\[1pt]\textbf{conformal\_metrics.json}};
+
+            \draw[edge] (in_cal.east) -- (s6.west);
+            \draw[edge] (onnx.south) -- ++(0,-1.0) -| (s6.north);
+            \draw[edge] (s6.east) -- ++(0.3,0) |- (conf.west);
+            \draw[edge] (s6.east) -- ++(0.3,0) |- (m6.west);
+
+            % Stage 7: Evaluate
+            \node[stagenode] (s7) at (-1.8, -1.9) {Stage 7: Evaluate\\[1pt]\tiny\texttt{pipelines.evaluate}};
+            \node[metricnode] (m7) at (0.8, -1.8) {reports/\\[1pt]\textbf{pareto\_evaluation.json}};
+            \node[gitnode] (docres) at (0.8, -2.5) {docs/assets/\\[1pt]\textbf{pareto\_results.json}};
+
+            \draw[edge] (in_tst.east) -- (s7.west);
+            \draw[edge] (conf.south) -- ++(0,-0.2) -| (s7.north);
+            \draw[edge] (s7.east) -- ++(0.3,0) |- (m7.west);
+            \draw[edge] (s7.east) -- ++(0.3,0) |- (docres.west);
+        \end{tikzpicture}%
+        }
+    \end{center}
+    \vspace{-0.1cm}
+    \script{This downstream lineage view covers Stages 4 through 7. The linear head trains on cached embeddings in under two seconds. Stage 5 fuses and quantizes the model to INT8 ONNX. Stage 6 uses the untouched calibration split to compute conformal quantile thresholds. Finally, Stage 7 validates empirical coverage and enforces the sub-15ms latency SLA on holdout test data.}
+    \qa{How does the downstream DAG enforce mathematical isolation against data leakage?}{The calibration split cal\_embeddings.pt is strictly inaccessible to Stage 4 and Stage 5. It is consumed solely by Stage 6 to calculate distribution-free conformal bounds, guaranteeing that the model has never adapted to calibration samples.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 4: Artifact Inventory (1/2): Manifests & Feature Tensors
 % ---------------------------------------------------------------------
 \begin{frame}{Artifact Inventory (1/2)}{DVC-Managed Manifests \& High-Dimensional Tensors}
     \vspace{-0.2cm}
-    \begin{center}\scriptsize\renewcommand{\arraystretch}{0.78}
-        \begin{tabular}{p{3.6cm} p{1.6cm} p{1.5cm} p{1.6cm} p{2.6cm}}
+    \begin{center}\scriptsize\renewcommand{\arraystretch}{0.80}
+        \begin{tabular}{>{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}p{2.3cm} >{\raggedright\arraybackslash}p{1.4cm} >{\raggedright\arraybackslash}p{1.5cm} >{\raggedright\arraybackslash}p{2.5cm}}
             \toprule
             \textbf{DVC Artifact Path} & \textbf{Data Format} & \textbf{Producer} & \textbf{Consumers} & \textbf{Storage Tier / Remote} \\
             \midrule
@@ -147,16 +233,16 @@
 \end{frame}
 
 % ---------------------------------------------------------------------
-% Slide 4: Artifact Inventory (2/2): Checkpoints, Engines & Metrics
+% Slide 5: Artifact Inventory (2/2): Checkpoints, Engines & Metrics
 % ---------------------------------------------------------------------
 \begin{frame}{Artifact Inventory (2/2)}{DVC Checkpoints, Compiled Engines \& Metrics}
     \vspace{-0.25cm}
-    \begin{center}\scriptsize\renewcommand{\arraystretch}{0.75}
-        \begin{tabular}{p{3.6cm} p{1.6cm} p{1.5cm} p{1.6cm} p{2.6cm}}
+    \begin{center}\scriptsize\renewcommand{\arraystretch}{0.80}
+        \begin{tabular}{>{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}p{2.3cm} >{\raggedright\arraybackslash}p{1.4cm} >{\raggedright\arraybackslash}p{1.5cm} >{\raggedright\arraybackslash}p{2.5cm}}
             \toprule
             \textbf{DVC Artifact Path} & \textbf{Data Format} & \textbf{Producer} & \textbf{Consumers} & \textbf{Storage Tier / Remote} \\
             \midrule
-            \texttt{models/checkpoints/} \newline \texttt{head.pt} & Torch StateDict \newline $W \in \mathbb{R}^{K \times 768}, b \in \mathbb{R}^K$ & \texttt{train} & \texttt{export} & DagsHub Release S3 \newline (\texttt{remote: origin}) \\
+            \texttt{models/checkpoints/} \newline \texttt{head.pt} & PyTorch StateDict \newline $W \in \mathbb{R}^{K \times 768}, b \in \mathbb{R}^K$ & \texttt{train} & \texttt{export} & DagsHub Release S3 \newline (\texttt{remote: origin}) \\
             \midrule
             \texttt{models/checkpoints/} \newline \texttt{model\_int8.onnx} & Quantized Graph \newline INT8/FP32 Operators & \texttt{export} & \texttt{calibrate}, \newline \texttt{eval}, \texttt{service} & DagsHub Release S3 \newline (\texttt{remote: origin}) \\
             \midrule
@@ -207,9 +293,27 @@
 \end{frame}
 
 % ---------------------------------------------------------------------
-% Slide 6: Stage 1 Deep-Dive: Data Ingestion
+% Slide 7: Stage 1 Deep-Dive: Data Ingestion
 % ---------------------------------------------------------------------
 \begin{frame}{Stage 1 Deep-Dive}{\texttt{ingestion}: Citizen-Science Querying \& Raw Manifest Creation}
+    \vspace{-0.2cm}
+    \begin{center}
+    \resizebox{0.95\textwidth}{!}{%
+    \begin{tikzpicture}[
+        box/.style={rectangle, rounded corners=3pt, draw=deepblue!70, fill=deepblue!8, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        stg/.style={rectangle, rounded corners=3pt, draw=signalorange!90, fill=signalorange!15, font=\tiny\bfseries\sffamily, align=center, inner sep=4pt},
+        outbox/.style={rectangle, rounded corners=3pt, draw=plantgreen!80, fill=plantgreen!10, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        arr/.style={-stealth, thick, draw=gray!70}
+    ]
+        \node[box] (deps) {\textbf{Stage Inputs \& Tracked Params}\\[1pt]\texttt{config/taxa\_catalog.yaml} $\cdot$ \texttt{inat\_client.py} $\cdot$ \texttt{params: per\_page, taxa\_to\_fetch}};
+        \node[stg, right=0.6cm of deps] (stage) {\textsc{Stage 1: Ingestion}\\[1pt]\texttt{pipelines.ingest}};
+        \node[outbox, right=0.6cm of stage] (outs) {\textbf{Outputs \& Metrics}\\[1pt]\texttt{data/manifests/raw\_manifest.parquet} (Snappy)};
+        \draw[arr] (deps) -- (stage);
+        \draw[arr] (stage) -- (outs);
+    \end{tikzpicture}%
+    }
+    \end{center}
+    \vspace{-0.2cm}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
             \begin{block}{DVC Stage Declaration (\texttt{dvc.yaml})}
@@ -250,9 +354,27 @@
 \end{frame}
 
 % ---------------------------------------------------------------------
-% Slide 7: Stage 2 Deep-Dive: License Compliance Audit
+% Slide 8: Stage 2 Deep-Dive: License Compliance Audit
 % ---------------------------------------------------------------------
 \begin{frame}{Stage 2 Deep-Dive}{\texttt{audit\_license}: Legal Compliance Gate \& Dataset Curation}
+    \vspace{-0.2cm}
+    \begin{center}
+    \resizebox{0.95\textwidth}{!}{%
+    \begin{tikzpicture}[
+        box/.style={rectangle, rounded corners=3pt, draw=deepblue!70, fill=deepblue!8, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        stg/.style={rectangle, rounded corners=3pt, draw=signalorange!90, fill=signalorange!15, font=\tiny\bfseries\sffamily, align=center, inner sep=4pt},
+        outbox/.style={rectangle, rounded corners=3pt, draw=plantgreen!80, fill=plantgreen!10, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        arr/.style={-stealth, thick, draw=gray!70}
+    ]
+        \node[box] (deps) {\textbf{Stage Inputs \& Tracked Params}\\[1pt]\texttt{raw\_manifest.parquet} $\cdot$ \texttt{license\_filter.py} $\cdot$ \texttt{domain/license.py}};
+        \node[stg, right=0.6cm of deps] (stage) {\textsc{Stage 2: Audit License}\\[1pt]\texttt{pipelines.audit\_license}};
+        \node[outbox, right=0.6cm of stage] (outs) {\textbf{Outputs \& Metrics}\\[1pt]\texttt{dataset\_manifest.parquet} $\cdot$ \texttt{reports/license\_audit.json}};
+        \draw[arr] (deps) -- (stage);
+        \draw[arr] (stage) -- (outs);
+    \end{tikzpicture}%
+    }
+    \end{center}
+    \vspace{-0.2cm}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
             \begin{block}{DVC Stage Declaration (\texttt{dvc.yaml})}
@@ -296,9 +418,27 @@
 \end{frame}
 
 % ---------------------------------------------------------------------
-% Slide 8: Stage 3 Deep-Dive: Feature Extraction & Partitioning
+% Slide 9: Stage 3 Deep-Dive: Feature Extraction & Partitioning
 % ---------------------------------------------------------------------
 \begin{frame}{Stage 3 Deep-Dive}{\texttt{extract\_features}: Zero-Copy S3 Streaming \& Epistemic Splitting}
+    \vspace{-0.2cm}
+    \begin{center}
+    \resizebox{0.95\textwidth}{!}{%
+    \begin{tikzpicture}[
+        box/.style={rectangle, rounded corners=3pt, draw=deepblue!70, fill=deepblue!8, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        stg/.style={rectangle, rounded corners=3pt, draw=signalorange!90, fill=signalorange!15, font=\tiny\bfseries\sffamily, align=center, inner sep=4pt},
+        outbox/.style={rectangle, rounded corners=3pt, draw=plantgreen!80, fill=plantgreen!10, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        arr/.style={-stealth, thick, draw=gray!70}
+    ]
+        \node[box] (deps) {\textbf{Stage Inputs \& Tracked Params}\\[1pt]\texttt{dataset\_manifest.parquet} $\cdot$ \texttt{s3\_streamer.py} $\cdot$ \texttt{params: extractor, batch\_size, splits}};
+        \node[stg, right=0.6cm of deps] (stage) {\textsc{Stage 3: Feature Extraction}\\[1pt]\texttt{pipelines.extract\_features}};
+        \node[outbox, right=0.6cm of stage] (outs) {\textbf{Outputs \& Metrics}\\[1pt]4x SeaweedFS Embeddings (\texttt{train, val, cal, test .pt})};
+        \draw[arr] (deps) -- (stage);
+        \draw[arr] (stage) -- (outs);
+    \end{tikzpicture}%
+    }
+    \end{center}
+    \vspace{-0.2cm}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
             \begin{block}{DVC Stage Declaration (\texttt{dvc.yaml})}
@@ -342,9 +482,27 @@
 \end{frame}
 
 % ---------------------------------------------------------------------
-% Slide 9: Stage 4 Deep-Dive: Linear Head Training
+% Slide 10: Stage 4 Deep-Dive: Linear Head Training
 % ---------------------------------------------------------------------
 \begin{frame}{Stage 4 Deep-Dive}{\texttt{train}: Class-Balanced Loss Optimization on Cached Tensors}
+    \vspace{-0.2cm}
+    \begin{center}
+    \resizebox{0.95\textwidth}{!}{%
+    \begin{tikzpicture}[
+        box/.style={rectangle, rounded corners=3pt, draw=deepblue!70, fill=deepblue!8, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        stg/.style={rectangle, rounded corners=3pt, draw=signalorange!90, fill=signalorange!15, font=\tiny\bfseries\sffamily, align=center, inner sep=4pt},
+        outbox/.style={rectangle, rounded corners=3pt, draw=plantgreen!80, fill=plantgreen!10, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        arr/.style={-stealth, thick, draw=gray!70}
+    ]
+        \node[box] (deps) {\textbf{Stage Inputs \& Tracked Params}\\[1pt]\texttt{train/val\_embeddings.pt} $\cdot$ \texttt{loss.py} $\cdot$ \texttt{params: epochs, lr, cb\_beta, tune}};
+        \node[stg, right=0.6cm of deps] (stage) {\textsc{Stage 4: Head Training}\\[1pt]\texttt{pipelines.train}};
+        \node[outbox, right=0.6cm of stage] (outs) {\textbf{Outputs \& Metrics}\\[1pt]\texttt{head.pt} $\cdot$ \texttt{reports/train\_metrics.json}};
+        \draw[arr] (deps) -- (stage);
+        \draw[arr] (stage) -- (outs);
+    \end{tikzpicture}%
+    }
+    \end{center}
+    \vspace{-0.2cm}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
             \begin{block}{DVC Stage Declaration (\texttt{dvc.yaml})}
@@ -387,9 +545,27 @@
 \end{frame}
 
 % ---------------------------------------------------------------------
-% Slide 10: Stage 5 Deep-Dive: ONNX Export & Dynamic Quantization
+% Slide 11: Stage 5 Deep-Dive: ONNX Export & Dynamic Quantization
 % ---------------------------------------------------------------------
 \begin{frame}{Stage 5 Deep-Dive}{\texttt{export}: Graph Fusion \& INT8 Dynamic Quantization}
+    \vspace{-0.2cm}
+    \begin{center}
+    \resizebox{0.95\textwidth}{!}{%
+    \begin{tikzpicture}[
+        box/.style={rectangle, rounded corners=3pt, draw=deepblue!70, fill=deepblue!8, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        stg/.style={rectangle, rounded corners=3pt, draw=signalorange!90, fill=signalorange!15, font=\tiny\bfseries\sffamily, align=center, inner sep=4pt},
+        outbox/.style={rectangle, rounded corners=3pt, draw=plantgreen!80, fill=plantgreen!10, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        arr/.style={-stealth, thick, draw=gray!70}
+    ]
+        \node[box] (deps) {\textbf{Stage Inputs \& Tracked Params}\\[1pt]\texttt{head.pt} $\cdot$ \texttt{onnx\_exporter.py} $\cdot$ \texttt{params: quantize\_int8, image\_size}};
+        \node[stg, right=0.6cm of deps] (stage) {\textsc{Stage 5: ONNX Compilation}\\[1pt]\texttt{pipelines.export\_onnx}};
+        \node[outbox, right=0.6cm of stage] (outs) {\textbf{Outputs \& Metrics}\\[1pt]\texttt{models/checkpoints/model\_int8.onnx} (Quantized Graph)};
+        \draw[arr] (deps) -- (stage);
+        \draw[arr] (stage) -- (outs);
+    \end{tikzpicture}%
+    }
+    \end{center}
+    \vspace{-0.2cm}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
             \begin{block}{DVC Stage Declaration (\texttt{dvc.yaml})}
@@ -432,9 +608,27 @@
 \end{frame}
 
 % ---------------------------------------------------------------------
-% Slide 11: Stage 6 Deep-Dive: Conformal Calibration & OOD Gating
+% Slide 12: Stage 6 Deep-Dive: Conformal Calibration & OOD Gating
 % ---------------------------------------------------------------------
 \begin{frame}{Stage 6 Deep-Dive}{\texttt{calibrate}: Non-Conformity Scoring \& Energy OOD Bounds}
+    \vspace{-0.2cm}
+    \begin{center}
+    \resizebox{0.95\textwidth}{!}{%
+    \begin{tikzpicture}[
+        box/.style={rectangle, rounded corners=3pt, draw=deepblue!70, fill=deepblue!8, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        stg/.style={rectangle, rounded corners=3pt, draw=signalorange!90, fill=signalorange!15, font=\tiny\bfseries\sffamily, align=center, inner sep=4pt},
+        outbox/.style={rectangle, rounded corners=3pt, draw=plantgreen!80, fill=plantgreen!10, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        arr/.style={-stealth, thick, draw=gray!70}
+    ]
+        \node[box] (deps) {\textbf{Stage Inputs \& Tracked Params}\\[1pt]\texttt{cal\_embeddings.pt} $\cdot$ \texttt{model\_int8.onnx} $\cdot$ \texttt{params: alpha, ood\_tpr}};
+        \node[stg, right=0.6cm of deps] (stage) {\textsc{Stage 6: Conformal Calibration}\\[1pt]\texttt{pipelines.calibrate}};
+        \node[outbox, right=0.6cm of stage] (outs) {\textbf{Outputs \& Metrics}\\[1pt]\texttt{config/conformal\_config.yaml} $\cdot$ \texttt{reports/conformal\_metrics.json}};
+        \draw[arr] (deps) -- (stage);
+        \draw[arr] (stage) -- (outs);
+    \end{tikzpicture}%
+    }
+    \end{center}
+    \vspace{-0.2cm}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
             \begin{block}{DVC Stage Declaration (\texttt{dvc.yaml})}
@@ -478,9 +672,27 @@
 \end{frame}
 
 % ---------------------------------------------------------------------
-% Slide 12: Stage 7 Deep-Dive: Pareto Evaluation & Latency SLA
+% Slide 13: Stage 7 Deep-Dive: Pareto Evaluation & Latency SLA
 % ---------------------------------------------------------------------
 \begin{frame}{Stage 7 Deep-Dive}{\texttt{eval}: Holdout Verification \& Production Latency Gating}
+    \vspace{-0.2cm}
+    \begin{center}
+    \resizebox{0.95\textwidth}{!}{%
+    \begin{tikzpicture}[
+        box/.style={rectangle, rounded corners=3pt, draw=deepblue!70, fill=deepblue!8, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        stg/.style={rectangle, rounded corners=3pt, draw=signalorange!90, fill=signalorange!15, font=\tiny\bfseries\sffamily, align=center, inner sep=4pt},
+        outbox/.style={rectangle, rounded corners=3pt, draw=plantgreen!80, fill=plantgreen!10, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        arr/.style={-stealth, thick, draw=gray!70}
+    ]
+        \node[box] (deps) {\textbf{Stage Inputs \& Tracked Params}\\[1pt]\texttt{test\_embeddings.pt} $\cdot$ \texttt{model\_int8.onnx} $\cdot$ \texttt{params: latency\_sla\_ms}};
+        \node[stg, right=0.6cm of deps] (stage) {\textsc{Stage 7: Pareto Evaluation}\\[1pt]\texttt{pipelines.evaluate}};
+        \node[outbox, right=0.6cm of stage] (outs) {\textbf{Outputs \& Metrics}\\[1pt]\texttt{docs/assets/pareto\_results.json} $\cdot$ \texttt{reports/pareto\_evaluation.json}};
+        \draw[arr] (deps) -- (stage);
+        \draw[arr] (stage) -- (outs);
+    \end{tikzpicture}%
+    }
+    \end{center}
+    \vspace{-0.2cm}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
             \begin{block}{DVC Stage Declaration (\texttt{dvc.yaml})}

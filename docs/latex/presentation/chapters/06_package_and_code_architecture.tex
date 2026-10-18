@@ -16,64 +16,66 @@
 \end{frame}
 
 % ---------------------------------------------------------------------
-% Slide 2: Master Intra- & Inter-Package Dependency Architecture
+% Slide 2: Master 4-Tier Layered Architectural Call Graph
 % ---------------------------------------------------------------------
-\begin{frame}{Package Architecture}{Master Intra- \& Inter-Package Dependency Call Graph}
+\begin{frame}{Package Architecture}{Master 4-Tier Layered Architectural Call Graph}
     \begin{center}
-        \resizebox{!}{0.62\textheight}{%
+        \resizebox{0.95\textwidth}{!}{%
         \begin{tikzpicture}[
             >=stealth, thick,
-            appnode/.style={rectangle, rounded corners=3pt, fill=deepblue!15, draw=deepblue!80, text=deepblue!80!black, font=\scriptsize\bfseries, inner sep=4pt, minimum width=2.6cm},
-            corenode/.style={rectangle, rounded corners=3pt, fill=teal!15, draw=teal!80, text=teal!70!black, font=\scriptsize\bfseries, inner sep=4pt, minimum width=2.4cm},
-            foundnode/.style={rectangle, rounded corners=3pt, fill=gray!20, draw=gray!75, text=black, font=\scriptsize\bfseries, inner sep=4pt, minimum width=2.4cm},
+            appnode/.style={rectangle, rounded corners=3pt, fill=deepblue!15, draw=deepblue!80, text=deepblue!90!black, font=\scriptsize\bfseries, inner sep=4pt, minimum width=3.4cm, align=center},
+            corenode/.style={rectangle, rounded corners=3pt, fill=teal!15, draw=teal!80, text=teal!80!black, font=\scriptsize\bfseries, inner sep=4pt, minimum width=2.1cm, align=center},
+            datanode/.style={rectangle, rounded corners=3pt, fill=plantgreen!15, draw=plantgreen!80, text=plantgreen!80!black, font=\scriptsize\bfseries, inner sep=4pt, minimum width=3.2cm, align=center},
+            cfgnode/.style={rectangle, rounded corners=3pt, fill=gray!20, draw=gray!75, text=black, font=\scriptsize\bfseries, inner sep=4pt, minimum width=5.5cm, align=center},
             edge/.style={->, draw=gray!70, semithick}
         ]
-            % Top Orchestration Layer
-            \node[appnode] (pipes) at (-3.2, 3.2) {\texttt{pipelines/}};
-            \node[appnode] (serv) at (3.2, 3.2) {\texttt{service/}};
+            % Tier 1: Orchestration
+            \node[appnode] (pipes) at (-3.2, 2.5) {\texttt{taxon\_vision.pipelines}\\[1pt]\tiny 7-Stage DVC DAG Batch Execution};
+            \node[appnode] (serv) at (3.2, 2.5) {\texttt{taxon\_vision.service}\\[1pt]\tiny Online FastAPI \& HTMX Dashboard};
+            \node[font=\tiny\bfseries, text=deepblue!80, anchor=west, align=left] at (-6.8, 2.5) {TIER 1:\\[-1pt]ENTRYPOINTS};
 
-            % Middle Processing Layer
-            \node[corenode] (mod) at (-4.2, 1.4) {\texttt{models/}};
-            \node[corenode] (inf) at (-1.4, 1.4) {\texttt{inference/}};
-            \node[corenode] (unc) at (1.4, 1.4) {\texttt{uncertainty/}};
-            \node[corenode] (al) at (4.2, 1.4) {\texttt{active\_learning/}};
+            % Tier 2: Engines
+            \node[corenode] (mod) at (-5.0, 0.8) {\texttt{models/}\\[1pt]\tiny Backbone \& Loss};
+            \node[corenode] (inf) at (-2.5, 0.8) {\texttt{inference/}\\[1pt]\tiny ONNX \& PTQ};
+            \node[corenode] (unc) at (0.0, 0.8) {\texttt{uncertainty/}\\[1pt]\tiny Conformal \& OOD};
+            \node[corenode] (al) at (2.5, 0.8) {\texttt{active\_learning/}\\[1pt]\tiny BADGE \& Queue};
+            \node[corenode] (mon) at (5.0, 0.8) {\texttt{monitoring/}\\[1pt]\tiny Telemetry \& Drift};
+            \node[font=\tiny\bfseries, text=teal!80, anchor=west, align=left] at (-6.8, 0.8) {TIER 2:\\[-1pt]ML ENGINES};
 
-            % Right-side telemetry
-            \node[corenode] (mon) at (4.2, -0.4) {\texttt{monitoring/}};
+            % Tier 3: Data & Domain
+            \node[datanode] (data) at (-2.5, -0.9) {\texttt{taxon\_vision.data}\\[1pt]\tiny S3 Streaming \& License Audit};
+            \node[datanode] (dom) at (2.5, -0.9) {\texttt{taxon\_vision.domain}\\[1pt]\tiny Taxonomy Tree \& Legal StrEnums};
+            \node[font=\tiny\bfseries, text=plantgreen!80, anchor=west, align=left] at (-6.8, -0.9) {TIER 3:\\[-1pt]DATA / DOMAIN};
 
-            % Foundation Tier
-            \node[foundnode] (data) at (-3.5, -0.4) {\texttt{data/}};
-            \node[foundnode] (dom) at (0.0, -0.4) {\texttt{domain/}};
-            \node[foundnode] (cfg) at (0.0, -1.8) {\texttt{config/}};
+            % Tier 4: Typed Config Foundation
+            \node[cfgnode] (cfg) at (0.0, -2.4) {\texttt{taxon\_vision.config}\\[1pt]\tiny Pydantic v2 Schemas, Loader \& Parameter Overrides};
+            \node[font=\tiny\bfseries, text=gray!80, anchor=west, align=left] at (-6.8, -2.4) {TIER 4:\\[-1pt]TYPED CONFIG};
 
-            % Dependency Edges (Pipelines Orchestration)
-            \draw[edge] (pipes) -- (mod);
-            \draw[edge] (pipes) -- (inf);
-            \draw[edge] (pipes) -- (unc);
-            \draw[edge] (pipes) -- (data);
-            \draw[edge] (pipes) to[out=270, in=120] (cfg);
+            % Downward Bus from Tier 1 to Tier 2
+            \draw[edge] (pipes.south) -- ++(0,-0.3) -| (mod.north);
+            \draw[edge] (pipes.south) -- ++(0,-0.3) -| (inf.north);
+            \draw[edge] (pipes.south) -- ++(0,-0.3) -| (unc.north);
+            \draw[edge] (serv.south) -- ++(0,-0.3) -| (inf.north);
+            \draw[edge] (serv.south) -- ++(0,-0.3) -| (unc.north);
+            \draw[edge] (serv.south) -- ++(0,-0.3) -| (al.north);
+            \draw[edge] (serv.south) -- ++(0,-0.3) -| (mon.north);
 
-            % Service Orchestration
-            \draw[edge] (serv) -- (inf);
-            \draw[edge] (serv) -- (unc);
-            \draw[edge] (serv) -- (al);
-            \draw[edge] (serv) -- (mon);
-            \draw[edge] (serv) to[out=270, in=60] (cfg);
+            % Downward Bus from Tier 2 to Tier 3
+            \draw[edge] (mod.south) -- ++(0,-0.4) -| (dom.north);
+            \draw[edge] (inf.south) -- ++(0,-0.4) -| (data.north);
+            \draw[edge] (unc.south) -- ++(0,-0.4) -| (dom.north);
+            \draw[edge] (al.south) -- ++(0,-0.4) -| (dom.north);
+            \draw[edge] (mon.south) -- ++(0,-0.4) -| (data.north);
 
-            % Cross-Module Engine Dependencies
-            \draw[edge] (inf) -- (unc);
-            \draw[edge] (mod) -- (dom);
-            \draw[edge] (data) -- (dom);
-            \draw[edge] (data) -- (cfg);
-            \draw[edge] (dom) -- (cfg);
-            \draw[edge] (al) -- (unc);
-        \end{tikzpicture}
+            % Downward Bus from Tier 3 to Tier 4
+            \draw[edge] (data.south) |- (cfg.west);
+            \draw[edge] (dom.south) |- (cfg.east);
+        \end{tikzpicture}%
         }
     \end{center}
-
-
-    \script{This diagram visualizes our master software dependency architecture. Notice the clean separation of concerns: pipelines and service sit at the top as consumers, delegating to specialized engines without circular dependencies.}
-    \qa{Why are pipelines and service isolated into separate top-level orchestration packages?}{Because pipelines execute offline, batch-oriented DVC DAG steps, whereas service handles low-latency, real-time HTTP requests. Separating them prevents batch dependencies from bloating the serving container.}
+    \vspace{-0.1cm}
+    \script{This diagram visualizes our master 4-tier layered architecture. Notice the strict downward direction of dependencies: entrypoints in Tier 1 consume specialized ML engines in Tier 2, which rely on domain data structures in Tier 3, all anchored by typed configuration schemas in Tier 4. Zero cyclic imports are mathematically guaranteed.}
+    \qa{Why does the architecture forbid upward or cross-tier circular imports?}{Strict layered acyclic dependencies ensure that low-level modules like domain models and configuration can be tested and reused in complete isolation without dragging in PyTorch, ONNX Runtime, or FastAPI dependencies.}
 \end{frame}
 
 % ---------------------------------------------------------------------
@@ -301,50 +303,90 @@
 \end{frame}
 
 % ---------------------------------------------------------------------
-% Slide 8: taxon_vision.inference Package
+% Slide 8a: taxon_vision.inference Package (Part 1)
 % ---------------------------------------------------------------------
-\begin{frame}{Inference Engine}{\texttt{taxon\_vision.inference}: ONNX Runtime, Head Projector \& Quantizer}
+\begin{frame}{Inference Architecture (1/2)}{\texttt{taxon\_vision.inference}: ONNX Engine, Head Projector \& CLI Profiler}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
-            \begin{block}{ONNX Engine \& Projection}
+            \begin{block}{Runtime Engine \& CLI Benchmark Runner}
                 \begin{itemize}\scriptsize
                     \item \textbf{\texttt{onnx\_engine.py} (\texttt{ONNXInferenceEngine}):}
                         \begin{itemize}\tiny
-                            \item Manages an active \texttt{onnxruntime.InferenceSession}.
-                            \item \texttt{predict()}: Zero-allocation hot path taking normalized image arrays and returning probabilities.
-                            \item \texttt{benchmark\_latency()}: Measures p50, p95, and p99 inference timing over 100 warm iterations.
+                            \item Encapsulates active \texttt{onnxruntime.InferenceSession}.
+                            \item \texttt{predict()}: Zero-allocation hot path converting pre-processed numpy arrays directly into softmax probabilities.
+                            \item \texttt{benchmark\_latency()}: Profiles p50, p95, and p99 inference timing over 100 warm iterations against production SLA.
                         \end{itemize}
-                    \item \textbf{\texttt{head\_projector.py}:}
+                    \item \textbf{\texttt{cli.py} (CLI Benchmark Profiler):}
                         \begin{itemize}\tiny
-                            \item \texttt{extract\_onnx\_head\_weights()}: Extracts classification weights from ONNX graph initializers.
-                            \item \texttt{compute\_onnx\_logits()}: Projects embeddings directly into logits without full graph execution.
+                            \item Standalone CLI command for offline model verification:
+                                \texttt{python -m taxon\_vision.inference.cli}
+                            \item Validates ONNX tensor shapes, dynamic batch dimensions, and latency compliance from terminal.
                         \end{itemize}
                 \end{itemize}
             \end{block}
         \end{column}
         \begin{column}{0.48\textwidth}
-            \begin{block}{Export, Quantization \& CAM}
+            \begin{block}{Linear Head Logit Projection}
                 \begin{itemize}\scriptsize
-                    \item \textbf{\texttt{onnx\_exporter.py}:}
+                    \item \textbf{\texttt{head\_projector.py}:}
                         \begin{itemize}\tiny
-                            \item \texttt{export\_to\_onnx()}: Compiles PyTorch modules into unified ONNX graphs with dynamic batch axes.
-                        \end{itemize}
-                    \item \textbf{\texttt{quantizer.py}:}
-                        \begin{itemize}\tiny
-                            \item \texttt{quantize\_onnx\_dynamic()}: Applies dynamic INT8 quantization targeting \texttt{MatMul} and \texttt{Gemm} operators.
-                        \end{itemize}
-                    \item \textbf{\texttt{cam.py} (\texttt{EigenCAMExplainer}):}
-                        \begin{itemize}\tiny
-                            \item Computes visual explanations by projecting principal components of convolutional or token activations.
+                            \item \texttt{extract\_onnx\_head\_weights()}: Extracts classification weight matrix $W \in \mathbb{R}^{K \times 768}$ and bias $b \in \mathbb{R}^K$ directly from ONNX graph initializers.
+                            \item \texttt{compute\_onnx\_logits()}: Projects cached 768-d embeddings into logits via direct BLAS matrix multiplication:
+                                $$Z = X W^\top + b$$
+                            \item Bypasses full vision backbone forward passes during calibration and active learning sweeps.
+                            \item Performance: Evaluates thousands of pre-computed embeddings in $< 5\text{ ms}$.
                         \end{itemize}
                 \end{itemize}
             \end{block}
         \end{column}
     \end{columns}
 
-
-    \script{The inference package powers our low-latency runtime. It executes ONNX Runtime sessions, provides specialized embedding projection utilities, performs INT8 dynamic quantization, and generates visual explanations.}
+    \script{Inference Architecture Part 1 focuses on our high-speed execution engine. ONNXInferenceEngine provides zero-allocation serving, cli.py offers command-line benchmarking, and head\_projector.py extracts linear head weights directly from ONNX graph initializers to score thousands of embeddings in under 5 milliseconds.}
     \qa{Why extract linear head weights using head\_projector.py?}{Extracting head initializers allows calibration and active learning pipelines to evaluate cached embedding tensors directly in milliseconds without re-running full visual graphs.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 8b: taxon_vision.inference Package (Part 2)
+% ---------------------------------------------------------------------
+\begin{frame}{Inference Architecture (2/2)}{\texttt{taxon\_vision.inference}: Export Pipeline, PTQ Calibration \& EigenCAM}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Export \& Quantization Engine}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{onnx\_exporter.py}:}
+                        \begin{itemize}\tiny
+                            \item \texttt{export\_to\_onnx()}: Fuses PyTorch foundation trunk + linear head into a unified computational graph at opset 17.
+                            \item Configures dynamic batch axes and explicit \texttt{TensorSpec} signatures.
+                        \end{itemize}
+                    \item \textbf{\texttt{quantizer.py}:}
+                        \begin{itemize}\tiny
+                            \item \texttt{quantize\_onnx\_dynamic()}: Applies dynamic INT8 quantization to \texttt{MatMul} and \texttt{Gemm} operators ($4\times$ size reduction).
+                            \item \texttt{TaxonCalibrationDataReader}: Custom reader implementing ONNX Runtime calibration interface for static quantization sweeps.
+                        \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Empirical Calibration \& Explainability}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{calibration.py}:}
+                        \begin{itemize}\tiny
+                            \item \texttt{load\_calibration\_tensors()}: Loads representative specimen images from the calibration partition using production preprocessing transforms.
+                            \item Enforces data integrity: strictly bans synthetic Gaussian noise to prevent clipping real activation distributions during PTQ.
+                        \end{itemize}
+                    \item \textbf{\texttt{cam.py} (\texttt{EigenCAMExplainer}):}
+                        \begin{itemize}\tiny
+                            \item Computes visual explanations by computing principal components of transformer token activations:
+                                $$M = \text{PCA}(\mathbf{A}_{l})_1$$
+                            \item Projects attribution heatmaps onto original specimen photos without requiring gradients.
+                        \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \script{Inference Architecture Part 2 covers compilation, post-training quantization, and visual explainability. onnx\_exporter compiles PyTorch models into unified graphs, quantizer and calibration.py execute static and dynamic quantization using real specimen data, and EigenCAM generates attribution heatmaps without backpropagation.}
+    \qa{Why does calibration.py ban synthetic noise during calibration data loading?}{Synthetic noise does not reflect the natural activation distributions of real biological specimens, which would lead to incorrect scale factors and quantization clipping errors in static INT8 models.}
 \end{frame}
 
 % ---------------------------------------------------------------------
