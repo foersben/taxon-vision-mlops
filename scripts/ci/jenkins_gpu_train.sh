@@ -70,9 +70,11 @@ if kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
     models/checkpoints/model_int8.onnx || echo "DVC push to local-seaweedfs skipped."
 fi
 
-# Push release checkpoints and INT8 models to DagsHub S3 remote (origin)
-echo ">>> Pushing release checkpoints and INT8 models to DagsHub S3 remote (origin)..."
+# Push release checkpoints, INT8 models, and manifests to DagsHub S3 remote (origin)
+echo ">>> Pushing release checkpoints and manifests to DagsHub S3 remote (origin)..."
 pixi run --frozen -e dev dvc push -r origin \
+  data/manifests/raw_manifest.parquet \
+  data/manifests/dataset_manifest.parquet \
   models/checkpoints/head.pt \
   models/checkpoints/model_int8.onnx
 

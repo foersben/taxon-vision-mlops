@@ -435,6 +435,8 @@ def run_prediction(image_bytes: bytes) -> dict[str, Any]:
     elapsed_time_ms = (time.perf_counter() - start_time) * 1000.0
 
     return {
+        "taxon_id": int(predicted_taxon.get("id", 0)),
+        "top1_idx": top1_idx,
         "scientific_name": predicted_taxon["scientific_name"],
         "common_name": predicted_taxon["common_name"],
         "confidence": top1_prob,

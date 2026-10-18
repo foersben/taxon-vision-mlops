@@ -4,6 +4,17 @@
 set -euo pipefail
 
 export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
+export PATH="/root/.pixi/bin:$PATH"
+
+if ! command -v curl >/dev/null 2>&1; then
+    if command -v pixi >/dev/null 2>&1; then
+        echo ">>> curl not found; installing curl via pixi global..."
+        pixi global install curl
+    else
+        echo "ERROR: curl is required for deployment verification." >&2
+        exit 1
+    fi
+fi
 
 NAMESPACE="${1:-taxon-vision}"
 DEPLOYMENT="taxon-vision-api"

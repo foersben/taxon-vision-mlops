@@ -51,6 +51,23 @@ def test_explain_endpoint_with_image() -> None:
     assert data["heatmap_status"] == "generated"
     assert data["heatmap_shape"] == [32, 32]
     assert data["latency_ms"] >= 0.0
+    assert data["cam_heatmap_base64"] is not None
+
+
+def test_explain_endpoint_htmx() -> None:
+    """Verify CAM explanation endpoint renders HTML fragment when requested via HTMX."""
+    buf = io.BytesIO()
+    Image.new("RGB", (32, 32), color="green").save(buf, format="JPEG")
+    buf.seek(0)
+    resp = client.post(
+        "/api/v1/explain?target_class_index=0",
+        files={"file": ("leaf.jpg", buf, "image/jpeg")},
+        headers={"HX-Request": "true"},
+    )
+    assert resp.status_code == 200
+    assert "cam-overlay" in resp.text
+    assert "data:image/png;base64," in resp.text
+    assert "<img" in resp.text
 
 
 def test_explain_endpoint_invalid_image() -> None:

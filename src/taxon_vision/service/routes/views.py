@@ -112,6 +112,12 @@ async def predict_htmx(request: Request, file: Annotated[UploadFile, File(...)])
         "is_ood": result["is_ood"],
         "requires_human_review": result["requires_human_review"],
         "latency_ms": result["latency_ms"],
+        "top_taxon_id": result.get("taxon_id", 0),
+        "top_pred": {
+            "taxon_id": result.get("taxon_id", 0),
+            "scientific_name": result["scientific_name"],
+            "common_name": result["common_name"],
+        },
         "heatmap_status": heatmap_status,
     }
     return templates.TemplateResponse(request=request, name="partials/prediction_card.html", context=context)

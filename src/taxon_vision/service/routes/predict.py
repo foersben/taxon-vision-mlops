@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 """Inference prediction endpoint."""
 
+import io
 import logging
 import time
 import uuid
@@ -9,8 +10,10 @@ from typing import Annotated, Any
 
 import anyio
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from PIL import Image
 
 from taxon_vision.config import get_settings
+from taxon_vision.inference.cam import generate_cam_overlay
 from taxon_vision.monitoring.telemetry import PREDICTION_COUNTER
 from taxon_vision.service.inference import InvalidImageError, ModelNotReadyError, load_taxa_catalog, run_prediction
 from taxon_vision.service.schemas import PredictionResponse, TaxonPrediction
@@ -21,7 +24,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Inference"])
 
 
-def _build_live_prediction(pred: dict[str, Any], latency_ms: float) -> PredictionResponse:
+def _build_live_prediction(
+    pred: dict[str, Any],
+    latency_ms: float,
+    cam_heatmap_base64: str | None = None,
+) -> PredictionResponse:
     """Construct structured response from successful inference output.
 
     Why:
@@ -42,6 +49,7 @@ def _build_live_prediction(pred: dict[str, Any], latency_ms: float) -> Predictio
     Args:
         pred: Raw prediction dictionary from the inference engine.
         latency_ms: Measured end-to-end execution latency in milliseconds.
+        cam_heatmap_base64: Optional base64-encoded CAM saliency overlay image.
 
     Returns:
         Validated PredictionResponse payload.
@@ -87,12 +95,16 @@ def _build_live_prediction(pred: dict[str, Any], latency_ms: float) -> Predictio
         is_ood_flagged=is_ood,
         requires_human_review=bool(pred["requires_human_review"]),
         latency_ms=round(latency_ms, 2),
+        cam_heatmap_base64=cam_heatmap_base64,
     )
 
 
 @router.post("/predict", response_model=PredictionResponse)
 @router.post("/api/v1/predict", response_model=PredictionResponse)
-async def predict_species(file: Annotated[UploadFile, File(...)]) -> PredictionResponse:
+async def predict_species(
+    file: Annotated[UploadFile, File(...)],
+    explain: bool = False,
+) -> PredictionResponse:
     """Classify species from an uploaded image with conformal uncertainty guarantees.
 
     Why:
@@ -110,15 +122,17 @@ async def predict_species(file: Annotated[UploadFile, File(...)]) -> PredictionR
         2. Validates payload non-emptiness and size constraints.
         3. Dispatches `run_prediction` to AnyIO's threadpool worker via `run_sync`.
         4. If flagged as OOD or requiring human review, persists observation metadata and embeddings.
-        5. On success: increments `taxon_predictions_total{status="success"}` and returns `PredictionResponse`.
-        6. On an undecodable/empty image (`InvalidImageError`): logs a warning, increments `status="invalid_input"` and raises HTTP 422.
-        7. On missing model artefacts or unexpected runtime inference failure: logs exception, increments counter, and raises HTTP 503.
+        5. If `explain=True`, computes forward-only CAM attribution for top-1 taxon and encodes as base64 PNG.
+        6. On success: increments `taxon_predictions_total{status="success"}` and returns `PredictionResponse`.
+        7. On an undecodable/empty image (`InvalidImageError`): logs a warning, increments `status="invalid_input"` and raises HTTP 422.
+        8. On missing model artefacts or unexpected runtime inference failure: logs exception, increments counter, and raises HTTP 503.
 
     Complexity:
         O(1) async dispatch plus O(K) schema serialization.
 
     Args:
         file: Multipart uploaded image file.
+        explain: Optional boolean flag to request forward-only CAM saliency visualization.
 
     Returns:
         Structured prediction response containing top candidates, conformal sets, and triage flags.
@@ -153,8 +167,18 @@ async def predict_species(file: Annotated[UploadFile, File(...)]) -> PredictionR
             obs_id = str(uuid.uuid4())
             persist_flagged_observation(obs_id, pred, embedding=pred.get("embedding"))
 
+        cam_base64: str | None = None
+        if explain:
+            try:
+                img = Image.open(io.BytesIO(content)).convert("RGB")
+                top1_idx = pred.get("top1_idx")
+                cam_base64 = await anyio.to_thread.run_sync(generate_cam_overlay, img, None, top1_idx, 0.5)
+            except Exception as cam_err:
+                logger.warning("CAM overlay generation failed for %s: %s", file.filename, cam_err)
+                cam_base64 = None
+
         PREDICTION_COUNTER.labels(status="success").inc()
-        return _build_live_prediction(pred, latency)
+        return _build_live_prediction(pred, latency, cam_base64)
     except InvalidImageError as img_err:
         logger.warning("Rejected undecodable upload %s: %s", file.filename, img_err)
         PREDICTION_COUNTER.labels(status="invalid_input").inc()

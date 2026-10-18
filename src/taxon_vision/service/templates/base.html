@@ -3,14 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="TaxonVision MLOps - Production Deep Learning Platform for Biological Taxonomy Classification with Conformal Uncertainty and Visual Attribution.">
   <title>{{ title|default("TaxonVision-MLOps") }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/style.css">
   <script src="/static/js/htmx.min.js"></script>
 </head>
 <body>
   <header class="app-header">
-    <div class="logo">🌿 TaxonVision MLOps</div>
-    <div class="header-status">Status: <strong>Live</strong> | Level 1 Closed Loop</div>
+    <div class="logo">
+      <span class="logo-icon">🌿</span>
+      <span class="logo-text">TaxonVision <span class="logo-sub">MLOps</span></span>
+    </div>
+    <div class="header-status">
+      <span class="status-indicator"></span>
+      <span class="status-text">Status: <strong>Live</strong> &bull; Level 1 Closed Loop</span>
+    </div>
   </header>
   <main class="container">
     {% block content %}{% endblock %}

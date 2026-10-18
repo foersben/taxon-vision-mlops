@@ -43,6 +43,7 @@ class PredictionResponse(BaseModel):
     is_ood_flagged: bool
     requires_human_review: bool
     latency_ms: float
+    cam_heatmap_base64: str | None = None
 
 
 class TrainingRequest(BaseModel):

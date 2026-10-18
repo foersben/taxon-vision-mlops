@@ -52,10 +52,10 @@ The pipeline tracks 9 core data and model artifacts across local storage and rem
 | :--- | :--- | :--- | :--- | :--- |
 | **Raw Manifest** | `data/manifests/raw_manifest.parquet` | `ingestion` | Local Git/DVC Workspace | Content hash of initial observation metadata and photo URLs. |
 | **Dataset Manifest** | `data/manifests/dataset_manifest.parquet` | `audit_license` | Local Git/DVC Workspace | 100% CC0, CC-BY, or CC-BY-NC validated citizen-science records. |
-| **Train Embeddings** | `data/embeddings/train_embeddings.pt` | `extract_features` | In-Cluster SeaweedFS S3 (`local-seaweedfs`) | 70% stratified training split ($1,182 \times 384$ tensor). |
-| **Val Embeddings** | `data/embeddings/val_embeddings.pt` | `extract_features` | In-Cluster SeaweedFS S3 (`local-seaweedfs`) | 10% stratified validation split ($169 \times 384$ tensor). |
-| **Cal Embeddings** | `data/embeddings/cal_embeddings.pt` | `extract_features` | In-Cluster SeaweedFS S3 (`local-seaweedfs`) | 10% stratified conformal calibration split ($169 \times 384$ tensor). |
-| **Test Embeddings** | `data/embeddings/test_embeddings.pt` | `extract_features` | In-Cluster SeaweedFS S3 (`local-seaweedfs`) | 10% stratified evaluation test split ($169 \times 384$ tensor). |
+| **Train Embeddings** | `data/embeddings/train_embeddings.pt` | `extract_features` | DagsHub S3 (`origin`) & SeaweedFS (`local-seaweedfs`) | 70% stratified training split ($1,182 \times 384$ tensor). |
+| **Val Embeddings** | `data/embeddings/val_embeddings.pt` | `extract_features` | DagsHub S3 (`origin`) & SeaweedFS (`local-seaweedfs`) | 10% stratified validation split ($169 \times 384$ tensor). |
+| **Cal Embeddings** | `data/embeddings/cal_embeddings.pt` | `extract_features` | DagsHub S3 (`origin`) & SeaweedFS (`local-seaweedfs`) | 10% stratified conformal calibration split ($169 \times 384$ tensor). |
+| **Test Embeddings** | `data/embeddings/test_embeddings.pt` | `extract_features` | DagsHub S3 (`origin`) & SeaweedFS (`local-seaweedfs`) | 10% stratified evaluation test split ($169 \times 384$ tensor). |
 | **Taxa Perimeter** | `config/taxa_catalog.yaml` | Git Tracked | Local Repository Root | 10 biological taxa definitions forming Level 1 classification boundary. |
 | **Head Checkpoint** | `models/checkpoints/head.pt` | `train` | Cloud Remote (`s3://dvc` at DagsHub) | Linear probe weights $\mathbf{W}$ optimized via Class-Balanced Loss. |
 | **INT8 ONNX Bundle** | `models/checkpoints/model_int8.onnx` | `export` | Cloud Remote (`s3://dvc` at DagsHub) | Fused backbone + linear head quantized via MinMax static PTQ. |

@@ -245,3 +245,21 @@ def test_predict_endpoint_persists_flagged_observation(monkeypatch: pytest.Monke
     assert len(meta_files) == 1
     emb_files = list(flagged_dir.glob("*_embedding.npy"))
     assert len(emb_files) == 1
+
+
+def test_predict_endpoint_explain_flag() -> None:
+    """Verify /api/v1/predict?explain=true returns base64 CAM heatmap, while explain=false leaves it None."""
+    buf = io.BytesIO()
+    Image.new("RGB", (32, 32), color="blue").save(buf, format="JPEG")
+    buf.seek(0)
+    resp_false = client.post("/api/v1/predict?explain=false", files={"file": ("test.jpg", buf, "image/jpeg")})
+    assert resp_false.status_code == 200
+    assert resp_false.json()["cam_heatmap_base64"] is None
+
+    buf.seek(0)
+    resp_true = client.post("/api/v1/predict?explain=true", files={"file": ("test.jpg", buf, "image/jpeg")})
+    assert resp_true.status_code == 200
+    data = resp_true.json()
+    assert data["cam_heatmap_base64"] is not None
+    assert isinstance(data["cam_heatmap_base64"], str)
+    assert len(data["cam_heatmap_base64"]) > 50

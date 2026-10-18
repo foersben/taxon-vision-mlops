@@ -2,8 +2,10 @@
 
 {% block content %}
 <section class="upload-section">
-  <h1>Citizen Science Species Identification</h1>
-  <p class="subtitle">Submit an open-licensed observation photograph to obtain species classification with conformal confidence bounds.</p>
+  <div class="section-header">
+    <h1>Citizen Science Species Identification</h1>
+    <p class="subtitle">Submit an open-licensed observation photograph to obtain species classification with conformal confidence bounds and diagnostic attribution.</p>
+  </div>
 
   <form id="upload-form"
         method="post"
@@ -15,48 +17,103 @@
         enctype="multipart/form-data">
     <div class="dropzone" id="dropzone">
       <input type="file" id="file" name="file" accept="image/*" required>
-      <label for="file" id="file-label">Drop observation photograph here or click to browse</label>
-      <div id="file-preview" class="file-preview" style="display: none;">
-        <span id="file-name"></span>
+      <div class="dropzone-content" id="dropzone-prompt">
+        <div class="dropzone-icon">📷</div>
+        <p class="dropzone-text"><strong>Drop observation photograph here</strong> or <span class="browse-link">browse files</span></p>
+        <span class="dropzone-hint">Supports JPEG, PNG &bull; Open CC Licenses Only</span>
+      </div>
+      <div id="file-preview" class="file-preview-card" style="display: none;">
+        <img id="preview-thumbnail" class="preview-thumbnail" alt="Selected observation preview" />
+        <div class="preview-meta">
+          <span id="file-name" class="preview-filename"></span>
+          <span class="preview-badge">Ready for inference</span>
+        </div>
       </div>
     </div>
-    <button type="submit" id="submit-btn" class="btn primary">Classify Observation</button>
-    <div id="loading-indicator" class="htmx-indicator" style="display: none; margin-top: 1rem; color: #4ade80;">
-      <span>⏳ Extracting foundation embeddings and computing conformal set...</span>
+
+    <div class="form-actions">
+      <button type="submit" id="submit-btn" class="btn primary btn-lg">
+        <span class="btn-text">Classify Observation</span>
+        <span class="btn-arrow">&rarr;</span>
+      </button>
+    </div>
+
+    <div id="loading-indicator" class="htmx-indicator loading-card">
+      <div class="pulse-ring"></div>
+      <div class="loading-message">
+        <strong>Processing Biological Observation</strong>
+        <p>Extracting vision foundation embeddings &amp; computing conformal prediction sets...</p>
+      </div>
     </div>
   </form>
 </section>
 
 <section id="prediction-result" class="result-section">
-  <!-- HTMX / Dynamic target -->
+  <!-- HTMX dynamic swap target -->
 </section>
 
 <script>
   // Progressive enhancement & instant UX feedback
   const fileInput = document.getElementById('file');
-  const fileLabel = document.getElementById('file-label');
+  const dropzonePrompt = document.getElementById('dropzone-prompt');
   const filePreview = document.getElementById('file-preview');
+  const previewThumbnail = document.getElementById('preview-thumbnail');
   const fileName = document.getElementById('file-name');
+  const dropzone = document.getElementById('dropzone');
   const form = document.getElementById('upload-form');
   const loadingIndicator = document.getElementById('loading-indicator');
   const resultSection = document.getElementById('prediction-result');
 
+  function handleFileSelected(file) {
+    if (file) {
+      fileName.textContent = file.name;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        previewThumbnail.src = e.target.result;
+        filePreview.style.display = 'flex';
+        dropzonePrompt.style.display = 'none';
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
   if (fileInput) {
-    fileInput.addEventListener('change', function(e) {
+    fileInput.addEventListener('change', function() {
       if (this.files && this.files.length > 0) {
-        fileName.textContent = 'Selected: ' + this.files[0].name;
-        filePreview.style.display = 'block';
-        fileLabel.style.display = 'none';
+        handleFileSelected(this.files[0]);
       }
     });
   }
 
-  // Fallback in case HTMX is not yet initialized
+  if (dropzone) {
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+      }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+      }, false);
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+        fileInput.files = e.dataTransfer.files;
+        handleFileSelected(e.dataTransfer.files[0]);
+      }
+    });
+  }
+
+  // Fallback in case HTMX is not loaded
   if (form) {
     form.addEventListener('submit', function(e) {
       if (typeof htmx === 'undefined') {
         e.preventDefault();
-        loadingIndicator.style.display = 'block';
+        loadingIndicator.style.display = 'flex';
         const formData = new FormData(form);
         fetch('/ui/predict-htmx', {
           method: 'POST',
@@ -69,7 +126,7 @@
         })
         .catch(err => {
           loadingIndicator.style.display = 'none';
-          resultSection.innerHTML = '<div class="alert error">Classification failed: ' + err + '</div>';
+          resultSection.innerHTML = '<div class="alert danger">Classification failed: ' + err + '</div>';
         });
       }
     });

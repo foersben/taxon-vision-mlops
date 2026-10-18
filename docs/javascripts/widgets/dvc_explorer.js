@@ -91,18 +91,18 @@ function initDVCExplorer() {
                 "feature_extraction.test_split = 0.10"
             ],
             outs: [
-                "data/embeddings/train_embeddings.pt (pushed to local-seaweedfs)",
-                "data/embeddings/val_embeddings.pt (pushed to local-seaweedfs)",
-                "data/embeddings/cal_embeddings.pt (pushed to local-seaweedfs)",
-                "data/embeddings/test_embeddings.pt (pushed to local-seaweedfs)"
+                "data/embeddings/train_embeddings.pt (DagsHub origin & SeaweedFS cache)",
+                "data/embeddings/val_embeddings.pt (DagsHub origin & SeaweedFS cache)",
+                "data/embeddings/cal_embeddings.pt (DagsHub origin & SeaweedFS cache)",
+                "data/embeddings/test_embeddings.pt (DagsHub origin & SeaweedFS cache)"
             ],
-            metrics: "N/A (Tensors pushed to in-cluster SeaweedFS S3 edge cache)",
+            metrics: "N/A (Tensors tracked to DagsHub origin & mirrored to SeaweedFS cache)",
             algorithm: [
                 "Instantiates frozen foundation backbone (DINOv3, BioCLIP-2, or MobileNetV4) via BackboneFactory.",
                 "Streams raw observation JPEG bytes on demand from s3://inaturalist-open-data with local LRU caching.",
                 "Normalizes images (ImageNet mean & std) and computes 384-dimensional representation vectors.",
                 "Executes deterministic 4-way stratified hash split (70% train, 10% val, 10% cal, 10% test, seed=42).",
-                "Pushes memory-mapped PyTorch .pt tensors directly to in-cluster SeaweedFS S3."
+                "Persists memory-mapped PyTorch .pt tensors to DagsHub S3 origin and in-cluster SeaweedFS cache."
             ],
             triggers: "Triggered when model.extractor, model.image_size, split ratios, dataset_manifest.parquet, or backbone factory code changes.",
             downstreamRadius: "Invalidates: Stage 4 (train), Stage 5 (export), Stage 6 (calibrate), and Stage 7 (eval). Heavy compute boundary."
