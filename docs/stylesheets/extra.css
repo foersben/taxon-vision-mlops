@@ -26,6 +26,26 @@
 }
 
 /* ==========================================================================
+   Wide Mode (Desktop & High-Resolution Displays)
+   ========================================================================== */
+
+/* Only apply wide-mode adjustments on larger desktop/laptop screens */
+@media screen and (min-width: 76.25em) {
+    :root {
+        /* Override max-width for the primary container and content area */
+        --md-container-width: 100%;
+        --md-typeset-width: 100%;
+    }
+    /* Force layout grids to take up the full view width */
+    .md-container,
+    .md-main__inner,
+    .md-content {
+        max-width: 100% !important;
+        width: 100%;
+    }
+}
+
+/* ==========================================================================
    Interactive Visualizer & Iframe Containers
    ========================================================================== */
 
