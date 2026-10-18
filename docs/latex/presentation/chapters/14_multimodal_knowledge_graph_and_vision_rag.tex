@@ -4,7 +4,7 @@
     \vfill
     \centering
     {\footnotesize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
-    {\large \textbf{\textcolor{signalorange}{CHAPTER 12}}} \\[0.25cm]
+    {\large \textbf{\textcolor{signalorange}{CHAPTER 14}}} \\[0.25cm]
     {\huge \textbf{Multimodal Knowledge Graph \& Vision-RAG}} \\[0.35cm]
     {\normalsize \textcolor{black!70}{Epistemic Ambiguity Resolution, Filtered Vector Retrieval \& Clinical-Grade Diagnosis Cards}} \\[0.5cm]
     \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
@@ -101,23 +101,24 @@
             \providecolor{TaxonAccent}{RGB}{231, 76, 60}
 
             % Parent Image
-            \node[box, fill=gray!10, draw=gray, minimum width=4cm, minimum height=3cm, text width=3.5cm] (parent) {};
-            \node[anchor=north, font=\small\sffamily\bfseries] at (parent.north) {Full Parent Scene ($I_{\text{parent}}$)};
-            \node[anchor=center, text width=3.5cm, align=center] at (parent.center) {\scriptsize Macro-habitat context, \\ background foliage/soil noise};
+            \node[box, fill=gray!10, draw=gray, minimum width=4.2cm, minimum height=3.6cm, text width=3.8cm] (parent) {};
+            \node[anchor=north, yshift=-0.2cm, font=\small\sffamily\bfseries] at (parent.north) {Full Parent Scene ($I_{\text{parent}}$)};
+            \node[anchor=north, yshift=-0.7cm, text width=3.8cm, align=center] at (parent.north) {\scriptsize Macro-habitat context, \\ background foliage/soil noise};
 
-            % Child Bounding Box inside Parent (conceptual)
-            \draw[thick, dashed, draw=TaxonAccent] ([xshift=-1cm,yshift=-0.5cm]parent.center) rectangle ([xshift=1cm,yshift=1cm]parent.center);
+            % Child Bounding Box inside Parent (cleanly in lower portion)
+            \draw[thick, dashed, draw=TaxonAccent, fill=TaxonAccent!10] ([xshift=-1.5cm, yshift=0.25cm]parent.south) rectangle ([xshift=1.5cm, yshift=1.55cm]parent.south);
+            \node[font=\tiny\bfseries, text=TaxonAccent] at ([yshift=0.9cm]parent.south) {Detected Organism Crop};
 
             % Detector node
-            \node[box, fill=TaxonPrimary!20, draw=TaxonPrimary, right=1.2cm of parent] (detector) {\textbf{Zero-Shot Detector} \\ \scriptsize YOLO-World / OWL-ViT};
+            \node[box, fill=TaxonPrimary!20, draw=TaxonPrimary, right=1.0cm of parent] (detector) {\textbf{Zero-Shot Detector} \\ \scriptsize YOLO-World / OWL-ViT};
 
             % Child Crop
-            \node[box, fill=TaxonSecondary!20, draw=TaxonSecondary, right=1.2cm of detector, minimum width=2.5cm, minimum height=2.5cm] (child) {};
-            \node[anchor=north, font=\small\sffamily\bfseries] at (child.north) {Child Crop ($I_{\text{child}}$)};
-            \node[anchor=center, text width=2cm, align=center] at (child.center) {\scriptsize Clean Organism};
+            \node[box, fill=TaxonSecondary!20, draw=TaxonSecondary, right=1.0cm of detector, minimum width=2.6cm, minimum height=2.6cm] (child) {};
+            \node[anchor=north, yshift=-0.2cm, font=\small\sffamily\bfseries] at (child.north) {Child Crop ($I_{\text{child}}$)};
+            \node[anchor=center, text width=2.2cm, align=center] at (child.center) {\scriptsize Clean Organism\\[-1pt]\tiny (Specimen Pixels)};
 
             % BioCLIP-2 Vector
-            \node[box, fill=TaxonDark!20, draw=TaxonDark, below=1cm of child] (vector) {\textbf{BioCLIP-2} \\ \scriptsize $z_{\text{child}} \in \mathbb{R}^{768}$};
+            \node[box, fill=TaxonDark!20, draw=TaxonDark, below=0.8cm of child] (vector) {\textbf{BioCLIP-2} \\ \scriptsize $z_{\text{child}} \in \mathbb{R}^{768}$};
 
             \draw[arrow] (parent.east) -- (detector.west);
             \draw[arrow] (detector.east) -- (child.west);
@@ -128,7 +129,7 @@
         }
     \end{center}
 
-    \vspace{0.4cm}
+    \vspace{0.15cm}
     \statustarget
 
     \script{This diagram visually summarises the Parent-Child Visual Chunking process. We take the full parent scene containing background noise, and pass it through a zero-shot detector like YOLO-World or OWL-ViT. This extracts the child bounding box crop, separating the organism from environmental noise, which is then fed to BioCLIP-2 to compute our clean morphological embedding vector of size 768.}

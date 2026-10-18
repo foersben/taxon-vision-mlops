@@ -4,7 +4,7 @@
     \vfill
     \centering
     {\footnotesize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
-    {\large \textbf{\textcolor{signalorange}{CHAPTER 11}}} \\[0.25cm]
+    {\large \textbf{\textcolor{signalorange}{CHAPTER 13}}} \\[0.25cm]
     {\huge \textbf{Delivery Roadmap \& Core Principles}} \\[0.35cm]
     {\normalsize \textcolor{black!70}{Implementation Milestones, Anti-Pattern Rectification \& Production Systems Engineering}} \\[0.5cm]
     \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
@@ -15,7 +15,9 @@
 \end{frame}
 
 \begin{frame}{Project Roadmap}{Implementation Status vs Architectural Roadmap}
+    \vspace{-0.15cm}
     \begin{block}{TaxonVision Delivery Phases}
+        \footnotesize
         An honest, transparent breakdown of the current implementation status versus future architectural milestones.
         \begin{itemize}
             \item \textbf{Phase 1 (Foundation):} Complete. Pixi toolchain, DVC/S3 streaming, pre-commit gates, license compliance.
@@ -25,6 +27,8 @@
     \end{block}
 
     \begin{center}
+    \vspace{-0.05cm}
+    \resizebox{0.92\textwidth}{!}{
     \begin{tikzpicture}[
         node distance=0.4cm and 0.4cm,
         box/.style={rectangle, draw, rounded corners, align=center, minimum height=1.1cm, minimum width=3.8cm, font=\scriptsize},
@@ -58,6 +62,7 @@
         \draw[arrow] (phase2) -- (phase3);
 
     \end{tikzpicture}
+    }
     \end{center}
 
     \script{Let's review our progress transparently. Phase 1 and Phase 2 are complete and battle-tested in our repository today: our reproducible Pixi environment, S3 zero-copy streaming, Class-Balanced Loss runner, conformal safety bounds, Jenkins container builds, and Kubernetes manifests are live. Phase 3—connecting the Milvus vector database into our active learning webhook loop—is our ongoing target architecture roadmap.}

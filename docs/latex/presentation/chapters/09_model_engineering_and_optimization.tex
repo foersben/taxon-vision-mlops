@@ -4,7 +4,7 @@
     \vfill
     \centering
     {\footnotesize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
-    {\large \textbf{\textcolor{signalorange}{CHAPTER 07}}} \\[0.25cm]
+    {\large \textbf{\textcolor{signalorange}{CHAPTER 09}}} \\[0.25cm]
     {\huge \textbf{Model Engineering \& Optimization}} \\[0.35cm]
     {\normalsize \textcolor{black!70}{Self-Supervised Vision Backbones, Class-Balanced Loss \& Optuna Sweeps}} \\[0.5cm]
     \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
@@ -48,40 +48,54 @@
     \qa{Can linear probing adapt if the test domain has different lighting or camera sensors?}{Because the foundation model was pre-trained on diverse web-scale imagery, its internal representations already generalize well across lighting and sensor variations without needing backbone parameter updates.}
 \end{frame}
 
-\begin{frame}{Backbone Factory}{Vision Backbone Registry: Configuration \& Parameters}
-    \vspace{-0.4cm}
-    \begin{block}{Config-Driven Architecture}
-        \tiny
-        A unified factory instantiates any backbone with a frozen trunk ($\nabla_\theta = 0$), yielding dense L2-normalized feature representations.
+\begin{frame}{Backbone Factory}{Foundation Vision Transformers (ViTs): Tree-of-Life \& Register Tokens}
+    \begin{block}{Config-Driven Factory Architecture}
+        \footnotesize
+        A unified factory in \texttt{factory.py} instantiates candidate backbones dynamically via \texttt{config/default\_config.yaml}, enforcing trunk freezing ($\nabla_\theta = 0$) and L2-normalized feature extraction.
     \end{block}
 
-    \vspace{-0.4cm}
-    \begin{block}{The 6 Canonical Models (strictly matching \texttt{config/default\_config.yaml})}
-        \tiny
+    \begin{block}{Foundation ViT Registry}
+        \footnotesize
         \begin{itemize}
-            \item \texttt{bioclip-2} (\texttt{hf-hub:imageomics/bioclip-2}): $D=512$, $224 \times 224$, CLS token, biological Tree-of-Life pre-training.
-            \item \texttt{dinov3} (\texttt{vit\_small\_patch16\_dinov3}): $D=384$, $224 \times 224$, Register tokens (reg4), dense structural representations.
-            \item \texttt{dinov3\_vits14} (\texttt{vit\_small\_patch16\_dinov3}): $D=384$, $224 \times 224$, 16x16 patch ViT-S variant.
-            \item \texttt{dinov2\_vits14} (\texttt{vit\_small\_patch14\_dinov2.lvd142m}): $D=384$, $224 \times 224$, 14x14 patches, LVD-142M self-supervised.
-            \item \texttt{mobilenetv4\_conv\_small} (\texttt{mobilenetv4\_conv\_small.e2400\_r224\_in1k}): $D=960$, $224 \times 224$, Universal Inverted Bottleneck (UIB) + Global Average Pooling (GAP), edge/CPU optimized.
-            \item \texttt{efficientnet\_b0} (\texttt{efficientnet\_b0.ra\_in1k}): $D=1280$, $224 \times 224$, Depthwise Separable Conv + Squeeze-and-Excitation, classic compound scaling.
+            \item \textbf{\texttt{bioclip-2}} (\texttt{hf-hub:imageomics/bioclip-2}): $D=512$, $224 \times 224$, CLS token pooling, biological Tree-of-Life pre-training across millions of global taxa.
+            \item \textbf{\texttt{dinov3}} (\texttt{vit\_small\_patch16\_dinov3}): $D=384$, $224 \times 224$, 4 Register tokens (\texttt{reg4}), dense structural and fine-grained visual representations.
+            \item \textbf{\texttt{dinov2\_vits14}} (\texttt{vit\_small\_patch14\_dinov2.lvd142m}): $D=384$, $224 \times 224$, $14 \times 14$ patches, self-supervised on curated LVD-142M dataset.
         \end{itemize}
     \end{block}
 
-    \vspace{-0.4cm}
-    \begin{block}{Distinct vs. Shared Parameters}
-        \tiny
-        \begin{itemize}
-            \item \emph{Distinct:} Latent dimension $D$ (384 to 1280), feature pooling (CLS token vs. Register tokens vs. GAP), normalization statistics.
-            \item \emph{Shared:} Frozen trunk ($\nabla_\theta = 0$), standardized input tensor ($3 \times 224 \times 224$), unit L2 normalization, convex linear classification interface.
-        \end{itemize}
-    \end{block}
-
-    \vspace{-0.3cm}
+    \vspace{0.15cm}
     \statusdone
-    \script{We manage six canonical vision backbones through a unified factory. Each backbone is frozen, sharing a standard 224 by 224 input and outputting an L2-normalized feature vector. However, they vary significantly in their latent dimensions—from 384 in DINOv3 to 1280 in EfficientNet-B0—and pooling mechanisms, giving us a spectrum of options from heavy biological pre-training like BioCLIP-2 to edge-optimized MobileNetV4.}
-    \qa{Why do the DINO models use register tokens instead of a standard CLS token?}{Register tokens allow the vision transformer to store global image information and discard uninformative background patches without corrupting the semantic representation, which is common when using a single CLS token.}
-    \qa{How does freezing the trunk ($\nabla_\theta = 0$) impact our ability to deploy to new edge devices?}{A frozen trunk allows us to compile the feature extraction layer to highly optimized ONNX graphs once, then swap out only the lightweight linear classification head for different target applications.}
+
+    \script{We manage our vision backbones through a unified Backbone Factory. On this slide, we present our three foundation Vision Transformers: BioCLIP-2, pre-trained on domain-specific biological taxonomy, DINOv3 with four register tokens to eliminate visual artifacts, and DINOv2 trained on the curated LVD-142M dataset. Each transformer outputs dense embeddings ready for downstream linear probing.}
+    \qa{Why do DINO models use register tokens instead of a standard CLS token?}{Register tokens allow the vision transformer to store global image information and discard uninformative background patches without corrupting the semantic representation.}
+    \qa{What makes BioCLIP-2 unique compared to generic ViTs?}{BioCLIP-2 is pre-trained directly on millions of organism photos aligned with the biological Tree-of-Life taxonomy, producing features that naturally cluster by taxonomic rank.}
+\end{frame}
+
+\begin{frame}{Backbone Factory}{Edge CNNs \& Shared Architectural Invariants}
+    \vspace{-0.15cm}
+    \begin{block}{Edge-Optimized Convolutional Backbones}
+        \scriptsize
+        \begin{itemize}
+            \item \textbf{\texttt{mobilenetv4\_conv\_small}} (\texttt{mobilenetv4\_conv\_small.e2400\_r224\_in1k}): $D=960$, $224 \times 224$, Universal Inverted Bottleneck (UIB) + Global Average Pooling (GAP), optimized for low-latency CPU and edge execution.
+            \item \textbf{\texttt{efficientnet\_b0}} (\texttt{efficientnet\_b0.ra\_in1k}): $D=1280$, $224 \times 224$, Depthwise Separable Convolutions + Squeeze-and-Excitation, classic compound scaling.
+        \end{itemize}
+    \end{block}
+
+    \begin{block}{Architectural Invariants \& Interface Contracts}
+        \scriptsize
+        \begin{itemize}
+            \item \textbf{Frozen Trunk Invariant:} Strict $\nabla_\theta = 0$ prevents feature drift and allows ahead-of-time embedding caching.
+            \item \textbf{Unit L2 Normalization:} All representations project onto unit hypersphere $\|z\|_2 = 1$, enabling cosine-distance linear classification.
+            \item \textbf{Convex Optimization Contract:} Linear head optimization has no local minima, guaranteeing reproducible convergence across training runs.
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.05cm}
+    \statusdone
+
+    \script{In addition to heavy Vision Transformers, our factory supports lightweight Edge CNNs like MobileNetV4 and EfficientNet-B0. MobileNetV4 uses Universal Inverted Bottlenecks to deliver sub-10ms inference on commodity CPUs. Across all six backbones, we enforce two critical invariants: trunks are strictly frozen to allow persistent embedding caching, and all output vectors are L2-normalized onto a unit hypersphere, turning classifier training into a convex optimization problem with guaranteed global convergence.}
+    \qa{How does freezing the trunk ($\nabla_\theta = 0$) impact our deployment cycle?}{A frozen trunk allows us to pre-extract and cache features once, reducing training from four hours to ten seconds and enabling exhaustive hyperparameter tuning.}
+    \qa{Why is unit L2 normalization essential for linear probe stability?}{Projecting embeddings onto the unit sphere bounds activation magnitudes, prevents gradient explosions, and aligns Euclidean distance directly with cosine similarity.}
 \end{frame}
 
 \begin{frame}{Model Architecture}{Architectural Showdown: Vision Transformers vs. Modern CNNs}

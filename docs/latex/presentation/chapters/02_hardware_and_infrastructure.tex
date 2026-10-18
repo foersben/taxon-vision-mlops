@@ -45,8 +45,8 @@
     \providecolor{TaxonDark}{RGB}{0, 51, 102}          % Deep Navy Blue
 
     \begin{center}
-    \vspace{-0.15cm}
-    \resizebox{0.95\textwidth}{!}{
+    \vspace{-0.1cm}
+    \resizebox{0.92\textwidth}{!}{
     \begin{tikzpicture}[
         box/.style={draw, rounded corners=4pt, align=center, font=\sffamily},
         flagship/.style={box, fill=TaxonSecondary!10, draw=TaxonSecondary!80!black, thick},
@@ -62,8 +62,8 @@
         % =========================================================================
         % NODE 1: FLAGSHIP (Local Dev Workstation) - X: 0.0 to 3.2
         % =========================================================================
-        \node[flagship, minimum height=4.3cm, minimum width=3.2cm] (flagship) at (1.6, 0) {};
-        \node[anchor=north, font=\sffamily, align=center] at (1.6, 2.05) {%
+        \node[flagship, minimum height=4.5cm, minimum width=3.3cm] (flagship) at (1.6, 0) {};
+        \node[anchor=north, font=\sffamily, align=center] at (1.6, 2.15) {%
             \textbf{\color{TaxonDark}\texttt{flagship}}\\[-1pt]%
             {\tiny\bfseries\color{TaxonSecondary!90!black}Developer Workstation}%
         };
@@ -78,13 +78,13 @@
             {\tiny Pixi Toolchain $\cdot$ Fast Feedback}%
         };
 
-        \node[anchor=south, font=\sffamily\tiny, text=TaxonDark!60] at (1.6, -2.05) {[Isolated Dev Plane]};
+        \node[anchor=south, font=\sffamily\tiny, text=TaxonDark!60] at (1.6, -2.15) {[Isolated Dev Plane]};
 
         % =========================================================================
-        % NODE 2: HIVE-MIND (Bare-Metal 24/7 Server) - X: 6.0 to 15.6 (width = 9.6cm)
+        % NODE 2: HIVE-MIND (Bare-Metal 24/7 Server) - X: 6.0 to 15.6 (width = 9.8cm)
         % =========================================================================
-        \node[hivemind, minimum height=4.3cm, minimum width=9.6cm] (hivemind) at (10.8, 0) {};
-        \node[anchor=north, font=\sffamily, align=center] at (10.8, 2.05) {%
+        \node[hivemind, minimum height=4.5cm, minimum width=9.8cm] (hivemind) at (10.8, 0) {};
+        \node[anchor=north, font=\sffamily, align=center] at (10.8, 2.15) {%
             \textbf{\color{TaxonDark}\texttt{hive-mind}}\\[-1pt]%
             {\tiny\bfseries\color{TaxonDark!80}Bare-Metal Server (24/7 Execution Plane)}%
         };
@@ -218,13 +218,13 @@
         \node[label, font=\scriptsize\bfseries, yshift=-2mm] at (s3.center) {Slot 3: PyTorch/Optuna (5.0G)};
 
         % The 70% Limit Line at 11.2 GB
-        \draw[thick, dashed, red] ([xshift=11.2cm]total.south west) -- ([xshift=11.2cm]total.north west) node[above=0.2cm, text=red, font=\small\bfseries, align=center] {11.2 GB (70\%) Hard Ceiling per Container};
+        \draw[thick, dashed, red] ([xshift=11.2cm]total.south west) -- ([xshift=11.2cm]total.north west) node[above=0.35cm, text=red, font=\small\bfseries, align=center, fill=white, inner sep=1.5pt] {11.2 GB (70\%) Hard Ceiling per Container};
 
         % Slot 4: Headroom (4.0 GB) -> 4.0cm
         \node[bar, fill=gray!50, minimum width=4.0cm, anchor=west] at (s3.east) (s4) {};
         \node[font=\scriptsize\bfseries, text=TaxonDark, yshift=-2mm] at (s4.center) {Slot 4: Elastic Headroom};
 
-        \draw[decorate,decoration={brace,amplitude=5pt,mirror},thick] ([xshift=0.1cm]s1.south west) -- ([xshift=-0.1cm]s4.south east) node[midway,below=0.2cm, font=\small\bfseries] {Kubernetes 4-Slot GPU Time-Slicing Configuration};
+        \draw[decorate,decoration={brace,amplitude=5pt,mirror},thick] ([xshift=0.1cm]s1.south west) -- ([xshift=-0.1cm]s4.south east) node[midway,below=0.25cm, font=\small\bfseries] {Kubernetes 4-Slot GPU Time-Slicing Configuration};
 
     \end{tikzpicture}
     }

@@ -4,7 +4,7 @@
     \vfill
     \centering
     {\footnotesize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
-    {\large \textbf{\textcolor{signalorange}{CHAPTER 05}}} \\[0.25cm]
+    {\large \textbf{\textcolor{signalorange}{CHAPTER 07}}} \\[0.25cm]
     {\huge \textbf{Pipeline Architecture \& Fast-Path Serving}} \\[0.35cm]
     {\normalsize \textcolor{black!70}{Decoupled Representation, High-Throughput ONNX \& Latency Budgets}} \\[0.5cm]
     \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
@@ -89,12 +89,12 @@
 
 \begin{frame}{Architectural Topology}{Offline Training to Online Serving Boundary}
     \begin{center}
-    \vspace{-0.2cm}
+    \vspace{-0.15cm}
     \providecolor{TaxonPrimary}{RGB}{34, 139, 34} % plantgreen
     \providecolor{TaxonSecondary}{RGB}{220, 120, 0} % signalorange
     \providecolor{TaxonDark}{RGB}{0, 51, 102} % deepblue
     \providecolor{TaxonAccent}{RGB}{180, 30, 30} % herbired
-    \resizebox{0.9\textwidth}{!}{
+    \resizebox{0.92\textwidth}{!}{
     \begin{tikzpicture}[
         node distance=0.4cm and 1.6cm,
         box/.style={rectangle, draw=TaxonDark, fill=TaxonDark!10, thick, rounded corners, minimum width=2.1cm, minimum height=1cm, align=center, font=\sffamily\small},
@@ -135,7 +135,7 @@
     % Grouping boxes
     \begin{scope}[on background layer]
         \node[draw=TaxonDark!30, fill=TaxonDark!5, dashed, rounded corners, fit=(s3)(onnx), inner sep=0.3cm, label={[font=\sffamily\bfseries, text=TaxonDark]above:Offline Training Pipeline (Batch)}] {};
-        \node[draw=TaxonPrimary!40, fill=TaxonPrimary!5, dashed, rounded corners, fit=(ingress)(api), inner sep=0.3cm, label={[font=\sffamily\bfseries, text=TaxonPrimary]below:Online Fast-Path Serving (Real-Time)}] {};
+        \node[draw=TaxonPrimary!40, fill=TaxonPrimary!5, dashed, rounded corners, fit=(ingress)(api), inner sep=0.25cm, label={[font=\sffamily\bfseries, text=TaxonPrimary]below=0.05cm:Online Fast-Path Serving (Real-Time)}] {};
     \end{scope}
 
     \end{tikzpicture}
@@ -197,11 +197,12 @@
     \providecolor{TaxonDark}{RGB}{0, 51, 102}          % Deep Navy Blue
     \providecolor{herbired}{RGB}{178, 34, 34}          % Firebrick Red
 
-    \vspace{-0.2cm}
+    \vspace{-0.60cm}
     \begin{columns}[T, totalwidth=\textwidth]
         % Left Column: Clean, Centered Flowchart (Strictly Contained)
         \begin{column}{0.48\textwidth}
             \begin{center}
+            \resizebox{\linewidth}{!}{
             \begin{tikzpicture}[
                 node distance=0.24cm,
                 start/.style={draw=TaxonDark, fill=TaxonDark!12, rectangle, rounded corners=3pt, minimum width=4.1cm, minimum height=0.52cm, align=center, font=\sffamily\bfseries\scriptsize},
@@ -235,44 +236,44 @@
                 \draw[arrow] (size.east) -| node[above, font=\sffamily\tiny, pos=0.4] {$|\mathcal{C}|=0$} (ood.north);
 
             \end{tikzpicture}
+            }
             \end{center}
         \end{column}
 
         % Right Column: Full-Width Structured Cards (Fits all 3 without clipping)
         \begin{column}{0.50\textwidth}
-            % \vspace{-0.15cm}
             % Card 1: Fast-Path
             \begin{tikzpicture}
             \node[draw=TaxonPrimary!80, fill=TaxonPrimary!6, rounded corners=3pt, thick, text width=0.94\linewidth] {
                 \textbf{\scriptsize\color{TaxonPrimary!90!black}$\blacktriangleright$ Fast-Path Automated Return ($|\mathcal{C}(x)| = 1$)} \hfill {\tiny\bfseries\color{TaxonPrimary!80!black}[$\sim$85\%]}\\
                 \tiny
-                \begin{itemize}
+                \begin{itemize}\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}
                     \item \textbf{SLA / Latency:} Sub-$15\text{ ms}$ $p95$ response on bare-metal hardware.
                     \item \textbf{Zero Overhead:} Emits top label + forward-hook CAM; bypasses VLM.
                 \end{itemize}
             };
             \end{tikzpicture}
-            \vspace{0.10cm}
+            \vspace{0.02cm}
 
             % Card 2: Vision-RAG
             \begin{tikzpicture}
             \node[draw=TaxonSecondary!80, fill=TaxonSecondary!6, rounded corners=3pt, thick, text width=0.94\linewidth] {
                 \textbf{\scriptsize\color{TaxonSecondary!90!black}$\blacktriangleright$ Vision-RAG Triage Engine ($|\mathcal{C}(x)| > 1$)} \hfill {\tiny\bfseries\color{TaxonSecondary!80!black}[$\sim$12\%]}\\
                 \tiny
-                \begin{itemize}
+                \begin{itemize}\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}
                     \item \textbf{Trigger:} Fine-grained sister-taxa ambiguity \& morphological mimicry.
                     \item \textbf{Action:} Geo-filtered HNSW + RRF $\to$ VLM differential diagnosis card.
                 \end{itemize}
             };
             \end{tikzpicture}
-            \vspace{0.10cm}
+            \vspace{0.02cm}
 
             % Card 3: Human Triage / OOD
             \begin{tikzpicture}
             \node[draw=herbired!80, fill=herbired!6, rounded corners=3pt, thick, text width=0.94\linewidth] {
                 \textbf{\scriptsize\color{herbired!90!black}$\blacktriangleright$ Human Expert Triage ($|\mathcal{C}(x)| = 0$ / OOD)} \hfill {\tiny\bfseries\color{herbired!80!black}[$\sim$3\%]}\\
                 \tiny
-                \begin{itemize}
+                \begin{itemize}\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}
                     \item \textbf{Safety Invariant:} All classes fail cutoff ($s_y > \hat{q}_\alpha$); rejects blind guesses.
                     \item \textbf{Active Learning:} Enqueued into Label Studio for BADGE sampling.
                 \end{itemize}

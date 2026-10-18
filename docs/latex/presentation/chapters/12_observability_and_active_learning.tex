@@ -4,7 +4,7 @@
     \vfill
     \centering
     {\footnotesize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
-    {\large \textbf{\textcolor{signalorange}{CHAPTER 10}}} \\[0.25cm]
+    {\large \textbf{\textcolor{signalorange}{CHAPTER 12}}} \\[0.25cm]
     {\huge \textbf{Observability \& Active Learning}} \\[0.35cm]
     {\normalsize \textcolor{black!70}{Prometheus Telemetry, Concept Drift Detection \& Continuous Human-in-the-Loop Triage}} \\[0.5cm]
     \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
@@ -36,7 +36,7 @@
     \begin{center}
     \resizebox{0.82\textwidth}{!}{
     \begin{tikzpicture}[
-        node distance=1.5cm and 2cm,
+        node distance=1.4cm and 3.4cm,
         box/.style={rectangle, draw=deepblue, thick, fill=blue!5, text width=3cm, align=center, minimum height=1.5cm, rounded corners},
         arrow/.style={->, thick, >=stealth},
         db/.style={cylinder, draw=soilbrown, thick, aspect=0.25, fill=orange!10, text width=2.5cm, align=center, minimum height=1.5cm, shape border rotate=90}
@@ -49,8 +49,8 @@
 
         % Arrows
         \draw[arrow] (model.west) |- node[near start, left, align=right, xshift=-0.1cm] {Latency \& \\ OOD stats} (fastapi.west);
-        \draw[arrow, dashed] (prometheus) -- node[above] {HTTP Pull (Roadmap)} (fastapi);
-        \draw[arrow, dashed] (grafana) -- node[above] {PromQL (Roadmap)} (prometheus);
+        \draw[arrow, dashed] (prometheus) -- node[midway, above=0.08cm, font=\scriptsize] {HTTP Pull (Roadmap)} (fastapi);
+        \draw[arrow, dashed] (grafana) -- node[midway, above=0.08cm, font=\scriptsize] {PromQL (Roadmap)} (prometheus);
     \end{tikzpicture}
     }
     \end{center}
@@ -199,7 +199,7 @@
         \draw[arrow] (conformal) -- (badge);
         \draw[arrow, dashed] (badge) -- (labelstudio);
         \draw[arrow, dashed] (labelstudio) -- (retrain);
-        \draw[arrow, dashed] (retrain) -| (stream);
+        \draw[arrow, dashed] (retrain.south) -- ++(0, -0.6cm) -| (stream.south);
     \end{tikzpicture}
     }
     \end{center}

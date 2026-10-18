@@ -4,7 +4,7 @@
     \vfill
     \centering
     {\footnotesize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
-    {\large \textbf{\textcolor{signalorange}{CHAPTER 08}}} \\[0.25cm]
+    {\large \textbf{\textcolor{signalorange}{CHAPTER 10}}} \\[0.25cm]
     {\huge \textbf{Epistemic Safety \& Uncertainty}} \\[0.35cm]
     {\normalsize \textcolor{black!70}{Split Conformal Prediction, $1-\alpha$ Statistical Bounds \& Outlier Rejection}} \\[0.5cm]
     \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
@@ -56,13 +56,13 @@
             \begin{center}
                 \providecolor{TaxonPrimary}{RGB}{0, 102, 204}
                 \providecolor{TaxonAccent}{RGB}{204, 0, 0}
-                \begin{tikzpicture}[scale=0.9, transform shape,scale=0.6, every node/.style={transform shape}]
+                \begin{tikzpicture}[scale=0.75, every node/.style={transform shape}]
                     \begin{axis}[
                         width=\textwidth,
-                        height=5.5cm,
+                        height=5.2cm,
                         xlabel={Non-Conformity Score ($s$)},
                         ylabel={Density},
-                        ymin=0, ymax=1.2,
+                        ymin=0, ymax=1.35,
                         xmin=0, xmax=1,
                         ytick=\empty,
                         axis lines=left,
@@ -73,10 +73,11 @@
                     ]
                     \addplot[fill=TaxonPrimary!20, draw=TaxonPrimary, thick, domain=0:0.9, samples=100] {exp(-5*x^2)};
                     \addplot[fill=TaxonAccent!30, draw=TaxonAccent, thick, domain=0.9:1, samples=50] {exp(-5*x^2)};
-                    \draw[dashed, thick, TaxonAccent] (axis cs:0.9,0) -- (axis cs:0.9,1.1) node[above, yshift=2pt] {$\hat{q}$ (e.g. 95\%)};
+                    \draw[dashed, thick, TaxonAccent] (axis cs:0.9,0) -- (axis cs:0.9,1.15);
+                    \node[fill=white, inner sep=1.5pt, font=\scriptsize, text=TaxonAccent] at (axis cs:0.82, 1.18) {$\hat{q}$ (95\%)};
                     \end{axis}
                 \end{tikzpicture}
-                \\ \vspace{0.2cm}
+                \\ \vspace{0.15cm}
                 \scriptsize \textit{Dynamic prediction sets scale from singletons (low ambiguity) to multi-class sets based on calibrated quantiles.}
             \end{center}
         \end{column}
@@ -104,7 +105,8 @@
                 \providecolor{TaxonSecondary}{RGB}{102, 102, 102}
                 \providecolor{TaxonAccent}{RGB}{204, 0, 0}
                 \providecolor{TaxonDark}{RGB}{0, 51, 102}
-                \begin{tikzpicture}[scale=0.9, transform shape,scale=0.9, transform shape,
+                \resizebox{\linewidth}{!}{
+                \begin{tikzpicture}[
                     node distance=1.2cm and 1cm,
                     box/.style={rectangle, draw=TaxonDark, fill=TaxonPrimary!10, thick, text width=2.6cm, align=center, rounded corners, font=\scriptsize},
                     decision/.style={diamond, draw=TaxonAccent, fill=TaxonAccent!10, thick, text width=1.5cm, align=center, inner sep=0pt, font=\tiny},
@@ -124,6 +126,7 @@
                 \draw[arrow] (card) -- node[above, font=\tiny] {$|C(X)| > 3$ or $\emptyset$} (human);
 
                 \end{tikzpicture}
+                }
             \end{center}
         \end{column}
     \end{columns}

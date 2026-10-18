@@ -8,7 +8,7 @@
     \vfill
     \centering
     {\footnotesize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
-    {\large \textbf{\textcolor{signalorange}{CHAPTER 06}}} \\[0.25cm]
+    {\large \textbf{\textcolor{signalorange}{CHAPTER 08}}} \\[0.25cm]
     {\huge \textbf{Data Engineering \& Storage}} \\[0.35cm]
     {\normalsize \textcolor{black!70}{Zero-Copy S3 Streaming, Parquet Manifests \& DVC Immutability}} \\[0.5cm]
     \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
@@ -167,11 +167,9 @@
                     \scriptsize $z \in \mathbb{R}^{768}$ (PyTorch / CUDA)
                 };
 
-                % Draw rows
-                \foreach \i/\y in {0/0.4, 1/0, 2/-0.4} {
-                    \draw[TaxonPrimary, thick] ([yshift=\y cm, xshift=-2.2cm]parquet.center) -- ([yshift=\y cm, xshift=2.2cm]parquet.center);
-                    \draw[TaxonSecondary, thick] ([yshift=\y cm, xshift=-1.7cm]memmap.center) -- ([yshift=\y cm, xshift=1.7cm]memmap.center);
-                }
+                % Draw clean header dividers
+                \draw[TaxonPrimary, thick] ([yshift=0.15cm, xshift=-2.2cm]parquet.center) -- ([yshift=0.15cm, xshift=2.2cm]parquet.center);
+                \draw[TaxonSecondary, thick] ([yshift=0.15cm, xshift=-1.7cm]memmap.center) -- ([yshift=0.15cm, xshift=1.7cm]memmap.center);
 
                 % Draw arrows indicating 1:1 mapping
                 \draw[arrow, color=TaxonAccent] ([yshift=0.2cm]parquet.east) -- node[above, label_text, color=TaxonAccent] {Exact 1:1 Row Alignment} ([yshift=0.2cm]memmap.west);
@@ -285,7 +283,7 @@
             \scriptsize Heavy Data Manifests \& Tensors
         };
 
-        \node[pointer, right=2cm of parquet] (dvc_ptr) {
+        \node[pointer, right=3.2cm of parquet] (dvc_ptr) {
             \textbf{dvc.lock}\\
             \scriptsize DAG Stage Hashes
         };
