@@ -176,8 +176,10 @@ spec:
           anyOf {
             expression { params.RETRAIN_MODEL == true }
             changeset "data/**"
-            changeset "src/taxon_vision/models/**"
-            changeset "src/taxon_vision/pipelines/**"
+            changeset "config/**"
+            changeset "params.yaml"
+            changeset "dvc.yaml"
+            changeset "src/taxon_vision/**"
           }
         }
       }

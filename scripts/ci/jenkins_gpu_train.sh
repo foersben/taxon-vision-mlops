@@ -56,27 +56,15 @@ if [ -d "/var/lib/taxon-vision/embeddings" ] && [ -f "data/embeddings/train_embe
   cp -f data/embeddings/*.pt /var/lib/taxon-vision/embeddings/ 2>/dev/null || true
 fi
 
-# Push embedding cache and manifests to local SeaweedFS if reachable
+# 1. Sync to in-cluster SeaweedFS (Tier 1 Edge Cache)
 if kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
-  echo ">>> Synchronizing Epistemic Diamond artifacts to in-cluster SeaweedFS (local-seaweedfs)..."
-  pixi run --frozen -e dev dvc push -r local-seaweedfs \
-    data/manifests/raw_manifest.parquet \
-    data/manifests/dataset_manifest.parquet \
-    data/embeddings/train_embeddings.pt \
-    data/embeddings/val_embeddings.pt \
-    data/embeddings/cal_embeddings.pt \
-    data/embeddings/test_embeddings.pt \
-    models/checkpoints/head.pt \
-    models/checkpoints/model_int8.onnx || echo "DVC push to local-seaweedfs skipped."
+  echo ">>> Synchronizing Epistemic Diamond artifacts to SeaweedFS (local-seaweedfs)..."
+  pixi run --frozen -e dev dvc push -r local-seaweedfs || echo "SeaweedFS push skipped."
 fi
 
-# Push release checkpoints, INT8 models, and manifests to DagsHub S3 remote (origin)
-echo ">>> Pushing release checkpoints and manifests to DagsHub S3 remote (origin)..."
-pixi run --frozen -e dev dvc push -r origin \
-  data/manifests/raw_manifest.parquet \
-  data/manifests/dataset_manifest.parquet \
-  models/checkpoints/head.pt \
-  models/checkpoints/model_int8.onnx
+# 2. Push all artifacts to DagsHub S3 (Tier 2 Cloud Archive)
+echo ">>> Pushing all Epistemic Diamond artifacts to DagsHub (origin)..."
+pixi run --frozen -e dev dvc push -r origin
 
 # Stage and commit updated DVC lockfile and evaluation reports to Git
 echo ">>> Committing updated pipeline lockfile and evaluation reports to Git..."
