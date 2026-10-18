@@ -25,3 +25,6 @@ MD025: false
 
 # Disable line-length limits to allow for natural prose and math formulas
 MD013: false
+
+# Allow inline HTML for interactive visualizer iframes, metric cards, and dashboard widgets
+MD033: false
