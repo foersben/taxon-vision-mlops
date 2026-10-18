@@ -9,6 +9,54 @@ import numpy as np
 from taxon_vision.config import get_settings
 
 
+class SplitConformalPredictor:
+    """Helper for Split Conformal calibration and quantile calculation (Angelopoulos & Bates, 2021)."""
+
+    @staticmethod
+    def compute_quantile(scores: np.ndarray, alpha: float) -> float:
+        """Compute finite-sample distribution-free quantile threshold q_hat.
+
+        Why:
+            Provides mathematical finite-sample coverage guarantees (1 - alpha)
+            under exchangeability by evaluating the empirical order statistic.
+
+        How:
+            Evaluates the empirical quantile at ceil((n + 1) * (1 - alpha)) / n using
+            the higher order statistic.
+
+        Args:
+            scores: Non-conformity scores array of shape (N,).
+            alpha: Nominal error tolerance (e.g. 0.05 for 95% coverage).
+
+        Returns:
+            Calibrated quantile cutoff q_hat.
+        """
+        n = len(scores)
+        if n == 0:
+            return 1.0
+        level = np.ceil((n + 1) * (1.0 - alpha)) / n
+        level = min(1.0, max(0.0, float(level)))
+        return float(np.quantile(scores, level, method="higher"))
+
+    @classmethod
+    def calibrate(cls, probabilities: np.ndarray, labels: np.ndarray, alpha: float) -> float:
+        """Calibrate non-conformity threshold q_hat on holdout probabilities and labels.
+
+        Args:
+            probabilities: Array of shape (N, K) containing predicted class probabilities.
+            labels: Array of shape (N,) containing true integer labels.
+            alpha: Nominal error rate budget (e.g. 0.05 for 95% coverage).
+
+        Returns:
+            Calibrated quantile cutoff q_hat.
+        """
+        n = len(labels)
+        if n == 0:
+            return 1.0
+        scores = 1.0 - probabilities[np.arange(n), labels]
+        return cls.compute_quantile(scores, alpha)
+
+
 class ConformalPredictionEngine:
     """Constructs finite-sample distribution-free prediction sets with error rate alpha.
 

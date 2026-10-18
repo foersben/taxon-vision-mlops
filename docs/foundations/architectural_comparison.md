@@ -17,26 +17,26 @@ This document provides a systematic, step-by-step comparative evaluation between
 flowchart TD
     subgraph Academic["Expected Curriculum Baseline (Academic MLOps)"]
         direction TB
-        A1["Raw Data (CSV / Web Scrape)"] --> A2["Monolithic SQL/NoSQL DB<br/>(Full Image Blobs on Disk)"]
+        A1["Raw Data<br/>(CSV / Web Scrape)"] --> A2["Monolithic SQL/NoSQL DB<br/>(Full Image Blobs on Disk)"]
         A2 --> A3["Airflow Monolithic DAG<br/>(ETL + Training + Tagging)"]
         A3 --> A4["MLflow Server<br/>(Ad-hoc Logging & Tagging)"]
-        A4 --> A5["Model API (FastAPI / Flask)<br/>(Raw Softmax argmax Point Prediction)"]
-        A5 --> A6["Streamlit Frontend App<br/>(Full Python script re-execution)"]
-        A3 -.-> A7["Evidently Tabular Drift DAG<br/>(Scheduled batch CSV comparisons)"]
+        A4 --> A5["Model API (FastAPI / Flask)<br/>(Raw Softmax argmax<br/>Point Prediction)"]
+        A5 --> A6["Streamlit Frontend App<br/>(Full Python script<br/>re-execution)"]
+        A3 -.-> A7["Evidently Tabular Drift DAG<br/>(Scheduled batch<br/>CSV comparisons)"]
     end
 
     subgraph TaxonVision["TaxonVision-MLOps (Industrial Bare-Metal Production)"]
         direction TB
-        B1["AWS S3 Open Data Registry<br/>(270M+ Observations)"] --> B2["Zero-Copy Apache Arrow Streamer<br/>+ Creative Commons Filter"]
-        B2 --> B3["DVC Parquet Index Manifests<br/>(SHA-256 Cryptographic Pointers)"]
-        B3 --> B4["Pipeline 1: Classification Engine<br/>(Optuna TPE + BioCLIP-2 / DINOv3 + INT8 ONNX)"]
-        B3 --> B5["Pipeline 2: Taxonomic MMKG<br/>(HNSW Vector Index + DuckDB O(1) Alias Mapping)"]
-        B4 --> B6["Epistemic Safety Gate<br/>(Split Conformal Prediction 1 - α Guarantee)"]
-        B5 --> B7["Convergence Serving Boundary<br/>(FastAPI Zero-Allocation Hot Path < 25ms)"]
+        B1["AWS S3 Open Data Registry<br/>(270M+ Observations)"] --> B2["Zero-Copy Arrow Streamer<br/>+ Creative Commons Filter"]
+        B2 --> B3["DVC Parquet Manifests<br/>(SHA-256 Crypto Pointers)"]
+        B3 --> B4["Pipeline 1: Classification Engine<br/>(Optuna TPE + DINOv3 / BioCLIP<br/>+ INT8 ONNX)"]
+        B3 --> B5["Pipeline 2: Taxonomic MMKG<br/>(HNSW Vector Index<br/>+ DuckDB O(1) Mapping)"]
+        B4 --> B6["Epistemic Safety Gate<br/>(Split Conformal Prediction<br/>1 - &alpha; Guarantee)"]
+        B5 --> B7["Convergence Serving Boundary<br/>(FastAPI Zero-Allocation<br/>Hot Path < 25ms)"]
         B6 --> B7
-        B7 --> B8["Unified Reactive Dashboard<br/>(FastAPI + HTMX + Forward CAM Heatmaps)"]
-        B6 -->|Card > 3 or 0| B9["Active Learning Triage Queue<br/>(BADGE Gradient Sampling -> Label Studio)"]
-        B7 --> B10["Prometheus Telemetry<br/>(Real-time Energy & Latency Alerts)"]
+        B7 --> B8["Unified Reactive Dashboard<br/>(FastAPI + HTMX<br/>+ Forward CAM Heatmaps)"]
+        B6 -->|Card > 3 or 0| B9["Active Learning Triage Queue<br/>(BADGE Gradient Sampling<br/>&rarr; Label Studio)"]
+        B7 --> B10["Prometheus Telemetry<br/>(Real-Time Energy<br/>& Latency Alerts)"]
     end
 ```
 
@@ -102,7 +102,7 @@ The table below summarizes the key architectural dimensions across both paradigm
 
 ##### Comparative Verdict & Trade-off: Storage Topology
 
-* *Storage Efficiency:* Zero local image storage required; 518 observations consume only 10.7 KB of manifest storage instead of gigabytes of raw images.
+* *Storage Efficiency:* Zero local image storage required; 1,689 verified observations consume only ~34 KB of manifest storage (`data/manifests/dataset_manifest.parquet`) instead of gigabytes of raw images.
 * *DevOps Overhead:* Zero database daemons to configure, patch, or maintain.
 * *The Trade-off:* Streaming requires consistent network connectivity during training batches. If internet access is intermittent, a local cache of reference exemplar crops (strictly capped at 50 crops per species, consuming ~4.5 GB) acts as a fallback buffer.
 

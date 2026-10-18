@@ -7,10 +7,13 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+import warnings
 from pathlib import Path
+from typing import Literal
 
 import torch
 import torch.nn as nn
+from torch.jit._trace import TracerWarning
 
 from taxon_vision.config import Settings, get_settings
 from taxon_vision.inference.calibration import load_calibration_tensors
@@ -96,7 +99,8 @@ def export_to_onnx(
     if is_dual:
         dynamic_axes["embeddings"] = {0: "batch_size"}
 
-    with torch.no_grad():
+    with torch.no_grad(), warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=TracerWarning)
         torch.onnx.export(
             export_module,
             (dummy_input,),
@@ -111,7 +115,7 @@ def export_to_onnx(
     return output_path
 
 
-def _load_head_checkpoint(classifier: nn.Module, checkpoint_file: Path) -> None:
+def _load_head_checkpoint(classifier: TaxonClassifier, checkpoint_file: Path) -> None:
     """Safely load trained classification head weights onto CPU.
 
     Why:
@@ -223,8 +227,8 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output",
         type=str,
-        default="models/checkpoints/model.onnx",
-        help="Destination path for serialized ONNX model graph.",
+        default=None,
+        help="Optional destination path for serialized FP32 ONNX model graph.",
     )
     parser.add_argument(
         "--extractor",
@@ -302,39 +306,131 @@ def _quantize_exported_graph(fp32_path: Path, args: argparse.Namespace, settings
 
     model_cfg = settings.model
     requested = args.quantize_mode or model_cfg.quantization_mode
-    mode = "static" if requested == "auto" else requested
+    cal_dir = Path(args.calibration_dir or model_cfg.calibration_dir)
+    calibration = None
+    mode: Literal["auto", "static", "dynamic"]
+    if requested == "static":
+        calibration = load_calibration_tensors(
+            cal_dir,
+            args.calibration_samples or model_cfg.calibration_samples,
+        )
+        mode = "static"
+    elif requested == "auto":
+        if cal_dir.exists() and any(cal_dir.glob("*.*")):
+            calibration = load_calibration_tensors(
+                cal_dir,
+                args.calibration_samples or model_cfg.calibration_samples,
+            )
+            mode = "static"
+        else:
+            mode = "dynamic"
+    elif requested == "dynamic":
+        mode = "dynamic"
+    else:
+        mode = "auto"
+
     default_quantized = (
         fp32_path.with_name(f"{fp32_path.stem}.int8.onnx")
-        if args.output != "models/checkpoints/model.onnx"
+        if args.output and args.output != "models/checkpoints/model.onnx"
         else Path(model_cfg.onnx_model_path)
     )
     quantized_path = Path(args.quantized_output or default_quantized)
-
-    calibration = None
-    if mode == "static":
-        calibration = load_calibration_tensors(
-            args.calibration_dir or model_cfg.calibration_dir,
-            args.calibration_samples or model_cfg.calibration_samples,
-        )
 
     quantize_onnx_model(fp32_path, quantized_path, calibration_tensors=calibration, mode=mode)
     logger.info("Quantized INT8 ONNX graph (%s) saved to %s", mode, quantized_path)
     return quantized_path
 
 
+def _resolve_export_output(output_arg: str | None, quantize_int8: bool) -> tuple[Path, Path | None]:
+    """Resolve target output path and optional temporary FP32 path.
+
+    Args:
+        output_arg: CLI output argument.
+        quantize_int8: Whether INT8 quantization is requested.
+
+    Returns:
+        Tuple of (output_path, temporary_fp32_path_or_none).
+    """
+    if output_arg is not None:
+        return Path(output_arg), None
+    if not quantize_int8:
+        return Path("models/checkpoints/model.onnx"), None
+
+    import tempfile
+
+    temp_fp32 = tempfile.NamedTemporaryFile(suffix=".onnx", delete=False)
+    temp_path = Path(temp_fp32.name)
+    temp_fp32.close()
+    return temp_path, temp_path
+
+
+def _build_and_restore_classifier(args: argparse.Namespace, settings: Settings) -> TaxonClassifier | None:
+    """Instantiate backbone, configure classifier, and restore head checkpoint.
+
+    Args:
+        args: Parsed command-line arguments.
+        settings: Global application settings.
+
+    Returns:
+        TaxonClassifier instance or None on error.
+    """
+    extractor_name = args.extractor or settings.model.default_extractor
+    checkpoint_file = Path(args.checkpoint or settings.model.head_checkpoint_path)
+
+    backbone = _resolve_backbone(extractor_name, settings.model.fallback_extractor, args.allow_untrained)
+    if backbone is None:
+        return None
+
+    feat_dim = get_feature_dimension(backbone)
+    taxa = load_taxa_catalog()
+    if not taxa:
+        logger.error("Authoritative taxa catalog loaded from %s is empty", settings.model.taxa_catalog_path)
+        return None
+
+    num_classes = len(taxa)
+    classifier = TaxonClassifier(backbone=backbone, feature_dim=feat_dim, num_classes=num_classes)
+
+    if not _restore_head(
+        classifier,
+        checkpoint_file,
+        args.allow_untrained,
+        extractor_name,
+        feat_dim,
+        num_classes,
+    ):
+        return None
+    return classifier
+
+
+def _finalize_export_artifacts(target_artifact: Path, output_arg: str | None, quantize_int8: bool) -> int:
+    """Validate exported model artifact existence and purge intermediate unquantized models.
+
+    Args:
+        target_artifact: Path to finalized output model graph.
+        output_arg: Raw user-specified output path string.
+        quantize_int8: Whether quantization was applied.
+
+    Returns:
+        Exit code: 0 on success, 1 on failure.
+    """
+    if not target_artifact.exists() or target_artifact.stat().st_size == 0:
+        logger.error("ONNX export failed: Output file %s was not created", target_artifact)
+        return 1
+
+    logger.info("ONNX export succeeded: %s (%d bytes)", target_artifact, target_artifact.stat().st_size)
+    if output_arg is None and quantize_int8:
+        stale_fp32 = Path("models/checkpoints/model.onnx")
+        if stale_fp32.exists():
+            stale_fp32.unlink()
+    return 0
+
+
 def export_classifier_cli(argv: list[str] | None = None) -> int:
     """CLI entrypoint for exporting the trained TaxonClassifier to ONNX format.
 
     Why:
-        Automation pipelines (e.g., Jenkins CI/CD, DVC) require a deterministic CLI tool to trace and serialize PyTorch checkpoints into high-performance ONNX computational graphs with optional INT8 quantization.
-
-    How:
-        1. Parses command-line flags (--checkpoint, --output, --extractor, --image-size, --allow-untrained, --quantize-int8, --quantize-mode, --quantized-output, --calibration-dir, --calibration-samples).
-        2. Resolves configuration defaults from application settings.
-        3. Instantiates the TaxonClassifier using the pretrained backbone (unless --allow-untrained is set).
-        4. Restores trained weights from checkpoint using _load_head_checkpoint (failing if missing unless --allow-untrained).
-        5. Traces and exports the model to ONNX via export_to_onnx.
-        6. Optionally applies dynamic INT8 quantization via quantize_onnx_model.
+        Preserves backwards-compatibility for existing tests and callers while delegating
+        to the canonical implementation in taxon_vision.pipelines.export_onnx.
 
     Args:
         argv: Optional list of command-line argument strings.
@@ -342,67 +438,9 @@ def export_classifier_cli(argv: list[str] | None = None) -> int:
     Returns:
         Exit code: 0 for success, 1 on failure.
     """
-    parser = _build_arg_parser()
-    args = parser.parse_args(argv)
+    from taxon_vision.pipelines.export_onnx import export_onnx_cli
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-        stream=sys.stdout,
-    )
-
-    try:
-        settings = get_settings()
-        extractor_name = args.extractor or settings.model.default_extractor
-        image_dim = args.image_size or settings.model.image_size
-        output_file = Path(args.output)
-        checkpoint_file = Path(args.checkpoint or settings.model.head_checkpoint_path)
-
-        backbone = _resolve_backbone(extractor_name, settings.model.fallback_extractor, args.allow_untrained)
-        if backbone is None:
-            return 1
-
-        feat_dim = get_feature_dimension(backbone)
-        taxa = load_taxa_catalog()
-        if not taxa:
-            logger.error("Authoritative taxa catalog loaded from %s is empty", settings.model.taxa_catalog_path)
-            return 1
-        num_classes = len(taxa)
-
-        classifier = TaxonClassifier(backbone=backbone, feature_dim=feat_dim, num_classes=num_classes)
-
-        if not _restore_head(
-            classifier,
-            checkpoint_file,
-            args.allow_untrained,
-            extractor_name,
-            feat_dim,
-            num_classes,
-        ):
-            return 1
-
-        logger.info(
-            "Exporting computational graph to ONNX (%s) with input shape (1, 3, %d, %d)...",
-            output_file,
-            image_dim,
-            image_dim,
-        )
-        export_to_onnx(classifier, output_file, input_shape=(1, 3, image_dim, image_dim))
-
-        if args.quantize_int8:
-            _quantize_exported_graph(output_file, args, settings)
-
-        if output_file.exists():
-            logger.info("ONNX export succeeded: %s (%d bytes)", output_file, output_file.stat().st_size)
-            return 0
-
-        logger.error("ONNX export failed: Output file %s was not created", output_file)
-        return 1
-
-    except Exception as err:
-        logger.exception("Fatal error during ONNX export: %s", err)
-        return 1
+    return export_onnx_cli(argv)
 
 
 if __name__ == "__main__":

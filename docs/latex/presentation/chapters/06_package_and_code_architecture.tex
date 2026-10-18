@@ -1,0 +1,551 @@
+% Chapter 6: Software Architecture: Packages, Modules, Classes & Call Graph
+% ---------------------------------------------------------------------
+
+\begin{frame}[plain]
+    \vfill
+    \centering
+    {\footnotesize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
+    {\large \textbf{\textcolor{signalorange}{CHAPTER 06}}} \\[0.25cm]
+    {\huge \textbf{Software Architecture: Packages, Modules \& Call Graph}} \\[0.35cm]
+    {\normalsize \textcolor{black!70}{High-Cohesion Subpackages, Domain Modeling \& Zero-Allocation Serving Hot Path}} \\[0.5cm]
+    \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
+    \statusdone
+    \vfill
+    \script{Welcome to Chapter 6. In this chapter, we unpack the internal software architecture of taxon-vision: exploring how domain modeling, frozen backbone factories, ONNX runtime engines, and conformal predictors are decoupled into modular, low-complexity subpackages.}
+    \qa{How is high maintainability enforced across the software package hierarchy?}{By strictly adhering to Rule 00: zero dynamic reflection, zero circular imports, pure Pixi environments, and an enforced cognitive complexity score strictly below 15 for every function.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 2: Master 4-Tier Layered Architectural Call Graph
+% ---------------------------------------------------------------------
+\begin{frame}{Package Architecture}{Master 4-Tier Layered Architectural Call Graph}
+    \begin{center}
+        \resizebox{0.95\textwidth}{!}{%
+        \begin{tikzpicture}[
+            >=stealth, thick,
+            appnode/.style={rectangle, rounded corners=3pt, fill=deepblue!15, draw=deepblue!80, text=deepblue!90!black, font=\scriptsize\bfseries, inner sep=4pt, minimum width=3.4cm, align=center},
+            corenode/.style={rectangle, rounded corners=3pt, fill=teal!15, draw=teal!80, text=teal!80!black, font=\scriptsize\bfseries, inner sep=4pt, minimum width=2.1cm, align=center},
+            datanode/.style={rectangle, rounded corners=3pt, fill=plantgreen!15, draw=plantgreen!80, text=plantgreen!80!black, font=\scriptsize\bfseries, inner sep=4pt, minimum width=3.2cm, align=center},
+            cfgnode/.style={rectangle, rounded corners=3pt, fill=gray!20, draw=gray!75, text=black, font=\scriptsize\bfseries, inner sep=4pt, minimum width=5.5cm, align=center},
+            edge/.style={->, draw=gray!70, semithick}
+        ]
+            % Tier 1: Orchestration
+            \node[appnode] (pipes) at (-3.2, 2.5) {\texttt{taxon\_vision.pipelines}\\[1pt]\tiny 7-Stage DVC DAG Batch Execution};
+            \node[appnode] (serv) at (3.2, 2.5) {\texttt{taxon\_vision.service}\\[1pt]\tiny Online FastAPI \& HTMX Dashboard};
+            \node[font=\tiny\bfseries, text=deepblue!80, anchor=east, align=right] at (-6.5, 2.5) {TIER 1:\\[-1pt]ENTRYPOINTS};
+
+            % Tier 2: Engines
+            \node[corenode] (mod) at (-5.0, 0.8) {\texttt{models/}\\[1pt]\tiny Backbone \& Loss};
+            \node[corenode] (inf) at (-2.5, 0.8) {\texttt{inference/}\\[1pt]\tiny ONNX \& PTQ};
+            \node[corenode] (unc) at (0.0, 0.8) {\texttt{uncertainty/}\\[1pt]\tiny Conformal \& OOD};
+            \node[corenode] (al) at (2.5, 0.8) {\texttt{active\_learning/}\\[1pt]\tiny BADGE \& Queue};
+            \node[corenode] (mon) at (5.0, 0.8) {\texttt{monitoring/}\\[1pt]\tiny Telemetry \& Drift};
+            \node[font=\tiny\bfseries, text=teal!80, anchor=east, align=right] at (-6.5, 0.8) {TIER 2:\\[-1pt]ML ENGINES};
+
+            % Tier 3: Data & Domain (spaced to preserve wide central channel at x=0.0)
+            \node[datanode] (data) at (-2.8, -0.9) {\texttt{taxon\_vision.data}\\[1pt]\tiny S3 Streaming \& License Audit};
+            \node[datanode] (dom) at (2.8, -0.9) {\texttt{taxon\_vision.domain}\\[1pt]\tiny Taxonomy Tree \& Legal StrEnums};
+            \node[font=\tiny\bfseries, text=plantgreen!80, anchor=east, align=right] at (-6.5, -0.9) {TIER 3:\\[-1pt]DATA / DOMAIN};
+
+            % Tier 4: Typed Config Foundation
+            \node[cfgnode] (cfg) at (0.0, -2.4) {\texttt{taxon\_vision.config}\\[1pt]\tiny Pydantic v2 Schemas, Loader \& Parameter Overrides};
+            \node[font=\tiny\bfseries, text=gray!80, anchor=east, align=right] at (-6.5, -2.4) {TIER 4:\\[-1pt]TYPED CONFIG};
+
+            % --- Tier 1 to Tier 2: Staggered Dual Buses ---
+            \draw[edge] (pipes.south) -- ++(0,-0.22) -| (mod.north);
+            \draw[edge] (pipes.south) -- ++(0,-0.22) -| ([xshift=-4pt]inf.north);
+            \draw[edge] (pipes.south) -- ++(0,-0.22) -| ([xshift=-4pt]unc.north);
+
+            \draw[edge] (serv.south) -- ++(0,-0.48) -| ([xshift=4pt]inf.north);
+            \draw[edge] (serv.south) -- ++(0,-0.48) -| ([xshift=4pt]unc.north);
+            \draw[edge] (serv.south) -- ++(0,-0.48) -| (al.north);
+            \draw[edge] (serv.south) -- ++(0,-0.48) -| (mon.north);
+
+            % --- Tier 2 to Tier 3: Clean Drops ---
+            \draw[edge] (mod.south) -- ++(0,-0.35) -| ([xshift=-0.7cm]data.north);
+            \draw[edge] (inf.south) -- ([xshift=0.3cm]data.north);
+
+            \draw[edge] (al.south) -- ([xshift=-0.3cm]dom.north);
+            \draw[edge] (mon.south) -- ++(0,-0.35) -| ([xshift=0.7cm]dom.north);
+
+            % --- Tier 2 to Tier 4 Mid-Channel Connector ---
+            \draw[edge] (unc.south) -- (cfg.north);
+
+            % --- Tier 3 to Tier 4: Symmetrical Top Entries ---
+            \draw[edge] (data.south) -- ++(0,-0.35) -| ([xshift=-1.6cm]cfg.north);
+            \draw[edge] (dom.south) -- ++(0,-0.35) -| ([xshift=1.6cm]cfg.north);
+        \end{tikzpicture}%
+        }
+    \end{center}
+    \vspace{-0.1cm}
+    \script{This diagram visualizes our master 4-tier layered architecture. Notice the strict downward direction of dependencies: entrypoints in Tier 1 consume specialized ML engines in Tier 2, which rely on domain data structures in Tier 3, all anchored by typed configuration schemas in Tier 4. Zero cyclic imports are mathematically guaranteed.}
+    \qa{Why does the architecture forbid upward or cross-tier circular imports?}{Strict layered acyclic dependencies ensure that low-level modules like domain models and configuration can be tested and reused in complete isolation without dragging in PyTorch, ONNX Runtime, or FastAPI dependencies.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 3: taxon_vision.config Package
+% ---------------------------------------------------------------------
+\begin{frame}{Configuration Subpackage}{\texttt{taxon\_vision.config}: Typed Schemas \& Dynamic Loader}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Modular File Architecture}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{\_\_init\_\_.py}:} Re-exports public API (\texttt{AppConfig}, \texttt{load\_config}, \texttt{get\_params\_path}) while preventing eager submodule pollution.
+                    \item \textbf{\texttt{schemas.py}:} Strictly typed Pydantic v2 schemas:
+                        \begin{itemize}\tiny
+                            \item \texttt{IngestionConfig}: \texttt{per\_page}, \texttt{taxa\_to\_fetch}
+                            \item \texttt{ModelConfig}: \texttt{extractor}, \texttt{image\_size}
+                            \item \texttt{TrainingConfig}: \texttt{epochs}, \texttt{lr}, \texttt{cb\_beta}
+                            \item \texttt{ExportConfig}: \texttt{quantize\_int8}, \texttt{opset}
+                            \item \texttt{ConformalConfig}: \texttt{alpha}, \texttt{ood\_tpr}
+                            \item \texttt{ServiceConfig}: \texttt{host}, \texttt{port}, \texttt{workers}
+                        \end{itemize}
+                    \item \textbf{\texttt{loader.py}:} Dynamic YAML resolution engine.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Dynamic Resolution Mechanics}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{load\_config(path=None)}:}
+                        Loads base settings from \texttt{config/default\_config.yaml}, layers DVC \texttt{params.yaml} overrides, and resolves nested \texttt{TAXON\_\_} environment variables.
+                    \item \textbf{Type Validation Invariant:}
+                        Rejects missing required fields or invalid numeric ranges at startup before any tensor allocations occur.
+                    \item \textbf{Zero Hardcoded Numbers:}
+                        Every timeout, learning rate, and threshold maps to a strongly typed configuration field.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+
+    \script{The config subpackage is our single source of truth for runtime settings. We use Pydantic v2 schemas in schemas.py and a layered loader in loader.py, enforcing a strict ban on magic numbers across the codebase.}
+    \qa{How does load\_config handle nested environment variables?}{It maps double-underscore environment variable keys, such as TAXON\_\_TRAINING\_\_LEARNING\_RATE, directly into nested Pydantic models with automatic type casting.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 4: taxon_vision.domain Package
+% ---------------------------------------------------------------------
+\begin{frame}{Domain Modeling}{\texttt{taxon\_vision.domain}: Taxonomic Entities, Licenses \& Observations}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Taxonomy \& Licensing Abstractions}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{taxonomy.py}:}
+                        \begin{itemize}\tiny
+                            \item \texttt{TaxonNode}: Pydantic model for DarwinCore nodes (\texttt{taxon\_id: int}, \texttt{name: str}, \texttt{rank: str}, \texttt{parent\_id: int | None}, \texttt{class\_index: int}).
+                            \item \texttt{TaxonomyCatalog}: In-memory taxonomic tree resolving GBIF taxonomy and bidirectional class-to-name lookups.
+                        \end{itemize}
+                    \item \textbf{\texttt{license.py}:}
+                        \begin{itemize}\tiny
+                            \item \texttt{OpenLicense(StrEnum)}: Enumeration of approved Creative Commons licenses (\texttt{CC0}, \texttt{CC\_BY}, \texttt{CC\_BY\_NC}, etc.).
+                            \item \texttt{AttributionRecord}: Strongly typed legal metadata retaining photographer name, license URI, and timestamp.
+                        \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Observation Entity \& Data Contracts}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{observation.py}:}
+                        \begin{itemize}\tiny
+                            \item \texttt{ObservationRecord}: Authoritative record definition:
+                                \begin{itemize}\tiny
+                                    \item \texttt{observation\_id: int}
+                                    \item \texttt{taxon: TaxonNode}
+                                    \item \texttt{image\_url: str}
+                                    \item \texttt{attribution: AttributionRecord}
+                                    \item \texttt{observed\_on: datetime}
+                                \end{itemize}
+                        \end{itemize}
+                    \item \textbf{Immutability \& Integrity:}
+                        All domain entities inherit from Pydantic's frozen base model, guaranteeing that data records cannot be mutated during pipeline execution.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+
+    \script{The domain package houses our core business entities: DarwinCore taxonomic nodes, Creative Commons legal licenses, and immutable observation records that link specimen IDs with photographer attribution.}
+    \qa{Why do domain entities use frozen Pydantic models?}{Immutability guarantees thread safety across concurrent data loaders and ensures that records cannot be accidentally corrupted during multi-stage pipeline transformations.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 5: taxon_vision.data Package
+% ---------------------------------------------------------------------
+\begin{frame}{Data Engineering Components}{\texttt{taxon\_vision.data}: Ingestion Client, License Filter \& Streaming}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{REST Ingestion \& Legal Filtering}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{inat\_client.py} (\texttt{INatAPIClient}):}
+                        \begin{itemize}\tiny
+                            \item Asynchronous client built on \texttt{httpx.AsyncClient}.
+                            \item \texttt{fetch\_observations()}: Queries research-grade observations with automatic pagination and exponential backoff.
+                            \item Handles rate limiting ($1\text{ req/sec}$) gracefully.
+                        \end{itemize}
+                    \item \textbf{\texttt{license\_filter.py} (\texttt{LicenseFilter}):}
+                        \begin{itemize}\tiny
+                            \item \texttt{filter\_manifest()}: Enforces open-license whitelist on Parquet manifests via lazy Polars predicates.
+                            \item Discards observations lacking verified photographer attribution.
+                        \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Zero-Copy S3 Image Streaming}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{s3\_streamer.py} (\texttt{S3ImageStreamer}):}
+                        \begin{itemize}\tiny
+                            \item High-throughput concurrent worker pool streaming raw image bytes directly from AWS Open Data (\texttt{s3://inaturalist-open-data/}).
+                            \item \texttt{fetch\_image\_with\_retry()}: Robust retry logic with jittered backoff.
+                            \item Decodes JPEG bytes directly into memory buffers via PIL and PyTorch transforms, bypassing local disk storage entirely.
+                        \end{itemize}
+                    \item \textbf{Throughput:} Sustains $180+\text{ images/second}$ per worker node on 1 Gbps networking.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+
+    \script{The data package implements our high-throughput data tier. It queries the iNaturalist API asynchronously, filters observations against strict legal licenses, and streams images from AWS Open Data directly into memory.}
+    \qa{How does S3ImageStreamer prevent memory leaks during long streaming runs?}{It manages memory using reusable byte buffers and context-managed HTTP sessions, guaranteeing that decoded PIL images are promptly garbage-collected after feature extraction.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 6: taxon_vision.models Package
+% ---------------------------------------------------------------------
+\begin{frame}{Model Engineering Core}{\texttt{taxon\_vision.models}: Backbone Factory, Linear Heads \& Loss}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Backbone Factory \& Linear Head}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{factory.py} (\texttt{BackboneFactory}):}
+                        \begin{itemize}\tiny
+                            \item \texttt{create\_feature\_extractor()}: Instantiates vision models via \texttt{timm} with frozen weights:
+                                \begin{itemize}\tiny
+                                    \item \texttt{dinov3\_vits14} ($D = 384$)
+                                    \item \texttt{bioclip-2} ($D = 512$)
+                                    \item \texttt{dinov2\_vits14} ($D = 384$)
+                                    \item \texttt{mobilenetv4\_conv\_small} ($D = 960$)
+                                \end{itemize}
+                            \item \texttt{get\_feature\_dimension()}: Dynamically queries backbone projection size.
+                        \end{itemize}
+                    \item \textbf{\texttt{head.py} (\texttt{TaxonClassifier}):}
+                        \begin{itemize}\tiny
+                            \item Lightweight linear head: $\mathbf{z} = \mathbf{W}\mathbf{x} + \mathbf{b}$, where $\mathbf{W} \in \mathbb{R}^{K \times D}, \mathbf{b} \in \mathbb{R}^K$.
+                            \item \texttt{load\_head\_checkpoint()}: Fast state-dict loader.
+                        \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Class-Balanced Loss Formulation}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{loss.py} (\texttt{ClassBalancedLoss}):}
+                        \begin{itemize}\tiny
+                            \item Mitigates extreme long-tailed distributions in biological observations.
+                            \item Effective sample weighting formula:
+                                $$W_y = \frac{1 - \beta}{1 - \beta^{n_y}}$$
+                            \item Normalized loss over batch $\mathcal{B}$:
+                                $$\mathcal{L}_{\text{CB}} = - \frac{1}{\sum_{i} W_{y_i}} \sum_{i \in \mathcal{B}} W_{y_i} \log \hat{\pi}(y_i \mid x_i)$$
+                            \item Hyperparameter $\beta = 0.999$ balances common vs rare taxa smoothly.
+                        \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+
+    \script{The models package defines our neural architectures. The backbone factory instantiates frozen self-supervised foundation extractors, while TaxonClassifier provides the linear head trained with Class-Balanced Loss.}
+    \qa{Why does the backbone factory freeze feature extractor weights by default?}{Freezing backbone weights eliminates the need for expensive backpropagation through hundreds of transformer layers, allowing training to converge in seconds on pre-computed feature vectors.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 7: taxon_vision.models.training Subpackage
+% ---------------------------------------------------------------------
+\begin{frame}{Training Subsystem}{\texttt{taxon\_vision.models.training}: Optimization, Tuning \& Tracking}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Execution Loops \& Bayeisan Tuning}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{runner.py}:} \texttt{run\_training\_pipeline()} orchestrates argument parsing, CUDA memory caps, and checkpointing.
+                    \item \textbf{\texttt{loops.py}:} Clean inner optimization routines:
+                        \begin{itemize}\tiny
+                            \item \texttt{train\_head\_epoch()}: Batched forward/backward passes with AdamW.
+                            \item \texttt{evaluate\_head()}: Evaluates loss, Macro F1, and PR-AUC.
+                        \end{itemize}
+                    \item \textbf{\texttt{tuning.py}:} \texttt{tune\_hyperparameters()} executes Optuna Bayesian sweeps with ASHA median trial pruning on SQLite PVC storage.
+                    \item \textbf{\texttt{checkpoint.py}:} Atomic checkpoint saving and metadata serialization.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Lineage Tracking \& Tensors}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{tracking.py} (\texttt{MLflowTracker}):}
+                        \begin{itemize}\tiny
+                            \item \texttt{mlflow\_run\_scope()}: Context-managed experiment run.
+                            \item Explicit \texttt{ModelSignature} logging:
+                                \texttt{TensorSpec(float32, (-1, D))} $\to$ \newline
+                                \texttt{TensorSpec(float32, (-1, K))}
+                            \item Automated registry candidate tagging (\texttt{@Challenger}).
+                        \end{itemize}
+                    \item \textbf{\texttt{embeddings.py}:} High-speed tensor loading:
+                        \begin{itemize}\tiny
+                            \item \texttt{train\_head\_on\_cached\_embeddings()}: Direct GPU tensor execution in $< 2\text{ seconds}$.
+                        \end{itemize}
+                    \item \textbf{\texttt{types.py}:} Typed dataclasses (\texttt{EmbeddingSplit}, \texttt{HeadTrainingConfig}).
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+
+    \script{The models.training subpackage provides our training engine. It cleanly separates optimization loops, Optuna Bayesian tuning, and MLflow experiment tracking into modular, low-complexity source files.}
+    \qa{How does MLflowTracker prevent model input shape mismatches in production?}{By attaching explicit ModelSignatures with float32 TensorSpecs during log\_model, MLflow validates tensor dimensions before permitting model registration.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 8a: taxon_vision.inference Package (Part 1)
+% ---------------------------------------------------------------------
+\begin{frame}{Inference Architecture (1/2)}{\texttt{taxon\_vision.inference}: ONNX Engine, Head Projector \& CLI Profiler}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Runtime Engine \& CLI Benchmark Runner}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{onnx\_engine.py} (\texttt{ONNXInferenceEngine}):}
+                        \begin{itemize}\tiny
+                            \item Encapsulates active \texttt{onnxruntime.InferenceSession}.
+                            \item \texttt{predict()}: Zero-allocation hot path converting pre-processed numpy arrays directly into softmax probabilities.
+                            \item \texttt{benchmark\_latency()}: Profiles p50, p95, and p99 inference timing over 100 warm iterations against production SLA.
+                        \end{itemize}
+                    \item \textbf{\texttt{cli.py} (CLI Benchmark Profiler):}
+                        \begin{itemize}\tiny
+                            \item Standalone CLI command for offline model verification:
+                                \texttt{python -m taxon\_vision.inference.cli}
+                            \item Validates ONNX tensor shapes, dynamic batch dimensions, and latency compliance from terminal.
+                        \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Linear Head Logit Projection}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{head\_projector.py}:}
+                        \begin{itemize}\tiny
+                            \item \texttt{extract\_onnx\_head\_weights()}: Extracts classification weight matrix $W \in \mathbb{R}^{K \times 768}$ and bias $b \in \mathbb{R}^K$ directly from ONNX graph initializers.
+                            \item \texttt{compute\_onnx\_logits()}: Projects cached 768-d embeddings into logits via direct BLAS matrix multiplication:
+                                $$Z = X W^\top + b$$
+                            \item Bypasses full vision backbone forward passes during calibration and active learning sweeps.
+                            \item Performance: Evaluates thousands of pre-computed embeddings in $< 5\text{ ms}$.
+                        \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \script{Inference Architecture Part 1 focuses on our high-speed execution engine. ONNXInferenceEngine provides zero-allocation serving, cli.py offers command-line benchmarking, and head\_projector.py extracts linear head weights directly from ONNX graph initializers to score thousands of embeddings in under 5 milliseconds.}
+    \qa{Why extract linear head weights using head\_projector.py?}{Extracting head initializers allows calibration and active learning pipelines to evaluate cached embedding tensors directly in milliseconds without re-running full visual graphs.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 8b: taxon_vision.inference Package (Part 2)
+% ---------------------------------------------------------------------
+\begin{frame}{Inference Architecture (2/2)}{\texttt{taxon\_vision.inference}: Export Pipeline, PTQ Calibration \& EigenCAM}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Export \& Quantization Engine}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{onnx\_exporter.py}:}
+                        \begin{itemize}\tiny
+                            \item \texttt{export\_to\_onnx()}: Fuses PyTorch foundation trunk + linear head into a unified computational graph at opset 17.
+                            \item Configures dynamic batch axes and explicit \texttt{TensorSpec} signatures.
+                        \end{itemize}
+                    \item \textbf{\texttt{quantizer.py}:}
+                        \begin{itemize}\tiny
+                            \item \texttt{quantize\_onnx\_dynamic()}: Applies dynamic INT8 quantization to \texttt{MatMul} and \texttt{Gemm} operators ($4\times$ size reduction).
+                            \item \texttt{TaxonCalibrationDataReader}: Custom reader implementing ONNX Runtime calibration interface for static quantization sweeps.
+                        \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Empirical Calibration \& Explainability}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{calibration.py}:}
+                        \begin{itemize}\tiny
+                            \item \texttt{load\_calibration\_tensors()}: Loads representative specimen images from the calibration partition using production preprocessing transforms.
+                            \item Enforces data integrity: strictly bans synthetic Gaussian noise to prevent clipping real activation distributions during PTQ.
+                        \end{itemize}
+                    \item \textbf{\texttt{cam.py} (\texttt{EigenCAMExplainer}):}
+                        \begin{itemize}\tiny
+                            \item Computes visual explanations by computing principal components of transformer token activations:
+                                $$M = \text{PCA}(\mathbf{A}_{l})_1$$
+                            \item Projects attribution heatmaps onto original specimen photos without requiring gradients.
+                        \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \script{Inference Architecture Part 2 covers compilation, post-training quantization, and visual explainability. onnx\_exporter compiles PyTorch models into unified graphs, quantizer and calibration.py execute static and dynamic quantization using real specimen data, and EigenCAM generates attribution heatmaps without backpropagation.}
+    \qa{Why does calibration.py ban synthetic noise during calibration data loading?}{Synthetic noise does not reflect the natural activation distributions of real biological specimens, which would lead to incorrect scale factors and quantization clipping errors in static INT8 models.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 9: taxon_vision.uncertainty Package
+% ---------------------------------------------------------------------
+\begin{frame}{Uncertainty \& Safety}{\texttt{taxon\_vision.uncertainty}: Conformal Prediction \& Energy OOD}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Split Conformal Predictor}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{conformal.py} (\texttt{SplitConformalPredictor}):}
+                        \begin{itemize}\tiny
+                            \item \texttt{calibrate(logits, targets, alpha=0.05)}:
+                                Computes non-conformity scores:
+                                $$s_i = 1 - \hat{\pi}(y_i \mid x_i)$$
+                                Derives empirical quantile $\hat{q}$ satisfying:
+                                $$\mathbb{P}(Y \in C(X)) \ge 1 - \alpha$$
+                            \item \texttt{predict\_set(logits)}:
+                                Returns set of admissible taxa:
+                                $$C(X) = \{k : \hat{\pi}(k \mid X) \ge 1 - \hat{q}\}$$
+                            \item Handles temperature scaling ($T = 1.0$) prior to softmax normalization.
+                        \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Free Energy OOD Detector}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{ood\_detector.py} (\texttt{EnergyOODDetector}):}
+                        \begin{itemize}\tiny
+                            \item Computes Helmholtz free energy from raw logit vectors $\mathbf{z}$:
+                                $$E(\mathbf{x}; T) = -T \cdot \log \sum_{k=1}^K \exp(z_k / T)$$
+                            \item \texttt{calibrate\_threshold\_from\_logits()}:
+                                Calibrates threshold $\tau_{\text{ood}}$ at target True Positive Rate (e.g., 95\%).
+                            \item \texttt{is\_ood()}: Flags inputs with $E(\mathbf{x}) > \tau_{\text{ood}}$ as anomalous, routing them to human triage before conformal evaluation.
+                        \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+
+    \script{The uncertainty package is our mathematical safety layer. SplitConformalPredictor guarantees statistical coverage, while EnergyOODDetector filters out out-of-distribution inputs prior to taxonomic classification.}
+    \qa{Why use Free Energy instead of maximum softmax probability for OOD detection?}{Because softmax probabilities suffer from overconfidence on distant anomalous inputs, whereas free energy is theoretically aligned with input density and exhibits superior out-of-distribution discrimination.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 10: taxon_vision.active_learning & monitoring Packages
+% ---------------------------------------------------------------------
+\begin{frame}{Active Learning \& Monitoring}{\texttt{taxon\_vision.active\_learning} \& \texttt{monitoring}}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Active Learning Subsystem}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{query.py}:}
+                        \begin{itemize}\tiny
+                            \item \texttt{margin\_sampling()}: Computes prediction margin between top two class probabilities:
+                                $$M(x) = \hat{\pi}_{(1)}(x) - \hat{\pi}_{(2)}(x)$$
+                            \item Samples with smallest margins represent maximum model ambiguity.
+                        \end{itemize}
+                    \item \textbf{\texttt{triage\_queue.py}:}
+                        \begin{itemize}\tiny
+                            \item \texttt{TriageQueue}: Priority queue ordering flagged observations by uncertainty and conformal set size.
+                            \item \texttt{TriageItem}: Dataclass storing image metadata, candidate set, and human review timestamps.
+                        \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Observability \& Drift Telemetry}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{telemetry.py} (Prometheus TSDB):}
+                        \begin{itemize}\tiny
+                            \item \texttt{PREDICTION\_COUNTER}: Total inferences served.
+                            \item \texttt{LATENCY\_HISTOGRAM}: Sub-millisecond latency buckets.
+                            \item \texttt{REFERRAL\_RATE}: Gauge tracking percentage of inputs referred to human triage.
+                        \end{itemize}
+                    \item \textbf{\texttt{drift.py}:}
+                        \begin{itemize}\tiny
+                            \item \texttt{compute\_wasserstein\_drift()}: Earth Mover's Distance measuring feature shift between baseline and production embeddings.
+                        \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+
+    \script{Here we see our active learning and monitoring packages. Margin sampling ranks ambiguous observations for human triage, while Prometheus telemetry and Wasserstein drift calculations monitor production performance.}
+    \qa{How does the triage queue feed continuous retraining?}{Human-reviewed triage items are ingested into the active learning loop, appending verified labels to raw\_manifest.parquet and triggering DVC pipeline re-execution.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 11: taxon_vision.service Package
+% ---------------------------------------------------------------------
+\begin{frame}{Production Web Service}{\texttt{taxon\_vision.service}: FastAPI REST Endpoints \& HTMX Views}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Application Structure \& Endpoints}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{api.py}:} Root FastAPI application instance configuring CORS middleware, error handlers, and static files.
+                    \item \textbf{\texttt{routes/}:} Modular endpoint routers:
+                        \begin{itemize}\tiny
+                            \item \texttt{predict.py}: \texttt{POST /v1/predict} (returns top predictions, conformal sets, and referral flags).
+                            \item \texttt{explain.py}: \texttt{POST /v1/explain} (returns Eigen-CAM heatmaps).
+                            \item \texttt{train.py}: \texttt{POST /v1/retrain} (triggers retrain loop).
+                            \item \texttt{health.py}: \texttt{/health/live}, \texttt{/health/ready}, and Prometheus \texttt{/metrics}.
+                            \item \texttt{views.py}: Server-rendered Jinja2/HTMX operator dashboard.
+                        \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Runtime Ingestion \& Persistence}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{inference.py}:}
+                        \begin{itemize}\tiny
+                            \item Singleton engine loading ONNX Runtime session and conformal config at startup.
+                            \item \texttt{run\_prediction()}: High-speed inference taking uploaded image files.
+                        \end{itemize}
+                    \item \textbf{\texttt{schemas.py}:}
+                        \begin{itemize}\tiny
+                            \item Pydantic request/response models: \texttt{PredictionResponse}, \texttt{TaxonPrediction}, \texttt{TrainingResponse}.
+                        \end{itemize}
+                    \item \textbf{\texttt{storage.py}:}
+                        \begin{itemize}\tiny
+                            \item Manages temporary file buffering and flagged observation persistence.
+                        \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+
+    \script{The service package unifies our machine API and operator dashboard. Built on FastAPI, it exposes high-performance prediction and explanation endpoints while serving an interactive Jinja2 and HTMX web interface.}
+    \qa{How does the web service maintain low latency during heavy concurrent traffic?}{By initializing the ONNX Runtime session once at startup and executing pure CPU-bound NumPy operations without dynamic PyTorch graph instantiations on the request hot path.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 12: Chapter Summary & Architectural Invariants
+% ---------------------------------------------------------------------
+\begin{frame}{Chapter Summary}{Software Architecture Takeaways}
+    \begin{block}{Core Software Engineering Principles}
+        \begin{itemize}\small
+            \item \textbf{High Cohesion \& Loose Coupling:} Ten specialized subpackages establish clear domain boundaries, preventing monolithic code rot and cyclic imports.
+            \item \textbf{Strict Static Typing:} Pydantic v2 schemas and strict Mypy validation across all 66 modules guarantee data contract integrity across runtime boundaries.
+            \item \textbf{Cognitive Complexity $< 15$:} Every function and method maintains low branching complexity, ensuring high testability and readability.
+            \item \textbf{Zero-Allocation Serving:} ONNX Runtime CPU inference with pre-extracted head initializers ensures sub-15ms p95 latency in production environments.
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.2cm}
+    \begin{center}
+        \textcolor{deepblue}{\textbf{Next: Chapter 07 --- Pipeline Architecture \& Fast-Path Serving}}
+    \end{center}
+
+    \script{To wrap up Chapter 6: our software architecture bridges academic research and enterprise software engineering through strict typing, modular subpackages, and disciplined complexity control.}
+    \qa{How does our package design facilitate future architectural changes?}{Because domain logic, inference engines, and web services communicate exclusively through typed interfaces, swapping out ONNX Runtime for TensorRT requires modifying only the inference package without touching domain entities.}
+\end{frame}

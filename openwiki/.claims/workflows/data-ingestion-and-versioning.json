@@ -28,14 +28,14 @@
     },
     {
       "id": "claim_22f83a8e1ab146c0942c3076c8f0a434",
-      "statement": "The data ingestion script `scripts/ingest_data.py` retrieves observation metadata across configured catalog taxa using `INatAPIClient`, filters records through `LicenseFilter`, and writes compliant observation UUIDs, taxon IDs, image URLs, photographer names, and license details to an Arrow Parquet manifest at `data/manifests/dataset_manifest.parquet` using Polars.",
+      "statement": "The data ingestion and audit pipeline retrieves observation metadata across configured catalog taxa using `INatAPIClient` to produce `data/manifests/raw_manifest.parquet`, filters records through `LicenseFilter`, and writes compliant observation records to `data/manifests/dataset_manifest.parquet` using Polars.",
       "evidence": [
         {
           "resource": "repo://dvc.yaml#L2-L13",
           "version": "repo-lines-v1:sha256:c4c089d314b7d313c1c22778a1945a02af54b0120b22d46ab60485b448b0c754:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI5OWQ4MTEyZDA2MGJiNGRjODc2MzllY2IyYzA4OGFlNDYxYzcyNGU4YTA3NWJiOGZmMTgyMmMzODI4ZTQ2MWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFiN2UxMGIzMmVlZGVmNWY0MGJlODA2ZjIxNjJiYjBlYTE0YTk4NGE5ZGZlMDUyZTcxOTVmMTBlYjI4ZWQ4ZGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjoxLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU0YTVlZmRiMzZlMDAzYWY3NTQzNGQzOWZiNmRiYWY0ZGNjZjFkZTA5YTVmODc0ZTFmYzQ0NzA4Njc2ZWQyZmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEyZGEwZWI3OWM1OTk2NWM4ZDRlYjgyYjljMzc4ZTllNmVkMGI1MGE1YmNlMzMxMmZjYzVjZmMzZjBhYzcyNTUifQ"
         },
         {
-          "resource": "repo://scripts/ingest_data.py#L24-L86",
+          "resource": "repo://src/taxon_vision/pipelines/ingest.py#L24-L86",
           "version": "repo-lines-v1:sha256:38891563728cb612913b6aa4f77d71c2e2dd6af4dd6d98425665066be7d37785:eyJzZWxlY3RlZExpbmVDb3VudCI6NjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY4ZmY0NTMxOGFlNTRiYWE5OTczMjQyOGFjOTIyYWUyMzAyNDdlMThlZTQ4ZjA0ODdmNmFiNzljOTNlYjJiODIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFhMDc1MjkyYjIzZjIzMDQ3ZWNjZDcwMzA2OThlNjI2NGZiODgxOGNiODk0ZjVjNzFkYjc5Yjc2MDNjYzQ3ZWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJhNzI4ZmFmNzQ4NGNlMThkOTZmOGVkNjc2OTU2YjRjM2I3OTk2YzNiNTlmZTU1Y2FkNTg3OGQyM2NjNDdlZTcifQ"
         }
       ]
@@ -62,7 +62,7 @@
     },
     {
       "id": "claim_38f8102d84a14538a3eb6f078d267f32",
-      "statement": "In the feature extraction pipeline, `build_taxon_index_map` projects external iNaturalist taxon IDs into dense zero-indexed class indices, and `create_stratified_embedding_split` partitions representations into stratified train and validation splits while computing empirical per-class sample frequencies for Class-Balanced Loss weighting.",
+      "statement": "In the feature extraction pipeline, `build_taxon_index_map` projects external iNaturalist taxon IDs into dense zero-indexed class indices, and `create_stratified_embedding_split` partitions representations into four stratified splits (train, validation, calibration, test) saved as discrete PyTorch tensor files while computing empirical per-class sample frequencies for Class-Balanced Loss weighting.",
       "evidence": [
         {
           "resource": "repo://src/taxon_vision/pipelines/extract_features.py#L27-L59",
@@ -76,7 +76,7 @@
     },
     {
       "id": "claim_791bbad5364848e9af9d87659ffe9d6c",
-      "statement": "The DVC pipeline stage `ingestion` in `dvc.yaml` tracks ingestion scripts, client dependencies, and parameters from `config/params.yaml`, generating `data/manifests` whose MD5 hash recorded in `dvc.lock` is read by the training runner and logged to MLflow as `dvc_dataset_hash` for dataset-to-checkpoint lineage.",
+      "statement": "The DVC pipeline stages `ingest` and `audit_license` in `dvc.yaml` track ingestion and audit scripts, client dependencies, and parameters from root `params.yaml`, generating `data/manifests/raw_manifest.parquet` and `data/manifests/dataset_manifest.parquet` whose hashes recorded in `dvc.lock` are tracked for end-to-end dataset-to-checkpoint lineage.",
       "evidence": [
         {
           "resource": "repo://dvc.lock#L1-L30",

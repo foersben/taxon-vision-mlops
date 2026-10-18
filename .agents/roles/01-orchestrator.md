@@ -1,6 +1,6 @@
 ---
 type: Agent Role
-title: Directives
+title: "Role 01: Orchestrator"
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
 version: 1.0

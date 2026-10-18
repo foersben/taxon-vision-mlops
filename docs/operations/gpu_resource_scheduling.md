@@ -6,6 +6,8 @@ stale_after: "2027-01-01T00:00:00Z"
 version: 1.0
 description: Architectural strategies for managing single-GPU scheduling conflicts between Training, CI/CD, and Web Inference workloads.
 tags: [infrastructure, gpu, k3s, scheduling]
+generated: {by: "process:docs-librarian", at: "2026-10-18T18:00:00Z"}
+verified: {by: "process:docs-librarian", at: "2026-10-18T18:00:00Z"}
 ---
 
 # GPU Resource Scheduling & Multiplexing
@@ -96,7 +98,7 @@ if torch.cuda.is_available():
 CLI execution also exposes `--cuda-memory-fraction`:
 
 ```bash
-pixi run -e dev python -m taxon_vision.models.trainer --cuda-memory-fraction 0.7
+pixi run -e dev python -m taxon_vision.pipelines.train --cuda-memory-fraction 0.7
 ```
 
 On CPU-only development environments, `configure_cuda_memory_budget()` gracefully degrades to a no-op, preserving portability across Darwin, Linux CPU, and CUDA workstations.

@@ -5,10 +5,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import numpy.typing as npt
 import onnxruntime as ort
+
+from taxon_vision.inference.head_projector import (
+    compute_onnx_logits,
+    extract_onnx_head_weights,
+)
 
 
 @dataclass(frozen=True)
@@ -45,15 +51,16 @@ class ONNXInferenceEngine:
         has_embeddings: Whether the exported graph emits a secondary embeddings tensor.
     """
 
-    def __init__(self, model_path: str) -> None:
+    def __init__(self, model_path: str | Path) -> None:
         """Initialize the ONNX Runtime session with graph optimizations.
 
         Args:
             model_path: Filesystem path to the exported ONNX model artifact.
         """
+        self.model_path = str(model_path)
         opts = ort.SessionOptions()
         opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-        self.session = ort.InferenceSession(model_path, opts, providers=["CPUExecutionProvider"])
+        self.session = ort.InferenceSession(self.model_path, opts, providers=["CPUExecutionProvider"])
         self.input_name = self.session.get_inputs()[0].name
         output_names = [out.name for out in self.session.get_outputs()]
         self.has_embeddings = "embeddings" in output_names
@@ -61,6 +68,7 @@ class ONNXInferenceEngine:
         self.output_name = self.session.get_outputs()[0].name
         out_dim = self.session.get_outputs()[0].shape[-1]
         self.num_classes: int | None = out_dim if isinstance(out_dim, int) else None
+        self._head_weights: tuple[np.ndarray, np.ndarray] | None = None
 
     def predict_outputs(self, input_array: npt.NDArray[np.float32]) -> InferenceOutputs:
         """Run inference returning both class logits and dense feature embeddings.
@@ -107,7 +115,38 @@ class ONNXInferenceEngine:
             A numpy array representing the softmax probabilities.
         """
         raw_outputs = self.predict_logits(input_array)
-        # Softmax
         exp = np.exp(raw_outputs - np.max(raw_outputs, axis=-1, keepdims=True))
+        probs: np.ndarray = exp / np.sum(exp, axis=-1, keepdims=True)
+        return probs
+
+    def project_embeddings(self, embeddings: np.ndarray) -> np.ndarray:
+        """Project pre-extracted backbone embeddings to classification logits using the model's head.
+
+        Why:
+            Enables evaluating calibration and Pareto benchmarks directly on cached tensor partitions
+            without incurring redundant vision backbone forward pass latency.
+
+        Args:
+            embeddings: Float32 representation matrix of shape (N, D).
+
+        Returns:
+            Classification logits array of shape (N, num_classes).
+        """
+        if self._head_weights is None:
+            self._head_weights = extract_onnx_head_weights(self.model_path)
+        weight, bias = self._head_weights
+        return compute_onnx_logits(embeddings, weight, bias)
+
+    def predict_from_embeddings(self, embeddings: np.ndarray) -> np.ndarray:
+        """Compute calibrated softmax probability distributions directly from dense feature embeddings.
+
+        Args:
+            embeddings: Float32 representation matrix of shape (N, D).
+
+        Returns:
+            Softmax probability array of shape (N, num_classes).
+        """
+        logits = self.project_embeddings(embeddings)
+        exp = np.exp(logits - np.max(logits, axis=-1, keepdims=True))
         probs: np.ndarray = exp / np.sum(exp, axis=-1, keepdims=True)
         return probs

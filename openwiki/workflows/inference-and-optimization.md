@@ -8,7 +8,7 @@ verified:
     at: 2026-10-15T19:46:36.219Z
 sources:
   - id: openwiki-source-8ad924b52f67b10056fc5e25
-    resource: repo://scripts/benchmark_pareto.py
+    resource: repo://src/taxon_vision/pipelines/evaluate.py
   - id: openwiki-source-d2314fb7d2c604322ed1f16e
     resource: repo://src/taxon_vision/inference/calibration.py
   - id: openwiki-source-7ad80404d4cdd9f0b9759340
@@ -45,7 +45,7 @@ flowchart TD
         
         EXP --> DUAL["_ONNXDualOutputModule<br/>forward_with_embeddings()"]
         DUAL --> TRACE["torch.onnx.export<br/>(opset 17, dynamic batching)"]
-        TRACE --> FP32["FP32 ONNX Graph<br/>(models/checkpoints/model.onnx)"]
+        TRACE --> FP32["Intermediate FP32 ONNX Graph<br/>(Dynamic Batching)"]
         
         FP32 --> MODE{"Quantization Mode Selection<br/>(quantize_onnx_model)"}
         
@@ -134,7 +134,7 @@ The command-line interface `export_classifier_cli()` in `src/taxon_vision/infere
 
 ```bash
 python -m taxon_vision.inference.onnx_exporter \
-    --output models/checkpoints/model.onnx \
+    --output models/checkpoints/model_int8.onnx \
     --extractor mobilenetv4_conv_small \
     --checkpoint models/checkpoints/best_head.pt \
     --quantize-int8 \
@@ -360,7 +360,7 @@ The inference and quantization pipelines are configured via `ModelConfig` in `sr
 
 | Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `onnx_model_path` | `str` | `"models/checkpoints/model.onnx"` | Path to the serialized and quantized INT8 ONNX graph artifact. |
+| `onnx_model_path` | `str` | `"models/checkpoints/model_int8.onnx"` | Path to the serialized and quantized INT8 ONNX graph artifact. |
 | `inference_backend` | `Literal["auto", "onnx", "torch"]` | `"auto"` | Runtime backend mode: `"onnx"` strictly requires the ONNX artifact, `"torch"` forces PyTorch, `"auto"` uses ONNX if present with PyTorch fallback. |
 | `prefer_onnx_runtime` | `bool` | `True` | Prioritize ONNX Runtime over PyTorch when available. |
 | `quantization_mode` | `Literal["auto", "static", "dynamic"]` | `"auto"` | INT8 quantization mode: `"static"` (PTQ with calibration data), `"dynamic"` (data-free), `"auto"` (static if calibration data exists). |

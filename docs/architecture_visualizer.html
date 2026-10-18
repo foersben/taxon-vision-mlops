@@ -1023,7 +1023,7 @@
       <!-- Main View Switcher -->
       <div class="view-tabs">
         <button class="tab-btn active" data-view="graph-view">
-          <i class="fa-solid fa-diagram-project"></i> 1. Architecture Graph (27
+          <i class="fa-solid fa-diagram-project"></i> 1. Architecture Graph (30
           Nodes)
         </button>
         <button class="tab-btn" data-view="pareto-view">
@@ -1074,7 +1074,7 @@
           <span class="chip-dot"></span> Prometheus &amp; Drift (6)
         </div>
         <div class="layer-chip active" data-layer="pipeline">
-          <span class="chip-dot"></span> DVC, MLflow &amp; Training (9)
+          <span class="chip-dot"></span> DVC, MLflow &amp; Training (12)
         </div>
       </div>
 
@@ -1191,18 +1191,18 @@
       <div id="pareto-view" class="view-container">
         <div class="kpi-strip">
           <div class="kpi-card">
-            <span class="kpi-label">Hot Path Latency Budget</span>
+            <span class="kpi-label">Dual Latency SLA</span>
             <span class="kpi-val" style="color: var(--accent-cyan)"
-              >&le; 25.0 ms</span
+              >&le; 15.0 ms</span
             >
-            <span class="kpi-sub">p95 ONNX Runtime INT8/FP16 SLA</span>
+            <span class="kpi-sub">GPU Fast-Path Target (&le; 25ms CPU Gate)</span>
           </div>
           <div class="kpi-card">
             <span class="kpi-label">Recommended Server Backbone</span>
             <span class="kpi-val" style="color: var(--accent-purple)"
               >DINOv3-ViT-S/14</span
             >
-            <span class="kpi-sub">89.8% Accuracy @ 9.5 ms p95</span>
+            <span class="kpi-sub">89.4% Accuracy (Holdout Empirical)</span>
           </div>
           <div class="kpi-card">
             <span class="kpi-label">Recommended Edge Backbone</span>
@@ -1227,10 +1227,9 @@
             <h2>Vision Backbone Multi-Objective Pareto Frontier</h2>
             <p>
               Empirical evaluation from
-              <code>docs/assets/pareto_results.json</code> and
-              <code>scripts/benchmark_pareto.py</code>
-              comparing taxonomic accuracy against p95 forward latency, peak
-              VRAM, and cloud serving cost.
+              <code>docs/assets/pareto_results.json</code> via
+              <code>python -m taxon_vision.pipelines.evaluate</code>.
+              DINOv3 reflects active empirical holdout evaluation (89.35% test accuracy in <code>reports/pareto_evaluation.json</code>); candidate backbones represent symbolic literature projections under identical latency budgets.
             </p>
           </div>
           <div class="chart-controls">
@@ -1262,7 +1261,7 @@
                 ></i>
                 Pareto Frontier: Accuracy vs. Latency
               </div>
-              <span class="badge sla-badge">SLA Invariant: 25ms p95</span>
+              <span class="badge sla-badge">Dual SLA: &le;15ms GPU / &le;25ms CPU</span>
             </div>
             <div id="plotly-pareto-main" class="chart-canvas"></div>
           </div>
@@ -1464,12 +1463,12 @@
       }
 
       /* ==========================================================================
-       1. DATA: PARETO BENCHMARKS & 27 ARCHITECTURAL NODES
+       1. DATA: PARETO BENCHMARKS & 30 ARCHITECTURAL NODES
        ========================================================================== */
-      const PARETO_RAW = [
+      let PARETO_RAW = [
         {
           extractor: "bioclip-2",
-          displayName: "BioCLIP-2",
+          displayName: "BioCLIP-2 [Projected]",
           architecture: "Vision-Language (Tree of Life)",
           canonical_baseline:
             "Zero-Shot ~59.3% Macro / Few-Shot up to 92.4% (Stevens et al., 2024)",
@@ -1486,10 +1485,10 @@
         },
         {
           extractor: "dinov3_vits14",
-          displayName: "DINOv3-ViT-S/14",
+          displayName: "DINOv3-ViT-S/14 [Empirical]",
           architecture: "Dense Self-Supervised ViT",
-          canonical_baseline: "Dense Morphology Probe / Register Tokens",
-          accuracy_score: 89.8,
+          canonical_baseline: "Dense Morphology Probe (89.35% Test Acc, reports/pareto_evaluation.json)",
+          accuracy_score: 89.4,
           parameters_m: 22.0,
           p50_latency_ms: 7.0,
           p95_latency_ms: 9.5,
@@ -1502,7 +1501,7 @@
         },
         {
           extractor: "dinov2_vits14",
-          displayName: "DINOv2-ViT-S/14",
+          displayName: "DINOv2-ViT-S/14 [Projected]",
           architecture: "Self-Supervised ViT",
           canonical_baseline:
             "Linear Probe 81.1% ImageNet-1K (Oquab et al., 2023)",
@@ -1519,7 +1518,7 @@
         },
         {
           extractor: "mobilenetv4_conv_small",
-          displayName: "MobileNetV4 Small",
+          displayName: "MobileNetV4 Small [Projected]",
           architecture: "Universal Inverted Bottleneck (UIB)",
           canonical_baseline:
             "Official 73.8% ImageNet-1K Top-1 (Qin et al., 2024)",
@@ -1536,7 +1535,7 @@
         },
         {
           extractor: "efficientnet_b0",
-          displayName: "EfficientNet-B0",
+          displayName: "EfficientNet-B0 [Projected]",
           architecture: "Compound-Scaled ConvNet",
           canonical_baseline:
             "Official 77.1% ImageNet-1K Top-1 (Tan & Le, 2019)",
@@ -1588,7 +1587,7 @@
               description:
                 "High-throughput endpoint receiving observation image uploads. Executes zero-copy preprocessing, cached TaxonClassifier forward pass, Helmholtz energy OOD scoring, and Split Conformal Prediction sets.",
               invariants:
-                "Hot inference path p95 latency <= 25ms SLA. Zero dynamic memory allocation.",
+                "Dual SLA: <= 15.0ms bare-metal GPU target, <= 25.0ms CPU/CI ceiling (Rule 02). Zero dynamic memory allocation.",
               formula:
                 "\\text{Card}(C(x)) \\le k_{\\max} \\implies \\text{Auto-Assign}, \\quad \\text{else} \\implies \\text{Refer}",
               config:
@@ -1712,7 +1711,7 @@
               role: "@uncertainty-safety-engineer",
               path: "src/taxon_vision/uncertainty/conformal.py",
               description:
-                "Computes finite-sample distribution-free prediction sets with guaranteed marginal coverage 1 - alpha >= 95% using Split Conformal calibration (`scripts/calibrate_conformal.py`).",
+                "Computes finite-sample distribution-free prediction sets with guaranteed marginal coverage 1 - alpha >= 95% using Split Conformal calibration (`src/taxon_vision/pipelines/calibrate.py`).",
               invariants:
                 "Empirical coverage P(Y in C(X)) >= 1 - alpha verified by invariant test suite.",
               formula:
@@ -1763,14 +1762,14 @@
             data: {
               id: "human_triage",
               label: "Human Triage Queue\ntriage_queue.py",
-              subtitle: "HITL Expert Taxonomist Backlog",
+              subtitle: "In-Memory Max-Heap (Component Verified; Unwired)",
               layer: "uncertainty",
               col: 1,
               row: 5.5,
               role: "@active-learning-engineer",
               path: "src/taxon_vision/active_learning/triage_queue.py",
               description:
-                "Manages priority backlog of ambiguous and OOD observations referred for expert morphological verification.",
+                "Component-verified in-memory binary max-heap (TriageQueue via heapq) for prioritizing uncertain observations. Note: /api/v1/predict currently persists flagged specimens to .npy + manifest.jsonl via service/storage.py; live heap wiring is pending.",
               invariants:
                 "Zero unverified auto-assignments on ambiguous specimens.",
               config:
@@ -1833,14 +1832,14 @@
             data: {
               id: "drift_detector",
               label: "Embedding Drift Monitor\ndrift.py",
-              subtitle: "Wasserstein / Covariate Shift",
+              subtitle: "1D Wasserstein-1 Norm Drift (Component Verified; Unwired)",
               layer: "telemetry",
               col: 2,
               row: 4.6,
               role: "@observability-engineer",
               path: "src/taxon_vision/monitoring/drift.py",
               description:
-                "Computes distributional divergence between incoming production feature embeddings and reference calibration splits to trigger retraining.",
+                "Computes O(N*D) 1D Wasserstein-1 Earth Mover's Distance over L2 embedding norms. Standalone unit-tested in test_monitoring.py; pending live rolling-window invocation in /api/v1/predict.",
               invariants:
                 "Detects seasonal and geographic domain shift before accuracy degrades.",
               config: "Module: src/taxon_vision/monitoring/drift.py",
@@ -1883,51 +1882,68 @@
           {
             data: {
               id: "active_learning",
-              label: "Active Learning Query\nquery.py (BADGE/CoreSet)",
-              subtitle: "Uncertainty + Diversity Sampling",
+              label: "Active Learning Query\nquery.py (margin_sampling)",
+              subtitle: "Margin Uncertainty Scorer (Component Verified; Unwired)",
               layer: "pipeline",
               col: 3,
               row: 0,
               role: "@active-learning-engineer",
               path: "src/taxon_vision/active_learning/query.py",
               description:
-                "Selects highest-value informative specimens from the human triage queue using gradient magnitude and CoreSet geometric diversity.",
+                "Component-verified margin_sampling (1 - (p_top1 - p_top2)) unit-tested in test_active_learning.py. Pending async worker wiring; BADGE gradient acquisition is a Phase 2.5 specification.",
               invariants: "Maximizes accuracy gain per annotated specimen.",
               formula:
-                "\\text{Score}(x) = \\| g_x \\|_2 \\cdot \\min_{s \\in \\mathcal{S}} d(x, s)",
+                "\\text{Score}(x) = 1.0 - (\\hat{\\pi}_{(1)}(x) - \\hat{\\pi}_{(2)}(x))",
               config: "Workflow: .agents/workflows/active-learning-cycle.md",
             },
           },
           {
             data: {
               id: "dvc_ingestion",
-              label: "DVC Stage: ingestion\ns3_streamer & license_filter",
-              subtitle: "Zero-Copy S3 & Open License Gate",
+              label: "DVC Stage: ingest\ns3_streamer & inat_client",
+              subtitle: "Raw Ingestion & S3 Manifest",
               layer: "pipeline",
               col: 3,
               row: 1,
               role: "@mlops-data-engineer",
-              path: "scripts/ingest_data.py",
+              path: "src/taxon_vision/pipelines/ingest.py",
               description:
-                "Streams iNaturalist imagery (`inat_client.py`, `s3_streamer.py`) and enforces strict Creative Commons license filtering (`license_filter.py`).",
+                "Streams iNaturalist observation metadata and image assets from S3 Open Data into raw_manifest.parquet.",
               invariants:
-                "Admits strictly CC0, CC-BY, CC-BY-NC. Rejects all proprietary assets.",
-              config: "Tested in tests/unit/test_license_filter.py",
+                "Zero-copy streaming with SHA-256 asset verification.",
+              config: "Pipeline: src/taxon_vision/pipelines/ingest.py",
+            },
+          },
+          {
+            data: {
+              id: "dvc_audit_license",
+              label: "DVC Stage: audit_license\nlicense_filter.py",
+              subtitle: "Strict Open-License Compliance Gate",
+              layer: "pipeline",
+              col: 3,
+              row: 2,
+              role: "@mlops-data-engineer",
+              path: "src/taxon_vision/pipelines/audit_license.py",
+              description:
+                "Audits observation licenses and photographer attribution metadata, filtering out proprietary and non-commercial assets.",
+              invariants:
+                "Admits strictly CC0, CC-BY, CC-BY-NC observations into dataset_manifest.parquet.",
+              config: "Pipeline: src/taxon_vision/pipelines/audit_license.py",
             },
           },
           {
             data: {
               id: "pipeline_extract",
-              label: "Pipeline: extract_features\nBackbone Factory Cache",
-              subtitle: "DINOv3 / BioCLIP-2 Embeddings",
+              label: "DVC Stage: extract_features\nBackbone Factory Cache",
+              subtitle: "DINOv3 / BioCLIP-2 4-Way Splits",
               layer: "pipeline",
               col: 3,
-              row: 2,
+              row: 3,
               role: "@model-engineer",
               path: "src/taxon_vision/pipelines/extract_features.py",
               description:
-                "Extracts and caches feature tensors (`embeddings.py`) from frozen vision backbones (`models/factory.py`) so head training runs in seconds.",
-              invariants: "Deterministic split caching (train/val/calib/test).",
+                "Extracts and caches 4-way stratified zero-leakage feature tensors (train, val, cal, test) from frozen vision backbones.",
+              invariants: "Deterministic 4-way stratified zero-leakage split caching.",
               config: "Factory: src/taxon_vision/models/factory.py",
             },
           },
@@ -1938,7 +1954,7 @@
               subtitle: "Effective Sample Number Weighting",
               layer: "pipeline",
               col: 3,
-              row: 3,
+              row: 4,
               role: "@model-engineer",
               path: "src/taxon_vision/models/loss.py",
               description:
@@ -1947,7 +1963,7 @@
                 "Prevents majority taxa from dominating gradient updates.",
               formula:
                 "E_n = \\frac{1 - \\beta^n}{1 - \\beta}, \\quad \\mathcal{L}_{\\text{CB}} = -\\frac{1-\\beta}{1-\\beta^{n_y}} \\log(p_y)",
-              config: "Tested in tests/unit/test_class_balanced_loss.py",
+              config: "Tested in tests/unit/test_models_components.py",
             },
           },
           {
@@ -1957,7 +1973,7 @@
               subtitle: "Bayesian Hyperparameter Search",
               layer: "pipeline",
               col: 3,
-              row: 4,
+              row: 5,
               role: "@model-engineer",
               path: "src/taxon_vision/models/training/tuning.py",
               description:
@@ -1974,14 +1990,14 @@
               subtitle: "Classification Head Training",
               layer: "pipeline",
               col: 3,
-              row: 5,
+              row: 6,
               role: "@model-engineer",
-              path: "src/taxon_vision/models/training/runner.py",
+              path: "src/taxon_vision/pipelines/train.py",
               description:
-                "Trains the taxonomic classification head (`models/head.py`) with deterministic seeding and early stopping (`loops.py`, `checkpoint.py`).",
+                "Trains the taxonomic classification head (`models/head.py`) with Class-Balanced Loss, deterministic seeding, and early stopping.",
               invariants:
-                "Reproducible PRNG seeds locked in config/params.yaml.",
-              config: "Stage defined in dvc.yaml & dvc.lock",
+                "Produces calibrated head.pt checkpoint with locked PRNG seeds.",
+              config: "Stage defined in dvc.yaml & params.yaml",
             },
           },
           {
@@ -1991,7 +2007,7 @@
               subtitle: "Lineage, Metrics & Artifacts",
               layer: "pipeline",
               col: 3,
-              row: 6,
+              row: 7,
               role: "@mlops-data-engineer",
               path: "src/taxon_vision/models/training/tracking.py",
               description:
@@ -2005,31 +2021,67 @@
             data: {
               id: "dvc_export_onnx",
               label: "DVC Stage: export_onnx\nonnx_exporter & quantizer",
-              subtitle: "ONNX Graph & INT8 PTQ",
+              subtitle: "Dual-Output ONNX & INT8 PTQ",
               layer: "pipeline",
               col: 3,
-              row: 7,
+              row: 8,
               role: "@inference-optimizer",
-              path: "src/taxon_vision/inference/onnx_exporter.py",
+              path: "src/taxon_vision/pipelines/export_onnx.py",
               description:
-                "Exports trained PyTorch head and backbone to ONNX and applies static INT8 Post-Training Quantization (`quantizer.py`).",
-              invariants: "Verified numerical parity and static tensor shapes.",
-              config: "Modules: onnx_exporter.py & quantizer.py",
+                "Exports dual-output ONNX graph (logits + embeddings) with static INT8 QDQ Post-Training Quantization.",
+              invariants: "Verified numerical parity and logit-protecting hybrid quantization.",
+              config: "Pipeline: src/taxon_vision/pipelines/export_onnx.py",
+            },
+          },
+          {
+            data: {
+              id: "dvc_calibrate",
+              label: "DVC Stage: calibrate\nuncertainty/conformal.py",
+              subtitle: "Conformal & OOD Threshold Calibration",
+              layer: "pipeline",
+              col: 3,
+              row: 9,
+              role: "@uncertainty-safety-engineer",
+              path: "src/taxon_vision/pipelines/calibrate.py",
+              description:
+                "Calibrates Split Conformal prediction threshold q_hat, temperature scaling T, and thermodynamic OOD energy cutoff tau_ood.",
+              invariants:
+                "Computes finite-sample distribution-free prediction sets with guaranteed 1 - alpha coverage.",
+              formula:
+                "\\hat{q}_\\alpha = \\text{Quantile}\\left(s_1, \\dots, s_n; \\frac{\\lceil(n+1)(1-\\alpha)\\rceil}{n}\\right)",
+              config: "Pipeline: src/taxon_vision/pipelines/calibrate.py",
+            },
+          },
+          {
+            data: {
+              id: "dvc_evaluate",
+              label: "DVC Stage: evaluate\nreports/pareto_evaluation.json",
+              subtitle: "Holdout Metrics & Latency SLA Audit",
+              layer: "pipeline",
+              col: 3,
+              row: 10,
+              role: "@qa-automator",
+              path: "src/taxon_vision/pipelines/evaluate.py",
+              description:
+                "Evaluates Top-1/Top-3 accuracy, macro PR-AUC, empirical conformal coverage, and validates p95 latency against SLA gate.",
+              invariants:
+                "Guarantees empirical coverage >= 1 - alpha and p95 latency <= 25.0ms on test holdout.",
+              config: "Pipeline: src/taxon_vision/pipelines/evaluate.py",
             },
           },
           {
             data: {
               id: "artifact_onnx",
-              label: "ONNX Runtime Engine\nonnx_engine.py (model.onnx)",
+              label: "ONNX Runtime Engine\nonnx_engine.py (model_int8.onnx)",
               subtitle: "Zero-Allocation Production Artifact",
               layer: "pipeline",
               col: 3,
-              row: 8,
+              row: 11,
               role: "@inference-optimizer",
               path: "src/taxon_vision/inference/onnx_engine.py",
               description:
-                "Production C++ ONNX Runtime session delivering sub-25ms p95 inference latency back to the FastAPI serving layer.",
-              invariants: "p95 latency <= 25ms verified prior to deployment.",
+                "Production C++ ONNX Runtime session delivering <= 15ms p95 latency on GPU (<= 25ms p95 on CPU) back to the FastAPI serving layer.",
+              invariants: "Dual SLA: <= 15.0ms p95 bare-metal GPU target, <= 25.0ms CPU CI ceiling.",
               config: "Consumed by: src/taxon_vision/service/inference.py",
             },
           },
@@ -2222,8 +2274,16 @@
             data: {
               id: "e23",
               source: "dvc_ingestion",
+              target: "dvc_audit_license",
+              label: "raw_manifest.parquet",
+            },
+          },
+          {
+            data: {
+              id: "e_audit_extract",
+              source: "dvc_audit_license",
               target: "pipeline_extract",
-              label: "CC-licensed S3",
+              label: "dataset_manifest.parquet",
             },
           },
           {
@@ -2239,7 +2299,7 @@
               id: "e25",
               source: "pipeline_extract",
               target: "dvc_train",
-              label: "Cached splits",
+              label: "train/val splits",
             },
           },
           {
@@ -2280,6 +2340,46 @@
               source: "dvc_train",
               target: "dvc_export_onnx",
               label: "head.pt",
+            },
+          },
+          {
+            data: {
+              id: "e_cal_onnx",
+              source: "dvc_export_onnx",
+              target: "dvc_calibrate",
+              label: "model_int8.onnx",
+            },
+          },
+          {
+            data: {
+              id: "e_cal_extract",
+              source: "pipeline_extract",
+              target: "dvc_calibrate",
+              label: "cal_embeddings.pt",
+            },
+          },
+          {
+            data: {
+              id: "e_cal_conformal",
+              source: "dvc_calibrate",
+              target: "conformal_engine",
+              label: "q_hat cutoff",
+            },
+          },
+          {
+            data: {
+              id: "e_eval_cal",
+              source: "dvc_calibrate",
+              target: "dvc_evaluate",
+              label: "Thresholds",
+            },
+          },
+          {
+            data: {
+              id: "e_eval_test",
+              source: "pipeline_extract",
+              target: "dvc_evaluate",
+              label: "test_embeddings.pt",
             },
           },
           {
@@ -2853,15 +2953,15 @@
         if (isOod) {
           banner.className = "sim-verdict ood";
           banner.innerText = `OOD DIVERGENT SPECIMEN • Energy E(x) = ${energy.toFixed(2)} > -4.50 • Routed to Human Triage`;
-          telemetryOut.innerHTML = `<code>is_ood = True | requires_human_review = True<br>taxon_predictions_total{status="ood_divergent"} += 1<br>taxon_human_referrals_active.inc()</code>`;
+          telemetryOut.innerHTML = `<code>is_ood = True | requires_human_review = True (Staged to .npy + manifest.jsonl via service/storage.py)<br>taxon_predictions_total{status="ood_divergent"} += 1<br>taxon_human_referrals_active.inc()</code>`;
         } else if (cardinality === 0) {
           banner.className = "sim-verdict refer";
           banner.innerText = `EMPTY PREDICTION SET (|C(x)| = 0) • All 1 - p_i > q_hat • Routed to Human Triage`;
-          telemetryOut.innerHTML = `<code>is_ood = False | requires_human_review = True (Empty Set)<br>taxon_predictions_total{status="needs_review"} += 1<br>taxon_human_referrals_active.inc()</code>`;
+          telemetryOut.innerHTML = `<code>is_ood = False | requires_human_review = True (Empty Set; Staged to .npy + manifest.jsonl via service/storage.py)<br>taxon_predictions_total{status="needs_review"} += 1<br>taxon_human_referrals_active.inc()</code>`;
         } else if (cardinality > 3) {
           banner.className = "sim-verdict refer";
           banner.innerText = `AMBIGUOUS PREDICTION SET (|C(x)| = ${cardinality} > k_max = 3) • Routed to Human Triage`;
-          telemetryOut.innerHTML = `<code>is_ood = False | requires_human_review = True (Cardinality > 3)<br>taxon_predictions_total{status="needs_review"} += 1<br>taxon_human_referrals_active.inc()</code>`;
+          telemetryOut.innerHTML = `<code>is_ood = False | requires_human_review = True (Cardinality > 3; Staged to .npy + manifest.jsonl via service/storage.py)<br>taxon_predictions_total{status="needs_review"} += 1<br>taxon_human_referrals_active.inc()</code>`;
         } else {
           banner.className = "sim-verdict pass";
           banner.innerText = `AUTO-ASSIGNED • |C(x)| = ${cardinality} <= k_max (3) • Guaranteed 95% Marginal Coverage`;
@@ -2921,6 +3021,45 @@
         initCytoscape();
         renderModelCards();
         updateSimulatorWorkbench();
+
+        // Dynamic fetch of assets/pareto_results.json (fallback to PARETO_RAW)
+        const fetchParetoData = () => {
+          const tryFetch = (url) =>
+            fetch(url).then((res) => {
+              if (!res.ok) throw new Error("HTTP " + res.status);
+              return res.json();
+            });
+
+          tryFetch("assets/pareto_results.json")
+            .catch(() => tryFetch("../assets/pareto_results.json"))
+            .catch(() => tryFetch("/taxon-vision-mlops/assets/pareto_results.json"))
+            .then((jsonData) => {
+              if (Array.isArray(jsonData) && jsonData.length > 0) {
+                jsonData.forEach((item) => {
+                  const match = PARETO_RAW.find((d) => d.extractor === item.extractor);
+                  if (match) {
+                    if (item.p50_latency_ms !== undefined) match.p50_latency_ms = item.p50_latency_ms;
+                    if (item.p95_latency_ms !== undefined) match.p95_latency_ms = item.p95_latency_ms;
+                    if (item.throughput_fps !== undefined) match.throughput_fps = item.throughput_fps;
+                    if (item.cost_per_million_usd !== undefined) match.cost_per_million_usd = item.cost_per_million_usd;
+                    if (item.vram_peak_mb !== undefined) match.vram_peak_mb = item.vram_peak_mb;
+                    if (item.parameters_m !== undefined) match.parameters_m = item.parameters_m;
+                    if (item.accuracy_score !== undefined) match.accuracy_score = item.accuracy_score;
+                    if (item.canonical_baseline !== undefined) match.canonical_baseline = item.canonical_baseline;
+                  }
+                });
+                renderModelCards();
+                const paretoView = document.getElementById("pareto-view");
+                if (paretoView && paretoView.classList.contains("active")) {
+                  renderPlotlyCharts();
+                }
+              }
+            })
+            .catch((err) => {
+              console.debug("pareto_results.json not fetched, using PARETO_RAW fallback", err);
+            });
+        };
+        fetchParetoData();
 
         // Default populate inspector data without covering the canvas initially
         const defaultNode = cy ? cy.$("#route_predict") : null;

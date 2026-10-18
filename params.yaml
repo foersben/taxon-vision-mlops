@@ -1,0 +1,42 @@
+ingestion:
+  taxa_to_fetch:
+    - 48662  # Danaus plexippus (Monarch Butterfly)
+    - 47219  # Apis mellifera (Western Honey Bee)
+    - 12727  # Turdus migratorius (American Robin)
+    - 8229   # Cyanocitta cristata (Blue Jay)
+    - 47602  # Taraxacum officinale (Common Dandelion)
+    - 57983  # Helianthus annuus (Common Sunflower)
+    - 47144  # Canis lupus (Gray Wolf)
+    - 42069  # Vulpes vulpes (Red Fox)
+    - 48715  # Amanita muscaria (Fly Agaric)
+    - 48701  # Boletus edulis (King Bolete)
+  per_page: 200
+
+model:
+  extractor: "dinov3"
+  image_size: 224
+
+feature_extraction:
+  batch_size: 32
+  val_split: 0.10
+  cal_split: 0.10
+  test_split: 0.10
+
+training:
+  epochs: 5
+  batch_size: 32
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  cb_beta: 0.9999
+  tune: false
+
+export:
+  quantize_int8: true
+
+conformal:
+  alpha: 0.05
+  min_confidence: 0.60
+  ood_tpr: 0.95
+
+evaluation:
+  latency_sla_ms: 25.0

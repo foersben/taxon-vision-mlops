@@ -32,14 +32,14 @@
     },
     {
       "id": "claim_0c65353da7ff49faa62829d99a5ec165",
-      "statement": "scripts/calibrate_conformal.py computes the empirical non-conformity quantile cutoff q_hat on holdout validation data using the higher order statistic at level ceil((n + 1)(1 - alpha)) / n, serializing calibration metadata for inference serving.",
+      "statement": "The calibration pipeline (src/taxon_vision/pipelines/calibrate.py) computes the empirical non-conformity quantile cutoff q_hat and Helmholtz OOD energy threshold on holdout calibration data (cal_embeddings.pt), serializing calibration parameters to config/conformal_config.yaml.",
       "evidence": [
         {
-          "resource": "repo://scripts/calibrate_conformal.py#L107-L121",
+          "resource": "repo://src/taxon_vision/pipelines/calibrate.py#L107-L121",
           "version": "repo-lines-v1:sha256:28065b71a32528ecca953f5bcc970d0de536df43d1809c4243a3ab1b44e2a9c8:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZiM2VmYjMxOGQyMjk4YTc2MDhlY2ExYmNmMWU0MDEzYzQ3OTFiNzA0MzRiYTZkOWJiOWFmNGI2OTIzYjhjZDIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZhOTcwNmM3N2IyNDEzYmZjZDJmNjIyNWIyOWNlNmE0YzMyZjc2MDExMDdhYmY3NGJiYThlYWI2Njc1NDZmODYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY5ZTRhNGM4NzQwZWMxZTY0OTljZWMxMjIxYTcyNTA3YTRiMmQ2MmE3ZGFjOWUwMjA0YWY3NTNkMTg4YTc4NjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNkNDEzNDBjYzIzOWExNTljZTliNjAyMmU5ZjYzMjI4MzJlMmVhZDc2Y2FlOWU0NzU0ZDIxMGViOGZiNmQ1ZTgifQ"
         },
         {
-          "resource": "repo://scripts/calibrate_conformal.py#L26-L50",
+          "resource": "repo://src/taxon_vision/pipelines/calibrate.py#L26-L50",
           "version": "repo-lines-v1:sha256:a8c50dbe90d540c72782784a4e181ff8c43f8aa0c2c18e4cc96714da616a7601:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIzNjkxNzViZTZkZWVhMDU1N2ZkNzlkOGY0NjgyOWRlN2Q3ZTkxOTRkMDUyMmEwMGM0MDlkMGVkNDUyMjQ4NzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYyMDA5N2U0YWE1MDA2OGJhMTU3ZjlhMjczOWZhZDg2OTk1ZTFlMGNkY2NkYWRjNTg5N2MyMDM0Yzc0ZDNlZmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYwODcxMWU0ZmRjOWJiN2RhMzgxNmJkOWRhNTBmZTNlZmJiMGIzNThjZDVhYTQ5YmQ2ZWE4YzkzODhlNTdhMDgifQ"
         }
       ]

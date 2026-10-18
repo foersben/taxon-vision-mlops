@@ -1,0 +1,880 @@
+% Chapter 5: The Epistemic Diamond DVC DAG & DagsHub Data Pipeline
+% ---------------------------------------------------------------------
+
+\begin{frame}[plain]
+    \vfill
+    \centering
+    {\footnotesize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
+    {\large \textbf{\textcolor{signalorange}{CHAPTER 05}}} \\[0.25cm]
+    {\huge \textbf{The Epistemic Diamond DVC DAG \& DagsHub Pipeline}} \\[0.35cm]
+    {\normalsize \textcolor{black!70}{Reproducible Lineage, Content-Addressable Storage \& Seven Canonical Stages}} \\[0.5cm]
+    \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
+    \statusdone
+    \vfill
+    \script{Welcome to Chapter 5. In this chapter, we explore the heartbeat of our MLOps system: the Epistemic Diamond DVC pipeline. We will trace every single stage, file, parameter, and metric that guarantees mathematical safety and total reproducibility across our data tier.}
+    \qa{Why do we refer to our pipeline as the Epistemic Diamond?}{Because it expands from a single raw dataset manifest into four strictly isolated split tensors for feature caching, and then contracts into a single validated, calibrated ONNX runtime package without data leakage.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 2A: Pipeline Topology (1/3): Macro Architecture
+% ---------------------------------------------------------------------
+\begin{frame}{Pipeline Topology (1/3)}{The 7-Stage Epistemic Diamond Macro Architecture}
+    \begin{center}
+        \resizebox{0.96\textwidth}{!}{%
+        \begin{tikzpicture}[
+            >=stealth, thick,
+            stg/.style={rectangle, rounded corners=3pt, fill=signalorange!15, draw=signalorange!85, text=black, font=\scriptsize\bfseries, inner sep=3.5pt, align=center},
+            art/.style={rectangle, rounded corners=3pt, fill=deepblue!12, draw=deepblue!75, text=deepblue!90!black, font=\tiny\ttfamily, inner sep=2.5pt, align=center},
+            tns/.style={rectangle, rounded corners=3pt, fill=plantgreen!12, draw=plantgreen!80, text=plantgreen!80!black, font=\tiny\ttfamily, inner sep=2.5pt, align=center},
+            arr/.style={->, draw=gray!70, semithick}
+        ]
+            % Upstream Ingestion & Invariant Audit (Top Row: Stages 1-3)
+            \node[stg] (s1) at (-6.2, 1.6) {Stage 1: Ingestion\\[1pt]\tiny\texttt{pipelines.ingest}};
+            \node[art] (raw) at (-3.1, 1.6) {raw\_manifest\\[1pt].parquet};
+            \node[stg] (s2) at (0.0, 1.6) {Stage 2: Audit\\[1pt]\tiny\texttt{pipelines.audit\_license}};
+            \node[art] (clean) at (3.1, 1.6) {dataset\_manifest\\[1pt].parquet};
+            \node[stg] (s3) at (6.2, 1.6) {Stage 3: Feature Extr.\\[1pt]\tiny\texttt{pipelines.extract\_features}};
+
+            % Diamond Fan-Out: 4 Split Tensors (Vertical pitch = 1.25cm)
+            \node[tns] (tr)  at (-3.8,  0.20) {train\_embeddings.pt};
+            \node[tns] (val) at (-3.8, -1.05) {val\_embeddings.pt};
+            \node[tns] (cal) at (-3.8, -2.30) {cal\_embeddings.pt};
+            \node[tns] (tst) at (-3.8, -3.55) {test\_embeddings.pt};
+
+            % Downstream Training & Convergence (Stages 4-7 and Output Artifacts)
+            \node[stg] (s4)   at (0.2,  0.20) {Stage 4: Train\\[1pt]\tiny\texttt{pipelines.train}};
+            \node[art] (head) at (4.3,  0.20) {models/checkpoints/\\[1pt]\textbf{head.pt}};
+
+            \node[stg] (s5)   at (0.2, -1.05) {Stage 5: Export\\[1pt]\tiny\texttt{pipelines.export\_onnx}};
+            \node[art] (onnx) at (4.3, -1.05) {models/checkpoints/\\[1pt]\textbf{model\_int8.onnx}};
+
+            \node[stg] (s6)   at (0.2, -2.30) {Stage 6: Calibrate\\[1pt]\tiny\texttt{pipelines.calibrate}};
+            \node[art] (conf) at (4.3, -2.30) {config/\\[1pt]\textbf{conformal\_config.yaml}};
+
+            \node[stg] (s7)   at (0.2, -3.55) {Stage 7: Eval\\[1pt]\tiny\texttt{pipelines.evaluate}};
+            \node[art] (eval) at (4.3, -3.55) {reports/\\[1pt]\textbf{pareto\_evaluation.json}};
+
+            % Connectors Upstream (Linear Top Row)
+            \draw[arr] (s1) -- (raw);
+            \draw[arr] (raw) -- (s2);
+            \draw[arr] (s2) -- (clean);
+            \draw[arr] (clean) -- (s3);
+
+            % Connector from Stage 3 to Diamond Split Tensors (Single clean trunk)
+            \draw[semithick, draw=gray!70] (s3.south) -- ++(0,-0.4) -| (-5.8, -3.55);
+            \draw[arr] (-5.8,  0.20) -- (tr.west);
+            \draw[arr] (-5.8, -1.05) -- (val.west);
+            \draw[arr] (-5.8, -2.30) -- (cal.west);
+            \draw[arr] (-5.8, -3.55) -- (tst.west);
+
+            % Downstream Connections: Strictly Horizontal Data Inputs
+            \draw[arr] (tr.east)  -- (s4.west);
+            \draw[arr] (val.east) -- ++(0.6,0) |- ([yshift=-5pt]s4.west);
+            \draw[arr] (cal.east) -- (s6.west);
+            \draw[arr] (tst.east) -- (s7.west);
+
+            % Downstream Artifact Production
+            \draw[arr] (s4) -- (head);
+            \draw[arr] (s5) -- (onnx);
+            \draw[arr] (s6) -- (conf);
+            \draw[arr] (s7) -- (eval);
+
+            % Head Checkpoint feeds Stage 5 (Clear alley at y = -0.42)
+            \draw[arr] (head.south) -- (4.3, -0.42) -| (s5.north);
+
+            % ONNX Model Distribution: Drops into clear channel x = 2.25 and enters s6.north & s7.north
+            \draw[semithick, draw=gray!70] (onnx.south) -- (4.3, -1.68) -- (2.25, -1.68) -- (2.25, -2.92);
+            \draw[arr] (2.25, -1.68) -| (s6.north);
+            \draw[arr] (2.25, -2.92) -| (s7.north);
+        \end{tikzpicture}%
+        }
+    \end{center}
+    \vspace{-0.1cm}
+    \script{Here is the macro architecture of the Epistemic Diamond DVC pipeline. Notice the distinctive expansion-contraction diamond topology: single-stream ingestion expands into four strictly partitioned embedding tensors, and then converges into our validated, calibrated ONNX runtime package without data leakage.}
+    \qa{Why do we refer to our pipeline as the Epistemic Diamond?}{Because it expands from a single raw dataset manifest into four strictly isolated split tensors for feature caching, and then contracts into a single validated, calibrated ONNX runtime package without data leakage.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 2B: Pipeline Topology (2/3): Upstream Lineage (Stages 1–3)
+% ---------------------------------------------------------------------
+\begin{frame}{Pipeline Topology (2/3)}{Upstream Data \& Feature Extraction Lineage (Stages 1--3)}
+    \begin{center}
+        \resizebox{0.96\textwidth}{!}{%
+        \begin{tikzpicture}[
+            >=stealth, thick,
+            gitnode/.style={rectangle, rounded corners=3pt, fill=teal!15, draw=teal!80, text=teal!70!black, font=\tiny\ttfamily, inner sep=2.5pt, align=center},
+            stagenode/.style={rectangle, rounded corners=3pt, fill=signalorange!15, draw=signalorange!85, text=black, font=\scriptsize\bfseries, inner sep=3.5pt, align=center},
+            dvcnode/.style={rectangle, rounded corners=3pt, fill=deepblue!12, draw=deepblue!75, text=deepblue!90!black, font=\tiny\ttfamily, inner sep=2.5pt, align=center},
+            metricnode/.style={rectangle, rounded corners=3pt, fill=magenta!15, draw=magenta!75, text=magenta!80!black, font=\tiny\ttfamily, inner sep=2.5pt, align=center},
+            tnsnode/.style={rectangle, rounded corners=3pt, fill=plantgreen!12, draw=plantgreen!80, text=plantgreen!80!black, font=\tiny\ttfamily, inner sep=2.5pt, align=center},
+            edge/.style={->, draw=gray!70, semithick}
+        ]
+            % Stage 1: Ingestion
+            \node[gitnode] (g1) at (-4.2, 1.5) {taxa\_catalog.yaml\\inat\_client.py\\pipelines/ingest.py};
+            \node[gitnode] (p1) at (-4.2, 0.4) {params.yaml\\[1pt]\tiny\texttt{ingestion.*}};
+            \node[stagenode] (s1) at (-4.2, -0.6) {Stage 1: Ingestion\\[1pt]\tiny\texttt{pipelines.ingest}};
+            \node[dvcnode] (raw) at (-4.2, -1.7) {data/manifests/\\[1pt]\textbf{raw\_manifest.parquet}};
+
+            \draw[edge] (g1) -- (p1);
+            \draw[edge] (p1) -- (s1);
+            \draw[edge] (s1) -- (raw);
+
+            % Stage 2: Audit License
+            \node[gitnode] (g2) at (0.0, 1.5) {license\_filter.py\\domain/license.py\\pipelines/audit\_license.py};
+            \node[stagenode] (s2) at (0.0, -0.6) {Stage 2: Audit License\\[1pt]\tiny\texttt{pipelines.audit\_license}};
+            \node[dvcnode] (clean) at (0.0, -1.7) {data/manifests/\\[1pt]\textbf{dataset\_manifest.parquet}};
+            \node[metricnode] (m2) at (0.0, -2.7) {reports/\\[1pt]\textbf{license\_audit.json}};
+
+            \draw[edge] (raw.east) -- ++(0.4,0) |- (s2.west);
+            \draw[edge] (g2) -- (s2);
+            \draw[edge] (s2) -- (clean);
+            \draw[edge] (clean) -- (m2);
+
+            % Stage 3: Feature Extraction
+            \node[gitnode] (g3) at (4.5, 1.5) {s3\_streamer.py\\models/factory.py\\pipelines/extract\_features.py};
+            \node[gitnode] (p3) at (4.5, 0.4) {params.yaml\\[1pt]\tiny\texttt{feature\_extraction.*}};
+            \node[stagenode] (s3) at (4.5, -0.6) {Stage 3: Extract Features\\[1pt]\tiny\texttt{pipelines.extract\_features}};
+
+            \draw[edge] (clean.east) -- ++(0.4,0) |- (s3.west);
+            \draw[edge] (g3) -- (p3);
+            \draw[edge] (p3) -- (s3);
+
+            % Stage 3 Outputs: 4 Split Tensors
+            \node[tnsnode] (t_tr) at (8.0, 0.6) {train\_embeddings.pt};
+            \node[tnsnode] (t_val) at (8.0, -0.2) {val\_embeddings.pt};
+            \node[tnsnode] (t_cal) at (8.0, -1.0) {cal\_embeddings.pt};
+            \node[tnsnode] (t_tst) at (8.0, -1.8) {test\_embeddings.pt};
+
+            \draw[edge] (s3.east) -- ++(0.2,0) |- (t_tr.west);
+            \draw[edge] (s3.east) -- ++(0.2,0) |- (t_val.west);
+            \draw[edge] (s3.east) -- ++(0.2,0) |- (t_cal.west);
+            \draw[edge] (s3.east) -- ++(0.2,0) |- (t_tst.west);
+        \end{tikzpicture}%
+        }
+    \end{center}
+    \vspace{-0.1cm}
+    \script{In this upstream lineage view, we trace Stages 1 through 3. Ingestion queries iNaturalist without downloading images, packaging URLs into raw\_manifest.parquet. Stage 2 enforces our strict open-license whitelist, producing dataset\_manifest.parquet. Stage 3 then streams image bytes into GPU memory, caching 768-dimensional embeddings across four isolated splits in SeaweedFS S3.}
+    \qa{Why are raw images not downloaded to disk during ingestion?}{Storing URLs keeps raw\_manifest.parquet under 500 KB and delays image streaming directly to feature extraction, avoiding the massive disk overhead of storing thousands of intermediate JPEG files.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 2C: Pipeline Topology (3/3): Downstream Lineage (Stages 4–7)
+% ---------------------------------------------------------------------
+\begin{frame}{Pipeline Topology (3/3)}{Downstream Training, Export, Calibration \& Eval Lineage (Stages 4--7)}
+    \begin{center}
+        \resizebox{0.96\textwidth}{!}{%
+        \begin{tikzpicture}[
+            >=stealth, thick,
+            gitnode/.style={rectangle, rounded corners=3pt, fill=teal!15, draw=teal!80, text=teal!70!black, font=\tiny\ttfamily, inner sep=2.5pt, align=center},
+            stagenode/.style={rectangle, rounded corners=3pt, fill=signalorange!15, draw=signalorange!85, text=black, font=\scriptsize\bfseries, inner sep=3.5pt, align=center},
+            dvcnode/.style={rectangle, rounded corners=3pt, fill=deepblue!12, draw=deepblue!75, text=deepblue!90!black, font=\tiny\ttfamily, inner sep=2.5pt, align=center},
+            metricnode/.style={rectangle, rounded corners=3pt, fill=magenta!15, draw=magenta!75, text=magenta!80!black, font=\tiny\ttfamily, inner sep=2.5pt, align=center},
+            tnsnode/.style={rectangle, rounded corners=3pt, fill=plantgreen!12, draw=plantgreen!80, text=plantgreen!80!black, font=\tiny\ttfamily, inner sep=2.5pt, align=center},
+            edge/.style={->, draw=gray!70, semithick}
+        ]
+            % Split Tensors on Left
+            \node[tnsnode] (in_tr)  at (-5.0,  1.85) {train\_embeddings.pt};
+            \node[tnsnode] (in_val) at (-5.0,  0.95) {val\_embeddings.pt};
+            \node[tnsnode] (in_cal) at (-5.0, -0.75) {cal\_embeddings.pt};
+            \node[tnsnode] (in_tst) at (-5.0, -2.55) {test\_embeddings.pt};
+
+            % Stage 4: Train
+            \node[stagenode]  (s4)   at (-1.8,  1.40) {Stage 4: Train\\[1pt]\tiny\texttt{pipelines.train}};
+            \node[dvcnode]    (head) at ( 1.65, 1.85) {models/checkpoints/\\[1pt]\textbf{head.pt}};
+            \node[metricnode] (m4)   at ( 1.65, 0.95) {reports/\\[1pt]\textbf{train\_metrics.json}};
+
+            \draw[edge] (in_tr.east)  -- ++(0.35,0) |- ([yshift=4pt]s4.west);
+            \draw[edge] (in_val.east) -- ++(0.35,0) |- ([yshift=-4pt]s4.west);
+            \draw[edge] (s4.east) -- ++(0.35,0) |- (head.west);
+            \draw[edge] (s4.east) -- ++(0.35,0) |- (m4.west);
+
+            % Stage 5: Export ONNX
+            \node[stagenode] (s5)   at (4.5, 1.85) {Stage 5: Export\\[1pt]\tiny\texttt{pipelines.export\_onnx}};
+            \node[dvcnode]   (onnx) at (7.3, 1.85) {models/checkpoints/\\[1pt]\textbf{model\_int8.onnx}};
+
+            \draw[edge] (head.east) -- (s5.west);
+            \draw[edge] (s5.east)   -- (onnx.west);
+
+            % Stage 6: Calibrate
+            \node[stagenode]  (s6)   at (-1.8, -0.75) {Stage 6: Calibrate\\[1pt]\tiny\texttt{pipelines.calibrate}};
+            \node[metricnode] (m6)   at ( 1.65, -0.35) {reports/\\[1pt]\textbf{conformal\_metrics.json}};
+            \node[gitnode]    (conf) at ( 1.65, -1.15) {config/\\[1pt]\textbf{conformal\_config.yaml}};
+
+            \draw[edge] (in_cal.east) -- (s6.west);
+            \draw[edge] (s6.east) -- ++(0.35,0) |- (m6.west);
+            \draw[edge] (s6.east) -- ++(0.35,0) |- (conf.west);
+
+            % Stage 7: Evaluate
+            \node[stagenode]  (s7)     at (-1.8, -2.55) {Stage 7: Evaluate\\[1pt]\tiny\texttt{pipelines.evaluate}};
+            \node[metricnode] (m7)     at ( 1.65, -2.15) {reports/\\[1pt]\textbf{pareto\_evaluation.json}};
+            \node[gitnode]    (docres) at ( 1.65, -2.95) {docs/assets/\\[1pt]\textbf{pareto\_results.json}};
+
+            \draw[edge] (in_tst.east) -- (s7.west);
+            \draw[edge] (conf.south)  -- (1.65, -1.65) -| (s7.north);
+            \draw[edge] (s7.east) -- ++(0.35,0) |- (m7.west);
+            \draw[edge] (s7.east) -- ++(0.35,0) |- (docres.west);
+
+            % Dedicated ONNX Distribution Bus: Explicit corridor at y = 0.15 and x = -3.4
+            \draw[semithick, draw=gray!70] (onnx.south) -- (7.3, 0.15) -- (-3.4, 0.15) -- (-3.4, -2.40);
+            \draw[edge] (-3.4, -0.60) -- ([yshift=4pt]s6.west);
+            \draw[edge] (-3.4, -2.40) -- ([yshift=4pt]s7.west);
+        \end{tikzpicture}%
+        }
+    \end{center}
+    \vspace{-0.1cm}
+    \script{This downstream lineage view covers Stages 4 through 7. The linear head trains on cached embeddings in under two seconds. Stage 5 fuses and quantizes the model to INT8 ONNX. Stage 6 uses the untouched calibration split to compute conformal quantile thresholds. Finally, Stage 7 validates empirical coverage and enforces the sub-15ms latency SLA on holdout test data.}
+    \qa{How does the downstream DAG enforce mathematical isolation against data leakage?}{The calibration split cal\_embeddings.pt is strictly inaccessible to Stage 4 and Stage 5. It is consumed solely by Stage 6 to calculate distribution-free conformal bounds, guaranteeing that the model has never adapted to calibration samples.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 4: Artifact Inventory (1/2): Manifests & Feature Tensors
+% ---------------------------------------------------------------------
+\begin{frame}{Artifact Inventory (1/2)}{DVC-Managed Manifests \& High-Dimensional Tensors}
+    \vspace{-0.2cm}
+    \begin{center}\scriptsize\renewcommand{\arraystretch}{0.80}
+        \begin{tabular}{>{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}p{2.3cm} >{\raggedright\arraybackslash}p{1.4cm} >{\raggedright\arraybackslash}p{1.5cm} >{\raggedright\arraybackslash}p{2.5cm}}
+            \toprule
+            \textbf{DVC Artifact Path} & \textbf{Data Format} & \textbf{Producer} & \textbf{Consumers} & \textbf{Storage Tier / Remote} \\
+            \midrule
+            \texttt{data/manifests/} \newline \texttt{raw\_manifest.parquet} & Arrow IPC \newline Parquet (Snappy) & \texttt{ingestion} & \texttt{audit\_} \newline \texttt{license} & Host NVMe SSD \newline (Local DVC cache) \\
+            \midrule
+            \texttt{data/manifests/} \newline \texttt{dataset\_manifest.parquet} & Filtered Parquet \newline (100\% CC-open) & \texttt{audit\_} \newline \texttt{license} & \texttt{extract\_} \newline \texttt{features} & Host NVMe SSD \newline (Local DVC cache) \\
+            \midrule
+            \texttt{data/embeddings/} \newline \texttt{train\_embeddings.pt} \newline \texttt{val\_embeddings.pt} & PyTorch Tensor \newline $[N, 768]$ float32 & \texttt{extract\_} \newline \texttt{features} & \texttt{train} & SeaweedFS S3 Edge \newline (\texttt{remote: local-seaweedfs}) \\
+            \midrule
+            \texttt{data/embeddings/} \newline \texttt{cal\_embeddings.pt} \newline \texttt{test\_embeddings.pt} & PyTorch Tensor \newline $[N, 768]$ float32 & \texttt{extract\_} \newline \texttt{features} & \texttt{calibrate}, \newline \texttt{eval} & SeaweedFS S3 Edge \newline (\texttt{remote: local-seaweedfs}) \\
+            \bottomrule
+        \end{tabular}
+    \end{center}
+
+    \script{This slide documents our foundational dataset manifests and high-dimensional embedding tensors. Large embedding tensors are pushed to SeaweedFS S3 to enable zero-egress, microsecond reads during model training.}
+    \qa{Why do we push embedding tensors to SeaweedFS rather than DagsHub?}{Embeddings can exceed several gigabytes across large catalogs. Caching them in bare-metal SeaweedFS avoids multi-gigabyte internet egress and enables microsecond reads during training.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 5: Artifact Inventory (2/2): Checkpoints, Engines & Metrics
+% ---------------------------------------------------------------------
+\begin{frame}{Artifact Inventory (2/2)}{DVC Checkpoints, Compiled Engines \& Metrics}
+    \vspace{-0.25cm}
+    \begin{center}\scriptsize\renewcommand{\arraystretch}{0.80}
+        \begin{tabular}{>{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}p{2.3cm} >{\raggedright\arraybackslash}p{1.4cm} >{\raggedright\arraybackslash}p{1.5cm} >{\raggedright\arraybackslash}p{2.5cm}}
+            \toprule
+            \textbf{DVC Artifact Path} & \textbf{Data Format} & \textbf{Producer} & \textbf{Consumers} & \textbf{Storage Tier / Remote} \\
+            \midrule
+            \texttt{models/checkpoints/} \newline \texttt{head.pt} & PyTorch StateDict \newline $W \in \mathbb{R}^{K \times 768}, b \in \mathbb{R}^K$ & \texttt{train} & \texttt{export} & DagsHub Release S3 \newline (\texttt{remote: origin}) \\
+            \midrule
+            \texttt{models/checkpoints/} \newline \texttt{model\_int8.onnx} & Quantized Graph \newline INT8/FP32 Operators & \texttt{export} & \texttt{calibrate}, \newline \texttt{eval}, \texttt{service} & DagsHub Release S3 \newline (\texttt{remote: origin}) \\
+            \midrule
+            \texttt{config/} \newline \texttt{conformal\_config.yaml} & YAML Manifest \newline $\hat{q}$, $\tau_{\text{ood}}$, $\alpha$ & \texttt{calibrate} & \texttt{eval}, \newline \texttt{service} & Git Repository \newline (Source-controlled) \\
+            \midrule
+            \texttt{reports/*.json} \newline (Audit, Train, Conf, Eval) & JSON Payload \newline Schema-validated & Stages \newline 2, 4, 6, 7 & Quality Gates \newline \& DagsHub UI & DVC Metrics / Git \newline (\texttt{cache: false}) \\
+            \bottomrule
+        \end{tabular}
+    \end{center}
+
+    \script{Here we catalog our downstream model artifacts and metrics. Checkpoints and quantized ONNX graphs are synchronized to DagsHub, while calibration thresholds and summary metrics are version-controlled alongside application code.}
+    \qa{Why is conformal\_config.yaml committed to Git instead of DVC?}{Because runtime inference services require the calibration thresholds to execute conformal guarantees. Committing the YAML to Git allows Docker serving containers to build without pulling multi-gigabyte DVC remotes.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 5: Complete Inventory of Every Git-Managed File in Pipeline
+% ---------------------------------------------------------------------
+\begin{frame}{Version Control Topology}{Git-Tracked Pipeline Assets \& DagsHub Parameter Badges}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Git-Tracked Configuration Manifests}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{params.yaml}:} Authoritative single source of truth for algorithmic constants (7 stages, 17 parameter keys).
+                    \item \textbf{\texttt{config/taxa\_catalog.yaml}:} DarwinCore species catalog mapping class names to taxonomic keys.
+                    \item \textbf{\texttt{config/conformal\_config.yaml}:} Runtime uncertainty thresholds ($\hat{q}$, $\tau_{\text{ood}}$) committed directly to Git.
+                    \item \textbf{\texttt{docs/assets/pareto\_results.json}:} Interactive front-end visualizer asset versioned with documentation.
+                    \item \textbf{\texttt{dvc.yaml} \& \texttt{dvc.lock}:} Declarative pipeline stage specifications and content hash snapshots.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Key-Level Parameter Tracking Architecture}
+                \begin{itemize}\scriptsize
+                    \item \textbf{DVC Parameter Granularity:}
+                        Stages declare dependencies on specific parameter paths (e.g., \texttt{model.extractor}, \texttt{training.cb\_beta}).
+                    \item \textbf{DagsHub Root Badge:}
+                        Because multiple stages bind to nested keys of \texttt{params.yaml}, DagsHub automatically renders \texttt{params.yaml} as a root badge at the top of the DAG.
+                    \item \textbf{Selective Stage Invalidation:}
+                        Tuning \texttt{training.learning\_rate} invalidates only \texttt{train}, \texttt{export}, \texttt{calibrate}, and \texttt{eval}, leaving expensive feature extraction fully cached.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+
+    \script{DVC allows fine-grained parameter tracking. In dvc.yaml, stages depend on individual parameter keys inside params.yaml. In the DagsHub visualizer, this renders params.yaml as an overarching root dependency badge.}
+    \qa{What is the primary advantage of key-level parameter tracking?}{It isolates changes. If an engineer modifies training epochs, DVC knows that feature extraction does not depend on epochs and skips the entire multi-minute feature extraction stage.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 7: Stage 1 Deep-Dive: Data Ingestion
+% ---------------------------------------------------------------------
+\begin{frame}{Stage 1 Deep-Dive}{\texttt{ingestion}: Citizen-Science Querying \& Raw Manifest Creation}
+    \vspace{-0.2cm}
+    \begin{center}
+    \resizebox{0.95\textwidth}{!}{%
+    \begin{tikzpicture}[
+        box/.style={rectangle, rounded corners=3pt, draw=deepblue!70, fill=deepblue!8, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        stg/.style={rectangle, rounded corners=3pt, draw=signalorange!90, fill=signalorange!15, font=\tiny\bfseries\sffamily, align=center, inner sep=4pt},
+        outbox/.style={rectangle, rounded corners=3pt, draw=plantgreen!80, fill=plantgreen!10, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        arr/.style={-stealth, thick, draw=gray!70}
+    ]
+        \node[box] (deps) {\textbf{Stage Inputs \& Tracked Params}\\[1pt]\texttt{config/taxa\_catalog.yaml} $\cdot$ \texttt{inat\_client.py} $\cdot$ \texttt{params: per\_page, taxa\_to\_fetch}};
+        \node[stg, right=0.6cm of deps] (stage) {\textsc{Stage 1: Ingestion}\\[1pt]\texttt{pipelines.ingest}};
+        \node[outbox, right=0.6cm of stage] (outs) {\textbf{Outputs \& Metrics}\\[1pt]\texttt{data/manifests/raw\_manifest.parquet} (Snappy)};
+        \draw[arr] (deps) -- (stage);
+        \draw[arr] (stage) -- (outs);
+    \end{tikzpicture}%
+    }
+    \end{center}
+    \vspace{-0.2cm}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{DVC Stage Declaration (\texttt{dvc.yaml})}
+                \begin{itemize}\scriptsize
+                    \item \textbf{CLI Invocation:}
+                        \texttt{pixi run -e dev python -m} \newline
+                        \texttt{taxon\_vision.pipelines.ingest} \newline
+                        \texttt{--out data/manifests/raw\_manifest.parquet}
+                    \item \textbf{Git Dependencies (\texttt{deps}):}
+                        \begin{itemize}\tiny
+                            \item \texttt{config/taxa\_catalog.yaml} (target species keys)
+                            \item \texttt{src/taxon\_vision/data/inat\_client.py}
+                            \item \texttt{src/taxon\_vision/pipelines/ingest.py}
+                        \end{itemize}
+                    \item \textbf{Tracked Parameters (\texttt{params}):}
+                        \texttt{ingestion.per\_page} (30), \newline
+                        \texttt{ingestion.taxa\_to\_fetch} (10)
+                    \item \textbf{DVC Output (\texttt{outs}):}
+                        \texttt{data/manifests/raw\_manifest.parquet}
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Internal Execution Algorithm}
+                \begin{enumerate}\scriptsize
+                    \item \textbf{Catalog Loading:} Reads \texttt{taxa\_catalog.yaml} to extract DarwinCore taxonomic identifiers.
+                    \item \textbf{Asynchronous Ingestion:} Queries iNaturalist v1 REST API for research-grade specimen observations.
+                    \item \textbf{Metadata Normalization:} Extracts observation IDs, high-resolution photo URLs, license codes, and photographer attributions.
+                    \item \textbf{Columnar Serialization:} Flushes metadata records directly into Apache Parquet with Snappy compression, generating a deterministic content hash.
+                \end{enumerate}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+
+    \script{Stage 1 handles raw data ingestion. It takes our taxonomic catalog and queries iNaturalist for research-grade citizen-science observations, packaging raw URLs and license metadata into Parquet without downloading image files to disk.}
+    \qa{Why does the ingestion stage store image URLs rather than downloading JPEG files?}{Storing URLs keeps the manifest lightweight (under 500 KB) and delays image byte fetching to the feature extraction stage, avoiding the 50-terabyte disk trap.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 8: Stage 2 Deep-Dive: License Compliance Audit
+% ---------------------------------------------------------------------
+\begin{frame}{Stage 2 Deep-Dive}{\texttt{audit\_license}: Legal Compliance Gate \& Dataset Curation}
+    \vspace{-0.2cm}
+    \begin{center}
+    \resizebox{0.95\textwidth}{!}{%
+    \begin{tikzpicture}[
+        box/.style={rectangle, rounded corners=3pt, draw=deepblue!70, fill=deepblue!8, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        stg/.style={rectangle, rounded corners=3pt, draw=signalorange!90, fill=signalorange!15, font=\tiny\bfseries\sffamily, align=center, inner sep=4pt},
+        outbox/.style={rectangle, rounded corners=3pt, draw=plantgreen!80, fill=plantgreen!10, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        arr/.style={-stealth, thick, draw=gray!70}
+    ]
+        \node[box] (deps) {\textbf{Stage Inputs \& Tracked Params}\\[1pt]\texttt{raw\_manifest.parquet} $\cdot$ \texttt{license\_filter.py} $\cdot$ \texttt{domain/license.py}};
+        \node[stg, right=0.6cm of deps] (stage) {\textsc{Stage 2: Audit License}\\[1pt]\texttt{pipelines.audit\_license}};
+        \node[outbox, right=0.6cm of stage] (outs) {\textbf{Outputs \& Metrics}\\[1pt]\texttt{dataset\_manifest.parquet} $\cdot$ \texttt{reports/license\_audit.json}};
+        \draw[arr] (deps) -- (stage);
+        \draw[arr] (stage) -- (outs);
+    \end{tikzpicture}%
+    }
+    \end{center}
+    \vspace{-0.2cm}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{DVC Stage Declaration (\texttt{dvc.yaml})}
+                \begin{itemize}\scriptsize
+                    \item \textbf{CLI Invocation:}
+                        \texttt{pixi run -e dev python -m} \newline
+                        \texttt{taxon\_vision.pipelines.audit\_license} \newline
+                        \texttt{--manifest raw\_manifest.parquet} \newline
+                        \texttt{--out-manifest dataset\_manifest.parquet} \newline
+                        \texttt{--out reports/license\_audit.json}
+                    \item \textbf{Dependencies (\texttt{deps}):}
+                        \begin{itemize}\tiny
+                            \item \texttt{data/manifests/raw\_manifest.parquet}
+                            \item \texttt{src/taxon\_vision/data/license\_filter.py}
+                            \item \texttt{src/taxon\_vision/domain/license.py}
+                            \item \texttt{src/taxon\_vision/pipelines/audit\_license.py}
+                        \end{itemize}
+                    \item \textbf{DVC Output (\texttt{outs}):}
+                        \texttt{data/manifests/dataset\_manifest.parquet}
+                    \item \textbf{DVC Metric (\texttt{metrics}):}
+                        \texttt{reports/license\_audit.json} (\texttt{cache: false})
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Internal Execution Algorithm}
+                \begin{enumerate}\scriptsize
+                    \item \textbf{Manifest Ingestion:} Reads \texttt{raw\_manifest.parquet} using Polars lazy scanning.
+                    \item \textbf{Predicate Pushdown:} Filters observations against the \texttt{OpenLicense} enum:
+                        $$\mathcal{L}_{\text{allowed}} = \{\text{CC0}, \text{CC-BY}, \text{CC-BY-NC}\}$$
+                    \item \textbf{Attribution Verification:} Asserts that photographer name and license URI are present for every admitted observation.
+                    \item \textbf{Metrics Generation:} Writes total count, compliant count, and rejection breakdown to \texttt{reports/license\_audit.json}.
+                \end{enumerate}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+
+    \script{Stage 2 is our legal compliance gate. It filters the raw manifest against our strict open-license policy, discarding non-compliant observations and producing dataset\_manifest.parquet alongside a full audit report.}
+    \qa{What happens if an observation lacks photographer attribution?}{LicenseFilter flags the record as non-compliant and discards it from dataset\_manifest.parquet, preventing un-attributed images from polluting training datasets.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 9: Stage 3 Deep-Dive: Feature Extraction & Partitioning
+% ---------------------------------------------------------------------
+\begin{frame}{Stage 3 Deep-Dive}{\texttt{extract\_features}: Zero-Copy S3 Streaming \& Epistemic Splitting}
+    \vspace{-0.2cm}
+    \begin{center}
+    \resizebox{0.95\textwidth}{!}{%
+    \begin{tikzpicture}[
+        box/.style={rectangle, rounded corners=3pt, draw=deepblue!70, fill=deepblue!8, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        stg/.style={rectangle, rounded corners=3pt, draw=signalorange!90, fill=signalorange!15, font=\tiny\bfseries\sffamily, align=center, inner sep=4pt},
+        outbox/.style={rectangle, rounded corners=3pt, draw=plantgreen!80, fill=plantgreen!10, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        arr/.style={-stealth, thick, draw=gray!70}
+    ]
+        \node[box] (deps) {\textbf{Stage Inputs \& Tracked Params}\\[1pt]\texttt{dataset\_manifest.parquet} $\cdot$ \texttt{s3\_streamer.py} $\cdot$ \texttt{params: extractor, batch\_size, splits}};
+        \node[stg, right=0.6cm of deps] (stage) {\textsc{Stage 3: Feature Extraction}\\[1pt]\texttt{pipelines.extract\_features}};
+        \node[outbox, right=0.6cm of stage] (outs) {\textbf{Outputs \& Metrics}\\[1pt]4x SeaweedFS Embeddings (\texttt{train, val, cal, test .pt})};
+        \draw[arr] (deps) -- (stage);
+        \draw[arr] (stage) -- (outs);
+    \end{tikzpicture}%
+    }
+    \end{center}
+    \vspace{-0.2cm}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{DVC Stage Declaration (\texttt{dvc.yaml})}
+                \begin{itemize}\scriptsize
+                    \item \textbf{CLI Invocation:}
+                        \texttt{pixi run -e dev python -m} \newline
+                        \texttt{taxon\_vision.pipelines.extract\_features} \newline
+                        \texttt{--extractor \$\{model.extractor\} ...}
+                    \item \textbf{Dependencies (\texttt{deps}):}
+                        \begin{itemize}\tiny
+                            \item \texttt{config/taxa\_catalog.yaml}
+                            \item \texttt{data/manifests/dataset\_manifest.parquet}
+                            \item \texttt{src/taxon\_vision/data/s3\_streamer.py}
+                            \item \texttt{src/taxon\_vision/models/factory.py}
+                        \end{itemize}
+                    \item \textbf{Tracked Parameters (\texttt{params}):}
+                        \texttt{model.extractor}, \texttt{model.image\_size}, \newline
+                        \texttt{feature\_extraction.batch\_size} (64), \newline
+                        \texttt{val\_split} (0.10), \texttt{cal\_split} (0.10), \newline
+                        \texttt{test\_split} (0.10)
+                    \item \textbf{DVC Outputs (\texttt{outs}):}
+                        4 split tensors in SeaweedFS S3.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Internal Execution Algorithm}
+                \begin{enumerate}\scriptsize
+                    \item \textbf{Backbone Instantiation:} Loads frozen foundation extractor (DINOv3 / BioCLIP-2) via \texttt{BackboneFactory}.
+                    \item \textbf{Streaming Ingestion:} \texttt{S3ImageStreamer} streams image bytes concurrently from AWS Open Data directly into memory buffers.
+                    \item \textbf{Batched Forward Pass:} Preprocesses images ($224 \times 224$) and computes 768-d embeddings without saving JPEG files.
+                    \item \textbf{Stratified 4-Way Split:} Partitions embeddings into strictly isolated tensors (\texttt{train}, \texttt{val}, \texttt{cal}, \texttt{test}).
+                \end{enumerate}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+
+    \script{Stage 3 is the expansion phase of the Epistemic Diamond. Images stream from AWS Open Data directly into GPU memory, and extracted embeddings are partitioned into four strictly isolated PyTorch tensors.}
+    \qa{Why do we partition embeddings into four sets instead of the standard three?}{Because conformal prediction mathematically requires an independent calibration set (cal\_embeddings.pt) that was never seen during head training or validation tuning.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 10: Stage 4 Deep-Dive: Linear Head Training
+% ---------------------------------------------------------------------
+\begin{frame}{Stage 4 Deep-Dive}{\texttt{train}: Class-Balanced Loss Optimization on Cached Tensors}
+    \vspace{-0.2cm}
+    \begin{center}
+    \resizebox{0.95\textwidth}{!}{%
+    \begin{tikzpicture}[
+        box/.style={rectangle, rounded corners=3pt, draw=deepblue!70, fill=deepblue!8, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        stg/.style={rectangle, rounded corners=3pt, draw=signalorange!90, fill=signalorange!15, font=\tiny\bfseries\sffamily, align=center, inner sep=4pt},
+        outbox/.style={rectangle, rounded corners=3pt, draw=plantgreen!80, fill=plantgreen!10, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        arr/.style={-stealth, thick, draw=gray!70}
+    ]
+        \node[box] (deps) {\textbf{Stage Inputs \& Tracked Params}\\[1pt]\texttt{train/val\_embeddings.pt} $\cdot$ \texttt{loss.py} $\cdot$ \texttt{params: epochs, lr, cb\_beta, tune}};
+        \node[stg, right=0.6cm of deps] (stage) {\textsc{Stage 4: Head Training}\\[1pt]\texttt{pipelines.train}};
+        \node[outbox, right=0.6cm of stage] (outs) {\textbf{Outputs \& Metrics}\\[1pt]\texttt{head.pt} $\cdot$ \texttt{reports/train\_metrics.json}};
+        \draw[arr] (deps) -- (stage);
+        \draw[arr] (stage) -- (outs);
+    \end{tikzpicture}%
+    }
+    \end{center}
+    \vspace{-0.2cm}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{DVC Stage Declaration (\texttt{dvc.yaml})}
+                \begin{itemize}\scriptsize
+                    \item \textbf{CLI Invocation:}
+                        \texttt{pixi run -e dev python -m} \newline
+                        \texttt{taxon\_vision.pipelines.train} \newline
+                        \texttt{--train-embeddings train\_embeddings.pt} \newline
+                        \texttt{--val-embeddings val\_embeddings.pt} \newline
+                        \texttt{--checkpoint models/checkpoints/head.pt}
+                    \item \textbf{Dependencies (\texttt{deps}):}
+                        \begin{itemize}\tiny
+                            \item \texttt{train\_embeddings.pt}, \texttt{val\_embeddings.pt}
+                            \item \texttt{src/taxon\_vision/models/loss.py}
+                            \item \texttt{src/taxon\_vision/models/training/}
+                        \end{itemize}
+                    \item \textbf{Tracked Parameters (\texttt{params}):}
+                        \texttt{training.epochs} (5), \texttt{training.lr} (0.001), \newline
+                        \texttt{training.cb\_beta} (0.999), \texttt{training.tune}
+                    \item \textbf{Outputs \& Metrics:}
+                        \texttt{head.pt}, \texttt{reports/train\_metrics.json}
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Internal Execution Algorithm}
+                \begin{enumerate}\scriptsize
+                    \item \textbf{Tensor Deserialization:} Loads pre-computed \texttt{train} and \texttt{val} embeddings in milliseconds.
+                    \item \textbf{Class Frequency Weighting:} Calculates effective sample counts $E_n = (1 - \beta^n)/(1 - \beta)$ for Class-Balanced loss.
+                    \item \textbf{Convex Head Optimization:} Trains linear projection layer ($768 \to K$) using AdamW with cosine learning rate decay.
+                    \item \textbf{MLflow Registry Logging:} Logs model signature, input tensors, training metrics, and tags `@Challenger` candidates.
+                \end{enumerate}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+
+    \script{Stage 4 trains the linear classification head. Because foundation embeddings are pre-computed, training completes in under two seconds on host GPUs, allowing rapid experimentation and Bayesian tuning.}
+    \qa{How does Class-Balanced Loss mitigate extreme taxonomic class imbalance?}{By weighting each class inversely proportional to its effective volume of samples, preventing dominant common species from overpowering rare endemic taxa.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 11: Stage 5 Deep-Dive: ONNX Export & Dynamic Quantization
+% ---------------------------------------------------------------------
+\begin{frame}{Stage 5 Deep-Dive}{\texttt{export}: Graph Fusion \& INT8 Dynamic Quantization}
+    \vspace{-0.2cm}
+    \begin{center}
+    \resizebox{0.95\textwidth}{!}{%
+    \begin{tikzpicture}[
+        box/.style={rectangle, rounded corners=3pt, draw=deepblue!70, fill=deepblue!8, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        stg/.style={rectangle, rounded corners=3pt, draw=signalorange!90, fill=signalorange!15, font=\tiny\bfseries\sffamily, align=center, inner sep=4pt},
+        outbox/.style={rectangle, rounded corners=3pt, draw=plantgreen!80, fill=plantgreen!10, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        arr/.style={-stealth, thick, draw=gray!70}
+    ]
+        \node[box] (deps) {\textbf{Stage Inputs \& Tracked Params}\\[1pt]\texttt{head.pt} $\cdot$ \texttt{onnx\_exporter.py} $\cdot$ \texttt{params: quantize\_int8, image\_size}};
+        \node[stg, right=0.6cm of deps] (stage) {\textsc{Stage 5: ONNX Compilation}\\[1pt]\texttt{pipelines.export\_onnx}};
+        \node[outbox, right=0.6cm of stage] (outs) {\textbf{Outputs \& Metrics}\\[1pt]\texttt{models/checkpoints/model\_int8.onnx} (Quantized Graph)};
+        \draw[arr] (deps) -- (stage);
+        \draw[arr] (stage) -- (outs);
+    \end{tikzpicture}%
+    }
+    \end{center}
+    \vspace{-0.2cm}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{DVC Stage Declaration (\texttt{dvc.yaml})}
+                \begin{itemize}\scriptsize
+                    \item \textbf{CLI Invocation:}
+                        \texttt{pixi run -e dev python -m} \newline
+                        \texttt{taxon\_vision.pipelines.export\_onnx} \newline
+                        \texttt{--checkpoint models/checkpoints/head.pt} \newline
+                        \texttt{--quantize-int8 --quantize-mode dynamic} \newline
+                        \texttt{--quantized-output model\_int8.onnx}
+                    \item \textbf{Dependencies (\texttt{deps}):}
+                        \begin{itemize}\tiny
+                            \item \texttt{models/checkpoints/head.pt}
+                            \item \texttt{src/taxon\_vision/inference/onnx\_exporter.py}
+                            \item \texttt{src/taxon\_vision/inference/quantizer.py}
+                        \end{itemize}
+                    \item \textbf{Tracked Parameters (\texttt{params}):}
+                        \texttt{export.quantize\_int8} (true), \newline
+                        \texttt{model.extractor}, \texttt{model.image\_size}
+                    \item \textbf{DVC Output (\texttt{outs}):}
+                        \texttt{models/checkpoints/model\_int8.onnx}
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Internal Execution Algorithm}
+                \begin{enumerate}\scriptsize
+                    \item \textbf{Model Stitching:} Combines frozen vision backbone with trained classification head into an end-to-end \texttt{TaxonClassifier}.
+                    \item \textbf{ONNX Tracing:} Exports computational graph using \texttt{torch.onnx.export} at opset 17 with dynamic batch dimensions.
+                    \item \textbf{Graph Optimization:} Runs ONNX Runtime graph transformations (constant folding, dead-code elimination).
+                    \item \textbf{Dynamic INT8 Quantization:} Quantizes \texttt{MatMul} and \texttt{Gemm} weight tensors to 8-bit integers, reducing binary size by $75\%$.
+                \end{enumerate}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+
+    \script{Stage 5 fuses our backbone and head into a unified ONNX model. We apply dynamic INT8 quantization, compressing model weights by 75 percent and preparing the artifact for zero-allocation runtime serving.}
+    \qa{Why use dynamic INT8 quantization instead of static quantization?}{Dynamic quantization quantizes weights ahead of time while computing activation scale factors dynamically, avoiding the need for extensive calibration datasets while achieving 3x CPU speedups.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 12: Stage 6 Deep-Dive: Conformal Calibration & OOD Gating
+% ---------------------------------------------------------------------
+\begin{frame}{Stage 6 Deep-Dive}{\texttt{calibrate}: Non-Conformity Scoring \& Energy OOD Bounds}
+    \vspace{-0.2cm}
+    \begin{center}
+    \resizebox{0.95\textwidth}{!}{%
+    \begin{tikzpicture}[
+        box/.style={rectangle, rounded corners=3pt, draw=deepblue!70, fill=deepblue!8, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        stg/.style={rectangle, rounded corners=3pt, draw=signalorange!90, fill=signalorange!15, font=\tiny\bfseries\sffamily, align=center, inner sep=4pt},
+        outbox/.style={rectangle, rounded corners=3pt, draw=plantgreen!80, fill=plantgreen!10, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        arr/.style={-stealth, thick, draw=gray!70}
+    ]
+        \node[box] (deps) {\textbf{Stage Inputs \& Tracked Params}\\[1pt]\texttt{cal\_embeddings.pt} $\cdot$ \texttt{model\_int8.onnx} $\cdot$ \texttt{params: alpha, ood\_tpr}};
+        \node[stg, right=0.6cm of deps] (stage) {\textsc{Stage 6: Conformal Calibration}\\[1pt]\texttt{pipelines.calibrate}};
+        \node[outbox, right=0.6cm of stage] (outs) {\textbf{Outputs \& Metrics}\\[1pt]\texttt{config/conformal\_config.yaml} $\cdot$ \texttt{reports/conformal\_metrics.json}};
+        \draw[arr] (deps) -- (stage);
+        \draw[arr] (stage) -- (outs);
+    \end{tikzpicture}%
+    }
+    \end{center}
+    \vspace{-0.2cm}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{DVC Stage Declaration (\texttt{dvc.yaml})}
+                \begin{itemize}\scriptsize
+                    \item \textbf{CLI Invocation:}
+                        \texttt{pixi run -e dev python -m} \newline
+                        \texttt{taxon\_vision.pipelines.calibrate} \newline
+                        \texttt{--onnx-model model\_int8.onnx} \newline
+                        \texttt{--embeddings cal\_embeddings.pt} \newline
+                        \texttt{--out config/conformal\_config.yaml} \newline
+                        \texttt{--metrics-out reports/conformal\_metrics.json}
+                    \item \textbf{Dependencies (\texttt{deps}):}
+                        \begin{itemize}\tiny
+                            \item \texttt{cal\_embeddings.pt}, \texttt{model\_int8.onnx}
+                            \item \texttt{src/taxon\_vision/inference/onnx\_engine.py}
+                            \item \texttt{src/taxon\_vision/uncertainty/conformal.py}
+                            \item \texttt{src/taxon\_vision/uncertainty/ood\_detector.py}
+                        \end{itemize}
+                    \item \textbf{Outputs \& Metrics:}
+                        \texttt{config/conformal\_config.yaml}, \newline
+                        \texttt{reports/conformal\_metrics.json}
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Internal Execution Algorithm}
+                \begin{enumerate}\scriptsize
+                    \item \textbf{Inference Execution:} Feeds calibration split embeddings through the exported ONNX model head.
+                    \item \textbf{Non-Conformity Scoring:} Calculates true-class residual non-conformity scores:
+                        $$s_i = 1 - \hat{\pi}(y_i \mid x_i)$$
+                    \item \textbf{Quantile Computation:} Computes empirical conformal quantile $\hat{q} = \text{Quantile}(s, \frac{\lceil(N+1)(1-\alpha)\rceil}{N})$.
+                    \item \textbf{Free Energy OOD Calibration:} Evaluates free energy scores $E(x; T) = -T \log \sum e^{z_k/T}$ and sets $\tau_{\text{ood}}$ at 95\% target TPR.
+                \end{enumerate}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+
+    \script{Stage 6 calculates our rigorous mathematical safety thresholds. Using the strictly isolated calibration split, it derives the conformal quantile q-hat and the free energy OOD threshold, persisting them to conformal\_config.yaml.}
+    \qa{How is the quantile threshold computed mathematically?}{We compute the ceiling of N plus 1 times 1 minus alpha, divided by N, ensuring that finite-sample distribution-free coverage holds unconditionally.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 13: Stage 7 Deep-Dive: Pareto Evaluation & Latency SLA
+% ---------------------------------------------------------------------
+\begin{frame}{Stage 7 Deep-Dive}{\texttt{eval}: Holdout Verification \& Production Latency Gating}
+    \vspace{-0.2cm}
+    \begin{center}
+    \resizebox{0.95\textwidth}{!}{%
+    \begin{tikzpicture}[
+        box/.style={rectangle, rounded corners=3pt, draw=deepblue!70, fill=deepblue!8, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        stg/.style={rectangle, rounded corners=3pt, draw=signalorange!90, fill=signalorange!15, font=\tiny\bfseries\sffamily, align=center, inner sep=4pt},
+        outbox/.style={rectangle, rounded corners=3pt, draw=plantgreen!80, fill=plantgreen!10, font=\tiny\sffamily, align=center, inner sep=3.5pt},
+        arr/.style={-stealth, thick, draw=gray!70}
+    ]
+        \node[box] (deps) {\textbf{Stage Inputs \& Tracked Params}\\[1pt]\texttt{test\_embeddings.pt} $\cdot$ \texttt{model\_int8.onnx} $\cdot$ \texttt{params: latency\_sla\_ms}};
+        \node[stg, right=0.6cm of deps] (stage) {\textsc{Stage 7: Pareto Evaluation}\\[1pt]\texttt{pipelines.evaluate}};
+        \node[outbox, right=0.6cm of stage] (outs) {\textbf{Outputs \& Metrics}\\[1pt]\texttt{docs/assets/pareto\_results.json} $\cdot$ \texttt{reports/pareto\_evaluation.json}};
+        \draw[arr] (deps) -- (stage);
+        \draw[arr] (stage) -- (outs);
+    \end{tikzpicture}%
+    }
+    \end{center}
+    \vspace{-0.2cm}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{DVC Stage Declaration (\texttt{dvc.yaml})}
+                \begin{itemize}\scriptsize
+                    \item \textbf{CLI Invocation:}
+                        \texttt{pixi run -e dev python -m} \newline
+                        \texttt{taxon\_vision.pipelines.evaluate} \newline
+                        \texttt{--onnx-model model\_int8.onnx} \newline
+                        \texttt{--embeddings test\_embeddings.pt} \newline
+                        \texttt{--conformal-config conformal\_config.yaml} \newline
+                        \texttt{--metrics-out reports/pareto\_evaluation.json}
+                    \item \textbf{Dependencies (\texttt{deps}):}
+                        \begin{itemize}\tiny
+                            \item \texttt{test\_embeddings.pt}, \texttt{model\_int8.onnx}
+                            \item \texttt{config/conformal\_config.yaml}
+                            \item \texttt{src/taxon\_vision/inference/onnx\_engine.py}
+                        \end{itemize}
+                    \item \textbf{Outputs \& Metrics:}
+                        \texttt{docs/assets/pareto\_results.json}, \newline
+                        \texttt{reports/pareto\_evaluation.json}
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Internal Execution Algorithm}
+                \begin{enumerate}\scriptsize
+                    \item \textbf{Holdout Test Prediction:} Runs inference on pure holdout test partition (\texttt{test\_embeddings.pt}).
+                    \item \textbf{Prediction Set Construction:} Forms conformal prediction set $C(X) = \{k : \hat{\pi}(k \mid X) \ge 1 - \hat{q}\}$.
+                    \item \textbf{Coverage Verification:} Empirically asserts that test coverage $\ge 1 - \alpha$, recording set size and referral rates.
+                    \item \textbf{Latency Profiling:} Executes 100-run warm benchmark profiling p50, p95, and p99 inference latency against the 15ms budget.
+                \end{enumerate}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+
+    \script{Stage 7 is our final production gatekeeper. It evaluates the holdout test set to verify that empirical coverage satisfies the 95 percent bound, while running latency profiling to ensure sub-15ms compliance.}
+    \qa{What happens if empirical coverage drops below 1 minus alpha on the test set?}{The evaluate pipeline stage exits with code 1, causing DVC to fail and blocking the Jenkins CI deployment pipeline from promoting the model to production.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 13: Pipeline Metrics Encyclopedia (Data & Training)
+% ---------------------------------------------------------------------
+\begin{frame}{Metrics Encyclopedia}{Data Quality, Licensing \& Head Training Metrics}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{\texttt{reports/license\_audit.json}}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{status}:} \texttt{"PASSED"} or \texttt{"FAILED"}.
+                    \item \textbf{\texttt{total\_observations}:} Raw queried observation count (e.g., 2,000).
+                    \item \textbf{\texttt{verified\_observations}:} Admitted open-license observations (e.g., 1,689).
+                    \item \textbf{\texttt{violations}:} Discarded proprietary / unverified records (e.g., 311).
+                    \item \textbf{\texttt{allowed\_licenses}:} Serialized whitelist (\texttt{CC0}, \texttt{CC-BY}, \texttt{CC-BY-NC}).
+                    \item \textbf{Invariant Rule 05:} Zero unverified records permitted into downstream training splits.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{\texttt{reports/train\_metrics.json}}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{status}:} \texttt{"completed"}.
+                    \item \textbf{\texttt{extractor}:} Active foundation backbone name (\texttt{"dinov3"}).
+                    \item \textbf{\texttt{epochs\_trained}:} Epoch iteration count (e.g., 5).
+                    \item \textbf{\texttt{final\_train\_loss}:} Class-Balanced training loss (e.g., 0.7524).
+                    \item \textbf{\texttt{final\_val\_loss}:} Stratified validation loss (e.g., 0.7694).
+                    \item \textbf{\texttt{final\_val\_accuracy}:} Multi-class accuracy (e.g., 0.8284).
+                    \item \textbf{\texttt{duration\_seconds}:} Head training latency (e.g., 1.58s).
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+
+    \script{Here we inspect the machine-readable metrics produced by Stages 2 and 4. The license audit report certifies legal compliance, while the training metrics capture loss convergence and training latency.}
+    \qa{Why is duration\_seconds so short (under 2 seconds)?}{Because linear convex heads train directly on cached floating-point embeddings, completely bypassing convolutional or transformer backpropagation loops.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 14: Pipeline Metrics Encyclopedia (Calibration & Evaluation)
+% ---------------------------------------------------------------------
+\begin{frame}{Metrics Encyclopedia}{Epistemic Calibration, OOD Gating \& Pareto Performance}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{\texttt{reports/conformal\_metrics.json}}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{alpha}:} Significance level ($\alpha = 0.05$).
+                    \item \textbf{\texttt{nominal\_coverage}:} Target coverage ($1 - \alpha = 0.95$).
+                    \item \textbf{\texttt{empirical\_cal\_coverage}:} Holdout check ($0.9645$).
+                    \item \textbf{\texttt{q\_hat}:} Conformal quantile threshold ($0.8405$).
+                    \item \textbf{\texttt{tau\_ood}:} Free energy OOD bound ($-2.2792$).
+                    \item \textbf{\texttt{num\_calibration\_samples}:} Dedicated calibration sample size ($N_{\text{cal}} = 169$).
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{\texttt{reports/pareto\_evaluation.json}}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{p50\_latency\_ms} / \texttt{p95\_latency\_ms}:} Realized CPU latency (e.g., 47.87ms / 51.99ms).
+                    \item \textbf{\texttt{throughput\_fps}:} Inference rate (20.7 FPS).
+                    \item \textbf{\texttt{test\_empirical\_coverage}:} $0.9645 \ge 0.95$ ($\implies$ \texttt{coverage\_guarantee\_satisfied: true}).
+                    \item \textbf{\texttt{mean\_set\_size}:} Average prediction set cardinality (e.g., 1.72 classes).
+                    \item \textbf{\texttt{referral\_rate}:} Human triage dispatch frequency (e.g., 0.6095).
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+
+    \script{Stages 6 and 7 generate our epistemic safety metrics. We verify that empirical coverage satisfies the 95 percent bound, measure prediction set efficiency, and calculate human triage referral rates.}
+    \qa{What does a mean set size of 1.72 indicate?}{It demonstrates that for typical ambiguous test specimens, the model narrows thousands of possibilities down to less than two plausible candidate species while maintaining a 95 percent ground truth guarantee.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 15: Cache Invalidation & Reproducibility Mechanics
+% ---------------------------------------------------------------------
+\begin{frame}{Pipeline Mechanics}{Content Hashing, Invalidation Trees \& CI Cache Acceleration}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Cryptographic Lineage Locking}
+                \begin{itemize}\scriptsize
+                    \item \textbf{\texttt{dvc.lock}:} Records SHA256 hashes of every input code file, parameter value, and data tensor.
+                    \item \textbf{Content-Addressable Cache:} Artifacts are indexed by their SHA256 hash in \texttt{.dvc/cache/}, allowing instant zero-copy checkouts.
+                    \item \textbf{Hermetic Reproducibility:} Executing \texttt{dvc repro} on any workstation or CI runner recreates the exact mathematical outputs.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Selective Invalidation Trees}
+                \begin{itemize}\scriptsize
+                    \item \textbf{Scenario A: Modify \texttt{params.yaml} (\texttt{training.lr}):}
+                        \texttt{ingestion}, \texttt{audit\_license}, and \texttt{extract\_features} are skipped ($100\%$ cached); only \texttt{train} through \texttt{eval} re-run ($< 15\text{s}$ total).
+                    \item \textbf{Scenario B: Modify \texttt{factory.py}:}
+                        DVC detects code hash shift in \texttt{extract\_features}, invalidating all downstream tensors and models.
+                    \item \textbf{Scenario C: Unchanged Commit:}
+                        \texttt{dvc repro} executes in $0.2\text{ seconds}$, verifying all stages are green.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+
+    \script{This slide details DVC's caching intelligence. By comparing SHA256 hashes in dvc.lock, DVC skips expensive stages whose code and parameters have not changed, allowing our CI pipelines to validate commits in seconds.}
+    \qa{How does DVC detect that a stage needs re-execution?}{It computes a combined hash of all declared code dependencies, input files, and parameter values. If this hash differs from dvc.lock, the stage is re-executed.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 16: Chapter Summary & Architectural Takeaways
+% ---------------------------------------------------------------------
+\begin{frame}{Chapter Summary}{Epistemic Diamond DAG Takeaways}
+    \begin{block}{Core DAG \& Data Engineering Principles}
+        \begin{itemize}\small
+            \item \textbf{The Epistemic Diamond Architecture:} Expanding raw data into 4 strictly isolated split tensors before contracting into an INT8 ONNX package guarantees mathematical distribution-free safety.
+            \item \textbf{Fine-Grained Parameter Binding:} Tracking parameters at key level allows rapid hyperparameter exploration without triggering expensive multi-gigabyte feature extraction.
+            \item \textbf{Two-Tier Remote Storage:} Bare-metal SeaweedFS handles high-bandwidth tensor caching, while collaborative DagsHub S3 locks releases to Git commit hashes.
+            \item \textbf{Automated Production Gating:} The pipeline automatically fails if empirical coverage drops below $1 - \alpha$ or p95 latency exceeds 15ms.
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.2cm}
+    \begin{center}
+        \textcolor{deepblue}{\textbf{Next: Chapter 06 --- Software Architecture: Packages, Modules, Classes \& Call Graph}}
+    \end{center}
+
+    \script{To wrap up Chapter 5: our DVC pipeline transforms complex multi-stage machine learning into a deterministic, reproducible software build graph governed by cryptographic hashes and mathematical safety gates.}
+    \qa{How does the Epistemic Diamond eliminate technical debt in machine learning?}{It replaces fragile ad-hoc Jupyter notebooks with declarative, version-controlled stages whose dependencies and outputs are rigorously tracked in Git and DVC.}
+\end{frame}

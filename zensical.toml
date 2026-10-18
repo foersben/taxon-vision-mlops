@@ -1,20 +1,51 @@
 [project]
-site_name = "TaxonVision-MLOps"
-site_description = "Automated End-to-End MLOps Pipeline for Species Identification from Photographs"
+site_name = "TaxonVision-MLOps Architecture & Engineering Portal"
+site_description = "Enterprise Biodiversity Computer Vision, Split Conformal Prediction, Vision-RAG & Bare-Metal Kubernetes MLOps"
 site_url = "https://foersben.github.io/taxon-vision-mlops/"
 repo_name = "foersben/taxon-vision-mlops"
 repo_url = "https://github.com/foersben/taxon-vision-mlops"
+edit_uri = "edit/develop/docs/"
 docs_dir = "docs"
 site_dir = "site"
 language = "en"
 
-extra_css = ["https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"]
+exclude_docs = """
+/Species identification.pdf
+/.archive/
+/latex/**/*.tex
+/latex/**/*.aux
+/latex/**/*.log
+/latex/**/*.nav
+/latex/**/*.out
+/latex/**/*.snm
+/latex/**/*.toc
+/latex/**/Makefile
+"""
+
+watch = [
+    "dvc.yaml",
+    "params.yaml",
+    "Justfile",
+    "Jenkinsfile",
+    "config/",
+    "src/taxon_vision/",
+    "reports/",
+    ".agents/",
+]
+
+extra_css = ["stylesheets/extra.css"]
+
 extra_javascript = [
-    "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js",
-    "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js",
-    "https://unpkg.com/mermaid@10/dist/mermaid.min.js",
     "javascripts/katex.js",
+    "https://unpkg.com/katex@0/dist/katex.min.js",
+    "https://unpkg.com/katex@0/dist/contrib/auto-render.min.js",
     "javascripts/mermaid.js",
+    "javascripts/widgets/fullscreen.js",
+    "javascripts/widgets/conformal_simulator.js",
+    "javascripts/widgets/codebase_explorer.js",
+    "javascripts/widgets/dvc_explorer.js",
+    "javascripts/widgets/epistemic_simulator.js",
+    "javascripts/widgets/pareto_explorer.js",
 ]
 
 [project.theme]
@@ -22,81 +53,132 @@ variant = "modern"
 features = [
     "navigation.tabs",
     "navigation.sections",
+    "navigation.path",
+    "navigation.indexes",
     "navigation.top",
-    "toc.integrate",
     "search.suggest",
     "search.highlight",
+    "content.action.edit",
+    "content.action.view",
     "content.code.copy",
+    "content.code.select",
+    "content.code.annotate",
+    "content.tabs.link",
 ]
 
-[project.theme.palette]
-scheme = "slate"
-primary = "black"
+[[project.theme.palette]]
+scheme = "default"
+primary = "teal"
 accent = "deep-orange"
+[project.theme.palette.toggle]
+icon = "material/brightness-7"
+name = "Switch to dark mode"
+
+[[project.theme.palette]]
+scheme = "slate"
+primary = "teal"
+accent = "deep-orange"
+[project.theme.palette.toggle]
+icon = "material/brightness-4"
+name = "Switch to light mode"
 
 [project.theme.icon]
 repo = "fontawesome/brands/github"
 
 [project.markdown_extensions]
 admonition = {}
-tables = {}
 attr_list = {}
+def_list = {}
+footnotes = {}
+md_in_html = {}
+tables = {}
+toc = { permalink = true, toc_depth = 4 }
 "pymdownx.details" = {}
 "pymdownx.inlinehilite" = {}
-"pymdownx.snippets" = {}
-toc = { permalink = true }
-"pymdownx.highlight" = { anchor_linenums = true }
+"pymdownx.keys" = {}
+"pymdownx.caret" = {}
+"pymdownx.mark" = {}
+"pymdownx.tilde" = {}
+"pymdownx.tabbed" = { alternate_style = true }
 "pymdownx.tasklist" = { custom_checkbox = true }
 "pymdownx.arithmatex" = { generic = true }
-"pymdownx.superfences" = { custom_fences = [
+"pymdownx.highlight" = { anchor_linenums = true, line_spans = "__span", pygments_lang_class = true }
+"pymdownx.snippets" = { base_path = [".", "docs"], check_paths = true }
+"pymdownx.superfences" = { preserve_tabs = true, custom_fences = [
     { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
 ] }
 
-[[project.nav]]
-Home = "index.md"
+# ==============================================================================
+# Navigation Hierarchy (4 Consolidated Top-Level Tabs with Sidebar Sections)
+# ==============================================================================
 
 [[project.nav]]
-"Foundations" = [
-    { "Chapter Overview" = "foundations/index.md" },
-    { "Taxonomy & DarwinCore" = "foundations/taxonomy_and_darwincore.md" },
-    { "iNaturalist Data Ecosystem" = "foundations/inaturalist_data_ecosystem.md" },
-    { "Curriculum vs. Production Strategy" = "foundations/architectural_comparison.md" },
+"Overview & Domain" = [
+    { "Portal & Visualizers" = [
+        { "Platform Overview" = "index.md" },
+        { "Interactive Architecture & OKF Hub" = "interactive_hub.md" },
+    ] },
+    { "Biological & Domain Foundations" = [
+        { "Domain Overview" = "foundations/index.md" },
+        { "iNaturalist & Open Licensing" = "foundations/inaturalist_data_ecosystem.md" },
+        { "Taxonomy & DarwinCore" = "foundations/taxonomy_and_darwincore.md" },
+        { "Curriculum vs. Production" = "foundations/architectural_comparison.md" },
+        { "Unified System Reference" = "foundations/system_reference.md" },
+    ] },
 ]
 
 [[project.nav]]
-"Data & MLOps Pipelines" = [
-    { "Chapter Overview" = "mlops_pipeline/index.md" },
-    { "Dual Pipeline Topology" = "mlops_pipeline/dual_pipeline_architecture.md" },
-    { "Ingestion & Versioning" = "mlops_pipeline/ingestion_and_versioning.md" },
+"Architecture & Data" = [
+    { "Software & Config Architecture" = [
+        { "Architecture Overview" = "architecture/index.md" },
+        { "Config & Parameter Encyclopedia" = "architecture/repository_and_config_encyclopedia.md" },
+        { "Package & Call Graph" = "architecture/package_and_call_graph.md" },
+        { "Interactive Codebase Explorer" = "architecture/codebase_explorer.md" },
+    ] },
+    { "MLOps Pipelines & Storage" = [
+        { "Pipelines Overview" = "mlops_pipeline/index.md" },
+        { "Asymmetric Dual-Pipeline" = "mlops_pipeline/dual_pipeline_architecture.md" },
+        { "Arrow S3 & DVC Versioning" = "mlops_pipeline/ingestion_and_versioning.md" },
+        { "Polyglot Storage & Databases" = "mlops_pipeline/storage_and_databases.md" },
+        { "Interactive DVC DAG Explorer" = "mlops_pipeline/dvc_dag_explorer.md" },
+    ] },
 ]
 
 [[project.nav]]
-"Model Engineering & Inference" = [
-    { "Chapter Overview" = "model_engineering/index.md" },
-    { "Vision Model Architecture" = "model_engineering/model_architecture.md" },
-    { "Training Pipeline" = "model_engineering/training_pipeline.md" },
-    { "Backbone Pareto Benchmarks" = "model_engineering/backbone_benchmarking_pareto.md" },
-    { "ONNX Runtime Optimization" = "model_engineering/onnx_optimization_and_latency.md" },
+"Models & Safety" = [
+    { "Model & Inference Engineering" = [
+        { "Model Engineering Overview" = "model_engineering/index.md" },
+        { "Backbones & Class-Balanced Loss" = "model_engineering/model_architecture.md" },
+        { "Head Training, Optuna & MLflow" = "model_engineering/training_pipeline.md" },
+        { "ONNX INT8 & Forward CAM" = "model_engineering/onnx_optimization_and_latency.md" },
+        { "Interactive Pareto Benchmark" = "model_engineering/backbone_benchmarking_pareto.md" },
+    ] },
+    { "Epistemic Safety & Vision-RAG" = [
+        { "Safety & Uncertainty Overview" = "uncertainty_and_safety/index.md" },
+        { "Split Conformal Theory" = "uncertainty_and_safety/conformal_prediction_theory.md" },
+        { "Four Calibration Layers" = "uncertainty_and_safety/calibration_layers_deep_dive.md" },
+        { "Helmholtz Energy & Shannon Entropy" = "uncertainty_and_safety/ood_and_empty_frame_detection.md" },
+        { "Interactive Conformal Simulator" = "uncertainty_and_safety/interactive_simulator.md" },
+        { "Active Learning & HITL Triage" = "uncertainty_and_safety/active_learning_and_hitl.md" },
+        { "Vision-RAG & Multimodal KG" = "uncertainty_and_safety/mmkg_and_vision_rag.md" },
+    ] },
 ]
 
 [[project.nav]]
-"Uncertainty & Safety" = [
-    { "Chapter Overview" = "uncertainty_and_safety/index.md" },
-    { "Conformal Prediction Theory" = "uncertainty_and_safety/conformal_prediction_theory.md" },
-    { "OOD & Empty Frame Detection" = "uncertainty_and_safety/ood_and_empty_frame_detection.md" },
-    { "Active Learning & Human Review" = "uncertainty_and_safety/active_learning_and_hitl.md" },
-]
-
-[[project.nav]]
-"Operations & Deployment" = [
-    { "Chapter Overview" = "operations/index.md" },
-    { "Current Infrastructure" = "operations/current_infrastructure.md" },
-    { "Jenkins CI/CD Infrastructure" = "operations/jenkins_ci_infrastructure.md" },
-    { "GPU Resource Scheduling" = "operations/gpu_resource_scheduling.md" },
-    { "Deployment Runbook" = "operations/deployment_runbook.md" },
-    { "Prometheus Observability" = "operations/prometheus_and_observability.md" },
-    { "API Reference" = "operations/api_reference.md" },
-    { "Implementation Roadmap" = "operations/implementation_status.md" },
+"Operations & QA" = [
+    { "Infrastructure & CI/CD" = [
+        { "Operations Overview" = "operations/index.md" },
+        { "Bare-Metal & k3s Topology" = "operations/current_infrastructure.md" },
+        { "GPU Time-Slicing & Scheduling" = "operations/gpu_resource_scheduling.md" },
+        { "Jenkins Ephemeral CI/CD" = "operations/jenkins_ci_infrastructure.md" },
+        { "Deployment & Scaling Runbook" = "operations/deployment_runbook.md" },
+    ] },
+    { "Service, Telemetry & Governance" = [
+        { "FastAPI & OpenAPI Reference" = "operations/api_reference.md" },
+        { "Prometheus & Drift Telemetry" = "operations/prometheus_and_observability.md" },
+        { "Agentic Governance & OKF v0.2" = "operations/agentic_governance_and_okf.md" },
+        { "Implementation Status & Roadmap" = "operations/implementation_status.md" },
+    ] },
 ]
 
 [project.plugins.htmlproofer]

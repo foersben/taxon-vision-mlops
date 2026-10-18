@@ -1,6 +1,6 @@
 ---
 type: Agent Role
-title: Directives
+title: "Role 11: Docs Librarian"
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
 version: 1.0

@@ -1,6 +1,6 @@
 ---
 type: Agent Rule
-title: Mandates
+title: "Rule 01: MLOps Reproducibility"
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
 version: 1.0

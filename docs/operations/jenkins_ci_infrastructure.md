@@ -6,6 +6,8 @@ stale_after: "2027-01-01T00:00:00Z"
 version: 1.0
 description: Comprehensive architecture, security design, and operational record of the zero-open-ports Jenkins controller, Cloudflare Tunnel ingress, and k3s ephemeral agent topology.
 tags: [jenkins, cicd, k3s, cloudflare, pixi, infrastructure, docker]
+generated: {by: "process:docs-librarian", at: "2026-10-18T18:00:00Z"}
+verified: {by: "process:docs-librarian", at: "2026-10-18T18:00:00Z"}
 ---
 
 # Jenkins CI/CD Architecture & Ephemeral Runner Topology
@@ -324,250 +326,55 @@ The Jenkins Kubernetes plugin manages agent pod lifecycles using the following c
 
 ## 6. Jenkinsfile Architecture & Pipeline Specification
 
-The declarative pipeline logic is declared in [Jenkinsfile](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/Jenkinsfile).
+The declarative pipeline logic is maintained in [`Jenkinsfile`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/Jenkinsfile).
 
 ### 6.1 Complete Declarative Pipeline Definition
 
 ```groovy
-pipeline {
-  agent {
-    kubernetes {
-      cloud 'k3s'
-      defaultContainer 'ml-runner'
-      yaml '''
-apiVersion: v1
-kind: Pod
-metadata:
-  namespace: jenkins-ci
-  labels:
-    app.kubernetes.io/name: taxon-vision-jenkins-agent
-spec:
-  serviceAccountName: jenkins-agent
-  containers:
-  - name: ml-runner
-    image: ghcr.io/prefix-dev/pixi:latest
-    command: ["sleep"]
-    args: ["99d"]
-    tty: true
-    volumeMounts:
-    - name: rattler-cache
-      mountPath: /root/.cache/rattler/cache
-    resources:
-      limits:
-        memory: "8Gi"
-        cpu: "4"
-      requests:
-        memory: "512Mi"
-        cpu: "200m"
-  volumes:
-  - name: rattler-cache
-    emptyDir: {}
-'''
-    }
-  }
+--8<-- "Jenkinsfile"
+```
 
-  options {
-    buildDiscarder(logRotator(numToKeepStr: '15', daysToKeepStr: '14'))
-    timeout(time: 45, unit: 'MINUTES')
-    timestamps()
-    disableConcurrentBuilds(abortPrevious: true)
-  }
+### 6.2 Ephemeral GPU Runner Pod Specification
 
-  stages {
-    stage('Prepare Toolchain') {
-      steps {
-        container('ml-runner') {
-          sh '''
-            echo ">>> Setting up toolchain in ephemeral agent..."
-            which git >/dev/null 2>&1 || pixi global install git
-            git config --global --add safe.directory "*"
-            pixi --version
-            pixi install --frozen -e ci-dev
-          '''
-        }
-      }
-    }
+Heavy training, feature extraction, and Pareto benchmarking execute inside an ephemeral GPU pod defined in [`deploy/k8s/jenkins-gpu-pod.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/jenkins-gpu-pod.yaml):
 
-    stage('Static Quality & Invariants') {
-      parallel {
-        stage('Lint & Format') {
-          steps {
-            container('ml-runner') {
-              sh '''
-                pixi run --frozen -e ci-dev ruff check .
-                pixi run --frozen -e ci-dev ruff format --check .
-              '''
-            }
-          }
-        }
-        stage('Type Checking') {
-          steps {
-            container('ml-runner') {
-              sh '''
-                pixi run --frozen -e ci-dev mypy src scripts
-              '''
-            }
-          }
-        }
-        stage('Compliance & OKF Audits') {
-          steps {
-            container('ml-runner') {
-              sh '''
-                pixi run --frozen -e ci-dev python scripts/audit_license_compliance.py
-                pixi run --frozen -e ci-dev python scripts/validate_okf.py
-              '''
-            }
-          }
-        }
-      }
-    }
+```yaml
+--8<-- "deploy/k8s/jenkins-gpu-pod.yaml"
+```
 
-    stage('Unit Tests & Coverage') {
-      steps {
-        container('ml-runner') {
-          sh '''
-            pixi run --frozen -e ci-dev pytest tests/ \
-              --cov=src/taxon_vision \
-              --cov-report=xml:coverage.xml \
-              --cov-fail-under=80 \
-              -o "addopts="
-          '''
-        }
-      }
-    }
+### 6.3 Dual CI/CD Bridge & GPU Execution Sequence Trace
 
-    stage('Integration & Conformal Invariants') {
-      steps {
-        container('ml-runner') {
-          sh '''
-            pixi run --frozen -e ci-dev pytest tests/integration/ tests/invariants/ -x -q -o "addopts="
-          '''
-        }
-      }
-    }
+When a developer or AI agent merges code to `develop` or `main`, execution traverses the **Dual CI/CD Bridge** connecting the cloud GitHub environment with the on-premise bare-metal GPU cluster:
 
-    stage('Documentation Strict Build') {
-      steps {
-        container('ml-runner') {
-          sh '''
-            pixi run --frozen -e ci-dev python scripts/visualize_okf.py
-            pixi run --frozen -e ci-dev zensical build --strict
-          '''
-        }
-      }
-    }
+```mermaid
+sequenceDiagram
+    autonumber
+    participant GH as GitHub Actions Enclave
+    participant CF as Cloudflare Zero Trust WAF
+    participant JC as Jenkins Controller (hive-mind)
+    participant K3S as k3s Cluster API
+    participant POD as GPU Pod (jenkins-gpu-pod.yaml)
+    participant SW as SeaweedFS In-Cluster S3
+    participant DH as DagsHub Remote S3
+    participant GIT as GitHub Git Origin
 
-    stage('Model Training & Checkpoint (GPU)') {
-      when {
-        anyOf {
-          branch 'main'
-          branch 'feature/phase1-foundations'
-        }
-      }
-      agent {
-        kubernetes {
-          cloud 'k3s'
-          defaultContainer 'ml-runner'
-          yaml '''
-apiVersion: v1
-kind: Pod
-metadata:
-  namespace: jenkins-ci
-  labels:
-    app.kubernetes.io/name: taxon-vision-jenkins-gpu-agent
-spec:
-  serviceAccountName: jenkins-agent
-  containers:
-  - name: ml-runner
-    image: ghcr.io/prefix-dev/pixi:latest
-    command: ["sleep"]
-    args: ["99d"]
-    tty: true
-    volumeMounts:
-    - name: rattler-cache
-      mountPath: /root/.cache/rattler/cache
-    resources:
-      limits:
-        memory: "16Gi"
-        cpu: "8"
-        nvidia.com/gpu: "1"
-      requests:
-        memory: "2Gi"
-        cpu: "1000m"
-        nvidia.com/gpu: "1"
-  volumes:
-  - name: rattler-cache
-    emptyDir: {}
-'''
-        }
-      }
-      steps {
-        container('ml-runner') {
-          sh '''
-            export PATH="/root/.pixi/bin:$PATH"
-            which git >/dev/null 2>&1 || pixi global install git
-            which kubectl >/dev/null 2>&1 || pixi global install kubernetes-client
-            git config --global --add safe.directory "*"
-            pixi install --frozen -e dev
-            pixi run --frozen -e dev dvc pull -f
-
-            # Extract vision foundation features from S3 manifest if not cached
-            if [ ! -f "data/embeddings/cached_features.pt" ]; then
-              pixi run --frozen -e dev python -m taxon_vision.pipelines.extract_features \
-                --extractor "${EXTRACTOR:-dinov3}" \
-                --manifest data/manifests/dataset_manifest.parquet \
-                --out data/embeddings/cached_features.pt
-            fi
-
-            # Train classification head with calibrated hyperparameters
-            EXTRA_OPTS=""
-            if [ "${TUNE_HYPERPARAMETERS:-false}" = "true" ]; then
-              EXTRA_OPTS="--tune --n-trials 10"
-            fi
-
-            pixi run --frozen -e dev python -m taxon_vision.models.trainer \
-              --extractor "${EXTRACTOR:-dinov3}" \
-              --epochs 15 \
-              --require-cache \
-              --require-promotion \
-              --cuda-memory-fraction 0.7 \
-              $EXTRA_OPTS
-
-            # Re-export ONNX computational graph and commit artifacts
-            pixi run --frozen -e dev python -m taxon_vision.inference.onnx_exporter --extractor "${EXTRACTOR:-dinov3}"
-            pixi run --frozen -e dev dvc commit -f models/checkpoints/head.pt models/checkpoints/model.onnx
-            pixi run --frozen -e dev dvc push models/checkpoints/head.pt models/checkpoints/model.onnx
-          '''
-        }
-      }
-    }
-
-    stage('Deploy to Kubernetes') {
-      when {
-        anyOf {
-          branch 'main'
-          branch 'feature/phase1-foundations'
-        }
-      }
-      steps {
-        container('ml-runner') {
-          sh '''
-            export PATH="/root/.pixi/bin:$PATH"
-            kubectl apply -f deploy/k8s/api-deployment.yaml
-            kubectl rollout restart deployment/taxon-vision-api -n taxon-vision
-            kubectl rollout status deployment/taxon-vision-api -n taxon-vision --timeout=120s
-          '''
-        }
-      }
-    }
-  }
-
-  post {
-    always {
-      cleanWs()
-    }
-  }
-}
+    GH->>CF: Signed Webhook Event (/github-webhook/)
+    CF->>JC: Tunnel Proxy Delivery (hive-mind-tunnel)
+    JC->>K3S: Schedule Ephemeral Agent Pod
+    K3S->>POD: Instantiate Pod with nvidia.com/gpu: 1
+    Note over POD: Step 1: Toolchain & Rattler Cache Sync<br/>pixi install --frozen -e dev
+    POD->>SW: Step 2: Feature Cache Retrieval (data/embeddings/*.pt)
+    alt Cache Miss
+        POD->>POD: Extract representations via S3 streaming
+    else Cache Hit
+        SW-->>POD: Fast stream 4-way stratified tensors
+    end
+    Note over POD: Step 3: Unified 7-Stage DVC Pipeline<br/>dvc repro (extract, train, export, calibrate, eval)
+    POD->>SW: Step 4a: Push Diamond artifacts to local SeaweedFS S3
+    POD->>DH: Step 4b: Push release model_int8.onnx & head.pt to DagsHub
+    POD->>GIT: Step 5: Commit dvc.lock & reports/*.json [skip ci]
+    POD-->>JC: Execution Success (Exit Code 0)
+    JC->>K3S: Delete Ephemeral GPU Pod (podRetention: Never)
 ```
 
 ### 6.2 Architectural Rationale of Pipeline Components
@@ -602,12 +409,26 @@ The provisioned Kubernetes pod instantiates two containers sharing network and f
 
 * **Prepare Toolchain:** Checks for Git and kubectl availability, installs standalone binaries via Pixi (`git`, `kubernetes-client`), registers `safe.directory "*"` across container mount boundaries, and executes `pixi install --frozen -e ci-dev`.
 * **Static Quality & Invariants:** Runs Lint (`ruff`) formatting/linting, Type Check (`mypy`) strict type analysis, open license compliance auditing (License Audit), and OKF knowledge graph validation concurrently in parallel blocks across CPU cores.
-* **Unit Tests & Coverage:** Executes the full unit test suite, enforcing a strict 78% line coverage threshold (`--cov-fail-under=78`).
-* **Integration & Conformal Invariants:** Validates FastAPI service endpoints and evaluates mathematical error bounds for split conformal prediction (Conformal Coverage Verification).
-* **Documentation Strict Build:** Generates the OKF knowledge graph visualizer (`docs/viz.html`) and executes `zensical build --strict` to verify syntax and reference integrity (strict Zensical build).
-* **Model Training & Checkpoint (GPU - main branch only):** When triggered on `main`, the stage defines a dedicated GPU agent pod requesting `nvidia.com/gpu: 1` in both limits and requests, guaranteeing 1 of the 4 NVIDIA time-slicing partitions on `hive-mind`. After pulling DVC datasets from DagsHub S3 (`s3://dvc`), the runner checks if `data/embeddings/cached_features.pt` exists and, if absent, executes S3 feature extraction (`pixi run -e dev python -m taxon_vision.pipelines.extract_features`). It then executes classification head training with Optuna Bayesian optimization: `pixi run -e dev python -m taxon_vision.models.trainer --extractor dinov3 --epochs 15 --tune --n-trials 10 --cuda-memory-fraction 0.7`. Training uses early stopping, best weight restoration, and PR-AUC model promotion; the ONNX graph is re-exported via `taxon_vision.inference.onnx_exporter`, and `models/checkpoints/head.pt` plus `models/checkpoints/model.onnx` are committed and pushed to DagsHub DVC.
-* **Deployment Rollout (main branch only):** Applies Kubernetes manifests and triggers `kubectl rollout restart deployment/taxon-vision-api -n taxon-vision`, awaiting readiness probe verification with zero downtime.
+* **Unit Tests & Coverage:** Executes the full unit test suite against `tests/unit/`, enforcing a strict 80% line coverage threshold (`--cov-fail-under=80`).
+* **Integration & Conformal Invariants:** Validates FastAPI service endpoints and evaluates mathematical error bounds for split conformal prediction (asserting empirical coverage $1 - \alpha \ge 0.90$).
+* **Documentation Strict Build:** Generates the OKF knowledge graph visualizer (`docs/viz.html`) and executes `zensical build --strict` to verify syntax and reference integrity (strict Zensical MkDocs compilation).
+* **Model Training & Checkpoint (GPU - develop & main):** When triggered by module changesets or manual parameter `RETRAIN_MODEL = true`, the stage defines an ephemeral GPU agent pod requesting `nvidia.com/gpu: 1`, securing 1 of the 4 NVIDIA time-slicing partitions on `hive-mind`. It connects to in-cluster SeaweedFS (`http://seaweedfs.taxon-vision.svc.cluster.local:8333`) to retrieve or cache stratified embedding partitions (`data/embeddings/*.pt`). It then executes the unified 7-stage DVC pipeline (`dvc repro`), training the head with Class-Balanced Loss (CBL) and Optuna Bayesian optimization when enabled (`TUNE_HYPERPARAMETERS=true`). It exports the dual-output ONNX graph, calibrates conformal prediction thresholds, runs the Pareto quantization benchmark, and pushes updated checkpoints to DagsHub S3 (`origin`).
+* **Deployment Rollout & Smoke Verification:** Injects SeaweedFS credentials, hydrates model checkpoints from DVC with a resilient fallback to the host volume tier, applies [`deploy/k8s/api-deployment.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml), triggers `kubectl rollout restart deployment/taxon-vision-api -n taxon-vision`, and validates health endpoints and Prometheus counters via [`scripts/ci/verify_deployment.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/ci/verify_deployment.sh).
 * **Workspace Cleanup (`cleanWs()`):** Wipes the temporary checkout directory before pod termination.
+
+### 6.3 Root-Cause Analysis and Hardening of Deployment Checkpoint Hydration (Build #33)
+
+During the continuous deployment cycle of Build #33, the pipeline passed all quality gates, unit tests, integration tests, and documentation builds, but failed abruptly at the `Deploy to Kubernetes` stage. A post-mortem forensic analysis revealed three compounding architectural factors:
+
+1. **Temporal Infrastructure Desynchronisation:** Build #33 reached the deployment stage at `22:47:05`, approximately five minutes before the in-cluster SeaweedFS storage engine was applied to the Kubernetes cluster (at `22:52`). When `dvc pull` initiated an HTTP connection to `http://seaweedfs.taxon-vision.svc.cluster.local:8333/taxon-dvc-cache/files/md5`, the Kubernetes DNS resolver correctly returned the ClusterIP, but connection attempts timed out because the destination pod was not yet listening.
+2. **Ephemeral Container Credential Isolation:** In declarative Jenkins pipelines, each stage executes inside a fresh, isolated container. Whilst SeaweedFS credentials (`taxonadmin` / `taxonadmin`) were injected in the `Model Training` stage, the subsequent `Deploy to Kubernetes` stage did not re-configure `remote.local-seaweedfs.access_key_id`. Consequently, DVC fell back to default unauthenticated S3 requests.
+3. **Rigid Checkpoint Dependencies on Skipped Retraining Runs:** In Build #33, the commit modified documentation, manifests, and deployment configurations without altering model source code (`src/taxon_vision/models/**`). Accordingly, the `Model Training` stage was skipped by design. However, the subsequent deployment stage executed an unconditional `dvc pull -f models/checkpoints/head.pt ...`. Because these specific artifact hashes had not been pushed to the remote repository, `dvc pull` returned exit code 1, halting deployment.
+
+**Architectural Hardening Implemented:**
+The deployment stage was hardened against these failure modes:
+
+* **Dynamic Credential Provisioning:** The deployment script checks for the active existence of `service/seaweedfs` in namespace `taxon-vision` and dynamically injects `taxonadmin` access keys into the ephemeral `.dvc/config.local` prior to any S3 network calls.
+* **Resilient Dual-Remote Hydration with Host-Tier Fallback:** Rather than enforcing a brittle fail-fast checkout, DVC attempts hydration sequentially from `origin` (DagsHub S3) and `local-seaweedfs`. If remote artifacts are absent (e.g. during a non-training documentation or configuration commit), the script gracefully emits a warning and falls back to existing model checkpoints already mounted from the host NVMe drive (`/home/benni/taxon-vision-mlops/models/checkpoints/`). This guarantees continuous zero-downtime rolling deployments while preserving release model consistency.
 
 ---
 
@@ -643,5 +464,5 @@ As outlined in [gpu_resource_scheduling.md](gpu_resource_scheduling.md) and [cur
 * **Stage 1 - Ingest & Cache (CPU):** Ephemeral CPU runner mounts NVMe Rattler cache, checks out code, pulls dataset updates, and verifies cryptographic hashes via DVC.
 * **Stage 2 - Static Gates & Unit Testing (CPU):** Concurrent Ruff linting, MyPy static analysis, open-license audit, OKF validation, and pytest coverage execution.
 * **Stage 3 - Conformal Invariant Assertions (CPU):** Formally asserts that empirical coverage of Split Conformal Prediction satisfies $1 - \alpha \ge 0.95$ on holdout splits.
-* **Stage 4 - Train & Export (GPU via Time-Slicing):** The ephemeral GPU agent claims 1 of 4 NVIDIA time-slicing slots on `hive-mind` (`nvidia.com/gpu: 1`) and enforces `TAXON_CUDA_MEMORY_FRACTION=0.7` to prevent VRAM starvation. The stage executes S3 feature extraction (`taxon_vision.pipelines.extract_features`), trains the classification head with Optuna tuning (`taxon_vision.models.trainer`), re-exports the ONNX graph, logs to DagsHub MLflow, and pushes model checkpoints to the DagsHub DVC remote.
+* **Stage 4 - Train & Export (GPU via Time-Slicing):** The ephemeral GPU agent claims 1 of 4 NVIDIA time-slicing slots on `hive-mind` (`nvidia.com/gpu: 1`) and enforces `TAXON_CUDA_MEMORY_FRACTION=0.7` to prevent VRAM starvation. The stage executes S3 feature extraction (`taxon_vision.pipelines.extract_features`), trains the classification head with Optuna tuning (`taxon_vision.pipelines.train`), re-exports the ONNX graph, logs to DagsHub MLflow, and pushes model checkpoints to the DagsHub DVC remote.
 * **Stage 5 - Zero-Downtime Deploy (CPU):** Dispatches rolling update to k3s via `kubectl rollout restart deployment/taxon-vision-api -n taxon-vision`. In-flight queries continue uninterrupted until newly warmed ONNX pods clear readiness probes.

@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    container_name: taxon_seaweedfs
+    ports:
+      - "8333:8333" # S3 API
+      - "9333:9333" # Master UI
+      - "8888:8888" # Filer UI
+    command: "server -dir=/data -s3 -s3.port=8333 -s3.allowEmptyFolder=true"
+    volumes:
+      - ./data/seaweedfs:/data
+
+  optuna-dashboard:
+    image: ghcr.io/optuna/optuna-dashboard:latest
+    container_name: taxon_optuna_dashboard
+    ports:
+      - "8080:8080"
+    command: ["sqlite:////optuna/optuna_studies.db", "--port", "8080", "--host", "0.0.0.0"]
+    volumes:
+      - ./data/optuna:/optuna
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: taxon_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yaml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    # This allows Prometheus inside the container to scrape the FastAPI app running locally on your host machine
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: taxon_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+volumes:
+  prometheus_data:
+  grafana_data:

@@ -28,7 +28,7 @@ repos:
     rev: v0.49.1
     hooks:
       - id: markdownlint
-        args: ["--fix"]
+        args: ["--fix", "--config", "config/lint/.markdownlint.yaml"]
 
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.3
@@ -74,7 +74,7 @@ repos:
 
       - id: verify-markdown-rules
         name: Enforce Markdown Rule 04 Formatting
-        entry: pixi run -e dev python scripts/verify_markdown_rules.py --fix
+        entry: pixi run -e dev python scripts/governance/verify_markdown_rules.py --fix
         language: system
         files: ^(docs/|\.agents/|README\.md)
         exclude: ^docs/latex/concept_design/considerations/
@@ -82,7 +82,7 @@ repos:
 
       - id: validate-okf
         name: Enforce Google Open Knowledge Format (OKF v0.2)
-        entry: pixi run -e dev python scripts/validate_okf.py
+        entry: pixi run -e dev python scripts/governance/validate_okf.py
         language: system
         files: ^(docs/|\.agents/|openwiki/).*\.md$
         pass_filenames: true
@@ -96,9 +96,9 @@ repos:
 
       - id: audit-license-compliance
         name: Audit iNaturalist Open License Compliance
-        entry: pixi run -e dev python scripts/audit_license_compliance.py
+        entry: pixi run -e dev python -m taxon_vision.pipelines.audit_license
         language: system
-        files: ^src/taxon_vision/data/
+        files: ^(src/taxon_vision/data/|src/taxon_vision/domain/license\.py|src/taxon_vision/pipelines/audit_license\.py|data/manifests/)
         pass_filenames: false
 
       - id: enforce-author-identity

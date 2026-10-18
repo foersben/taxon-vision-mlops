@@ -1,2 +1,5 @@
 /manifests
-/sample
+/embeddings
+/optuna
+/seaweedfs
+*.pt

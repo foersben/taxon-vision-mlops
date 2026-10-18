@@ -11,7 +11,7 @@
           "version": "repo-lines-v1:sha256:a5bbb975c1bd4511d21b7562be439d5a33a5b931156462f973875f2eb42bb720:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMmYyM2YyMWM3MGVjNzM1MGY5MmY4MDNmZTExNWVhMmMwYmNiOGM3MGQ3OWFhMmU5NjU1ZjZkZWJlOWU2MzUyNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDY2OTk5YzU4ZTYyNzY5ZmUwYTEzODI4ZDZmYWJlOWYxYmNiZjYwYzZjYmU5NzgxMmFmNDI4ZmUzMjc1NjUwZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDcxZTEzNGU1ZGZlY2M4MzljOWQ0NTQ0ZTM4MzZjMGMzYTYyOTdlNDViNDdjYzM0YzM0MTE0MjkyY2VmMmZiNCJ9"
         },
         {
-          "resource": "repo://scripts/local_ci.sh#L44-L49",
+          "resource": "repo://scripts/ci/local_ci.sh#L44-L49",
           "version": "repo-lines-v1:sha256:2a7e855ca04a898d731f7525d638aca4d6eafacd64ba96c48664ef9621f071e1:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWRmNzg0ZjQ3Nzc3MmNjN2RhYmE3ZDg0YzY1NTI1Y2Y1NDkxNzMzNzc0MmQyNWY1YjczZWJkMjMwNDE4NzFjYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzVmYzkwZmY4YTQ0MTRjNTQ0MWQwZjY3N2M1Y2JmZGEzOGI0NzRlNTFiZmQ1NTlhNTU1OWRlMGY4NzcwNTUyNCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZGJiZTVhYzUyOThjNDFhYjJlYjgyZjdjMDE2M2U5YTk1M2VmMTM2MTkzMmRjY2IyNzE2ODU3ZDY2Yzc2MzRmOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiN2ZkYTA3MWJiN2ZmZWI0YzhiZmU0YjA0ODExZDc3YTI4YWVhOGM4MTg4OTVjYzk5Y2ViYzllYTcxMGJhYTllMiJ9"
         },
         {
@@ -25,7 +25,7 @@
       "statement": "The test suite mathematically asserts Split Conformal empirical coverage guarantees P(Y in C(X)) >= 1 - alpha on holdout distributions by calibrating empirical non-conformity quantiles and verifying that nominal coverage is satisfied across evaluation samples.",
       "evidence": [
         {
-          "resource": "repo://scripts/calibrate_conformal.py#L26-L50",
+          "resource": "repo://src/taxon_vision/pipelines/calibrate.py#L26-L50",
           "version": "repo-lines-v1:sha256:a8c50dbe90d540c72782784a4e181ff8c43f8aa0c2c18e4cc96714da616a7601:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIzNjkxNzViZTZkZWVhMDU1N2ZkNzlkOGY0NjgyOWRlN2Q3ZTkxOTRkMDUyMmEwMGM0MDlkMGVkNDUyMjQ4NzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYyMDA5N2U0YWE1MDA2OGJhMTU3ZjlhMjczOWZhZDg2OTk1ZTFlMGNkY2NkYWRjNTg5N2MyMDM0Yzc0ZDNlZmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYwODcxMWU0ZmRjOWJiN2RhMzgxNmJkOWRhNTBmZTNlZmJiMGIzNThjZDVhYTQ5YmQ2ZWE4YzkzODhlNTdhMDgifQ"
         },
         {
@@ -57,15 +57,15 @@
       "statement": "The OKF v0.2 validation engine validates documentation structure by enforcing mandatory 'type' frontmatter on concept files, prohibiting YAML frontmatter on subdirectory index.md (Option A) and update logs (log.md), requiring newest-first chronological ordering on log files, and mandating a runtime field on Attested Computation concepts.",
       "evidence": [
         {
-          "resource": "repo://scripts/validate_okf.py#L204-L222",
+          "resource": "repo://scripts/governance/validate_okf.py#L204-L222",
           "version": "repo-lines-v1:sha256:4df8ba8d8ff06ab6c554b3fba5e4088a03ffb082a3c01d58705996fe70c9c11b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJhZjRhM2ExOTYyNjVlMzFmYWE2ZTk3ODFkMDY0MmVlZWVkMmE0MWUwNmFjMmExZDk4NWE4MDM3NWU2MDdhOWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRlMTAxYjk2NmMwNjZkMzE2M2MxYjgwZDBhMjA2OWFiNGZhZGY3NjU0MzJjMjA4MjI2Yzc4MjNkOWQ3ZmU0NDciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNkNDI3MjAwY2JjYzMxNThhMGYxMTFhZDQ5NmM0Yzk4NjRhZGM1ODJjYmM4MTVlMTBlZTUzN2EzOGRlZjJhYzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFhYTljNWU5OTg2NWZhODM2YmJhYjFiZjlmNzQ2OTVlOWJiMDQ5ODJlMjBjNTE2YmJiM2E3NDIwOTRkYTFkMmYifQ"
         },
         {
-          "resource": "repo://scripts/validate_okf.py#L272-L304",
+          "resource": "repo://scripts/governance/validate_okf.py#L272-L304",
           "version": "repo-lines-v1:sha256:e52748861f777e2a1938a4b9be2a23a05aad6e239a4e5dd96ff1153e331da6b9:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZlZjhiZDM3YjE3ZjQxMmZjMTFmODgzNGQwZDY0NDNhNTdiMTJkMDYwZDA1YmE1MWE1M2UyZGQ2ZmM1MjdjMTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2YWY3YzJhYzIyNzk2MGZjZDVjM2NjODgwZDViMDhjZmIzOTcxMTJkYTgxMGJmNzVjM2Y0ZWJhYTNhMzdlNWQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJhNmNjZDliYjliZjMxOTJkNjNiYzM0NDQyYWY1NTI0NmNhY2UwMjEzZmRlOTZhNTQ4NDIzNmU2ZTBlOTBiM2MiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQyMDE5ZmRhNGY0YTFkNDc3NTA3OWVhNmJiMzYzODQxMGNhNWI0MWIyYTNkNzk0NDc1OTlhOTNiYmExYTk5YTIifQ"
         },
         {
-          "resource": "repo://scripts/validate_okf.py#L307-L322",
+          "resource": "repo://scripts/governance/validate_okf.py#L307-L322",
           "version": "repo-lines-v1:sha256:0f3ea7e496feeaad33104fc5b02854911644cd9b3d48caae75740650dee58ee5:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhmMWZlOGRkN2VmYzdkYTY5MDEzMjI0YWYzY2I4NmQ4YTNkNzdmNDk1NTkzZTg3MTJhNTgwMjBhZDE0YWIxOGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2YWY3YzJhYzIyNzk2MGZjZDVjM2NjODgwZDViMDhjZmIzOTcxMTJkYTgxMGJmNzVjM2Y0ZWJhYTNhMzdlNWQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJhNmNjZDliYjliZjMxOTJkNjNiYzM0NDQyYWY1NTI0NmNhY2UwMjEzZmRlOTZhNTQ4NDIzNmU2ZTBlOTBiM2MiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVmM2IxZjZkNGViMmM5MmQzODY0MzZjZjJhMTExMWM0ZGJhMzlhMTI2OGE1YzJjZTNjNTBmNDBmNmRmZGJlOGYifQ"
         }
       ]
@@ -75,15 +75,15 @@
       "statement": "The OKF v0.2 validator verifies provenance integrity by requiring strict ISO-8601 UTC timestamps with trailing 'Z', conforming actor naming conventions, existence of declared source resource paths, and bounded cross-document Markdown link topology.",
       "evidence": [
         {
-          "resource": "repo://scripts/validate_okf.py#L119-L167",
+          "resource": "repo://scripts/governance/validate_okf.py#L119-L167",
           "version": "repo-lines-v1:sha256:aafb703ad1364aec680cecaa32456ee13b1d1b059b6caa447338dd27bc6b5375:eyJzZWxlY3RlZExpbmVDb3VudCI6NDksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE4YzY2MmI1NTU5Yzg1NTFiYzczNzEwYTdmZGRmMjE0N2YyODRkNWFlZTM1MzhiMDg0Mzk3NGQ5NTlhZmEyZTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTYwMGE3M2QyZTAyZjM1MmI5MGZlZjFkOGQ2MzgxMWJhNGE4ZWUwYzFiZWFhN2FlNDY1OGYzNmFhMmUxOTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUwYjIxYmY4OTVmYWUyZDczOTIwZDkzMTc4Y2ZkNTg0MWNkZjhmOTUyNDUxNmM4YTU2NTg0MzZhNGFjNDhmM2IiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJhODQyYTU2Y2YxZDE3ZTA0OGM4MTE1MDc3ODBlMjM3MGJkNmRkMzZhM2M4YzlhZDljY2I2YzA3YzVkNDdhZmMifQ"
         },
         {
-          "resource": "repo://scripts/validate_okf.py#L424-L463",
+          "resource": "repo://scripts/governance/validate_okf.py#L424-L463",
           "version": "repo-lines-v1:sha256:b7a1508a884d61d5a113b541625236389275a50948c830fac48fc28ae22b7298:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwODRhOWM2MDA4Y2NhODFjYTUzZThiN2FhMGRhODE3NjYxMDFmYjFhZDNhM2ZlY2U5NjE5NWNhYzRlOWM1Y2UiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2YWY3YzJhYzIyNzk2MGZjZDVjM2NjODgwZDViMDhjZmIzOTcxMTJkYTgxMGJmNzVjM2Y0ZWJhYTNhMzdlNWQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRiYmM5ZDM3MmRkYzkyNzk1ZGE5Y2JhODJjMjg0N2ExNTY3ZGZhODhmY2QwZTMwZmU0MTc3MTU0ZDg3MjlhZWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY3YWE3NDdlOGVkM2FiMmUwYTY0NjViYmFhY2JkMTZlYmJjM2Y2MjY2MTk3ZDZlYWMzOGQ0OGVhZWJkOWU1ZjMifQ"
         },
         {
-          "resource": "repo://scripts/validate_okf.py#L466-L528",
+          "resource": "repo://scripts/governance/validate_okf.py#L466-L528",
           "version": "repo-lines-v1:sha256:2da358a194ae03694eed2d5b2f081adfb3cbd587b75d94eb145bcbd2e7d07b98:eyJzZWxlY3RlZExpbmVDb3VudCI6NjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgwZjliNDUxZjg4ZWZmMTE2ZjM2OTIzNWIxNzMwNDNkYWE4NjMzN2NmOWY5NDA5MGJiMGRkODNmNGI0Y2Q1MGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJhNmNjZDliYjliZjMxOTJkNjNiYzM0NDQyYWY1NTI0NmNhY2UwMjEzZmRlOTZhNTQ4NDIzNmU2ZTBlOTBiM2MiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQyOWM3ODAyNmRhZDhiOTE0ZWQyMjFlOWZhYTQ0ZmI1MTVhMGVjYzdlYTRhZDI4YWJiOWQ5ZmUxNTY5OGUzODEifQ"
         }
       ]
@@ -101,7 +101,7 @@
           "version": "repo-lines-v1:sha256:7af79b7ea2e8bd4c187402bbf192368ffbed7bf63684705aaef496f401ac6d57:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODY3NmU2NDE0NjVhNjU1MWU5ZTljZmZkN2ZhYTFlNmE0MmY5YjcyNDgwOTgxM2M5MDNkN2VkY2I1MmYzMDA2ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTVlOTYzMWI4ZjZjNWI5NDZkMWM5NjhjNGNkYWYyOTRhMDMxOTAyMmRlNjliMGY1NDc4MjU2ZDQxODM1NTViMiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiN2NkMjY3NGJjNzY4N2RhYzVlM2Y0ZmU2MmM0NmE5OTVlZjVjYzRlOWYwNGRiM2NiYTAzNDA4NTJkMTM3MjcwYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNTA5ZWViYmIzOGIxOThiYjczYzBlZTMwY2M4MTNjNDNkZDIzZmQ0YWM2NWY2NDY3NTFlNGE1OGUzZGRlZGY2MyJ9"
         },
         {
-          "resource": "repo://scripts/local_ci.sh#L60-L69",
+          "resource": "repo://scripts/ci/local_ci.sh#L60-L69",
           "version": "repo-lines-v1:sha256:5f34d1c42c80e412bb60f896e938767352753e0cfee5b918bd3dd33cd6b43251:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNiY2FhNDFiYmFjMDhiYmUxNDI1YzRlNGJkOWJjZGEyNjkyZTcyZGY1ZTdlODZiNWEyNWZmOGQ0ZTIzMzE3ZjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUxZjBkYzg0YWFlOTM1YTZlMDg0MTJhMGVkMzQxZGE3YTk4ZDg2ZjEyM2ZiYjcxNzU0YjA5NDI5ZWQwZWYxOGUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM4NjYzOTNmZWFlMzcwOTM2MjkyMTkwMmNhMGIxNjU5ODlmOGU0ZWFmNmZiODFmMjE1OWE2M2RkZTgxZGVkZWQifQ"
         }
       ]
@@ -129,7 +129,7 @@
           "version": "repo-lines-v1:sha256:8b5ed70df4b98b7f7f201e404d79055d9e53b155d570f1a14cc9ec12cf03bb9d:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc3NDVmYWI4NmIxMjFkYzg1YjRmNzg2NzMzOWExM2ZlZTgwNGM4YTAyZjQ3MTA2NTcyZjJiZjA2NjRkNTk1MWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc3ZjExN2Q2NTNhYWYxYTUxZTVkYmRkYTZhYmVkODhmOWZjYmNiOTAwOTRhNjlkYTg0OGQ5ODI2ZGVkY2ZlM2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgyOTgyMDY1ZmM2OTc3NWUyZTQxZWM1ZDQ0YmNhZDc2NTM0YTk3MzkyYjA2NmQyMGU5ZmRmNjRkMzFjMmZhNGMifQ"
         },
         {
-          "resource": "repo://scripts/local_ci.sh#L52-L58",
+          "resource": "repo://scripts/ci/local_ci.sh#L52-L58",
           "version": "repo-lines-v1:sha256:00b543edb21f0eab73124472b5c683386096d2f01e5c98c3311ecce937e06d76:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTNkNzJkOWQzMTIxN2Q4YmI0NmU2Nzk2MGUwMGRjMTQ2OGIyNWEyMzhjYTc1MWUzNmE2ZDQ2MmI5YTdjMzExOCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWNhN2EzM2JiODM0NWU0YjljNGQ5ZTk5YjdlOTAyOWRiMjU4YWQ1NDBlNjdiZjM1NzNhNjNjZDIxY2MzZGZmNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMWQ4M2U3NmE4MzJlZTVjYjQxZWQ4MjY5NTZkZDA4ZDBhNjUyZTFlZjM2NWJjYmVhMjM5MTg4OGMxNzE4ZDBhYiJ9"
         }
       ]

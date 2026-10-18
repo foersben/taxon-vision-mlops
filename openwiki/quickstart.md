@@ -14,9 +14,9 @@ sources:
   - id: openwiki-source-05ccef8d4cf1698187f20464
     resource: repo://pyproject.toml
   - id: openwiki-source-12914d3b78b4a80693643804
-    resource: repo://scripts/local_ci.sh
+    resource: repo://scripts/ci/local_ci.sh
   - id: openwiki-source-7079947a60e14bc71bc44a0e
-    resource: repo://src/taxon_vision/config.py
+    resource: repo://src/taxon_vision/config/__init__.py
   - id: openwiki-source-f0a6e7dc03522b2682f88655
     resource: repo://tests/conftest.py
   - id: openwiki-source-60b001159f253a7d5bdf9f0f
@@ -322,7 +322,7 @@ TaxonVision maintains a deterministic configuration architecture preventing conf
 Configuration settings are resolved by `taxon_vision.config.get_settings()` through a strict six-tier hierarchy:
 
 1. **Base Declarative Defaults**: `config/default_config.yaml` declares system defaults for web serving, vision backbones, calibration parameters, and OOD thresholds.
-2. **Pipeline Hyperparameters**: `config/params.yaml` overlays training epochs, batch sizes, and learning rates (synchronized with DVC stages).
+2. **Pipeline Hyperparameters**: Root `params.yaml` overlays training epochs, batch sizes, and learning rates (synchronized with DVC stages).
 3. **Conformal Quantiles**: `config/conformal_config.yaml` overlays calibrated non-conformity threshold values ($\hat{q}$ and $k_{\max}$).
 4. **Custom YAML Overrides**: Specified via the `TAXON_CONFIG_PATH` environment variable or an explicit filesystem argument.
 5. **Direct Environment Overrides**: Targeted runtime environment variables for test execution and offline sandboxing:
@@ -375,13 +375,13 @@ To modify the species perimeter, download new observations, or stream images fro
 #### 2. Training Representation Heads & Tracking Experiments
 To train classifier heads on top of frozen vision backbones (`BioCLIP-2`, `DINOv3`, `MobileNetV4`):
 * Consult [Model Training & Experiment Tracking](workflows/model-training-and-tracking.md) for details on embedding caching and Class-Balanced Loss.
-* Configure hyperparameters in `config/params.yaml` and execute `just train epochs=10 extractor=dinov3`.
+* Configure hyperparameters in root `params.yaml` and execute `just train epochs=10 extractor=dinov3`.
 * Metrics, confusion matrices, and model artifacts are automatically tracked to MLflow on DagsHub.
 
 #### 3. Optimizing Inference with ONNX Runtime & INT8 Quantization
 To convert PyTorch weights to high-throughput ONNX computational graphs:
 * Consult [Inference Optimization & ONNX Runtime](workflows/inference-and-optimization.md) for graph architecture details, dynamic vs static calibration, and dual-output heads (logits + Grad-CAM feature activations).
-* Run `just export-onnx` to produce `models/checkpoints/taxon_vision_quantized.onnx`.
+* Run `just export-onnx` to produce `models/checkpoints/model_int8.onnx`.
 * Run `just pareto` to evaluate latency, throughput, and memory consumption across backbones.
 
 #### 4. Calibrating Statistical Uncertainty & OOD Detection

@@ -100,7 +100,7 @@
     
     \node[metricbox, below=0.5cm of metadata] (metrics) {\textbf{Metrics Logging (per-epoch)}\\\texttt{train\_loss}, \texttt{val\_loss}\\\texttt{val\_acc\_top1}, \texttt{val\_acc\_top5}\\\texttt{val\_macro\_f1}};
     
-    \node[artifactbox, below=0.5cm of metrics] (artifacts) {\textbf{Artifact Logging (S3)}\\\texttt{head.pt} weights\\Confusion matrix heatmaps\\Classification report MD};
+    \node[artifactbox, below=0.5cm of metrics] (artifacts) {\textbf{Artifact Logging (S3)}\\\texttt{head.pt}, \texttt{model\_int8.onnx}\\Confusion matrix heatmaps\\Classification report MD};
 
     \begin{scope}[on background layer]
         \node[groupbox, fit=(dagshub)(metadata)(metrics)(artifacts), label={[font=\bfseries\color{TaxonPrimary}]above:2. MLflow Experiment Tracking}] (tracking_group) {};
@@ -126,7 +126,7 @@
     
     \draw[bidirectional] (lineage.west) -| (gitdvc.east);
     \draw[bidirectional] (lineage.west) -- (metadata.east);
-    \draw[bidirectional] (lineage.south) -- ++(0,-0.5) -| node[pos=0.25, below, font=\scriptsize] {ONNX Serving Artifact $\leftrightarrow$ MLflow Model Version} (artifacts.east);
+    \draw[bidirectional] (lineage.south) -- ++(0,-0.5) -| node[pos=0.25, below, font=\scriptsize] {\texttt{model\_int8.onnx} $\leftrightarrow$ MLflow Model Version} (artifacts.east);
 
     \end{tikzpicture}%
     }

@@ -56,11 +56,49 @@ Under these illustrative assumptions:
 \end{align*}
 This 8.3 GB peak allocation (or 9.8 GB under peak 60 KB compression ceiling) operates well within the DagsHub 20 GB free-tier allowance, leaving ample headroom for active learning annotations.
 
-\subsection{Local Intermediate Lakehouse and External Remote Topology}
-Whilst DagsHub acts as the external Git and DVC synchronisation mirror, high-throughput training and inference loops cannot endure public internet round-trip latencies for ephemeral or high-volume intermediate data. Consequently, the single-host k3s cluster hosts a localized MinIO object store instance (\texttt{s3://taxon-lakehouse/}) backed by a \texttt{NOCOW} (\texttt{chattr +C}) BTRFS subvolume on the FireCuda NVMe drive. This instance provides a local, high-bandwidth S3 object tier dedicated to three distinct workload classes:
+\subsection{In-Cluster Object Storage: SeaweedFS Architecture and Multi-Remote Topology}
+\label{sec:seaweedfs_topology}
+
+Whilst DagsHub acts as the external Git and DVC synchronisation mirror, high-throughput training and iterative inference loops cannot endure public internet round-trip latencies for ephemeral or high-volume intermediate data. Historically, early prototypes relied upon localised MinIO instances; however, architectural evolution and licensing constraints necessitated an absolute migration to \textbf{SeaweedFS} (\texttt{chrislusf/seaweedfs:latest}), licensed under the permissive \textbf{Apache~2.0} standard.
+
+\subsubsection{Licensing Imperatives and Community Sustainability}
+The containerised distribution of upstream MinIO transitioned to the Affero General Public License (AGPLv3), creating severe operational friction for downstream academic and commercial deployments. Following upstream Docker Hub repository purges, community continuity forks (such as Pigsty Silo) offer temporary respite. However, SeaweedFS eliminates all copyleft exposure through an unencumbered Apache~2.0 license, ensuring complete sovereign control over data plane operations without legal ambiguity.
+
+\subsubsection{The Small-File Bottleneck and Haystack/Needle Mechanics}
+In deep vision pipelines, storage workloads exhibit extreme bimodal variance: Pipeline~1 produces heavy, multi-megabyte dense tensor matrices (stratified embedding splits under \texttt{data/embeddings/}, 50--500~MB), whilst Pipeline~2 requires rapid nearest-neighbour retrieval over $N = 100{,}000$ compressed visual exemplar crops ($s \approx 45\text{ KiB}$).
+
+On conventional POSIX filesystems (such as standard ext4, XFS, or Copy-on-Write BTRFS), each individual file requires an independent inode allocation. Under continuous multi-worker streaming, reading $N$ small objects introduces the catastrophic phenomenon known as \textit{disk-seek death}:
+\[
+T_{\text{read}} = \sum_{i=1}^{N} \left( t_{\text{inode\_lookup}}(i) + t_{\text{seek}}(i) + \frac{s_i}{B_{\text{NVMe}}} \right),
+\]
+where $t_{\text{inode\_lookup}} + t_{\text{seek}} \gg \frac{s_i}{B_{\text{NVMe}}}$, causing bus starvation and driving p95 retrieval latency beyond 30~ms.
+
+SeaweedFS solves this structural bottleneck by adopting the Facebook Haystack needle-packing architecture. Individual observation crops are appended sequentially into contiguous, pre-allocated 32~GB volume files (\texttt{.dat}), whilst needle keys, physical byte offsets, and sizes are maintained within an in-memory compact hash index (\texttt{.idx}):
+\[
+\text{Memory}_{\text{Index}} = N \times 16 \text{ bytes} \approx 100{,}000 \times 16\text{ B} = 1.6\text{ MB}.
+\]
+Consequently, object lookups require exactly $O(1)$ disk seeks, enabling SeaweedFS to sustain sub-$2\text{ ms}$ p95 read latencies on our Seagate FireCuda 530 NVMe drive under saturated 4~KiB random-read workloads.
+
+\subsubsection{Consolidated Cluster Daemon and Dynamic Bucket Provisioning}
+In Kubernetes, SeaweedFS is deployed as a consolidated, lightweight single-container daemon executing \texttt{weed server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -volume.max=20}. This encapsulates four coordinated internal subsystems within an active memory envelope of approximately 80~MB RAM:
 \begin{enumerate}
-    \item \textbf{High-Volume Feature Tables and Embeddings:} Intermediate LanceDB dataset tables (\texttt{.lance} format) and pre-computed backbone embeddings streamed during classification head retraining.
-    \item \textbf{Active Learning Triage Records:} Bounded image crops, feature representations, and predictive distributions routed to the operator review queue (\texttt{triage\_queue.lance}).
-    \item \textbf{Local Run Artefacts:} Intermediate MLflow run artefacts -- including checkpoint heads (\texttt{head.pt}), compiled ONNX graphs (\texttt{model.onnx}), and calibrated Conformal Prediction thresholds (\texttt{conformal\_config.yaml}) -- before external promotion.
+    \item \textbf{The Master Service (port 9333):} Manages topology assignment, volume growth, and leader election.
+    \item \textbf{The Volume Server (port 8080):} Directly executes sequential needle read/write operations against the host NVMe filesystem.
+    \item \textbf{The Filer Engine (port 8888):} Maintains a hierarchical directory tree and metadata catalog backed by embedded LevelDB.
+    \item \textbf{The S3 REST Gateway (port 8333):} Translates AWS S3 Signature Version 4 (SigV4) API calls into high-performance Filer entries.
 \end{enumerate}
-When the catalogue scales towards an illustrative upper horizon of 10,000 global taxa, exemplar storage requirements would scale linearly to approximately 30~GB, thereby exceeding public free-tier quotas. In this scenario, the DVC remote backend is configured to synchronise with the local MinIO lakehouse or an external zero-egress S3-compatible bucket (such as Cloudflare R2), whilst DagsHub continues to render Directed Acyclic Graphs (DAGs) and track Git-to-DVC commit diffs, cleanly decoupling the metadata management interface from the physical storage layer.
+
+Unlike legacy MinIO configurations that mandate an auxiliary sidecar container executing asynchronous \texttt{mc mb} loops to initialise buckets, SeaweedFS dynamically auto-provisions bucket roots upon receiving valid authenticated S3 \texttt{CreateBucket} requests or pre-initialises buckets declaratively via a container lifecycle hook targeting the local Filer HTTP endpoint:
+\begin{minted}{bash}
+wget -q -O - --post-data="" "http://127.0.0.1:8888/buckets/taxon-dvc-cache/?op=mkdir"
+wget -q -O - --post-data="" "http://127.0.0.1:8888/buckets/triage-queue/?op=mkdir"
+\end{minted}
+
+\subsubsection{Filesystem Invariants and Multi-Remote Routing}
+To prevent physical block fragmentation across the NVMe bus, the underlying persistent directory (\texttt{/var/lib/taxon-vision/seaweedfs}) is mounted onto a dedicated BTRFS subvolume configured with the \texttt{NOCOW} (\texttt{chattr +C}) attribute. Automatic volume compaction runs in the background whenever deleted needle space exceeds 30\%, reclaiming disk space without interrupting live inference loops.
+
+DVC synchronisation is partitioned strictly across two distinct remotes:
+\begin{itemize}
+    \item \textbf{The In-Cluster High-Throughput Remote (\texttt{local-seaweedfs}):} Targeting \texttt{s3://taxon-dvc-cache} at \texttt{http://seaweedfs.taxon-vision.svc.cluster.local:8333}. Dedicated to multi-gigabyte embedding caches (\texttt{train\_embeddings.pt}, \texttt{val\_embeddings.pt}, \texttt{cal\_embeddings.pt}, \texttt{test\_embeddings.pt}), enabling zero-egress, wire-speed caching for Bayesian hyperparameter optimization sweeps.
+    \item \textbf{The Public Lineage Remote (\texttt{origin}):} Targeting \texttt{s3://dvc} at DagsHub. Dedicated to release model checkpoints (\texttt{head.pt}) and INT8 quantized runtimes (\texttt{model\_int8.onnx}).
+\end{itemize}

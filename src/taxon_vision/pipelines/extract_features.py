@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import torch
 from sklearn.model_selection import train_test_split
 from torchvision import transforms
@@ -81,9 +82,12 @@ class FeatureExtractionConfig:
 
     extractor: str = ""
     manifest_path: Path = Path("data/manifests/dataset_manifest.parquet")
-    output_path: Path = Path("data/embeddings/cached_features.pt")
+    output_path: Path | None = None
+    out_dir: Path = Path("data/embeddings")
     batch_size: int = 0
     val_split: float = 0.0
+    cal_split: float = 0.0
+    test_split: float = 0.0
     device: str | None = None
     limit: int | None = None
     image_size: int = 0
@@ -92,6 +96,8 @@ class FeatureExtractionConfig:
 
     def __post_init__(self) -> None:
         """Resolve unspecified hyperparameters dynamically from centralized settings."""
+        if self.output_path is not None and self.out_dir == Path("data/embeddings"):
+            object.__setattr__(self, "out_dir", self.output_path.parent)
         settings = get_settings()
         if not self.extractor:
             object.__setattr__(self, "extractor", settings.model.default_extractor)
@@ -99,6 +105,10 @@ class FeatureExtractionConfig:
             object.__setattr__(self, "batch_size", settings.training.batch_size)
         if self.val_split <= 0.0:
             object.__setattr__(self, "val_split", settings.training.val_split)
+        if self.cal_split <= 0.0:
+            object.__setattr__(self, "cal_split", settings.training.cal_split)
+        if self.test_split <= 0.0:
+            object.__setattr__(self, "test_split", settings.training.test_split)
         if self.image_size <= 0:
             object.__setattr__(self, "image_size", settings.model.image_size)
         if self.resize_size <= 0:
@@ -323,43 +333,164 @@ def stream_and_extract_representations(
     return all_x, all_y
 
 
+def _can_stratify(y_sub: np.ndarray, test_size: int) -> bool:
+    """Check if subset has enough samples per class to permit stratified splitting."""
+    if len(y_sub) <= test_size or test_size <= 0:
+        return False
+    _, counts = np.unique(y_sub, return_counts=True)
+    n_classes = len(counts)
+    return bool(np.min(counts) >= 2 and test_size >= n_classes and (len(y_sub) - test_size) >= n_classes)
+
+
+def _split_cal_and_test(
+    cal_test_idx: list[int],
+    labels: np.ndarray,
+    n_cal: int,
+    n_test: int,
+    random_seed: int,
+) -> tuple[list[int], list[int]]:
+    """Partition candidate calibration and test indices into two disjoint subsets.
+
+    Args:
+        cal_test_idx: Indices representing the combined calibration and test pool.
+        labels: 1D NumPy array of ground truth labels for stratification.
+        n_cal: Target sample count for calibration.
+        n_test: Target sample count for holdout test.
+        random_seed: PRNG seed for deterministic splitting.
+
+    Returns:
+        Tuple of (cal_idx, test_idx).
+    """
+    empty_list: list[int] = []
+    if n_test == 0:
+        return cal_test_idx, empty_list
+    if n_cal == 0:
+        return empty_list, cal_test_idx
+
+    cal_test_labels = labels[cal_test_idx]
+    stratify_labels_test = cal_test_labels if _can_stratify(cal_test_labels, n_test) else None
+    cal_idx, test_idx = train_test_split(
+        cal_test_idx,
+        test_size=n_test,
+        stratify=stratify_labels_test,
+        random_state=random_seed,
+    )
+    return cal_idx, test_idx
+
+
+def _partition_stratified_subsets(
+    indices: list[int],
+    labels: np.ndarray,
+    val_split: float,
+    cal_split: float,
+    test_split: float,
+    random_seed: int,
+) -> tuple[list[int], list[int], list[int], list[int]]:
+    """Partition observation indices into stratified train, val, cal, and test subsets.
+
+    Args:
+        indices: List of index integers into the source dataset.
+        labels: 1D NumPy array of ground truth class labels.
+        val_split: Fraction allocated to validation.
+        cal_split: Fraction allocated to conformal calibration.
+        test_split: Fraction allocated to holdout testing.
+        random_seed: PRNG seed for deterministic partitioning.
+
+    Returns:
+        Tuple of (train_idx, val_idx, cal_idx, test_idx).
+    """
+    n_total = len(indices)
+    n_val = max(1, round(n_total * val_split)) if val_split > 0 else 0
+    n_cal = max(1, round(n_total * cal_split)) if cal_split > 0 else 0
+    n_test = max(1, round(n_total * test_split)) if test_split > 0 else 0
+    n_holdout = n_val + n_cal + n_test
+
+    if n_holdout <= 0 or n_holdout >= n_total:
+        raise ValueError(f"Holdout sample count ({n_holdout}) must be strictly between 1 and {n_total - 1}.")
+
+    stratify_labels_holdout = labels if _can_stratify(labels, n_holdout) else None
+    train_idx, holdout_idx = train_test_split(
+        indices,
+        test_size=n_holdout,
+        stratify=stratify_labels_holdout,
+        random_state=random_seed,
+    )
+
+    empty_list: list[int] = []
+    if n_cal == 0 and n_test == 0:
+        return train_idx, holdout_idx, empty_list, empty_list
+
+    holdout_labels = labels[holdout_idx]
+    if n_val == 0:
+        val_idx: list[int] = empty_list
+        cal_test_idx = holdout_idx
+    else:
+        stratify_labels_cal_test = holdout_labels if _can_stratify(holdout_labels, n_cal + n_test) else None
+        val_idx, cal_test_idx = train_test_split(
+            holdout_idx,
+            test_size=(n_cal + n_test),
+            stratify=stratify_labels_cal_test,
+            random_state=random_seed,
+        )
+
+    cal_idx, test_idx = _split_cal_and_test(cal_test_idx, labels, n_cal, n_test, random_seed)
+    return train_idx, val_idx, cal_idx, test_idx
+
+
 def create_stratified_embedding_split(
     embeddings: torch.Tensor,
     labels: torch.Tensor,
     num_classes: int,
-    val_split: float = 0.2,
+    val_split: float = 0.10,
+    cal_split: float = 0.0,
+    test_split: float = 0.0,
     random_seed: int = 42,
 ) -> EmbeddingSplit:
-    """Partition extracted representations into stratified training and validation splits.
+    """Partition extracted representations into stratified training, validation, calibration, and test splits.
 
     Why:
-        In severe long-tail biological distributions, unstratified random partitioning risks allocating zero validation instances for rare or endangered species, rendering validation PR-AUC metrics statistically undefined. Stratified splitting preserves class proportions across both subsets.
+        In severe long-tail biological distributions, unstratified random partitioning risks allocating zero validation instances for rare or endangered species, rendering validation PR-AUC metrics statistically undefined. Stratified splitting preserves class proportions across all subsets. Furthermore, Split Conformal Prediction requires an exchangeable calibration split that was not seen during model training.
 
     How:
-        Converts labels to NumPy format, executes scikit-learn `train_test_split` with `stratify=labels`, extracts corresponding tensor rows, calculates empirical per-class frequency vectors for effective sample weighting in Class-Balanced Loss, and validates the `EmbeddingSplit` invariant.
+        Asserts cardinality invariant (>= 2 classes). Executes multi-stage stratified splitting using scikit-learn `train_test_split` with `stratify=labels`, extracts corresponding tensor rows, calculates empirical per-class frequency vectors from training labels for Class-Balanced Loss, and returns an `EmbeddingSplit`.
 
     Args:
         embeddings: Full 2D tensor of representation vectors of shape `(N, D)`.
         labels: Full 1D tensor of ground-truth target labels of shape `(N,)`.
         num_classes: Total number of target classification categories.
-        val_split: Proportion of data allocated to the validation split (default: 0.2).
+        val_split: Proportion of data allocated to validation (default: 0.10).
+        cal_split: Proportion of data allocated to conformal calibration (default: 0.0).
+        test_split: Proportion of data allocated to holdout testing (default: 0.0).
         random_seed: PRNG seed ensuring reproducible split partitioning.
 
     Returns:
         Instantiated and validated EmbeddingSplit container.
     """
-    total_samples = embeddings.shape[0]
-    indices = list(range(total_samples))
+    unique_classes = torch.unique(labels)
+    if unique_classes.numel() < 2:
+        raise RuntimeError(
+            f"Cardinality collapse detected: Extracted embeddings contain only {unique_classes.numel()} "
+            f"distinct class ({unique_classes.tolist()}), but at least 2 are required for multi-class classification."
+        )
 
-    train_idx, val_idx = train_test_split(
-        indices,
-        test_size=val_split,
-        stratify=labels.numpy(),
-        random_state=random_seed,
+    indices = list(range(embeddings.shape[0]))
+    labels_np = labels.cpu().numpy()
+
+    train_idx, val_idx, cal_idx, test_idx = _partition_stratified_subsets(
+        indices=indices,
+        labels=labels_np,
+        val_split=val_split,
+        cal_split=cal_split,
+        test_split=test_split,
+        random_seed=random_seed,
     )
 
     train_z, train_y = embeddings[train_idx], labels[train_idx]
     val_z, val_y = embeddings[val_idx], labels[val_idx]
+    cal_z = embeddings[cal_idx] if cal_idx else None
+    cal_y = labels[cal_idx] if cal_idx else None
+    test_z = embeddings[test_idx] if test_idx else None
+    test_y = labels[test_idx] if test_idx else None
 
     samples_per_class = [max(1, int((train_y == c).sum().item())) for c in range(num_classes)]
 
@@ -368,6 +499,10 @@ def create_stratified_embedding_split(
         train_labels=train_y,
         val_embeddings=val_z,
         val_labels=val_y,
+        cal_embeddings=cal_z,
+        cal_labels=cal_y,
+        test_embeddings=test_z,
+        test_labels=test_y,
         samples_per_class=samples_per_class,
     )
 
@@ -464,21 +599,106 @@ def run_feature_extraction(config: FeatureExtractionConfig) -> Path:
         labels=labels,
         num_classes=num_classes,
         val_split=config.val_split,
+        cal_split=config.cal_split,
+        test_split=config.test_split,
         random_seed=config.random_seed,
     )
 
-    output_file = Path(config.output_path)
-    output_file.parent.mkdir(parents=True, exist_ok=True)
+    emb_dir = config.out_dir
+    _save_split_artifacts(emb_dir, split, config.extractor, num_classes, output_file=config.output_path)
+    return config.output_path if config.output_path is not None else (emb_dir / "train_embeddings.pt")
 
-    payload = {
-        "extractor": config.extractor,
-        "feature_dim": split.feature_dim,
-        "num_classes": num_classes,
-        "split": split,
-    }
-    torch.save(payload, output_file)
-    logger.info("Serialized feature embedding split artifact to: %s", output_file)
-    return output_file
+
+def _save_split_artifacts(
+    emb_dir: Path,
+    split: EmbeddingSplit,
+    extractor: str,
+    num_classes: int,
+    output_file: Path | None = None,
+) -> None:
+    """Save composite embedding split and individual 4-way partition files to disk.
+
+    Why:
+        Encapsulates binary tensor serialization, preserving backward compatibility with
+        single-file caches while materializing individual 4-way partitions for granular
+        Directed Acyclic Graph (DAG) stage tracking in DVC.
+
+    Args:
+        emb_dir: Target directory for individual partition files.
+        split: Instantiated EmbeddingSplit container.
+        extractor: Name of the feature extractor backbone.
+        num_classes: Total number of target classification categories.
+        output_file: Optional legacy path for composite cached_features.pt file.
+    """
+    if emb_dir.suffix in (".pt", ".bin"):
+        actual_output_file: Path | None = emb_dir
+        actual_emb_dir: Path = emb_dir.parent
+    else:
+        actual_output_file = output_file
+        actual_emb_dir = emb_dir
+
+    actual_emb_dir.mkdir(parents=True, exist_ok=True)
+    if actual_output_file is not None:
+        actual_output_file.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "extractor": extractor,
+            "feature_dim": split.feature_dim,
+            "num_classes": num_classes,
+            "split": split,
+            "train_embeddings": split.train_embeddings,
+            "train_labels": split.train_labels,
+            "val_embeddings": split.val_embeddings,
+            "val_labels": split.val_labels,
+            "cal_embeddings": split.cal_embeddings,
+            "cal_labels": split.cal_labels,
+            "test_embeddings": split.test_embeddings,
+            "test_labels": split.test_labels,
+            "samples_per_class": split.samples_per_class,
+        }
+        torch.save(payload, actual_output_file)
+        logger.info("Serialized feature embedding split artifact to: %s", actual_output_file)
+    else:
+        stale_composite = actual_emb_dir / "cached_features.pt"
+        if stale_composite.exists():
+            stale_composite.unlink()
+            logger.info("Purged obsolete composite cache %s to eliminate dead-ends", stale_composite)
+
+    torch.save(
+        {
+            "embeddings": split.train_embeddings,
+            "labels": split.train_labels,
+            "samples_per_class": split.samples_per_class,
+            "feature_dim": split.feature_dim,
+        },
+        actual_emb_dir / "train_embeddings.pt",
+    )
+    torch.save(
+        {
+            "embeddings": split.val_embeddings,
+            "labels": split.val_labels,
+            "feature_dim": split.feature_dim,
+        },
+        actual_emb_dir / "val_embeddings.pt",
+    )
+    if split.cal_embeddings is not None and split.cal_labels is not None:
+        torch.save(
+            {
+                "embeddings": split.cal_embeddings,
+                "labels": split.cal_labels,
+                "feature_dim": split.feature_dim,
+            },
+            actual_emb_dir / "cal_embeddings.pt",
+        )
+    if split.test_embeddings is not None and split.test_labels is not None:
+        torch.save(
+            {
+                "embeddings": split.test_embeddings,
+                "labels": split.test_labels,
+                "feature_dim": split.feature_dim,
+            },
+            actual_emb_dir / "test_embeddings.pt",
+        )
+    logger.info("Materialized individual 4-way split artifacts in: %s", actual_emb_dir)
 
 
 def extract_features_cli(argv: list[str] | None = None) -> int:
@@ -513,10 +733,16 @@ def extract_features_cli(argv: list[str] | None = None) -> int:
         help="Path to Parquet dataset manifest",
     )
     parser.add_argument(
+        "--out-dir",
+        type=str,
+        default=None,
+        help="Destination directory for discrete 4-way split artifacts (default: data/embeddings)",
+    )
+    parser.add_argument(
         "--out",
         type=str,
-        default="data/embeddings/cached_features.pt",
-        help="Destination path for serialized EmbeddingSplit artifact",
+        default=None,
+        help="Optional destination path for legacy composite EmbeddingSplit artifact",
     )
     parser.add_argument(
         "--batch-size",
@@ -529,6 +755,24 @@ def extract_features_cli(argv: list[str] | None = None) -> int:
         type=float,
         default=settings.training.val_split,
         help=f"Validation split ratio (default: {settings.training.val_split})",
+    )
+    parser.add_argument(
+        "--cal-split",
+        type=float,
+        default=settings.training.cal_split,
+        help=f"Conformal calibration split ratio (default: {settings.training.cal_split})",
+    )
+    parser.add_argument(
+        "--test-split",
+        type=float,
+        default=settings.training.test_split,
+        help=f"Holdout test split ratio (default: {settings.training.test_split})",
+    )
+    parser.add_argument(
+        "--image-size",
+        type=int,
+        default=settings.model.image_size,
+        help=f"Spatial resolution for image resize and center crop (default: {settings.model.image_size})",
     )
     parser.add_argument(
         "--limit",
@@ -552,12 +796,21 @@ def extract_features_cli(argv: list[str] | None = None) -> int:
         stream=sys.stdout,
     )
 
+    out_dir_path = Path(args.out_dir) if args.out_dir else Path("data/embeddings")
+    output_path = Path(args.out) if args.out else None
+    if output_path is not None and args.out_dir is None:
+        out_dir_path = output_path.parent
+
     cfg = FeatureExtractionConfig(
         extractor=args.extractor,
         manifest_path=Path(args.manifest),
-        output_path=Path(args.out),
+        output_path=output_path,
+        out_dir=out_dir_path,
         batch_size=args.batch_size,
         val_split=args.val_split,
+        cal_split=args.cal_split,
+        test_split=args.test_split,
+        image_size=args.image_size,
         limit=args.limit,
         device=args.device,
     )

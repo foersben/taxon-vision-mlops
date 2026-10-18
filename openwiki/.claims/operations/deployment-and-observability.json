@@ -89,7 +89,7 @@
       "statement": "The verify_deployment.sh script deterministically validates deployments through a 5-step gate checking rollout completion, pod inspection, Service ClusterIP resolution, HTTP 200 liveness and readiness probe responses, and live multipart inference with Prometheus metric confirmation.",
       "evidence": [
         {
-          "resource": "repo://scripts/verify_deployment.sh#L16-L54",
+          "resource": "repo://scripts/ci/verify_deployment.sh#L16-L54",
           "version": "repo-lines-v1:sha256:c14d5a915de0d1e3872284d7ae8589e21aad54e7bd4707844da9e05f96b24626:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIyZWRjM2U3OWVhYjA3NWM0ODlmNDE5NTQ5OTY0MDdmOWNjMjE4YzViMGNkNzUyZmU1ZjBjNzRmYWRiMjc1OWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdhNGU3YTY0N2M1Yjc4ZTJkMmNkMWM3ZjQ1NmYxMTg2OGJmMDY1ZThiYWMxNzA3YTY2ZTA5NDE5YTRkY2FkMDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZlYjk5MWNjODY0MDc0OGZjZGU1ZmJhMTI3NzY0MjZkZWRmZDJkMjE3ZGMwYzNjNjAzMDY0NjgyMzI4MTJmNzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         }
       ]

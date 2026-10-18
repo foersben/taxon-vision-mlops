@@ -1,0 +1,150 @@
+% Chapter 13: Roadmap, Delivery Phases & Pedagogical Takeaways
+
+\begin{frame}[plain]
+    \vfill
+    \centering
+    {\footnotesize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
+    {\large \textbf{\textcolor{signalorange}{CHAPTER 13}}} \\[0.25cm]
+    {\huge \textbf{Delivery Roadmap \& Core Principles}} \\[0.35cm]
+    {\normalsize \textcolor{black!70}{Implementation Milestones, Anti-Pattern Rectification \& Production Systems Engineering}} \\[0.5cm]
+    \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
+    \statusdone
+    \vfill
+    \script{In Chapter 13, we review our delivery roadmap, contrast common junior anti-patterns with enterprise solutions, and summarize the core engineering discipline required for Level 4 MLOps.}
+    \qa{What is the core pedagogical takeaway from this chapter?}{Moving beyond stateful exploratory scripts to immutable datasets, mathematical calibration, and hardware-conscious production systems.}
+\end{frame}
+
+\begin{frame}{Project Roadmap}{Implementation Status vs Architectural Roadmap}
+    \vspace{-0.15cm}
+    \begin{block}{TaxonVision Delivery Phases}
+        \footnotesize
+        An honest, transparent breakdown of the current implementation status versus future architectural milestones.
+        \begin{itemize}
+            \item \textbf{Phase 1 (Foundation):} Complete. Pixi toolchain, DVC/S3 streaming, pre-commit gates, license compliance.
+            \item \textbf{Phase 2 (Model \& MLOps):} Complete. Frozen feature extraction, Class-Balanced Loss, Optuna, Conformal safety, k3s, GHCR, Jenkins.
+            \item \textbf{Phase 3 (Continuous Intelligence):} Target. Full Milvus MMKG, Vision-RAG, Label Studio retraining trigger.
+        \end{itemize}
+    \end{block}
+
+    \begin{center}
+    \vspace{-0.05cm}
+    \resizebox{0.92\textwidth}{!}{
+    \begin{tikzpicture}[
+        node distance=0.4cm and 0.4cm,
+        box/.style={rectangle, draw, rounded corners, align=center, minimum height=1.1cm, minimum width=3.8cm, font=\scriptsize},
+        arrow/.style={-stealth, thick},
+        done/.style={fill=plantgreen!10, draw=plantgreen, thick},
+        target/.style={fill=deepblue!10, draw=deepblue, thick}
+    ]
+        % Nodes
+        \node[box, done] (phase1) {
+            \textbf{Phase 1: Foundation}\\[1mm]
+            \tiny Pixi, DVC, Licensing, Gates\\
+            \tiny \textcolor{plantgreen}{\textbf{[Complete]}}
+        };
+
+        \node[box, done, right=of phase1] (phase2) {
+            \textbf{Phase 2: Core MLOps}\\[1mm]
+            \tiny Frozen Features, Optuna, Conformal,\\
+            \tiny k3s, GHCR, Jenkins\\
+            \tiny \textcolor{plantgreen}{\textbf{[Complete]}}
+        };
+
+        \node[box, target, right=of phase2] (phase3) {
+            \textbf{Phase 3: Intelligence}\\[1mm]
+            \tiny Milvus MMKG, Vision-RAG,\\
+            \tiny Label Studio Retraining\\
+            \tiny \textcolor{deepblue}{\textbf{[Target]}}
+        };
+
+        % Arrows
+        \draw[arrow] (phase1) -- (phase2);
+        \draw[arrow] (phase2) -- (phase3);
+
+    \end{tikzpicture}
+    }
+    \end{center}
+
+    \vspace{0.25cm}
+    \statuspartial
+
+    \script{Let's review our progress transparently. Phase 1 and Phase 2 are complete and battle-tested in our repository today: our reproducible Pixi environment, S3 zero-copy streaming, Class-Balanced Loss runner, conformal safety bounds, Jenkins container builds, and Kubernetes manifests are live. Phase 3—connecting the Milvus vector database into our active learning webhook loop—is our ongoing target architecture roadmap.}
+    \qa{How do we ensure that new feature development does not regress existing Phase 1 and 2 capabilities?}{Every commit is protected by our pre-commit gates, automated test fixtures in \texttt{tests/}, and CI pipeline validation including license and complexity audits.}
+\end{frame}
+
+\begin{frame}{Pedagogical Takeaways}{Classic MLOps Anti-Patterns \& Engineering Fixes}
+    \begin{block}{Bootcamp vs. Enterprise}
+        Core pedagogical lessons for transitioning into MLOps, contrasting common junior anti-patterns with enterprise architectural solutions.
+    \end{block}
+
+    \begin{center}
+    \begin{tikzpicture}[
+        node distance=0.15cm and 0.5cm,
+        box/.style={rectangle, draw, rounded corners, align=center, minimum height=0.75cm, minimum width=6.2cm, font=\scriptsize},
+        bad/.style={fill=herbired!10, draw=herbired, thick},
+        good/.style={fill=plantgreen!10, draw=plantgreen, thick},
+        arrow/.style={-stealth, thick, line width=0.8mm, draw=black!30}
+    ]
+        % Row 1
+        \node[box, bad] (bad1) {\textbf{Monolithic Notebook Sprawl}\\Unversioned, stateful Jupyter notebooks};
+        \node[box, good, right=1cm of bad1] (good1) {\textbf{Modular Python Packages}\\Strict complexity limits, typed functions};
+        \draw[arrow] (bad1) -- (good1);
+
+        % Row 2
+        \node[box, bad, below=of bad1] (bad2) {\textbf{Local Dataset Hoarding}\\Downloading terabytes to local SSDs};
+        \node[box, good, right=1cm of bad2] (good2) {\textbf{Zero-Copy S3 Streaming}\\DVC pointers, Apache Arrow Parquet};
+        \draw[arrow] (bad2) -- (good2);
+
+        % Row 3
+        \node[box, bad, below=of bad2] (bad3) {\textbf{Uncalibrated Softmax}\\Trusting raw model probabilities blindly};
+        \node[box, good, right=1cm of bad3] (good3) {\textbf{Split Conformal Prediction}\\Mathematically guaranteed safety bounds};
+        \draw[arrow] (bad3) -- (good3);
+
+        % Row 4
+        \node[box, bad, below=of bad3] (bad4) {\textbf{Unbudgeted Cloud GPUs}\\Renting unmanaged A100s indefinitely};
+        \node[box, good, right=1cm of bad4] (good4) {\textbf{Bare-Metal GPU Time-Slicing}\\Strict memory ceilings on RTX 5070 Ti};
+        \draw[arrow] (bad4) -- (good4);
+
+    \end{tikzpicture}
+    \end{center}
+
+    \script{For all of you in this course, if you take away four key lessons from this project, make it these four: First, stop writing monolithic notebooks—use modular packages with strict complexity limits. Second, don't download multi-terabyte datasets locally—stream them and cache embeddings. Third, never trust raw softmax probabilities—use conformal prediction sets for safety. And fourth, don't waste thousands of dollars on unmanaged cloud GPUs—budget your VRAM and use time-slicing.}
+    \qa{What is the fastest way for a junior data scientist to adopt these best practices?}{Start by enforcing automated pre-commit hooks with Ruff and Mypy, tracking datasets with DVC, and writing unit tests for your data transformation functions before touching model code.}
+\end{frame}
+
+\begin{frame}{Model Governance}{Model Registry Governance \& Deployment Gates}
+    \begin{block}{Promotion Lifecycle}
+        \scriptsize
+        Study Run $\to$ Candidate Model $\to$ Automated Conformal Gate $\to$ Staging Tag $\to$ Production Promotion
+    \end{block}
+
+    \begin{block}{Audit Integrity}
+        \scriptsize
+        \begin{itemize}
+            \item \textbf{Cryptographic Binding:} Strict cryptographic binding connecting production model version to immutable DVC commit and signed Git release tag.
+            \item \textbf{Safety Guarantee:} Prevents deployment of uncalibrated or drifting models.
+        \end{itemize}
+    \end{block}
+
+
+    \script{A model registry is not merely a storage bucket; it is a governance boundary. Our promotion lifecycle moves candidates from study runs to staging only after they pass an automated conformal gate. This ensures mathematical safety before human review. For audit integrity, the final production model is cryptographically tied to an immutable DVC commit and a signed Git release tag. This prevents the nightmare scenario of deploying uncalibrated models that have silently drifted from their original training distributions.}
+    \qa{How does the automated conformal gate prevent bad deployments?}{The gate strictly tests the model on a holdout calibration set. If the empirical coverage falls below $1-\alpha$ or the set size exceeds a usability threshold, the promotion script halts and rejects the candidate automatically.}
+    \qa{Why do we require a signed Git release tag for the final promotion?}{The signed tag acts as an immutable, non-repudiable ledger of the human approval step. It guarantees that the deployment authorization was explicitly granted by a recognized principal, fulfilling our audit and compliance requirements.}
+\end{frame}
+
+\begin{frame}{Operational Maturity}{The MLOps Level 4 Engineering Checklist}
+    \begin{block}{Enterprise Level 4 Verification Matrix}
+        \begin{itemize}\small
+            \item \textbf{Data Lineage:} 100\% deterministic Parquet metadata with DVC SHA256 immutability.
+            \item \textbf{Hermetic Toolchains:} Zero reliance on unpinned pip/conda environments; strict lockfiles via Pixi.
+            \item \textbf{Mathematical Safety:} Automated test gates asserting conformal coverage $1-\alpha$ on holdout splits.
+            \item \textbf{Continuous Deployment \& Observability:} Jenkins OCI image builds and k3s manifests established; streaming drift monitors and Label Studio triage scheduled as Phase 3 roadmap.
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.25cm}
+    \statuspartial
+
+    \script{This checklist provides our concrete evaluation criteria for Level 4 MLOps maturity. While core data lineage, hermetic toolchains, and mathematical conformal safety gates are fully operational, our end-to-end telemetry daemons and active learning loops remain actively under development.}
+    \qa{What is the single most critical gate currently enforced before deployment?}{The combination of hermetic Pixi package lockfiles and mathematical conformal coverage verification on holdout data.}
+\end{frame}

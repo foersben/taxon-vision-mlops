@@ -76,15 +76,20 @@ format:
 complexity:
 	pixi run --frozen -e dev complexipy src/ --failed
 
+# Lint Markdown documents with markdownlint-cli
+[group("quality")]
+lint-markdown:
+	markdownlint --config config/lint/.markdownlint.yaml --fix "docs/**/*.md" "README.md" ".agents/**/*.md"
+
 # Validate Open Knowledge Format (OKF v0.2) frontmatter and link topology
 [group("quality")]
 validate-okf:
-	pixi run --frozen -e dev python scripts/validate_okf.py
+	pixi run --frozen -e dev python scripts/governance/validate_okf.py
 
 # Verify and fix Markdown Rule 04 formatting invariants
 [group("quality")]
 lint-md:
-	pixi run --frozen -e dev python scripts/verify_markdown_rules.py --fix
+	pixi run --frozen -e dev python scripts/governance/verify_markdown_rules.py --fix
 
 # ── Testing ─────────────────────────────────────────────────────────────────
 
@@ -111,12 +116,12 @@ test-conformal:
 # Run local CI pass without Docker/GPU (options: all, quality, tests, docs)
 [group("testing")]
 ci job="all":
-	./scripts/local_ci.sh {{job}}
+	./scripts/ci/local_ci.sh {{job}}
 
 # Run local CI test pass (alias for 'ci tests')
 [group("testing")]
 ci-test:
-	./scripts/local_ci.sh tests
+	./scripts/ci/local_ci.sh tests
 
 # ── MLOps & Pipelines ───────────────────────────────────────────────────────
 
@@ -125,30 +130,45 @@ ci-test:
 fetch-sample:
 	pixi run --frozen -e dev python -m taxon_vision.data.s3_streamer --limit 100 --out data/sample/
 
-# Ingest citizen-science observations from iNaturalist to Parquet manifest
+# Ingest citizen-science observations from iNaturalist to Parquet manifest (Stage 1)
 [group("mlops")]
 ingest-data:
-	pixi run --frozen -e dev python scripts/ingest_data.py
+	pixi run --frozen -e dev python -m taxon_vision.pipelines.ingest
 
-# Train baseline classification head with Class-Balanced Loss
+# Audit open licenses and filter compliant observations to dataset manifest (Stage 2)
 [group("mlops")]
-train-baseline extractor="bioclip-2":
+audit-license:
+	pixi run --frozen -e dev python -m taxon_vision.pipelines.audit_license
+
+# Stream representations from S3 open data into 4-way embedding split (Stage 3)
+[group("mlops")]
+extract-features:
+	pixi run --frozen -e dev python -m taxon_vision.pipelines.extract_features
+
+# Train baseline classification head with Class-Balanced Loss (Stage 4)
+[group("mlops")]
+train epochs="5" extractor="dinov3":
 	@TOKEN=$(secret-tool lookup Title DagsHub 2>/dev/null || secret-tool lookup service dagshub 2>/dev/null || true); \
 	if [ -n "$TOKEN" ]; then \
 		export MLFLOW_TRACKING_USERNAME="foersben"; \
 		export MLFLOW_TRACKING_PASSWORD="$TOKEN"; \
 	fi; \
-	pixi run --frozen -e dev python -m taxon_vision.models.trainer --extractor {{extractor}} --epochs 5
+	pixi run --frozen -e dev python -m taxon_vision.pipelines.train --epochs {{epochs}} --extractor {{extractor}}
 
-# Run CLI training script (Phase 1 Baseline)
+# Export trained classification head to ONNX computational graph (Stage 5)
 [group("mlops")]
-train epochs="5" extractor="mobilenetv4_conv_small":
-	@TOKEN=$(secret-tool lookup Title DagsHub 2>/dev/null || secret-tool lookup service dagshub 2>/dev/null || true); \
-	if [ -n "$TOKEN" ]; then \
-		export MLFLOW_TRACKING_USERNAME="foersben"; \
-		export MLFLOW_TRACKING_PASSWORD="$TOKEN"; \
-	fi; \
-	pixi run --frozen -e dev python -m taxon_vision.models.trainer --epochs {{epochs}} --extractor {{extractor}}
+export-onnx:
+	pixi run --frozen -e dev python -m taxon_vision.pipelines.export_onnx
+
+# Calibrate Split Conformal Prediction quantiles and OOD energy thresholds (Stage 6)
+[group("mlops")]
+calibrate:
+	pixi run --frozen -e dev python -m taxon_vision.pipelines.calibrate
+
+# Evaluate Pareto trade-offs and holdout test set with conformal bounds (Stage 7)
+[group("mlops")]
+pareto:
+	pixi run --frozen -e dev python -m taxon_vision.pipelines.evaluate
 
 # Run CLI prediction script on an observation image
 [group("mlops")]
@@ -158,24 +178,7 @@ predict image="data/sample/406185885_taxon_47120.jpg":
 # Download verified open-license sample images for all 10 catalog taxa from iNaturalist
 [group("mlops")]
 download-samples per_taxon="1":
-	pixi run --frozen -e dev python scripts/download_samples.py --per-taxon {{per_taxon}}
-
-
-
-# Export trained PyTorch model to ONNX computational graph
-[group("mlops")]
-export-onnx:
-	pixi run --frozen -e dev python -m taxon_vision.inference.onnx_exporter
-
-# Evaluate Pareto trade-offs (Accuracy vs Latency vs Cost) across backbones
-[group("mlops")]
-pareto:
-	pixi run --frozen -e dev python scripts/benchmark_pareto.py
-
-# Calibrate Split Conformal Prediction quantiles on holdout validation data
-[group("mlops")]
-calibrate:
-	pixi run --frozen -e dev python scripts/calibrate_conformal.py --alpha 0.05
+	pixi run --frozen -e dev python scripts/data/download_samples.py --per-taxon {{per_taxon}}
 
 # Push tracked datasets & models to DagsHub using in-memory Secret Service credentials
 [group("mlops")]
@@ -199,6 +202,16 @@ dvc-pull:
 	AWS_ACCESS_KEY_ID="$TOKEN" AWS_SECRET_ACCESS_KEY="$TOKEN" \
 	pixi run --frozen -e dev dvc pull
 
+# Display DVC pipeline Directed Acyclic Graph
+[group("mlops")]
+dvc-dag:
+	PAGER=cat pixi run --frozen -e dev dvc dag
+
+# Reproduce DVC pipeline Directed Acyclic Graph
+[group("mlops")]
+dvc-repro:
+	pixi run --frozen -e dev dvc repro
+
 # ── Serving & Web UI ────────────────────────────────────────────────────────
 
 # Start FastAPI inference and HTMX dashboard server with live reload
@@ -214,25 +227,27 @@ run:
 # Validate live Kubernetes deployment health, endpoints, and inference
 [group("app")]
 verify-deployment namespace="taxon-vision":
-	@bash scripts/verify_deployment.sh {{namespace}}
+	@bash scripts/ci/verify_deployment.sh {{namespace}}
 
 # ── Documentation ───────────────────────────────────────────────────────────
 
 # Build Zensical documentation site
 [group("docs")]
 docs:
+	pixi run --frozen -e dev python scripts/governance/visualize_okf.py
 	pixi run --frozen -e dev zensical build
 
 # Build and serve Zensical documentation locally on port 9000
 [group("docs")]
 serve:
+	pixi run --frozen -e dev python scripts/governance/visualize_okf.py
 	pixi run --frozen -e dev zensical build
 	pixi run --frozen -e dev zensical serve -a localhost:9000
 
 # Generate interactive D3/SVG knowledge graph visualization
 [group("docs")]
 visualize-okf:
-	pixi run --frozen -e dev python scripts/visualize_okf.py
+	pixi run --frozen -e dev python scripts/governance/visualize_okf.py
 
 # Update OpenWiki documentation and reconcile grounded claims
 [group("docs")]
@@ -249,12 +264,12 @@ wiki-update:
 # Validate OKF v0.2 structural integrity for .agents/ and openwiki/
 [group("docs")]
 wiki-validate:
-	pixi run python scripts/validate_okf.py
+	pixi run --frozen -e dev python scripts/governance/validate_okf.py
 
 # Launch local interactive visualizer for the OKF knowledge graph
 [group("docs")]
 wiki-viz:
-	pixi run python scripts/visualize_okf.py
+	pixi run --frozen -e dev python scripts/governance/visualize_okf.py
 
 
 

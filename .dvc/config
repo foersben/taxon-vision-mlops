@@ -3,6 +3,6 @@
 ['remote "origin"']
     url = s3://dvc
     endpointurl = https://dagshub.com/foersben/taxon-vision-mlops.s3
-['remote "local-minio"']
+['remote "local-seaweedfs"']
     url = s3://taxon-dvc-cache
-    endpointurl = http://minio.default.svc.cluster.local:9000
+    endpointurl = http://seaweedfs.taxon-vision.svc.cluster.local:8333

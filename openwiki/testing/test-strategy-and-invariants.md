@@ -16,11 +16,11 @@ sources:
   - id: openwiki-source-05ccef8d4cf1698187f20464
     resource: repo://pyproject.toml
   - id: openwiki-source-8e72812dd1b19bee5573c46c
-    resource: repo://scripts/calibrate_conformal.py
+    resource: repo://src/taxon_vision/pipelines/calibrate.py
   - id: openwiki-source-12914d3b78b4a80693643804
-    resource: repo://scripts/local_ci.sh
+    resource: repo://scripts/ci/local_ci.sh
   - id: openwiki-source-79bc5a0a00c0f3d661174b32
-    resource: repo://scripts/validate_okf.py
+    resource: repo://scripts/governance/validate_okf.py
   - id: openwiki-source-1c89821d53610d1110534353
     resource: repo://src/taxon_vision/uncertainty/conformal.py
   - id: openwiki-source-f0a6e7dc03522b2682f88655
@@ -174,7 +174,7 @@ Unit tests in `tests/unit/test_conformal_bounds.py` explicitly verify all three 
 - Ambiguous diffuse distributions (e.g., $[0.34, 0.33, 0.33]$) admit all three classes, triggering referral because $|C(x)| = 3 > k_{\text{max}} = 2$.
 - Low-confidence predictions (e.g., top-1 probability $0.482 < 0.60$ with other classes $< 0.20$) yield a singleton set $C(x) = [0]$ but still mandate human referral.
 
-The standalone calibration script `scripts/calibrate_conformal.py` computes $\hat{q}$ from real holdout validation softmax logits or permitted synthetic fallback (`--allow-synthetic`), serializing the calibrated threshold to `config/conformal_calibration.json`.
+The calibration pipeline `src/taxon_vision/pipelines/calibrate.py` (with CLI shim `scripts/calibrate_conformal.py`) computes $\hat{q}$ and Helmholtz OOD energy threshold $\tau_{\text{energy}}$ from calibration partition representations (`data/embeddings/cal_embeddings.pt`) evaluated through `models/checkpoints/model_int8.onnx`, serializing calibrated parameters to `config/conformal_config.yaml`.
 
 ---
 

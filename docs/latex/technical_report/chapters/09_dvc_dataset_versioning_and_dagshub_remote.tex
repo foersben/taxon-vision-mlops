@@ -21,23 +21,36 @@ The absolute cornerstone of DVC is its CAS implementation. Instead of identifyin
 
 To prevent catastrophic filesystem slowdowns caused by massive directory listings (a known limitation of standard inode structures like \texttt{ext4}), DVC implements a deterministic, two-character subdirectory sharding protocol. For example, if an artefact yields an MD5 hash beginning with \texttt{f5}, its physical cache path becomes \texttt{.dvc/cache/f5/}. The remaining 30 characters of the hash form the filename within that specific shard. This structure explicitly avoids unbounded flat directories and enables instantaneous hash-based retrieval during CI/CD hydration. In the case of directory tracking, the hash corresponds to a structured JSON manifest enumerating the individual file hashes within that directory, suffixed with \texttt{.dir} to logically denote its structural nature.
 
-\subsection{Structural Anatomy of DVC Pointer Files}
-The physical decoupling process generates a lightweight, YAML-formatted pointer file (typically bearing the \texttt{.dvc} extension), which is subsequently committed to Git alongside the source code. A forensic examination of the existing \texttt{data/sample.dvc} pointer in the active repository provides an explicit illustration of this architecture, revealing the exact mathematical linkages established by the system:
+\subsection{Structural Anatomy of DVC Pipeline Tracking and Pointer Files}
+The physical decoupling process generates lightweight, YAML-formatted pointer files (such as atomic \texttt{.dvc} files or the comprehensive \texttt{dvc.yaml} pipeline DAG with its state ledger \texttt{dvc.lock}), which are subsequently committed to Git alongside the source code. While individual \texttt{.dvc} files can track isolated local assets, the full multi-stage Epistemic Diamond DAG is codified within \texttt{dvc.yaml} and locked in \texttt{dvc.lock}, tracking code dependencies, execution parameters, and output artifacts:
 
 \begin{listing}[H]
 \begin{minted}{yaml}
-outs:
-- md5: f546997db8b542e87e4f006326d04aac.dir
-  size: 37744
-  nfiles: 1
-  hash: md5
-  path: sample
+schema: '2.0'
+stages:
+  extract_features:
+    cmd: pixi run -e dev python -m taxon_vision.pipelines.extract_features
+    deps:
+    - data/manifests/dataset_manifest.parquet
+    - src/taxon_vision/pipelines/extract_features.py
+    params:
+      params.yaml:
+        extract_features:
+          backbone: timm/vit_base_patch16_clip_224.openai
+          split_ratio: [0.7, 0.1, 0.1, 0.1]
+    outs:
+    - md5: 8a4c1f930e1b4279b9087c2b5f001234
+      size: 15288320
+      path: data/embeddings/train_embeddings.pt
+    - md5: 3d7f9b201e5a4891a8761e0b9c345678
+      size: 2184000
+      path: data/embeddings/val_embeddings.pt
 \end{minted}
-\caption{Cryptographic tracking structure within \texttt{data/sample.dvc}.}
-\label{lst:sample_dvc}
+\caption{Cryptographic DAG and artifact tracking structure within \texttt{dvc.lock}.}
+\label{lst:dvc_lock}
 \end{listing}
 
-As thoroughly detailed in Listing~\ref{lst:sample_dvc}, the pointer intrinsically binds the logical path (\texttt{path: sample}) to its exact cryptographic identity. The \texttt{outs} block defines the generated output specification. The \texttt{md5} key specifies the exact content hash (in this instance, a directory hash ending in \texttt{.dir}, explicitly confirming the structural directory tracking mode). The \texttt{size} field meticulously records the aggregate byte volume (\texttt{37744} bytes), providing an immediate pre-download integrity check, and \texttt{nfiles} enumerates the total constituent files. This structure enables Git to strictly track the exact state of the dataset through time without ever persisting the binary payload itself. The cache shard for this specific dataset logically resides at \texttt{.dvc/cache/f5/46997db8b542e87e4f006326d04aac.dir}, effectively linking the declarative YAML syntax to precise physical disc sectors.
+As thoroughly detailed in Listing~\ref{lst:dvc_lock}, the tracking specification intrinsically binds each logical artifact path (\texttt{data/embeddings/train\_embeddings.pt}) to its exact cryptographic MD5 hash, byte size, and stage dependencies. This structure enables Git to strictly track the exact state of manifests, split embeddings, and model checkpoints through time without ever persisting heavy binary payloads in the Git object store. The physical cache shard for each artifact resides within \texttt{.dvc/cache/}, linking declarative pipeline states to immutable disk blocks.
 
 \section{DagsHub S3 Remote Integration}
 \label{sec:dagshub_s3_remote}
@@ -97,7 +110,7 @@ pixi run --frozen -e ci-dev dvc pull || echo "WARNING: DVC pull skipped or faile
 \label{lst:jenkins_hydration}
 \end{listing}
 
-As explicitly illustrated in Listing~\ref{lst:jenkins_hydration}, the invocation utilises the isolated \texttt{ci-dev} environment managed by Pixi. The command interrogates the checked-out \texttt{.dvc} files and efficiently streams only the required MD5 blobs from the S3 remote, thus flawlessly reconstructing the necessary environment for model testing. Furthermore, within the subsequent \texttt{stage('Model Training \& Checkpoint (GPU)')}, trained outputs are synchronised back to remote storage via \texttt{pixi run --frozen -e dev dvc push models/checkpoints/head.pt models/checkpoints/model.onnx || true}.
+As explicitly illustrated in Listing~\ref{lst:jenkins_hydration}, the invocation utilises the isolated \texttt{ci-dev} environment managed by Pixi. The command interrogates the checked-out \texttt{dvc.lock} manifest and efficiently streams only the required MD5 blobs from the S3 remote, thus flawlessly reconstructing the necessary environment for model testing. Furthermore, within the subsequent \texttt{stage('Model Training \& Checkpoint (GPU)')}, trained outputs are synchronised back to remote storage via \texttt{pixi run --frozen -e dev dvc push models/checkpoints/head.pt models/checkpoints/model\_int8.onnx || true}.
 
 \subsection{Fail-Soft Caching Mechanisms}
 A critical requirement for enterprise-grade MLOps is unyielding resilience against external infrastructure degradation. If the DagsHub S3 endpoint experiences sudden latency spikes, degraded throughput, or absolute downtime, the pipeline must not catastrophically stall if the necessary assets are already present on the local cluster. The explicit shell logical OR operator (\texttt{||}) implements a strict fail-soft mechanism. If the network request fails, the pipeline automatically emits a non-fatal warning and continues execution by safely utilising whatever files are currently available in the cached storage layer. This resilient strategy heavily relies on the persistence of the underlying Kubernetes PersistentVolumeClaim (mounted specifically at \texttt{/root/.cache/rattler/cache} and the workspace), allowing successive, ephemeral pod executions to leverage previously downloaded, immutable chunks from prior CI runs. This methodology fundamentally preserves CI/CD throughput even during severe remote storage outages, guaranteeing high availability and unhindered workflow continuation.

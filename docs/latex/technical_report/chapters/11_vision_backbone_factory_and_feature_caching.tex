@@ -50,30 +50,31 @@ During the extraction phase, the images are strictly normalised using channel-wi
 
 The resultant activation tensors are immediately detached from the active device and transferred to host CPU memory. This continuous offloading strictly prevents the exhaustion of precious GPU VRAM, allowing the architecture to process datasets scaling to millions of biological observations on heavily constrained bare-metal hardware.
 
-\section{Persistent Embedding Caching System}
+\section{Persistent Embedding Caching and Stratified Tensor Partitions}
 \label{sec:persistent_embedding_caching}
 
-Once extracted, the gigabyte-scale arrays of feature embeddings and their associated ground-truth taxonomic labels must be reliably persisted and efficiently loaded during subsequent training invocations. The \texttt{src/taxon\_vision/models/training/embeddings.py} module dictates the mathematical and physical invariants governing this caching engine.
+Once extracted, the gigabyte-scale arrays of feature representations and their associated taxonomic labels are serialised into four discrete, stratified embedding partitions within \texttt{data/embeddings/}: \texttt{train\_embeddings.pt}, \texttt{val\_embeddings.pt}, \texttt{cal\_embeddings.pt}, and \texttt{test\_embeddings.pt}, accompanied by \texttt{taxa\_mapping.json}. The canonical pipeline entrypoint \texttt{src/taxon\_vision/pipelines/extract\_features.py} orchestrates this transformation in accordance with the parameter matrix declared in the root \texttt{params.yaml}.
 
-\subsection{On-Disk Serialisation and Key Generation}
+\subsection{Stratified Partitioning and Invariant Serialisation}
 
-The integrity of the cache is paramount; if the caching system erroneously serves stale representations that do not precisely correspond to the current dataset state or backbone architecture, the resulting model will suffer catastrophic catastrophic divergence. To enforce absolute mathematical reproducibility, the caching system implements a cryptographically secure invalidation invariant.
-
-Cache files are stored on disk with a uniquely generated hash key. This deterministic cache key is synthesised by hashing a strictly ordered concatenation of critical parameters:
+The integrity of the feature partitions is paramount; if downstream models consume uncalibrated or leaking data splits, epistemic guarantees crumble. To enforce strict mathematical rigor, the feature extraction pipeline implements deterministic stratified sampling:
 \begin{enumerate}
-    \item The precise canonical identifier of the active foundational backbone\\(e.g., \texttt{vit\_small\_patch16\_dinov3}).
-    \item A cryptographic hash (MD5 or SHA-256) of the underlying dataset manifest, specifically tracking the DVC dataset versioning file, thereby detecting any alterations to the constituent images or labelling matrices.
-    \item The serialised parameters of the image transformation pipeline, particularly the spatial resolution ($224 \times 224$) and normalisation constants, ensuring that alterations to the input pre-processing immediately invalidate the historical cache.
+    \item \textbf{Four-Way Deterministic Split:} Observations from \texttt{data/manifests/dataset\_manifest.parquet} are partitioned into training (70\%), validation (10\%), conformal calibration (10\%), and holdout evaluation (10\%) subsets, preserving class frequency distributions even across extreme long-tail taxa.
+    \item \textbf{Structured Tensor Dictionaries:} Each partition is serialised as an immutable PyTorch dictionary mapping \texttt{\{"embeddings": Tensor, "labels": Tensor, "observation\_uuids": list[str]\}}, with embeddings strictly $L_2$ unit-normalised to facilitate cosine similarity classification.
+    \item \textbf{Cryptographic Lineage Tracking:} The extraction step records exact MD5 hashes for all four tensors into \texttt{dvc.lock}, binding the representations to the foundational backbone architecture (e.g., \texttt{timm/vit\_base\_patch16\_clip\_224.openai}) and the active Git commit SHA.
 \end{enumerate}
-If any of these invariants diverge, the system gracefully bypasses the cache and forces a full re-extraction over the active hardware.
 
-\subsection{Memory-Mapped Tensor Loading}
+\subsection{Diamond DAG Downstream Ingestion and Zero-RAM Bloat}
 
-Loading massive datasets into memory natively poses severe engineering challenges. A dataset comprising 500,000 biological observations projected into a $768$-dimensional FP32 space consumes approximately 1.5 gigabytes of memory purely for the embedding vectors, excluding labels and runtime overhead. Attempting to allocate these contiguous arrays entirely within the system RAM can rapidly trigger out-of-memory (OOM) faults, particularly during parallel hyperparameter tuning trials executed via Optuna.
+The existence of four distinct tensor files underpins the Epistemic Diamond DAG architecture:
+\begin{itemize}
+    \item \textbf{Training Stage (\texttt{train.py}):} Ingests \texttt{train\_embeddings.pt} and \texttt{val\_embeddings.pt} to optimise the linear classification head (\texttt{head.pt}) using Class-Balanced Loss and Optuna Bayesian sweeps.
+    \item \textbf{ONNX Export Stage (\texttt{export\_onnx.py}):} Fuses the trained head weights with backbone specifications to produce the accelerated serving binary \texttt{models/checkpoints/model\_int8.onnx}.
+    \item \textbf{Conformal Calibration Stage (\texttt{calibrate.py}):} Ingests the independent \texttt{cal\_embeddings.pt} alongside \texttt{model\_int8.onnx} to compute exact non-conformity quantiles $\hat{q}_\alpha$, producing \texttt{config/conformal\_config.yaml}.
+    \item \textbf{Evaluation Stage (\texttt{evaluate.py}):} Evaluates \texttt{test\_embeddings.pt} against \texttt{model\_int8.onnx} and \texttt{config/conformal\_config.yaml}, confirming $1-\alpha$ empirical coverage and Macro PR-AUC without data leakage.
+\end{itemize}
 
-To guarantee operational stability, the caching engine inherently supports memory mapping via \texttt{mmap\_mode}. By writing the contiguous NumPy or PyTorch tensors to disk using a memory-mapped format, the operating system's virtual memory manager is permitted to treat the file on disk as though it were resident in RAM. When the PyTorch \texttt{DataLoader} subsequently requests a specific mini-batch permutation during the \texttt{\_train\_cached\_epoch} execution, the operating system transparently pages only the specifically requested memory chunks into the active physical memory.
-
-This memory-mapping architecture explicitly severs the correlation between the absolute dataset size and the peak RAM allocation, allowing the TaxonVision pipeline to train robust linear heads on datasets that vastly exceed the physical memory constraints of the underlying node, whilst maintaining high-throughput sequential reads.
+By writing contiguous, normalised tensors directly to disk and loading mini-batches with pin memory on NVMe storage, the training daemon eliminates redundant image decoding passes and prevents host RAM exhaustion, maintaining high-throughput execution during parallel hyperparameter searches.
 
 \section{Throughput and Resource Benchmarking}
 \label{sec:throughput_and_resource_benchmarking}

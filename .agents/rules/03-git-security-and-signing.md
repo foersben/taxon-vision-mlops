@@ -1,6 +1,6 @@
 ---
 type: Agent Rule
-title: Mandates
+title: "Rule 03: Git Security & Signing"
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
 version: 1.0

@@ -49,7 +49,7 @@
 %%  Left: DagsHub (-4.7) | Right: CI/CD (+4.7), width = 6.9cm
 %% ======================================================================
 \node[hubbox={6.9cm}] (dagshub) at (-4.7, 12.4) {%
-    \textbf{\footnotesize\color{mblueborder} DagsHub \& MinIO MLOps Hub}\\[0.8mm]
+    \textbf{\footnotesize\color{mblueborder} DagsHub \& SeaweedFS MLOps Hub}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
     \textbullet\ \textbf{Data Version Control (DVC):} Remote storage, Parquet \& Lance manifests\\
     \textbullet\ \textbf{Experiment Tracking:} MLflow metrics, hyperparameters \& Registry\\
@@ -73,21 +73,22 @@
 %%  Left: Data Ingestion (-4.7) | Right: Data Prep (+4.7), width = 6.9cm
 %% ======================================================================
 \node[ingestbox={6.9cm}] (ingest) at (-4.7, 8.2) {%
-    \textbf{\footnotesize\color{morangeborder} 1. Data Ingestion \& Licensing}\\[0.8mm]
+    \textbf{\footnotesize\color{morangeborder} 1. Ingest \& Audit (\texttt{params.yaml})}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
-    \textbullet\ \textbf{Zero-Copy Streaming:} Apache Arrow batches from AWS Open Data\\
-    \textbullet\ \textbf{Licence Whitelist:} CC0, CC-BY, CC-BY-NC open access only\\
-    \textbullet\ \textbf{Spatial-Temporal Priors:} GBIF occurrence priors, GPS \& seasonal month\\
-    \textbullet\ \textbf{Data Versioning:} DVC Parquet manifests with SHA-256 integrity hashing
+    \textbullet\ \textbf{Stage 1: \texttt{ingest}:} \nolinkurl{data/manifests/raw_manifest.parquet}\\
+    \textbullet\ \textbf{Stage 2: \texttt{audit\_license}:} CC0, CC-BY, CC-BY-NC validation\\
+    \textbullet\ \textbf{Verified Manifest:} \nolinkurl{dataset_manifest.parquet} + \nolinkurl{license_audit.json}\\
+    \textbullet\ \textbf{Data Lineage:} Governed by root \nolinkurl{params.yaml} and DVC hashing
 };
 
 \node[prepbox={6.9cm}] (dataprep) at (4.7, 8.2) {%
-    \textbf{\footnotesize\color{mblueborder!80!black} 2. Multimodal Visual Chunking}\\[0.8mm]
+    \textbf{\footnotesize\color{mblueborder!80!black} 2. Feature Extraction (\texttt{extract\_features})}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
-    \textbullet\ \textbf{Parent-Child Chunking:} Zero-shot isolation $\to 224{\times}224$ child crops\\
-    \textbullet\ \textbf{Frozen Features:} Embeddings $z_{\mathrm{child}} \in \mathbb{R}^{d}$ via backbone\\
-    \textbullet\ \textbf{Habitat Context:} Uncropped parent scene preserved for environmental priors\\
-    \textbullet\ \textbf{Relational Linking:} Child embeddings mapped to parent DarwinCore IDs
+    \textbullet\ \textbf{Stage 3: \texttt{extract\_features}:} Zero-copy S3 streaming\\
+    \textbullet\ \textbf{Frozen Trunk:} DINOv3 ($d=384$) or BioCLIP-2 ($d=512$)\\
+    \textbullet\ \textbf{Diamond Fan-Out:} 4 discrete stratified embedding splits:\\
+    \quad\textbullet\ \nolinkurl{train_embeddings.pt} (70\%) $\vert$ \nolinkurl{val_embeddings.pt} (10\%)\\
+    \quad\textbullet\ \nolinkurl{cal_embeddings.pt} (10\%) $\vert$ \nolinkurl{test_embeddings.pt} (10\%)
 };
 
 \begin{scope}[on background layer]
@@ -99,13 +100,13 @@
 %%  Left: Pipeline 1 (-4.7) | Right: Pipeline 2 (+4.7), width = 6.9cm
 %% ======================================================================
 \node[classbox={6.9cm}] (pipe1) at (-4.7, 3.3) {%
-    \textbf{\footnotesize\color{mgrayborder} Pipeline 1: Offline Classification Engine}\\[0.8mm]
+    \textbf{\footnotesize\color{mgrayborder} Epistemic Diamond: Train, Export, Calibrate \& Eval}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
-    \textbullet\ \textbf{Frozen Backbone:} BioCLIP-2 / DINOv3 (zero grad)\\
-    \textbullet\ \textbf{Head Training:} Class-Balanced Loss ($E_n = \frac{1-\beta^n}{1-\beta}$) for long-tail classes\\
-    \textbullet\ \textbf{Hyperparameter Tuning:} Optuna TPE + ASHA, early stopping, LR decay\\
-    \textbullet\ \textbf{Graph Compilation:} INT8 ONNX export (${<}25$\,ms latency SLA)\\
-    \textbullet\ \textbf{Interpretability:} Forward-hooked Class Activation Mapping (CAM)
+    \textbullet\ \textbf{Stage 4: \texttt{train}:} Class-Balanced Loss on train/val $\to$ \nolinkurl{head.pt}\\
+    \textbullet\ \textbf{Stage 5: \texttt{export\_onnx}:} Dual logits/embeds $\to$ \nolinkurl{model_int8.onnx}\\
+    \textbullet\ \textbf{Stage 6: \texttt{calibrate}:} $\hat{q}_\alpha$, $\tau_{\text{energy}}$ on cal $\to$ \nolinkurl{conformal_config.yaml}\\
+    \textbullet\ \textbf{Stage 7: \texttt{evaluate}:} $1-\alpha$ bound check on test $\to$ \nolinkurl{pareto_evaluation.json}\\
+    \textbullet\ \textbf{Fast-Path CAM:} Forward-only Class Activation Mapping (${<}2$\,ms)
 };
 
 \node[pipebox={6.9cm}] (pipe2) at (4.7, 3.3) {%
@@ -167,7 +168,7 @@
     \rule{\linewidth}{0.4pt}\\[0.6mm]
     \begin{minipage}[t]{0.485\linewidth}
     \textbf{Epistemic Triage \& Uncertainty Sampling:}\\
-    \textbullet\ \textbf{Conformal Routing:} Ambiguous sets ($|\hat{C}| > k_{\max}$) and null sets ($|\hat{C}|=0$) routed to MinIO \texttt{triage\_queue.lance}\\
+    \textbullet\ \textbf{Conformal Routing:} Ambiguous sets ($|\hat{C}| > k_{\max}$) and null sets ($|\hat{C}|=0$) routed to SeaweedFS \texttt{triage\_queue.lance}\\
     \textbullet\ \textbf{BADGE Strategy:} Diverse gradient embeddings maximise parameter updates
     \end{minipage}\hfill
     \begin{minipage}[t]{0.485\linewidth}

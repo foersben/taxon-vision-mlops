@@ -1,0 +1,265 @@
+% Chapter 14: Multimodal Knowledge Graph & Vision-RAG
+
+\begin{frame}[plain]
+    \vfill
+    \centering
+    {\footnotesize \textbf{\textcolor{deepblue}{\textsc{TaxonVision-MLOps Architecture}}}} \\[0.35cm]
+    {\large \textbf{\textcolor{signalorange}{CHAPTER 14}}} \\[0.25cm]
+    {\huge \textbf{Multimodal Knowledge Graph \& Vision-RAG}} \\[0.35cm]
+    {\normalsize \textcolor{black!70}{Epistemic Ambiguity Resolution, Filtered Vector Retrieval \& Clinical-Grade Diagnosis Cards}} \\[0.5cm]
+    \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
+    \statustarget
+    \vfill
+    \script{Welcome to Chapter 14: our capstone architecture on Multimodal Knowledge Graphs and Vision-RAG. Here, we resolve difficult morphological ambiguities through visual chunking, geo-temporal filtered HNSW retrieval, and local VLM differential diagnosis cards.}
+    \qa{When is the Vision-RAG pipeline triggered?}{It executes lazily only when the upstream conformal predictor detects epistemic ambiguity ($|C|>1$) or out-of-distribution outliers ($|C|=0$), preserving fast-path latency for simple classifications.}
+\end{frame}
+
+\begin{frame}{Knowledge Graph Architecture}{Conformal-Driven Lazy Execution of the MMKG}
+    \begin{block}{Conformal-Driven Lazy Invocation Policy}
+        \begin{itemize}\small
+            \item \textbf{Throughput Preservation:} Querying dense graph and vector databases on routine inferences exhausts latency budgets.
+            \item \textbf{Fast-Path Resolution:} Unambiguous singleton predictions ($|\hat{C}(X)| = 1$) resolve in $\le 15$ ms via INT8 ONNX models.
+            \item \textbf{Lazy Activation Gate:} The MMKG pipeline triggers exclusively when the Split Conformal Gate detects epistemic uncertainty.
+            \item \textbf{Epistemic Triggers:} Severe classification ambiguity ($|\hat{C}(X)| > 3$) between sibling taxa or complete OOD outliers ($|\hat{C}(X)| = 0$).
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.2cm}
+    \statustarget
+
+    \script{Our Multimodal Knowledge Graph is powerful, but querying it takes time. In production, we do not query the graph for every single simple observation. If our conformal safety gate outputs a confident singleton prediction ($|\hat{C}(X)| = 1$), we return the INT8 ONNX prediction on the Fast Hot-Path in under 22 milliseconds. We lazy-load the MMKG only when the conformal gate signals uncertainty—either severe ambiguity ($|\hat{C}(X)| > 3$), or an empty prediction set ($|\hat{C}(X)| = 0$) indicating an anomalous, out-of-distribution specimen.}
+    \qa{Why not query the knowledge graph in parallel on every request?}{Parallel querying would saturate database connection pools and waste CPU/GPU cycles on obvious, clear-cut classifications, degrading overall cluster throughput.}
+\end{frame}
+
+\begin{frame}{MMKG Pipeline Architecture}{Ingestion \& Retrieval Data Flow}
+    \begin{center}
+        \resizebox{0.95\textwidth}{!}{
+            \begin{tikzpicture}[
+                node distance=0.8cm and 1.2cm,
+                box/.style={rectangle, draw, rounded corners, align=center, thick, fill=gray!10, minimum height=1.2cm, minimum width=2.5cm},
+                arrow/.style={-stealth, thick},
+                font=\small\sffamily
+            ]
+            \providecolor{TaxonPrimary}{RGB}{41, 128, 185}
+            \providecolor{TaxonSecondary}{RGB}{39, 174, 96}
+            \providecolor{TaxonDark}{RGB}{44, 62, 80}
+            \providecolor{TaxonAccent}{RGB}{231, 76, 60}
+
+            \node[box, fill=TaxonPrimary!20, draw=TaxonPrimary] (ingest) {\textbf{Raw Ingestion}};
+            \node[box, fill=TaxonSecondary!20, draw=TaxonSecondary, right=of ingest] (filter) {\textbf{Quality Filter} \\ \scriptsize Research Grade, CC licenses, $>1024$\,px};
+            \node[box, fill=TaxonSecondary!20, draw=TaxonSecondary, right=of filter] (chunk) {\textbf{Visual Chunking} \\ \scriptsize ($I_{\text{child}}$ extraction)};
+
+            \node[box, fill=TaxonDark!20, draw=TaxonDark, below=of chunk, yshift=-0.5cm] (hnsw) {\textbf{Single-Stage Filtered HNSW} \\ \scriptsize Spatial/Seasonal Predicates};
+            \node[box, fill=TaxonDark!20, draw=TaxonDark, left=of hnsw] (rrf) {\textbf{RRF Re-ranking} \\ \scriptsize Visual + Geo};
+            \node[box, fill=TaxonAccent!20, draw=TaxonAccent, left=of rrf] (vlm) {\textbf{VLM Diagnosis Card} \\ \scriptsize JSON generation};
+
+            \draw[arrow] (ingest) -- (filter);
+            \draw[arrow] (filter) -- (chunk);
+            \draw[arrow] (chunk) -- (hnsw);
+            \draw[arrow] (hnsw) -- (rrf);
+            \draw[arrow] (rrf) -- (vlm);
+            \end{tikzpicture}
+        }
+    \end{center}
+
+
+    \script{This diagram maps the full data flow of the MMKG pipeline. Raw data flows through strict quality filters ensuring research-grade, open-license images over 1024 pixels. Then we extract the child organism. The isolated vector is searched in our single-stage filtered HNSW index. Retrieved candidates are fused using Reciprocal Rank Fusion, and finally passed to our local VLM to emit a structured diagnosis card.}
+\end{frame}
+
+\begin{frame}{Visual Pre-Processing}{Parent-Child Visual Chunking ($I_{\text{child}}$ vs $I_{\text{parent}}$)}
+    \begin{block}{Background Clutter Isolation Strategy}
+        \begin{itemize}\small
+            \item \textbf{The Foliage Noise Problem:} In uncropped citizen-science photos, specimens occupy $< 10\%$ of pixels; soil and sky corrupt embeddings.
+            \item \textbf{Zero-Shot Organism Localization:} Upstream zero-shot detectors (YOLO-World / OWL-ViT) isolate primary organism bounding boxes.
+            \item \textbf{Focused Child Embedding:} Extracts noise-free BioCLIP-2 embeddings ($z_{\text{child}} \in \mathbb{R}^{768}$) from the isolated specimen crop ($I_{\text{child}}$).
+            \item \textbf{Context Preservation:} Uncropped parent scene context ($I_{\text{parent}}$) is retained for macro-habitat and environmental verification.
+        \end{itemize}
+    \end{block}
+
+
+    \script{In nature photography, the actual insect or wildflower often takes up less than 10 percent of the frame. The rest is dirt, grass, or human fingers. If you embed the whole image, your vector captures dirt rather than biology. We use YOLO-World or OWL-ViT to detect the specimen and isolate a clean child bounding box crop for fine-grained BioCLIP-2 embedding, while preserving the parent scene image to verify environmental habitat.}
+    \qa{What happens if the zero-shot detector finds multiple organisms in one image?}{Each detected child entity generates an independent bounding box and child embedding, allowing multi-organism observations to be analysed separately.}
+\end{frame}
+
+\begin{frame}{Visual Pre-Processing}{Parent-Child Visual Chunking Diagram}
+    \centering
+    \vspace{0.2cm}
+
+    \resizebox{0.96\textwidth}{!}{%
+    \begin{tikzpicture}[
+        >=stealth, font=\small\sffamily,
+        stage/.style={rectangle, draw=TaxonPrimary!80, fill=TaxonPrimary!8, thick, rounded corners=4pt, minimum width=3.0cm, minimum height=2.7cm, align=center},
+        imgbox/.style={rectangle, draw=TaxonDark!60, fill=gray!6, thick, rounded corners=4pt, minimum width=2.5cm, minimum height=2.7cm, align=center},
+        childbox/.style={rectangle, draw=TaxonSecondary!80, fill=TaxonSecondary!8, thick, rounded corners=4pt, minimum width=3.0cm, minimum height=2.7cm, align=center},
+        vecbox/.style={rectangle, draw=TaxonDark!75, fill=TaxonDark!7, thick, rounded corners=4pt, minimum width=3.0cm, minimum height=2.7cm, align=center},
+        arr/.style={->, >=stealth, very thick, draw=TaxonDark!75}
+    ]
+        \providecolor{TaxonPrimary}{RGB}{41, 128, 185}
+        \providecolor{TaxonSecondary}{RGB}{39, 174, 96}
+        \providecolor{TaxonDark}{RGB}{44, 62, 80}
+        \providecolor{TaxonAccent}{RGB}{231, 76, 60}
+
+        % --- Node 1: Parent Scene ---
+        \node[imgbox] (parent) at (0, 0) {};
+        \node[font=\footnotesize\bfseries, text=TaxonDark, anchor=north, align=center] at ([yshift=-0.16cm]parent.north) {Parent Scene\\($I_{\text{parent}}$)};
+        \node[font=\fontsize{5.2pt}{6.2pt}\selectfont, text=gray!75!black, anchor=north, align=center] at ([yshift=-0.96cm]parent.north) {
+            $\mathbb{R}^{H \times W \times 3}$ (Full Frame)\\[1pt]
+            Macro-habitat \& soil noise
+        };
+        % Detected BBox inside Parent
+        \draw[thick, dashed, draw=TaxonAccent, fill=TaxonAccent!12, rounded corners=2pt] 
+            ([xshift=-1.15cm, yshift=0.20cm]parent.south) rectangle ([xshift=1.15cm, yshift=0.80cm]parent.south);
+        \node[font=\fontsize{5.5pt}{6.5pt}\selectfont\bfseries, text=TaxonAccent] at ([yshift=0.6cm]parent.south) {Organism BBox $\hat{B}$};
+
+        % --- Node 2: Detector Stage ---
+        \node[stage, right=0.9cm of parent] (detector) {};
+        \node[font=\footnotesize\bfseries, text=TaxonPrimary!90!black, anchor=north] at ([yshift=-0.16cm]detector.north) {Zero-Shot Detector};
+        \node[font=\fontsize{5.5pt}{6.5pt}\selectfont\bfseries, text=TaxonDark!90!black, anchor=north] at ([yshift=-0.62cm]detector.north) {\texttt{YOLO-World} / \texttt{OWL-ViT}};
+        % Prompt card in center
+        \node[rectangle, fill=white, draw=TaxonPrimary!40, rounded corners=2pt, font=\fontsize{5pt}{6pt}\selectfont, text=TaxonPrimary!90!black, align=center] 
+            at ([yshift=-0.05cm]detector.center) {Text Prompt:\\[1pt]\textit{"biological organism"}};
+        \node[font=\fontsize{5.2pt}{6.2pt}\selectfont\bfseries, text=TaxonAccent, anchor=south] at ([yshift=0.25cm]detector.south) {Predicted BBox $\hat{B}$};
+
+        % --- Node 3: Child Crop ---
+        \node[childbox, right=0.9cm of detector] (child) {};
+        \node[font=\footnotesize\bfseries, text=TaxonSecondary!90!black, anchor=north] at ([yshift=-0.16cm]child.north) {Child Crop ($I_{\text{child}}$)};
+        \node[font=\fontsize{5.2pt}{6.2pt}\selectfont, text=gray!75!black, anchor=north, align=center] at ([yshift=-0.62cm]child.north) {
+            $\mathbb{R}^{224 \times 224 \times 3}$ (Rescaled)\\[1pt]
+            Specimen-isolated pixels
+        };
+        % Specimen box inside Child
+        \draw[draw=TaxonSecondary!70, fill=white, rounded corners=2pt] 
+            ([xshift=-1.1cm, yshift=0.25cm]child.south) rectangle ([xshift=1.1cm, yshift=1.15cm]child.south);
+        \node[font=\fontsize{5.5pt}{6.5pt}\selectfont\bfseries, text=TaxonSecondary!90!black, align=center] at ([yshift=0.7cm]child.south) {Isolated Morphology\\[1pt]\tiny (Clean Specimen)};
+
+        % --- Node 4: BioCLIP-2 Encoder ---
+        \node[vecbox, right=0.9cm of child] (backbone) {};
+        \node[font=\footnotesize\bfseries, text=TaxonDark, anchor=north] at ([yshift=-0.16cm]backbone.north) {BioCLIP-2 Encoder};
+        \node[font=\fontsize{5.2pt}{6.2pt}\selectfont, text=gray!75!black, anchor=north, align=center] at ([yshift=-0.62cm]backbone.north) {
+            Frozen ViT-B/16 Backbone\\[1pt]
+            $f_\theta(I_{\text{child}}) \to z_{\text{child}}$
+        };
+        % Embedding strip (centered safely at center)
+        \begin{scope}[shift={([yshift=-0.12cm]backbone.center)}]
+            \foreach \i in {-4,-3,-2,-1,0,1,2,3,4} {
+                \draw[fill=TaxonDark!\ifnum\i<0 25\else\ifnum\i>1 65\else 45\fi\fi, draw=TaxonDark!80] (\i*0.22-0.11, -0.15) rectangle (\i*0.22+0.11, 0.15);
+            }
+        \end{scope}
+        \node[font=\fontsize{6pt}{7pt}\selectfont\bfseries, text=TaxonDark] at ([yshift=0.55cm]backbone.south) {$z_{\text{child}} \in \mathbb{R}^{768}$};
+        \node[font=\fontsize{4.8pt}{5.8pt}\selectfont, text=gray!80!black] at ([yshift=0.24cm]backbone.south) {($\ell_2\text{-normalized to } \mathbb{S}^{767}$)};
+
+        % --- Connecting Arrows ---
+        \draw[arr] (parent.east) -- node[above=2pt, font=\fontsize{5.5pt}{6.5pt}\selectfont\bfseries, text=TaxonDark!80] {Full Image} (detector.west);
+        \draw[arr] (detector.east) -- node[above=2pt, font=\fontsize{5.5pt}{6.5pt}\selectfont\bfseries, text=TaxonSecondary!90!black] {$\text{Crop}(I, \hat{B})$} (child.west);
+        \draw[arr] (child.east) -- node[above=2pt, font=\fontsize{5.5pt}{6.5pt}\selectfont\bfseries, text=TaxonDark!80, align=center] {Patch\\Tokens} (backbone.west);
+
+    \end{tikzpicture}%
+    }
+
+    \vspace{-0.10cm}
+
+    % --- Lower Half: Architecture Guarantees & Invariants ---
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Spatial Noise \& Confounder Filtering}
+                \begin{itemize}\scriptsize
+                    \setlength{\itemsep}{2pt}
+                    \item \textbf{Environmental Disentanglement:} Discards non-diagnostic background (soil, foliage, human fingers, specimen pins).
+                    \item \textbf{Receptive Field Maximization:} Rescales the target organism to full $224 \times 224$ patch resolution.
+                    \item \textbf{Zero-Shot Localization:} Open-vocabulary detector handles unannotated taxa without category retraining.
+                \end{itemize}
+            \end{block}
+        \end{column}
+
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Downstream Embedding Invariants}
+                \begin{itemize}\scriptsize
+                    \setlength{\itemsep}{2pt}
+                    \item \textbf{Morphology Isolation:} Precludes ViT attention heads from latching onto spurious background shortcuts.
+                    \item \textbf{Unit Hypersphere Projection:} Feature vector is $\ell_2$-normalized to $\mathbb{S}^{767}$ for optimal cosine retrieval.
+                    \item \textbf{Context Decoupling:} Macro-habitat context can be independently routed as an auxiliary tabular feature.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \script{This diagram visually summarises the Parent-Child Visual Chunking process. We take the full parent scene containing background noise and pass it through a zero-shot detector like YOLO-World or OWL-ViT. This extracts the child bounding box crop, separating the organism from environmental noise, which is then fed to BioCLIP-2 to compute our clean morphological embedding vector of size 768.}
+    \qa{Why not pass the full parent scene directly into BioCLIP-2?}{Foundation vision backbones readily overfit to background correlations such as soil color or geographic markers rather than diagnostic specimen morphology.}
+\end{frame}
+
+\begin{frame}{Biogeographical Filtering}{Single-Stage Filtered HNSW with Spatial-Temporal Predicates}
+    \begin{block}{Pruning Geographically Impossible Candidates}
+        \begin{itemize}\small
+            \item \textbf{Convergent Evolution Trap:} Unrelated species on distant continents evolve near-identical morphologies (e.g., mimicry).
+            \item \textbf{Post-Filtering Failure:} Top-$k$ visual search post-filtering causes candidate starvation when top neighbors are from the wrong continent.
+            \item \textbf{Native Single-Stage HNSW Walk:} Spatial predicates (Haversine geodesic $R_{\text{max}} \le 500$ km) evaluated directly inside C++ graph traversal.
+            \item \textbf{Temporal Phenology Bounds:} Seasonal observation month filters ($\Delta_{\text{season}} = 1$) prune phenologically impossible taxa.
+        \end{itemize}
+    \end{block}
+
+
+    \script{Nature is full of convergent evolution: two insects on opposite sides of the globe may look identical even though they diverged 50 million years ago. If you only look at pixels, you will misclassify a European wasp as an American cicada killer. In our HNSW vector graph, we evaluate GPS coordinates and seasonal observation month directly inside the graph traversal. If an exemplar is outside a 500-kilometre radius or wrong season, it is pruned instantly before similarity scores are computed.}
+    \qa{Why not perform vector search first and filter out GPS locations afterward?}{Post-filtering suffers from candidate starvation: if your top-50 visual neighbours are all from the wrong continent, post-filtering discards all of them and leaves you with zero valid results. Native single-stage filtering guarantees high recall among geographically valid candidates.}
+\end{frame}
+
+\begin{frame}{Ensemble Ranking}{Multi-Modal Re-Ranking via Reciprocal Rank Fusion (RRF)}
+    \begin{block}{Synthesizing Visual Similarity \& Ecological Priors}
+        \begin{itemize}\small
+            \item \textbf{Rank Combination:} Combines dense visual cosine similarity ($w_{\text{vis}} = 0.65$) with GBIF historical occurrence density ($w_{\text{geo}} = 0.35$):
+            \[
+                \text{RRF}(d) = \frac{w_{\text{vis}}}{k + r_{\text{vis}}(d)} + \frac{w_{\text{geo}}}{k + r_{\text{geo}}(d)}
+            \]
+            \item \textbf{Distribution Invariance:} Non-linear rank fusion prevents score scale mismatch between dissimilar probability spaces.
+            \item \textbf{Robustness:} Constant $k=60$ dampens top-rank outliers, tilting decisions toward true local ecology.
+        \end{itemize}
+    \end{block}
+
+
+    \script{Once we retrieve candidate species, how do we combine visual similarity with ecological reality? We use Reciprocal Rank Fusion. We assign a 65 percent weight to visual similarity and a 35 percent weight to historical GBIF occurrence density. Even if an exotic species looks slightly closer visually, a high local occurrence density for the native sibling species correctly tilts the ranking towards the true ecological observation.}
+    \qa{What is the parameter $k$ in the RRF formula?}{The constant $k$ (typically set to 60) dampens the impact of extreme outliers at top ranks, preventing a single high rank from disproportionately dominating the final ensemble score.}
+\end{frame}
+
+\begin{frame}{Clinical-Grade Diagnosis}{VLM Context Synthesis \& Differential Diagnosis Cards}
+    \begin{block}{Grammar-Constrained VLM Reasoning for Triage}
+        \begin{itemize}\small
+            \item \textbf{Taxonomist Context Synthesis:} When ambiguous observations hit human review, query crops and top-3 exemplar specimens are injected into a local VLM (Qwen2-VL-2B).
+            \item \textbf{Grammar-Based Sampling:} Strict JSON grammar constraint prevents hallucination and guarantees valid schema adherence.
+            \item \textbf{Differential Diagnosis Card:} Emits structured anatomical discriminators, likelihoods, and CAM activation overlays.
+            \item \textbf{Label Studio Integration:} Direct rendering in review UI turns triage into rapid expert verification.
+        \end{itemize}
+    \end{block}
+
+
+    \script{When a human taxonomist is asked to review an ambiguous specimen, we don't just dump raw images on their screen. We pass the query crop and the top-3 reference exemplars into a local Vision-Language Model like Qwen2-VL-2B. Constrained by grammar-based decoding, the VLM generates a structured JSON differential diagnosis card: it details specific anatomical discriminators, shows CAM overlays, and allows the expert to confirm the species in seconds.}
+    \qa{Why use grammar-based sampling with the Vision-Language Model?}{Unconstrained VLMs hallucinate text and output unpredictable schemas. Grammar-based sampling forces the model to emit strictly valid JSON conforming to our differential diagnosis schema.}
+\end{frame}
+
+\begin{frame}{Taxonomic Agility}{Zero-Retraining Taxonomic Mutations via DuckDB}
+    \begin{block}{Handling Dynamic Biological Taxonomy}
+        \begin{itemize}\small
+            \item \textbf{Dynamic Taxa Evolution:} Biological committees frequently revise classifications: merging species (lumps) or subdividing them (splits).
+            \item \textbf{Decoupled Architecture:} Embeddings reside in HNSW vector storage, while taxonomic relationships and metadata reside in DuckDB.
+            \item \textbf{$\mathcal{O}(1)$ Taxonomic Lumps:} Species mergers execute as instant relational table updates without touching model weights or embeddings.
+            \item \textbf{Audited Taxonomic Splits:} Historical nodes are marked \texttt{requires\_reannotation = true} and safely queued for expert re-labeling.
+        \end{itemize}
+    \end{block}
+
+
+    \script{In real biology, taxonomy is not static. Scientists frequently merge two species into one, or split one species into three. In a standard deep learning model, every split or merge requires retraining the entire neural network from scratch. Because our architecture decouples HNSW vector storage from DuckDB relational metadata, a taxonomic merge is an instant O(1) database update. Our vectors remain untouched with zero GPU compute cost.}
+    \qa{What happens during a taxonomic split when one species becomes two?}{Historical observation nodes for that taxon in DuckDB are flagged with \texttt{requires\_reannotation = true} and purged from active traversal. Their crops are routed to Label Studio for expert re-sorting, after which they are re-registered under their new respective taxon keys.}
+\end{frame}
+
+\begin{frame}{Conclusion}{Core Architectural Principles \& System Vision}
+    \begin{block}{The Pillars of Production Systems Engineering}
+        TaxonVision is built on three uncompromising principles that define enterprise MLOps.
+        \begin{itemize}
+            \item \textbf{Reproducibility by Default:} Using Pixi environments, DVC data lineage, and declarative k3s manifests ensures every run is perfectly replicable.
+            \item \textbf{Mathematical Safety under Uncertainty:} Split Conformal Prediction guarantees error bounds, refusing confident misclassification.
+            \item \textbf{Hardware-Conscious Sustainability:} Bare-metal GPU time-slicing, INT8 ONNX quantization, and zero-allocation inference maximize throughput per watt.
+        \end{itemize}
+    \end{block}
+
+
+    \script{To conclude our complete presentation: MLOps is not just about using trendy tools like Kubernetes or Docker. It is a systems engineering mindset. It means building models that are reproducible down to the exact commit, mathematically honest about what they don't know, and engineered to run reliably on physical hardware within budget. TaxonVision proves that with the right architecture, we can tackle the most complex biodiversity challenges on Earth with mathematical confidence and operational excellence. Thank you!}
+    \qa{Where can students inspect the source code and documentation?}{The entire repository, including Zensical documentation, LaTeX strategy reports, and CI/CD pipelines, is maintained under strict version control in the taxon-vision-mlops repository.}
+\end{frame}

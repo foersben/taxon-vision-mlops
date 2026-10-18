@@ -16,7 +16,7 @@ sources:
   - id: openwiki-source-948b3861f8fd9364bb8fd9eb
     resource: repo://deploy/k8s/nvidia-time-slicing-config.yaml
   - id: openwiki-source-15e78b5bc4ff817f2847b1a5
-    resource: repo://scripts/verify_deployment.sh
+    resource: repo://scripts/ci/verify_deployment.sh
   - id: openwiki-source-d972e68d3d76a2fa6167a3ad
     resource: repo://src/taxon_vision/monitoring/drift.py
   - id: openwiki-source-af85e4e085de42b48e7e7b7f
