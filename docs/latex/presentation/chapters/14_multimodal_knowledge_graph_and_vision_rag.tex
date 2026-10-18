@@ -82,51 +82,109 @@
 \end{frame}
 
 \begin{frame}{Visual Pre-Processing}{Parent-Child Visual Chunking Diagram}
-    \begin{center}
-        \resizebox{0.9\textwidth}{!}{
-            \makebox[\textwidth][c]{
-            \begin{tikzpicture}[
-                node distance=0.8cm,
-                box/.style={rectangle, draw, rounded corners, align=center, thick, fill=gray!10, minimum height=1.2cm, text width=2.4cm},
-                arrow/.style={-stealth, thick},
-                font=\small\sffamily
-            ]
-            \providecolor{TaxonPrimary}{RGB}{41, 128, 185}
-            \providecolor{TaxonSecondary}{RGB}{39, 174, 96}
-            \providecolor{TaxonDark}{RGB}{44, 62, 80}
-            \providecolor{TaxonAccent}{RGB}{231, 76, 60}
+    \centering
+    \vspace{0.2cm}
 
-            % Parent Image
-            \node[box, fill=gray!10, draw=gray, minimum width=4.2cm, minimum height=3.6cm, text width=3.8cm] (parent) {};
-            \node[anchor=north, yshift=-0.2cm, font=\small\sffamily\bfseries] at (parent.north) {Full Parent Scene ($I_{\text{parent}}$)};
-            \node[anchor=north, yshift=-0.7cm, text width=3.8cm, align=center] at (parent.north) {\scriptsize Macro-habitat context, \\ background foliage/soil noise};
+    \resizebox{0.96\textwidth}{!}{%
+    \begin{tikzpicture}[
+        >=stealth, font=\small\sffamily,
+        stage/.style={rectangle, draw=TaxonPrimary!80, fill=TaxonPrimary!8, thick, rounded corners=4pt, minimum width=3.0cm, minimum height=2.7cm, align=center},
+        imgbox/.style={rectangle, draw=TaxonDark!60, fill=gray!6, thick, rounded corners=4pt, minimum width=2.5cm, minimum height=2.7cm, align=center},
+        childbox/.style={rectangle, draw=TaxonSecondary!80, fill=TaxonSecondary!8, thick, rounded corners=4pt, minimum width=3.0cm, minimum height=2.7cm, align=center},
+        vecbox/.style={rectangle, draw=TaxonDark!75, fill=TaxonDark!7, thick, rounded corners=4pt, minimum width=3.0cm, minimum height=2.7cm, align=center},
+        arr/.style={->, >=stealth, very thick, draw=TaxonDark!75}
+    ]
+        \providecolor{TaxonPrimary}{RGB}{41, 128, 185}
+        \providecolor{TaxonSecondary}{RGB}{39, 174, 96}
+        \providecolor{TaxonDark}{RGB}{44, 62, 80}
+        \providecolor{TaxonAccent}{RGB}{231, 76, 60}
 
-            % Child Bounding Box inside Parent (cleanly in lower portion)
-            \draw[thick, dashed, draw=TaxonAccent, fill=TaxonAccent!10] ([xshift=-1.5cm, yshift=0.25cm]parent.south) rectangle ([xshift=1.5cm, yshift=1.55cm]parent.south);
-            \node[font=\tiny\bfseries, text=TaxonAccent] at ([yshift=0.9cm]parent.south) {Detected Organism Crop};
+        % --- Node 1: Parent Scene ---
+        \node[imgbox] (parent) at (0, 0) {};
+        \node[font=\footnotesize\bfseries, text=TaxonDark, anchor=north, align=center] at ([yshift=-0.16cm]parent.north) {Parent Scene\\($I_{\text{parent}}$)};
+        \node[font=\fontsize{5.2pt}{6.2pt}\selectfont, text=gray!75!black, anchor=north, align=center] at ([yshift=-0.96cm]parent.north) {
+            $\mathbb{R}^{H \times W \times 3}$ (Full Frame)\\[1pt]
+            Macro-habitat \& soil noise
+        };
+        % Detected BBox inside Parent
+        \draw[thick, dashed, draw=TaxonAccent, fill=TaxonAccent!12, rounded corners=2pt] 
+            ([xshift=-1.15cm, yshift=0.20cm]parent.south) rectangle ([xshift=1.15cm, yshift=0.80cm]parent.south);
+        \node[font=\fontsize{5.5pt}{6.5pt}\selectfont\bfseries, text=TaxonAccent] at ([yshift=0.6cm]parent.south) {Organism BBox $\hat{B}$};
 
-            % Detector node
-            \node[box, fill=TaxonPrimary!20, draw=TaxonPrimary, right=1.0cm of parent] (detector) {\textbf{Zero-Shot Detector} \\ \scriptsize YOLO-World / OWL-ViT};
+        % --- Node 2: Detector Stage ---
+        \node[stage, right=0.9cm of parent] (detector) {};
+        \node[font=\footnotesize\bfseries, text=TaxonPrimary!90!black, anchor=north] at ([yshift=-0.16cm]detector.north) {Zero-Shot Detector};
+        \node[font=\fontsize{5.5pt}{6.5pt}\selectfont\bfseries, text=TaxonDark!90!black, anchor=north] at ([yshift=-0.62cm]detector.north) {\texttt{YOLO-World} / \texttt{OWL-ViT}};
+        % Prompt card in center
+        \node[rectangle, fill=white, draw=TaxonPrimary!40, rounded corners=2pt, font=\fontsize{5pt}{6pt}\selectfont, text=TaxonPrimary!90!black, align=center] 
+            at ([yshift=-0.05cm]detector.center) {Text Prompt:\\[1pt]\textit{"biological organism"}};
+        \node[font=\fontsize{5.2pt}{6.2pt}\selectfont\bfseries, text=TaxonAccent, anchor=south] at ([yshift=0.25cm]detector.south) {Predicted BBox $\hat{B}$};
 
-            % Child Crop
-            \node[box, fill=TaxonSecondary!20, draw=TaxonSecondary, right=1.0cm of detector, minimum width=2.6cm, minimum height=2.6cm] (child) {};
-            \node[anchor=north, yshift=-0.2cm, font=\small\sffamily\bfseries] at (child.north) {Child Crop ($I_{\text{child}}$)};
-            \node[anchor=center, text width=2.2cm, align=center] at (child.center) {\scriptsize Clean Organism\\[-1pt]\tiny (Specimen Pixels)};
+        % --- Node 3: Child Crop ---
+        \node[childbox, right=0.9cm of detector] (child) {};
+        \node[font=\footnotesize\bfseries, text=TaxonSecondary!90!black, anchor=north] at ([yshift=-0.16cm]child.north) {Child Crop ($I_{\text{child}}$)};
+        \node[font=\fontsize{5.2pt}{6.2pt}\selectfont, text=gray!75!black, anchor=north, align=center] at ([yshift=-0.62cm]child.north) {
+            $\mathbb{R}^{224 \times 224 \times 3}$ (Rescaled)\\[1pt]
+            Specimen-isolated pixels
+        };
+        % Specimen box inside Child
+        \draw[draw=TaxonSecondary!70, fill=white, rounded corners=2pt] 
+            ([xshift=-1.1cm, yshift=0.25cm]child.south) rectangle ([xshift=1.1cm, yshift=1.15cm]child.south);
+        \node[font=\fontsize{5.5pt}{6.5pt}\selectfont\bfseries, text=TaxonSecondary!90!black, align=center] at ([yshift=0.7cm]child.south) {Isolated Morphology\\[1pt]\tiny (Clean Specimen)};
 
-            % BioCLIP-2 Vector
-            \node[box, fill=TaxonDark!20, draw=TaxonDark, below=0.8cm of child] (vector) {\textbf{BioCLIP-2} \\ \scriptsize $z_{\text{child}} \in \mathbb{R}^{768}$};
-
-            \draw[arrow] (parent.east) -- (detector.west);
-            \draw[arrow] (detector.east) -- (child.west);
-            \draw[arrow] (child.south) -- (vector.north);
-
-            \end{tikzpicture}
+        % --- Node 4: BioCLIP-2 Encoder ---
+        \node[vecbox, right=0.9cm of child] (backbone) {};
+        \node[font=\footnotesize\bfseries, text=TaxonDark, anchor=north] at ([yshift=-0.16cm]backbone.north) {BioCLIP-2 Encoder};
+        \node[font=\fontsize{5.2pt}{6.2pt}\selectfont, text=gray!75!black, anchor=north, align=center] at ([yshift=-0.62cm]backbone.north) {
+            Frozen ViT-B/16 Backbone\\[1pt]
+            $f_\theta(I_{\text{child}}) \to z_{\text{child}}$
+        };
+        % Embedding strip (centered safely at center)
+        \begin{scope}[shift={([yshift=-0.12cm]backbone.center)}]
+            \foreach \i in {-4,-3,-2,-1,0,1,2,3,4} {
+                \draw[fill=TaxonDark!\ifnum\i<0 25\else\ifnum\i>1 65\else 45\fi\fi, draw=TaxonDark!80] (\i*0.22-0.11, -0.15) rectangle (\i*0.22+0.11, 0.15);
             }
-        }
-    \end{center}
+        \end{scope}
+        \node[font=\fontsize{6pt}{7pt}\selectfont\bfseries, text=TaxonDark] at ([yshift=0.55cm]backbone.south) {$z_{\text{child}} \in \mathbb{R}^{768}$};
+        \node[font=\fontsize{4.8pt}{5.8pt}\selectfont, text=gray!80!black] at ([yshift=0.24cm]backbone.south) {($\ell_2\text{-normalized to } \mathbb{S}^{767}$)};
 
+        % --- Connecting Arrows ---
+        \draw[arr] (parent.east) -- node[above=2pt, font=\fontsize{5.5pt}{6.5pt}\selectfont\bfseries, text=TaxonDark!80] {Full Image} (detector.west);
+        \draw[arr] (detector.east) -- node[above=2pt, font=\fontsize{5.5pt}{6.5pt}\selectfont\bfseries, text=TaxonSecondary!90!black] {$\text{Crop}(I, \hat{B})$} (child.west);
+        \draw[arr] (child.east) -- node[above=2pt, font=\fontsize{5.5pt}{6.5pt}\selectfont\bfseries, text=TaxonDark!80, align=center] {Patch\\Tokens} (backbone.west);
 
-    \script{This diagram visually summarises the Parent-Child Visual Chunking process. We take the full parent scene containing background noise, and pass it through a zero-shot detector like YOLO-World or OWL-ViT. This extracts the child bounding box crop, separating the organism from environmental noise, which is then fed to BioCLIP-2 to compute our clean morphological embedding vector of size 768.}
+    \end{tikzpicture}%
+    }
+
+    \vspace{-0.10cm}
+
+    % --- Lower Half: Architecture Guarantees & Invariants ---
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Spatial Noise \& Confounder Filtering}
+                \begin{itemize}\scriptsize
+                    \setlength{\itemsep}{2pt}
+                    \item \textbf{Environmental Disentanglement:} Discards non-diagnostic background (soil, foliage, human fingers, specimen pins).
+                    \item \textbf{Receptive Field Maximization:} Rescales the target organism to full $224 \times 224$ patch resolution.
+                    \item \textbf{Zero-Shot Localization:} Open-vocabulary detector handles unannotated taxa without category retraining.
+                \end{itemize}
+            \end{block}
+        \end{column}
+
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Downstream Embedding Invariants}
+                \begin{itemize}\scriptsize
+                    \setlength{\itemsep}{2pt}
+                    \item \textbf{Morphology Isolation:} Precludes ViT attention heads from latching onto spurious background shortcuts.
+                    \item \textbf{Unit Hypersphere Projection:} Feature vector is $\ell_2$-normalized to $\mathbb{S}^{767}$ for optimal cosine retrieval.
+                    \item \textbf{Context Decoupling:} Macro-habitat context can be independently routed as an auxiliary tabular feature.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \script{This diagram visually summarises the Parent-Child Visual Chunking process. We take the full parent scene containing background noise and pass it through a zero-shot detector like YOLO-World or OWL-ViT. This extracts the child bounding box crop, separating the organism from environmental noise, which is then fed to BioCLIP-2 to compute our clean morphological embedding vector of size 768.}
+    \qa{Why not pass the full parent scene directly into BioCLIP-2?}{Foundation vision backbones readily overfit to background correlations such as soil color or geographic markers rather than diagnostic specimen morphology.}
 \end{frame}
 
 \begin{frame}{Biogeographical Filtering}{Single-Stage Filtered HNSW with Spatial-Temporal Predicates}

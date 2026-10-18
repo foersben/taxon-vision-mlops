@@ -134,13 +134,13 @@
         edge/.style={->, draw=TaxonDark!70, thick}
     ]
         \node[inputnode] (img) at (0, 0) {Input Image\\{\tiny $[1, 3, 224, 224]$}};
-        \node[int8node, right=0.8cm of img] (backbone) {INT8 ViT Trunk\\{\tiny QDQ Static PTQ $\cdot$ 86 MB}};
-        \node[fp32node, right=0.8cm of backbone] (head) {\texttt{head\_projector.py}\\{\tiny FP32 Linear Head $[768, K]$}};
-        \node[gatenode, right=0.8cm of head] (safety) {Conformal \& OOD\\{\tiny $\hat{q}_\alpha$ Sets $\cdot$ Energy $E(x; T)$}};
+        \node[int8node, right=0.4cm of img] (backbone) {INT8 ViT Trunk\\{\tiny QDQ Static PTQ $\cdot$ 86 MB}};
+        \node[fp32node, right=1.0cm of backbone] (head) {\texttt{head\_projector.py}\\{\tiny FP32 Linear Head $[768, K]$}};
+        \node[gatenode, right=1.0cm of head] (safety) {Conformal \& OOD\\{\tiny $\hat{q}_\alpha$ Sets $\cdot$ Energy $E(x; T)$}};
 
         \draw[edge] (img) -- (backbone);
-        \draw[edge] (backbone) -- node[above, font=\tiny\ttfamily] {Embedding $[1, 768]$} (head);
-        \draw[edge] (head) -- node[above, font=\tiny\ttfamily] {Logits $z \in \mathbb{R}^K$} (safety);
+        \draw[edge] (backbone) -- node[above, font=\tiny\ttfamily, align=center] {Embedding\\$[1, 768]$} (head);
+        \draw[edge] (head) -- node[above, font=\tiny\ttfamily, align=center] {Logits\\$z \in \mathbb{R}^K$} (safety);
     \end{tikzpicture}
     }
     \end{center}
@@ -214,7 +214,9 @@
     \draw[arrow] (conformal) -- (api);
 
     % Connection from Artifact to Serving Engine (Orthogonal route around right margin)
-    \draw[dashedarrow] (onnx.east) -- ++(0.6,0) |- node[near start, right, font=\sffamily\scriptsize, text=TaxonSecondary] {Artifact Release} (session.east);
+\draw[dashedarrow] (onnx.east) -- ++(0.6,0) 
+    -- ++(0,-1.15) node[midway, right, font=\sffamily\scriptsize, text=TaxonSecondary] {Artifact Release} 
+    -| (session.north);
 
     % Grouping boxes
     \begin{scope}[on background layer]
@@ -303,9 +305,9 @@
         \draw[arrow] (conformal) -- (size);
 
         % Exit routing tags pointing to bottom cards
-        \node[dest, fill=TaxonPrimary!20, draw=TaxonPrimary, right=1.0cm of size, yshift=0.35cm] (p_fast) {$|\mathcal{C}|=1$ $\to$ Fast-Path};
+        \node[dest, fill=TaxonPrimary!20, draw=TaxonPrimary, right=1.0cm of size, yshift=0.55cm] (p_fast) {$|\mathcal{C}|=1$ $\to$ Fast-Path};
         \node[dest, fill=TaxonSecondary!20, draw=TaxonSecondary, right=1.0cm of size] (p_rag) {$|\mathcal{C}| \in [2, 3]$ $\to$ Vision-RAG};
-        \node[dest, fill=herbired!20, draw=herbired, right=1.0cm of size, yshift=-0.35cm] (p_human) {$|\mathcal{C}|>3 \lor \emptyset$ $\to$ Human Review};
+        \node[dest, fill=herbired!20, draw=herbired, right=1.0cm of size, yshift=-0.55cm] (p_human) {$|\mathcal{C}|>3 \lor \emptyset$ $\to$ Human Review};
 
         \draw[arrow] (size.east) -- ++(0.3,0) |- (p_fast.west);
         \draw[arrow] (size.east) -- (p_rag.west);

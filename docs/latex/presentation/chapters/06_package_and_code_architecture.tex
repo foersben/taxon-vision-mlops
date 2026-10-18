@@ -51,27 +51,29 @@
             \node[cfgnode] (cfg) at (0.0, -2.4) {\texttt{taxon\_vision.config}\\[1pt]\tiny Pydantic v2 Schemas, Loader \& Parameter Overrides};
             \node[font=\tiny\bfseries, text=gray!80, anchor=east, align=right] at (-6.5, -2.4) {TIER 4:\\[-1pt]TYPED CONFIG};
 
-            % Downward Bus from Tier 1 to Tier 2
-            \draw[edge] (pipes.south) -- ++(0,-0.3) -| (mod.north);
-            \draw[edge] (pipes.south) -- ++(0,-0.3) -| (inf.north);
-            \draw[edge] (pipes.south) -- ++(0,-0.3) -| (unc.north);
-            \draw[edge] (serv.south) -- ++(0,-0.3) -| (inf.north);
-            \draw[edge] (serv.south) -- ++(0,-0.3) -| (unc.north);
-            \draw[edge] (serv.south) -- ++(0,-0.3) -| (al.north);
-            \draw[edge] (serv.south) -- ++(0,-0.3) -| (mon.north);
+            % --- Tier 1 to Tier 2: Staggered Dual Buses ---
+            \draw[edge] (pipes.south) -- ++(0,-0.22) -| (mod.north);
+            \draw[edge] (pipes.south) -- ++(0,-0.22) -| ([xshift=-4pt]inf.north);
+            \draw[edge] (pipes.south) -- ++(0,-0.22) -| ([xshift=-4pt]unc.north);
 
-            % Downward Bus from Tier 2 to Tier 3 (Clean, orthogonal drops)
-            \draw[edge] (mod.south) -- ++(0,-0.4) -| (data.north);
-            \draw[edge] (inf.south) -- (data.north);
-            \draw[edge] (al.south) -- (dom.north);
-            \draw[edge] (mon.south) -- ++(0,-0.4) -| (dom.north);
+            \draw[edge] (serv.south) -- ++(0,-0.48) -| ([xshift=4pt]inf.north);
+            \draw[edge] (serv.south) -- ++(0,-0.48) -| ([xshift=4pt]unc.north);
+            \draw[edge] (serv.south) -- ++(0,-0.48) -| (al.north);
+            \draw[edge] (serv.south) -- ++(0,-0.48) -| (mon.north);
 
-            % Direct Tier 2 to Tier 4 Mid-Channel Connector (x = 0.0cm between data and domain)
+            % --- Tier 2 to Tier 3: Clean Drops ---
+            \draw[edge] (mod.south) -- ++(0,-0.35) -| ([xshift=-0.7cm]data.north);
+            \draw[edge] (inf.south) -- ([xshift=0.3cm]data.north);
+
+            \draw[edge] (al.south) -- ([xshift=-0.3cm]dom.north);
+            \draw[edge] (mon.south) -- ++(0,-0.35) -| ([xshift=0.7cm]dom.north);
+
+            % --- Tier 2 to Tier 4 Mid-Channel Connector ---
             \draw[edge] (unc.south) -- (cfg.north);
 
-            % Downward Bus from Tier 3 to Tier 4
-            \draw[edge] (data.south) |- (cfg.west);
-            \draw[edge] (dom.south) |- (cfg.east);
+            % --- Tier 3 to Tier 4: Symmetrical Top Entries ---
+            \draw[edge] (data.south) -- ++(0,-0.35) -| ([xshift=-1.6cm]cfg.north);
+            \draw[edge] (dom.south) -- ++(0,-0.35) -| ([xshift=1.6cm]cfg.north);
         \end{tikzpicture}%
         }
     \end{center}

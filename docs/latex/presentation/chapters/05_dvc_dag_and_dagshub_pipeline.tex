@@ -29,30 +29,30 @@
             arr/.style={->, draw=gray!70, semithick}
         ]
             % Upstream Ingestion & Invariant Audit (Top Row: Stages 1-3)
-            \node[stg] (s1) at (-6.2, 1.4) {Stage 1: Ingestion\\[1pt]\tiny\texttt{pipelines.ingest}};
-            \node[art] (raw) at (-3.1, 1.4) {raw\_manifest\\[1pt].parquet};
-            \node[stg] (s2) at (0.0, 1.4) {Stage 2: Audit\\[1pt]\tiny\texttt{pipelines.audit\_license}};
-            \node[art] (clean) at (3.1, 1.4) {dataset\_manifest\\[1pt].parquet};
-            \node[stg] (s3) at (6.2, 1.4) {Stage 3: Feature Extr.\\[1pt]\tiny\texttt{pipelines.extract\_features}};
+            \node[stg] (s1) at (-6.2, 1.6) {Stage 1: Ingestion\\[1pt]\tiny\texttt{pipelines.ingest}};
+            \node[art] (raw) at (-3.1, 1.6) {raw\_manifest\\[1pt].parquet};
+            \node[stg] (s2) at (0.0, 1.6) {Stage 2: Audit\\[1pt]\tiny\texttt{pipelines.audit\_license}};
+            \node[art] (clean) at (3.1, 1.6) {dataset\_manifest\\[1pt].parquet};
+            \node[stg] (s3) at (6.2, 1.6) {Stage 3: Feature Extr.\\[1pt]\tiny\texttt{pipelines.extract\_features}};
 
-            % Diamond Fan-Out: 4 Split Tensors (Bottom Row: Left Bank)
-            \node[tns] (tr) at (-3.8, -0.2) {train\_embeddings.pt};
-            \node[tns] (val) at (-3.8, -0.9) {val\_embeddings.pt};
-            \node[tns] (cal) at (-3.8, -1.6) {cal\_embeddings.pt};
-            \node[tns] (tst) at (-3.8, -2.3) {test\_embeddings.pt};
+            % Diamond Fan-Out: 4 Split Tensors (Vertical pitch = 1.25cm)
+            \node[tns] (tr)  at (-3.8,  0.20) {train\_embeddings.pt};
+            \node[tns] (val) at (-3.8, -1.05) {val\_embeddings.pt};
+            \node[tns] (cal) at (-3.8, -2.30) {cal\_embeddings.pt};
+            \node[tns] (tst) at (-3.8, -3.55) {test\_embeddings.pt};
 
-            % Downstream Training & Convergence (Bottom Row: Center & Right Bank)
-            \node[stg] (s4) at (0.6, -0.2) {Stage 4: Train\\[1pt]\tiny\texttt{pipelines.train}};
-            \node[art] (head) at (3.8, -0.2) {models/checkpoints/\\[1pt]\textbf{head.pt}};
+            % Downstream Training & Convergence (Stages 4-7 and Output Artifacts)
+            \node[stg] (s4)   at (0.2,  0.20) {Stage 4: Train\\[1pt]\tiny\texttt{pipelines.train}};
+            \node[art] (head) at (4.3,  0.20) {models/checkpoints/\\[1pt]\textbf{head.pt}};
 
-            \node[stg] (s5) at (0.6, -0.9) {Stage 5: Export\\[1pt]\tiny\texttt{pipelines.export\_onnx}};
-            \node[art] (onnx) at (3.8, -0.9) {models/checkpoints/\\[1pt]\textbf{model\_int8.onnx}};
+            \node[stg] (s5)   at (0.2, -1.05) {Stage 5: Export\\[1pt]\tiny\texttt{pipelines.export\_onnx}};
+            \node[art] (onnx) at (4.3, -1.05) {models/checkpoints/\\[1pt]\textbf{model\_int8.onnx}};
 
-            \node[stg] (s6) at (0.6, -1.6) {Stage 6: Calibrate\\[1pt]\tiny\texttt{pipelines.calibrate}};
-            \node[art] (conf) at (3.8, -1.6) {config/\\[1pt]\textbf{conformal\_config.yaml}};
+            \node[stg] (s6)   at (0.2, -2.30) {Stage 6: Calibrate\\[1pt]\tiny\texttt{pipelines.calibrate}};
+            \node[art] (conf) at (4.3, -2.30) {config/\\[1pt]\textbf{conformal\_config.yaml}};
 
-            \node[stg] (s7) at (0.6, -2.3) {Stage 7: Eval\\[1pt]\tiny\texttt{pipelines.evaluate}};
-            \node[art] (eval) at (3.8, -2.3) {reports/\\[1pt]\textbf{pareto\_evaluation.json}};
+            \node[stg] (s7)   at (0.2, -3.55) {Stage 7: Eval\\[1pt]\tiny\texttt{pipelines.evaluate}};
+            \node[art] (eval) at (4.3, -3.55) {reports/\\[1pt]\textbf{pareto\_evaluation.json}};
 
             % Connectors Upstream (Linear Top Row)
             \draw[arr] (s1) -- (raw);
@@ -60,26 +60,32 @@
             \draw[arr] (s2) -- (clean);
             \draw[arr] (clean) -- (s3);
 
-            % Connector from Stage 3 to Diamond Split Tensors (Drop down bus)
-            \draw[arr] (s3.south) -- ++(0,-0.3) -| (-5.8, 0.3) |- (tr.west);
-            \draw[arr] (-5.8, 0.3) |- (val.west);
-            \draw[arr] (-5.8, 0.3) |- (cal.west);
-            \draw[arr] (-5.8, 0.3) |- (tst.west);
+            % Connector from Stage 3 to Diamond Split Tensors (Single clean trunk)
+            \draw[semithick, draw=gray!70] (s3.south) -- ++(0,-0.4) -| (-5.8, -3.55);
+            \draw[arr] (-5.8,  0.20) -- (tr.west);
+            \draw[arr] (-5.8, -1.05) -- (val.west);
+            \draw[arr] (-5.8, -2.30) -- (cal.west);
+            \draw[arr] (-5.8, -3.55) -- (tst.west);
 
-            % Connectors Downstream
-            \draw[arr] (tr.east) -- (s4.west);
-            \draw[arr] (val.east) -- ++(0.3,0) |- (s4.west);
-            \draw[arr] (s4) -- (head);
-            \draw[arr] (head.south) -- ++(0,-0.15) -| (s5.north);
-            \draw[arr] (s5) -- (onnx);
+            % Downstream Connections: Strictly Horizontal Data Inputs
+            \draw[arr] (tr.east)  -- (s4.west);
+            \draw[arr] (val.east) -- ++(0.6,0) |- ([yshift=-5pt]s4.west);
             \draw[arr] (cal.east) -- (s6.west);
             \draw[arr] (tst.east) -- (s7.west);
+
+            % Downstream Artifact Production
+            \draw[arr] (s4) -- (head);
+            \draw[arr] (s5) -- (onnx);
             \draw[arr] (s6) -- (conf);
             \draw[arr] (s7) -- (eval);
 
-            % Route ONNX model to Stage 6 and Stage 7 cleanly on right
-            \draw[arr] (onnx.east) -- ++(0.4,0) |- (s6.east);
-            \draw[arr] (onnx.east) -- ++(0.4,0) |- (s7.east);
+            % Head Checkpoint feeds Stage 5 (Clear alley at y = -0.42)
+            \draw[arr] (head.south) -- (4.3, -0.42) -| (s5.north);
+
+            % ONNX Model Distribution: Drops into clear channel x = 2.25 and enters s6.north & s7.north
+            \draw[semithick, draw=gray!70] (onnx.south) -- (4.3, -1.68) -- (2.25, -1.68) -- (2.25, -2.92);
+            \draw[arr] (2.25, -1.68) -| (s6.north);
+            \draw[arr] (2.25, -2.92) -| (s7.north);
         \end{tikzpicture}%
         }
     \end{center}
@@ -139,10 +145,10 @@
             \node[tnsnode] (t_cal) at (8.0, -1.0) {cal\_embeddings.pt};
             \node[tnsnode] (t_tst) at (8.0, -1.8) {test\_embeddings.pt};
 
-            \draw[edge] (s3.east) -- ++(0.4,0) |- (t_tr.west);
-            \draw[edge] (s3.east) -- ++(0.4,0) |- (t_val.west);
-            \draw[edge] (s3.east) -- ++(0.4,0) |- (t_cal.west);
-            \draw[edge] (s3.east) -- ++(0.4,0) |- (t_tst.west);
+            \draw[edge] (s3.east) -- ++(0.2,0) |- (t_tr.west);
+            \draw[edge] (s3.east) -- ++(0.2,0) |- (t_val.west);
+            \draw[edge] (s3.east) -- ++(0.2,0) |- (t_cal.west);
+            \draw[edge] (s3.east) -- ++(0.2,0) |- (t_tst.west);
         \end{tikzpicture}%
         }
     \end{center}
@@ -167,50 +173,51 @@
             edge/.style={->, draw=gray!70, semithick}
         ]
             % Split Tensors on Left
-            \node[tnsnode] (in_tr) at (-4.8, 1.8) {train\_embeddings.pt};
-            \node[tnsnode] (in_val) at (-4.8, 0.9) {val\_embeddings.pt};
-            \node[tnsnode] (in_cal) at (-4.8, -0.6) {cal\_embeddings.pt};
-            \node[tnsnode] (in_tst) at (-4.8, -1.9) {test\_embeddings.pt};
+            \node[tnsnode] (in_tr)  at (-5.0,  1.85) {train\_embeddings.pt};
+            \node[tnsnode] (in_val) at (-5.0,  0.95) {val\_embeddings.pt};
+            \node[tnsnode] (in_cal) at (-5.0, -0.75) {cal\_embeddings.pt};
+            \node[tnsnode] (in_tst) at (-5.0, -2.55) {test\_embeddings.pt};
 
             % Stage 4: Train
-            \node[stagenode] (s4) at (-1.8, 1.35) {Stage 4: Train\\[1pt]\tiny\texttt{pipelines.train}};
-            \node[dvcnode] (head) at (0.8, 1.8) {models/checkpoints/\\[1pt]\textbf{head.pt}};
-            \node[metricnode] (m4) at (0.8, 0.9) {reports/\\[1pt]\textbf{train\_metrics.json}};
+            \node[stagenode]  (s4)   at (-1.8,  1.40) {Stage 4: Train\\[1pt]\tiny\texttt{pipelines.train}};
+            \node[dvcnode]    (head) at ( 1.65, 1.85) {models/checkpoints/\\[1pt]\textbf{head.pt}};
+            \node[metricnode] (m4)   at ( 1.65, 0.95) {reports/\\[1pt]\textbf{train\_metrics.json}};
 
-            \draw[edge] (in_tr.east) -- ++(0.3,0) |- (s4.west);
-            \draw[edge] (in_val.east) -- ++(0.3,0) |- (s4.west);
-            \draw[edge] (s4.east) -- ++(0.3,0) |- (head.west);
-            \draw[edge] (s4.east) -- ++(0.3,0) |- (m4.west);
+            \draw[edge] (in_tr.east)  -- ++(0.35,0) |- ([yshift=4pt]s4.west);
+            \draw[edge] (in_val.east) -- ++(0.35,0) |- ([yshift=-4pt]s4.west);
+            \draw[edge] (s4.east) -- ++(0.35,0) |- (head.west);
+            \draw[edge] (s4.east) -- ++(0.35,0) |- (m4.west);
 
             % Stage 5: Export ONNX
-            \node[stagenode] (s5) at (3.6, 1.8) {Stage 5: Export\\[1pt]\tiny\texttt{pipelines.export\_onnx}};
-            \node[dvcnode] (onnx) at (6.2, 1.8) {models/checkpoints/\\[1pt]\textbf{model\_int8.onnx}};
+            \node[stagenode] (s5)   at (4.5, 1.85) {Stage 5: Export\\[1pt]\tiny\texttt{pipelines.export\_onnx}};
+            \node[dvcnode]   (onnx) at (7.3, 1.85) {models/checkpoints/\\[1pt]\textbf{model\_int8.onnx}};
 
             \draw[edge] (head.east) -- (s5.west);
-            \draw[edge] (s5.east) -- (onnx.west);
+            \draw[edge] (s5.east)   -- (onnx.west);
 
             % Stage 6: Calibrate
-            \node[stagenode] (s6) at (-1.8, -0.6) {Stage 6: Calibrate\\[1pt]\tiny\texttt{pipelines.calibrate}};
-            \node[gitnode] (conf) at (0.8, -0.2) {config/\\[1pt]\textbf{conformal\_config.yaml}};
-            \node[metricnode] (m6) at (0.8, -1.0) {reports/\\[1pt]\textbf{conformal\_metrics.json}};
+            \node[stagenode]  (s6)   at (-1.8, -0.75) {Stage 6: Calibrate\\[1pt]\tiny\texttt{pipelines.calibrate}};
+            \node[metricnode] (m6)   at ( 1.65, -0.35) {reports/\\[1pt]\textbf{conformal\_metrics.json}};
+            \node[gitnode]    (conf) at ( 1.65, -1.15) {config/\\[1pt]\textbf{conformal\_config.yaml}};
 
-            \draw[edge] (in_cal.east) -- ([yshift=-0.15cm]s6.west);
-            \draw[edge] (s6.east) -- ++(0.3,0) |- (conf.west);
-            \draw[edge] (s6.east) -- ++(0.3,0) |- (m6.west);
+            \draw[edge] (in_cal.east) -- (s6.west);
+            \draw[edge] (s6.east) -- ++(0.35,0) |- (m6.west);
+            \draw[edge] (s6.east) -- ++(0.35,0) |- (conf.west);
 
             % Stage 7: Evaluate
-            \node[stagenode] (s7) at (-1.8, -1.9) {Stage 7: Evaluate\\[1pt]\tiny\texttt{pipelines.evaluate}};
-            \node[metricnode] (m7) at (0.8, -1.8) {reports/\\[1pt]\textbf{pareto\_evaluation.json}};
-            \node[gitnode] (docres) at (0.8, -2.5) {docs/assets/\\[1pt]\textbf{pareto\_results.json}};
+            \node[stagenode]  (s7)     at (-1.8, -2.55) {Stage 7: Evaluate\\[1pt]\tiny\texttt{pipelines.evaluate}};
+            \node[metricnode] (m7)     at ( 1.65, -2.15) {reports/\\[1pt]\textbf{pareto\_evaluation.json}};
+            \node[gitnode]    (docres) at ( 1.65, -2.95) {docs/assets/\\[1pt]\textbf{pareto\_results.json}};
 
-            \draw[edge] (in_tst.east) -- ([yshift=-0.15cm]s7.west);
-            \draw[edge] (conf.south) -- ++(0,-0.2) -| (s7.north);
-            \draw[edge] (s7.east) -- ++(0.3,0) |- (m7.west);
-            \draw[edge] (s7.east) -- ++(0.3,0) |- (docres.west);
+            \draw[edge] (in_tst.east) -- (s7.west);
+            \draw[edge] (conf.south)  -- (1.65, -1.65) -| (s7.north);
+            \draw[edge] (s7.east) -- ++(0.35,0) |- (m7.west);
+            \draw[edge] (s7.east) -- ++(0.35,0) |- (docres.west);
 
-            % Dedicated ONNX Distribution Bus: Up and over to the left of Stage 6 and Stage 7
-            \draw[edge] (onnx.north) -- ++(0,0.5) -| (-2.6, -0.45) -- ([yshift=0.15cm]s6.west);
-            \draw[edge] (-2.6, -0.45) |- ([yshift=0.15cm]s7.west);
+            % Dedicated ONNX Distribution Bus: Explicit corridor at y = 0.15 and x = -3.4
+            \draw[semithick, draw=gray!70] (onnx.south) -- (7.3, 0.15) -- (-3.4, 0.15) -- (-3.4, -2.40);
+            \draw[edge] (-3.4, -0.60) -- ([yshift=4pt]s6.west);
+            \draw[edge] (-3.4, -2.40) -- ([yshift=4pt]s7.west);
         \end{tikzpicture}%
         }
     \end{center}

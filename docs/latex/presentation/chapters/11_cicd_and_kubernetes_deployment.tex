@@ -16,7 +16,7 @@
 
 \begin{frame}{CI/CD Engineering}{End-to-End Workflow: The Dual-Pipeline CI/CD Bridge}
     \begin{block}{Security \& Network Boundary Architecture}
-        \begin{itemize}\tiny
+        \begin{itemize}
             \item \textbf{Public Cloud Enclave (GitHub Actions):} Pull request validation (Ruff linting, Mypy strict typing, complexipy cognitive complexity $\le 15$, open license audit, OKF validation). Zero access to bare-metal hardware or production secrets.
             \item \textbf{The Bridge:} PR merge to \texttt{develop} or \texttt{main} $\to$ Signed commit $\to$ Cloudflare Zero Trust outbound-authenticated webhook to private Jenkins controller on \texttt{hive-mind}.
             \item \textbf{Private On-Premise Enclave (Jenkins \& k3s):} Secret injection via Linux Secret Service / unified HMAC tokens. Dedicated GPU training and k3s deployment with zero inbound firewall ports opened.
@@ -34,35 +34,40 @@
     \resizebox{0.95\textwidth}{!}{
     \begin{tikzpicture}[
         >=stealth, auto,
-        job/.style={rectangle, draw=deepblue, thick, fill=blue!6, text width=2.4cm, align=center, minimum height=0.7cm, rounded corners=3pt, font=\fontsize{6pt}{7pt}\selectfont},
-        crit/.style={rectangle, draw=herbired, thick, fill=red!6, text width=2.4cm, align=center, minimum height=0.7cm, rounded corners=3pt, font=\fontsize{6pt}{7pt}\selectfont\bfseries},
-        sync/.style={rectangle, draw=plantgreen, thick, fill=green!6, text width=2.4cm, align=center, minimum height=0.7cm, rounded corners=3pt, font=\fontsize{6pt}{7pt}\selectfont\bfseries},
+        job/.style={rectangle, draw=deepblue, thick, fill=blue!6, text width=2.4cm, align=center, minimum height=0.75cm, rounded corners=3pt, font=\fontsize{6pt}{7pt}\selectfont},
+        crit/.style={rectangle, draw=herbired, thick, fill=red!6, text width=2.4cm, align=center, minimum height=0.75cm, rounded corners=3pt, font=\fontsize{6pt}{7pt}\selectfont\bfseries},
+        sync/.style={rectangle, draw=plantgreen, thick, fill=green!6, text width=2.4cm, align=center, minimum height=0.75cm, rounded corners=3pt, font=\fontsize{6pt}{7pt}\selectfont\bfseries},
         arr/.style={->, thick, >=stealth, draw=black!70}
     ]
         % Trigger Node
-        \node[rectangle, draw=signalorange, thick, fill=orange!10, text width=2.2cm, align=center, minimum height=0.7cm, rounded corners=3pt, font=\fontsize{6pt}{7pt}\selectfont\bfseries] (trigger) {Push / PR Event\\ \texttt{develop} / \texttt{main}};
+        \node[rectangle, draw=signalorange, thick, fill=orange!10, text width=2.2cm, align=center, minimum height=0.75cm, rounded corners=3pt, font=\fontsize{6pt}{7pt}\selectfont\bfseries] (trigger) {Push / PR Event\\ \texttt{develop} / \texttt{main}};
 
-        % Parallel Jobs
-        \node[crit, right=1.0cm of trigger, yshift=0.85cm] (job1) {Job 1: Tests \& Quality\\ \scriptsize\textnormal{\texttt{ci-dev} / Pytest $\ge 80\%$}};
-        \node[job, right=1.0cm of trigger, yshift=0.0cm] (job2) {\textbf{Job 2: complexipy}\\ \scriptsize\textnormal{SARIF Scan $\le 15$}};
-        \node[job, right=1.0cm of trigger, yshift=-0.85cm] (job3) {\textbf{Job 3: Boyter SCC}\\ \scriptsize\textnormal{LOC \& Code Stats}};
+        % Parallel Jobs (Expanded vertical pitch: \Delta y = 1.15cm)
+        \node[crit, right=1.1cm of trigger, yshift=1.15cm]  (job1) {Job 1: Tests \& Quality\\ \scriptsize\textnormal{\texttt{ci-dev} / Pytest $\ge 80\%$}};
+        \node[job,  right=1.1cm of trigger, yshift=0.0cm]   (job2) {\textbf{Job 2: complexipy}\\ \scriptsize\textnormal{SARIF Scan $\le 15$}};
+        \node[job,  right=1.1cm of trigger, yshift=-1.0cm] (job3) {\textbf{Job 3: Boyter SCC}\\ \scriptsize\textnormal{LOC \& Code Stats}};
 
-        % Downstream Sequential Jobs
-        \node[sync, right=1.0cm of job1] (job4) {Job 4: Zensical Docs\\ \scriptsize\textnormal{\texttt{-{}-strict} $\to$ Pages}};
-        \node[sync, right=1.0cm of job2] (job5) {Job 5: GHCR OCI\\ \scriptsize\textnormal{Docker Buildx Multi-Stage}};
+        % Downstream Sequential Jobs (Widened inter-column corridor: 1.8cm)
+        \node[sync, right=1.8cm of job1] (job4) {Job 4: Zensical Docs\\ \scriptsize\textnormal{\texttt{-{}-strict} $\to$ Pages}};
+        \node[sync, right=1.8cm of job2] (job5) {Job 5: GHCR OCI\\ \scriptsize\textnormal{Docker Buildx Multi-Stage}};
 
-        % Connections
-        \draw[arr] (trigger.east) -- ++(0.4,0) |- (job1.west);
+        % Upstream Trigger Distribution Bus
+        \draw[arr] (trigger.east) -- ++(0.45,0) |- (job1.west);
         \draw[arr] (trigger.east) -- (job2.west);
-        \draw[arr] (trigger.east) -- ++(0.4,0) |- (job3.west);
+        \draw[arr] (trigger.east) -- ++(0.45,0) |- (job3.west);
 
-        \draw[arr] (job1.east) -- node[above, font=\fontsize{5pt}{6pt}\selectfont] {\texttt{needs: [test]}} (job4.west);
-        \draw[arr] (job1.east) -- ++(0.4,0) |- (job5.west);
-        \draw[arr] (job2.east) -- (job5.west);
+        % Job 1 -> Job 4: Clear horizontal line with protected two-line label
+        \draw[arr] (job1.east) -- node[midway, above=1pt, font=\fontsize{5.5pt}{6.5pt}\selectfont, align=center] {\texttt{needs:[test]}} (job4.west);
+
+        % Job 1 -> Job 5: Independent upper entry into Job 5
+        \draw[arr] ([yshift=-5pt]job1.east) -- ++(0.65,0) |- ([yshift=4pt]job5.west);
+
+        % Job 2 -> Job 5: Independent lower entry into Job 5 (no path overlap)
+        \draw[arr] ([yshift=-4pt]job2.east) -- ([yshift=-4pt]job5.west);
     \end{tikzpicture}
     }
 
-    \vspace{-0.05cm}
+    \vspace{-0.40cm}
 
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
@@ -91,25 +96,28 @@
 \end{frame}
 
 \begin{frame}{Cloud Quality Gates}{Automated Repository Maintenance Workflows}
-    \begin{block}{Scheduled Evidence Indexing (\texttt{.github/workflows/openwiki-update.yml})}
-        \begin{itemize}\tiny
+    \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+    \begin{block}{\small Scheduled Evidence Indexing (\texttt{.github/workflows/openwiki-update.yml})}
+        \begin{itemize}\footnotesize
             \item \textbf{Trigger \& Cadence:} Scheduled weekly cron (\texttt{0 8 * * 1}, Monday 08:00 UTC) with manual \texttt{workflow\_dispatch} fallback.
             \item \textbf{Autonomous Indexer:} Executes Gemini 3.8 Flash via OpenWiki subagent protocol to audit codebase claims against ground-truth unit tests.
             \item \textbf{Incremental Knowledge Bundle:} Updates markdown dossiers, dependency invariants, and claim verification receipts in \texttt{openwiki/}.
             \item \textbf{Isolated Commit Bot:} Uses a dedicated GitHub Actions bot token to push signed documentation updates with zero impact on production pipelines.
         \end{itemize}
     \end{block}
-
-    \vspace{-0.05cm}
-
-    \begin{block}{Semantic Tag Release Pipeline (\texttt{.github/workflows/release.yaml})}
-        \begin{itemize}\tiny
+    \end{column}
+    \begin{column}{0.49\textwidth}
+    \begin{block}{\small Semantic Tag Release Pipeline (\texttt{.github/workflows/release.yaml})}
+        \begin{itemize}\footnotesize
             \item \textbf{Semantic Tag Trigger:} Invoked automatically upon pushing annotated Git tags matching \texttt{v*.*.*}.
             \item \textbf{Version Invariant Verification:} Strictly asserts version parity between \texttt{pyproject.toml} and runtime \texttt{taxon\_vision.\_\_version\_\_}.
             \item \textbf{Hermetic Wheel Packaging:} Runs \texttt{pixi run -e dev flit build} to produce immutable wheels and source distribution tarballs.
             \item \textbf{Cryptographic Release Draft:} Generates SHA256 checksums and drafts an official GitHub Release with automated changelogs.
         \end{itemize}
     \end{block}
+    \end{column}
+    \end{columns}
 
     \script{In addition to PR verification, GitHub Actions manages automated repository maintenance. Every Monday at 08:00 UTC, the OpenWiki workflow runs Gemini 3.8 Flash to index claims and unit tests into our persistent knowledge base. When a developer pushes a semantic version tag, release.yaml verifies version alignment across the codebase, packages hermetic wheels, and publishes a GitHub Release with cryptographic checksums.}
     \qa{Why run OpenWiki on a scheduled cron rather than every commit?}{Indexing claims across the entire repository requires synthesizing code and test semantics. Running weekly avoids unnecessary token usage while keeping architecture documentation continuously fresh.}
@@ -219,26 +227,45 @@
                     \item \textbf{Node Affinity:} Bound to physical host \texttt{hive-mind} with direct NVMe volume attachments.
                 \end{itemize}
             \end{block}
+
+            \vspace{-0.1cm}
+
+            \begin{block}{Storage Mounting Architecture}
+                \begin{itemize}\tiny
+                    \item \textbf{Ephemeral Scratch:} \texttt{rattler-cache} (\texttt{emptyDir}) provides container-isolated Pixi environment caching.
+                    \item \textbf{Host Direct NVMe:} Direct \texttt{hostPath} mounts for Hugging Face weights and DVC tensors avoid redundant downloads.
+                    \item \textbf{Persistent State:} \texttt{optuna-db} via PVC preserves HPO study trials across ephemeral agent teardowns.
+                \end{itemize}
+            \end{block}
         \end{column}
+
         \begin{column}{0.53\textwidth}
             \resizebox{\linewidth}{!}{
             \begin{tikzpicture}[
                 >=stealth, auto,
-                pod/.style={rectangle, draw=signalorange, thick, fill=orange!8, text width=3.4cm, align=center, minimum height=1.3cm, rounded corners=4pt, font=\scriptsize},
-                vol/.style={rectangle, draw=deepblue, thick, fill=blue!6, text width=3.7cm, align=center, minimum height=0.6cm, rounded corners=3pt, font=\tiny},
+                pod/.style={rectangle, draw=signalorange, thick, fill=orange!8, text width=3.4cm, align=center, minimum height=1.45cm, rounded corners=4pt, font=\scriptsize},
+                vol/.style={rectangle, draw=deepblue, thick, fill=blue!6, text width=3.8cm, align=center, minimum height=0.65cm, rounded corners=3pt, font=\tiny},
+                emptydir/.style={rectangle, draw=teal!80, thick, fill=teal!8, text width=3.8cm, align=center, minimum height=0.65cm, rounded corners=3pt, font=\tiny},
                 arr/.style={<->, thick, >=stealth, draw=black!70}
             ]
-                \node[pod] (pod) {\textbf{Jenkins GPU Agent Pod}\\ {\tiny\texttt{ghcr.io/prefix-dev/pixi}}\\ \textcolor{signalorange}{\textbf{[nvidia.com/gpu: 1]}}};
+                % Agent Pod
+                \node[pod] (pod) {\textbf{Jenkins GPU Agent Pod}\\ {\tiny\texttt{ghcr.io/prefix-dev/pixi}}\\[2pt] \textcolor{signalorange}{\textbf{[nvidia.com/gpu: 1]}}};
 
-                \node[vol, above=0.35cm of pod] (rattler) {\textbf{rattler-cache} (\texttt{emptyDir})\\ \texttt{/root/.cache/rattler/cache}};
-                \node[vol, right=0.5cm of pod, yshift=1.0cm] (hf) {\textbf{hf-cache} (\texttt{hostPath})\\ \texttt{/var/lib/taxon-vision/hf-cache}};
-                \node[vol, right=0.5cm of pod, yshift=0.0cm] (optuna) {\textbf{optuna-db} (\texttt{PVC})\\ \texttt{/var/lib/taxon-vision/optuna}};
-                \node[vol, right=0.5cm of pod, yshift=-1.0cm] (emb) {\textbf{embeddings} (\texttt{hostPath})\\ \texttt{/var/lib/taxon-vision/embeddings}};
+                % Ephemeral scratch volume above pod
+                \node[emptydir, above=0.55cm of pod] (rattler) {\textbf{rattler-cache} (\texttt{emptyDir})\\[1pt] \texttt{/root/.cache/rattler/cache}};
 
-                \draw[arr] (rattler) -- (pod);
-                \draw[arr] (hf) -- (pod.east);
-                \draw[arr] (optuna) -- (pod.east);
-                \draw[arr] (emb) -- (pod.east);
+                % Persistent storage mounts on the right
+                \node[vol, right=0.85cm of pod, yshift=1.15cm]  (hf)     {\textbf{hf-cache} (\texttt{hostPath})\\[1pt] \texttt{/var/lib/taxon-vision/hf-cache}};
+                \node[vol, right=0.85cm of pod, yshift=0.0cm]   (optuna) {\textbf{optuna-db} (\texttt{PVC})\\[1pt] \texttt{/var/lib/taxon-vision/optuna}};
+                \node[vol, right=0.85cm of pod, yshift=-1.15cm] (emb)    {\textbf{embeddings} (\texttt{hostPath})\\[1pt] \texttt{/var/lib/taxon-vision/embeddings}};
+
+                % Vertical bidirectional link to ephemeral cache
+                \draw[arr] (rattler.south) -- (pod.north);
+
+                % Orthogonal, non-overlapping bidirectional ports on pod.east
+                \draw[arr] (hf.west) -- ++(-0.38,0) |- ([yshift=14pt]pod.east);
+                \draw[arr] (optuna.west) -- (pod.east);
+                \draw[arr] (emb.west) -- ++(-0.38,0) |- ([yshift=-14pt]pod.east);
             \end{tikzpicture}
             }
         \end{column}
@@ -250,26 +277,66 @@
 \end{frame}
 
 \begin{frame}{Ephemeral GPU Runner}{\texttt{jenkins\_gpu\_train.sh}: 5-Step Execution Lifecycle}
-    \vspace{-0.08cm}
-    \begin{block}{1. Bootstrap \& Credentials Ingestion}
-        \tiny Installs \texttt{git} and \texttt{kubectl} via Pixi global; validates SeaweedFS S3 credentials (\texttt{s3.json} / \texttt{taxonadmin}); configures local S3 endpoint \texttt{http://local-seaweedfs:8333}.
-    \end{block}
-    \vspace{-0.15cm}
-    \begin{block}{2. Embedding Cache Priming (Host \& SeaweedFS Tier)}
-        \tiny Checks \texttt{/var/lib/taxon-vision/embeddings/*.pt} on host NVMe or syncs from \texttt{s3://dvc/embeddings}; bypasses redundant ViT/DINOv3 backbone extraction for identical manifests.
-    \end{block}
-    \vspace{-0.15cm}
-    \begin{block}{3. DVC Pipeline Execution (\texttt{dvc repro})}
-        \tiny Invokes \texttt{dvc repro} with Optuna overrides (\texttt{-S training.tune=true}, \texttt{-S model.extractor=...}); trains Class-Balanced Loss head; exports INT8 quantized ONNX model.
-    \end{block}
-    \vspace{-0.15cm}
-    \begin{block}{4. Multi-Tier Cache Synchronization}
-        \tiny Synchronizes newly generated \texttt{.pt} tensors back to host NVMe tier; pushes intermediate Epistemic Diamond artifacts to in-cluster \texttt{local-seaweedfs}.
-    \end{block}
-    \vspace{-0.15cm}
-    \begin{block}{5. DagsHub Remote Push \& Lineage Lock}
-        \tiny Pushes production checkpoints (\texttt{head.pt}, \texttt{model\_int8.onnx}) to DagsHub S3 remote (\texttt{origin}); auto-commits updated \texttt{dvc.lock}, \texttt{conformal\_config.yaml}, and evaluation reports with \texttt{[skip ci]}.
-    \end{block}
+    \centering
+    \vspace{-0.25cm}
+    \begin{tikzpicture}[
+        >=stealth,
+        stepnum/.style={circle, fill=deepblue, text=white, font=\fontsize{9pt}{10pt}\selectfont\bfseries, inner sep=1pt, minimum size=0.42cm},
+        card/.style={
+            rectangle, rounded corners=3pt, draw=deepblue!40, fill=deepblue!3,
+            text width=12.6cm, inner sep=2.2pt, align=left,
+            font=\fontsize{8pt}{9.2pt}\selectfont
+        },
+        spine/.style={->, very thick, >=stealth, draw=signalorange!90},
+        bridge/.style={-, thick, draw=signalorange!90}
+    ]
+        % Step 1: Anchor Node
+        \node[card] (s1) at (0, 0) {
+            {\fontsize{8pt}{9.2pt}\selectfont\bfseries\color{deepblue!90!black}1. Bootstrap \& Credentials Ingestion}\\[0.5pt]
+            Installs \texttt{git} and \texttt{kubectl} via Pixi global; validates SeaweedFS S3 credentials (\texttt{s3.json} / \texttt{taxonadmin}); configures local S3 endpoint \texttt{http://local-seaweedfs:8333}.
+        };
+
+        % Steps 2-5: Tight relative stacking (below=0.06cm)
+        \node[card, below=0.06cm of s1] (s2) {
+            {\fontsize{8pt}{9.2pt}\selectfont\bfseries\color{deepblue!90!black}2. Embedding Cache Priming (Host \& SeaweedFS Tier)}\\[0.5pt]
+            Checks \texttt{/var/lib/taxon-vision/embeddings/*.pt} on host NVMe or syncs from \texttt{s3://dvc/embeddings}; bypasses redundant ViT/DINOv3 backbone extraction for identical manifests.
+        };
+
+        \node[card, below=0.06cm of s2] (s3) {
+            {\fontsize{8pt}{9.2pt}\selectfont\bfseries\color{deepblue!90!black}3. DVC Pipeline Execution (\texttt{dvc repro})}\\[0.5pt]
+            Invokes \texttt{dvc repro} with Optuna overrides (\texttt{-S training.tune=true}, \texttt{-S model.extractor=...}); trains Class-Balanced Loss head; exports INT8 quantized ONNX model.
+        };
+
+        \node[card, below=0.06cm of s3] (s4) {
+            {\fontsize{8pt}{9.2pt}\selectfont\bfseries\color{deepblue!90!black}4. Multi-Tier Cache Synchronization}\\[0.5pt]
+            Synchronizes newly generated \texttt{.pt} tensors back to host NVMe tier; pushes intermediate Epistemic Diamond artifacts to in-cluster \texttt{local-seaweedfs}.
+        };
+
+        \node[card, below=0.06cm of s4] (s5) {
+            {\fontsize{8pt}{9.2pt}\selectfont\bfseries\color{deepblue!90!black}5. DagsHub Remote Push \& Lineage Lock}\\[0.5pt]
+            Pushes production checkpoints (\texttt{head.pt}, \texttt{model\_int8.onnx}) to DagsHub S3 remote (\texttt{origin}); auto-commits updated \texttt{dvc.lock}, \texttt{conformal\_config.yaml}, and evaluation reports with \texttt{[skip ci]}.
+        };
+
+        % Left Spine Numbered Badges
+        \node[stepnum] (c1) at ([xshift=-0.42cm]s1.west) {1};
+        \node[stepnum] (c2) at ([xshift=-0.42cm]s2.west) {2};
+        \node[stepnum] (c3) at ([xshift=-0.42cm]s3.west) {3};
+        \node[stepnum] (c4) at ([xshift=-0.42cm]s4.west) {4};
+        \node[stepnum] (c5) at ([xshift=-0.42cm]s5.west) {5};
+
+        % Spine Pipeline
+        \draw[spine] (c1) -- (c2);
+        \draw[spine] (c2) -- (c3);
+        \draw[spine] (c3) -- (c4);
+        \draw[spine] (c4) -- (c5);
+
+        % Bridges
+        \draw[bridge] (c1) -- (s1.west);
+        \draw[bridge] (c2) -- (s2.west);
+        \draw[bridge] (c3) -- (s3.west);
+        \draw[bridge] (c4) -- (s4.west);
+        \draw[bridge] (c5) -- (s5.west);
+    \end{tikzpicture}
 
     \script{The execution script jenkins\_gpu\_train.sh bootstraps the environment, primes embeddings from the local host tier or SeaweedFS, runs dvc repro with any requested Optuna overrides, synchronizes fresh checkpoints across local and remote S3 tiers, and finally commits the updated dvc.lock and evaluation reports back to Git with a skip-ci annotation.}
     \qa{Why does jenkins\_gpu\_train.sh push to both local SeaweedFS and DagsHub?}{Local SeaweedFS provides ultra-fast in-cluster caching for low-latency pod restarts, while DagsHub acts as our immutable external cloud backup and team collaboration hub.}
@@ -312,7 +379,7 @@
 
 \begin{frame}{Deployment Strategy}{Zero-Downtime Rolling Updates \& Health Probes}
     \begin{block}{Zero-Downtime Rolling Update Topology}
-        \begin{itemize}\tiny
+        \begin{itemize}
             \item \textbf{The Downtime Challenge:} Updating an inference service must avoid dropping HTTP connections or returning 502 Bad Gateway errors.
             \item \textbf{Health Probes Configuration:} Kubernetes Deployment manifests define readiness and liveness probes targeting the FastAPI \texttt{/health} endpoint.
             \item \textbf{Model Warmup Sequence:} Kubernetes waits for model weights to load into GPU memory and warm up before declaring readiness.

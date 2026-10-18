@@ -95,10 +95,10 @@
             \begin{center}
             \resizebox{0.95\linewidth}{!}{
             \begin{tikzpicture}[
-                node distance=0.2cm and 0.2cm,
-                block/.style={draw=TaxonPrimary, fill=TaxonPrimary!10, rounded corners, rectangle, align=center, thick, minimum width=3.5cm, minimum height=0.6cm, font=\tiny\sffamily},
+                node distance=0.4cm and 0.4cm,
+                block/.style={draw=TaxonPrimary, fill=TaxonPrimary!10, rounded corners, rectangle, align=center, thick, minimum width=3.5cm, minimum height=0.4cm, font=\scriptsize\sffamily},
                 arrow/.style={->, thick, draw=TaxonDark, shorten >=2pt, shorten <=2pt},
-                label_text/.style={font=\tiny\sffamily\bfseries, color=TaxonAccent}
+                label_text/.style={font=\scriptsize\sffamily\bfseries, color=TaxonAccent}
             ]
 
                 % Nodes
@@ -126,7 +126,7 @@
 
 \begin{frame}{Memory Optimization}{1:1 Row Alignment with Feature Embeddings (np.memmap)}
     \begin{columns}
-        \begin{column}{0.48\textwidth}
+        \begin{column}{0.44\textwidth}
             \begin{block}{Zero-RAM Bloat Feature Loading}
                 \begin{itemize}\small
                     \item \textbf{Exact 1:1 Invariant:} Row $i$ in \texttt{dataset\_manifest.parquet} maps deterministically to vector $i$ in disk-backed split tensors (\texttt{train\_embeddings.pt}, etc.).
@@ -135,7 +135,7 @@
             \end{block}
         \end{column}
 
-        \begin{column}{0.48\textwidth}
+        \begin{column}{0.52\textwidth}
             \vspace{-0.1cm}
             \begin{center}
             \resizebox{0.85\linewidth}{!}{
@@ -164,7 +164,7 @@
                 };
 
                 % Right Node: Split Embeddings (.pt)
-                \node[array_node, right=2.2cm of parquet] (memmap) {
+                \node[array_node, right=2.8cm of parquet] (memmap) {
                     \textbf{Split Tensors (.pt)}\\[2pt]
                     \scriptsize
                     \begin{tabular}{|l|l|}
@@ -180,7 +180,7 @@
                 };
 
                 % Draw arrows indicating 1:1 mapping
-                \draw[arrow, color=TaxonAccent] ([yshift=0.4cm]parquet.east) -- node[above, label_text, color=TaxonAccent] {Exact 1:1 Row Alignment} ([yshift=0.4cm]memmap.west);
+                \draw[arrow, color=TaxonAccent] ([yshift=0.4cm]parquet.east) -- node[above, label_text, color=TaxonAccent, align=center] {Exact 1:1 Row\\Alignment} ([yshift=0.4cm]memmap.west);
                 \draw[arrow, color=TaxonAccent] ([yshift=-0.4cm]parquet.east) -- ([yshift=-0.4cm]memmap.west);
 
                 \node[below=0.4cm of parquet, text width=5cm, align=center] {\scriptsize Columnar metadata loaded rapidly into Pandas/Polars RAM};
