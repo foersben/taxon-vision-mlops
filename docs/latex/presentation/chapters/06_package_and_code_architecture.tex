@@ -32,7 +32,7 @@
             % Tier 1: Orchestration
             \node[appnode] (pipes) at (-3.2, 2.5) {\texttt{taxon\_vision.pipelines}\\[1pt]\tiny 7-Stage DVC DAG Batch Execution};
             \node[appnode] (serv) at (3.2, 2.5) {\texttt{taxon\_vision.service}\\[1pt]\tiny Online FastAPI \& HTMX Dashboard};
-            \node[font=\tiny\bfseries, text=deepblue!80, anchor=west, align=left] at (-6.8, 2.5) {TIER 1:\\[-1pt]ENTRYPOINTS};
+            \node[font=\tiny\bfseries, text=deepblue!80, anchor=east, align=right] at (-6.5, 2.5) {TIER 1:\\[-1pt]ENTRYPOINTS};
 
             % Tier 2: Engines
             \node[corenode] (mod) at (-5.0, 0.8) {\texttt{models/}\\[1pt]\tiny Backbone \& Loss};
@@ -40,16 +40,16 @@
             \node[corenode] (unc) at (0.0, 0.8) {\texttt{uncertainty/}\\[1pt]\tiny Conformal \& OOD};
             \node[corenode] (al) at (2.5, 0.8) {\texttt{active\_learning/}\\[1pt]\tiny BADGE \& Queue};
             \node[corenode] (mon) at (5.0, 0.8) {\texttt{monitoring/}\\[1pt]\tiny Telemetry \& Drift};
-            \node[font=\tiny\bfseries, text=teal!80, anchor=west, align=left] at (-6.8, 0.8) {TIER 2:\\[-1pt]ML ENGINES};
+            \node[font=\tiny\bfseries, text=teal!80, anchor=east, align=right] at (-6.5, 0.8) {TIER 2:\\[-1pt]ML ENGINES};
 
-            % Tier 3: Data & Domain
-            \node[datanode] (data) at (-2.5, -0.9) {\texttt{taxon\_vision.data}\\[1pt]\tiny S3 Streaming \& License Audit};
-            \node[datanode] (dom) at (2.5, -0.9) {\texttt{taxon\_vision.domain}\\[1pt]\tiny Taxonomy Tree \& Legal StrEnums};
-            \node[font=\tiny\bfseries, text=plantgreen!80, anchor=west, align=left] at (-6.8, -0.9) {TIER 3:\\[-1pt]DATA / DOMAIN};
+            % Tier 3: Data & Domain (spaced to preserve wide central channel at x=0.0)
+            \node[datanode] (data) at (-2.8, -0.9) {\texttt{taxon\_vision.data}\\[1pt]\tiny S3 Streaming \& License Audit};
+            \node[datanode] (dom) at (2.8, -0.9) {\texttt{taxon\_vision.domain}\\[1pt]\tiny Taxonomy Tree \& Legal StrEnums};
+            \node[font=\tiny\bfseries, text=plantgreen!80, anchor=east, align=right] at (-6.5, -0.9) {TIER 3:\\[-1pt]DATA / DOMAIN};
 
             % Tier 4: Typed Config Foundation
             \node[cfgnode] (cfg) at (0.0, -2.4) {\texttt{taxon\_vision.config}\\[1pt]\tiny Pydantic v2 Schemas, Loader \& Parameter Overrides};
-            \node[font=\tiny\bfseries, text=gray!80, anchor=west, align=left] at (-6.8, -2.4) {TIER 4:\\[-1pt]TYPED CONFIG};
+            \node[font=\tiny\bfseries, text=gray!80, anchor=east, align=right] at (-6.5, -2.4) {TIER 4:\\[-1pt]TYPED CONFIG};
 
             % Downward Bus from Tier 1 to Tier 2
             \draw[edge] (pipes.south) -- ++(0,-0.3) -| (mod.north);
@@ -60,12 +60,14 @@
             \draw[edge] (serv.south) -- ++(0,-0.3) -| (al.north);
             \draw[edge] (serv.south) -- ++(0,-0.3) -| (mon.north);
 
-            % Downward Bus from Tier 2 to Tier 3
-            \draw[edge] (mod.south) -- ++(0,-0.4) -| (dom.north);
-            \draw[edge] (inf.south) -- ++(0,-0.4) -| (data.north);
-            \draw[edge] (unc.south) -- ++(0,-0.4) -| (dom.north);
-            \draw[edge] (al.south) -- ++(0,-0.4) -| (dom.north);
-            \draw[edge] (mon.south) -- ++(0,-0.4) -| (data.north);
+            % Downward Bus from Tier 2 to Tier 3 (Clean, orthogonal drops)
+            \draw[edge] (mod.south) -- ++(0,-0.4) -| (data.north);
+            \draw[edge] (inf.south) -- (data.north);
+            \draw[edge] (al.south) -- (dom.north);
+            \draw[edge] (mon.south) -- ++(0,-0.4) -| (dom.north);
+
+            % Direct Tier 2 to Tier 4 Mid-Channel Connector (x = 0.0cm between data and domain)
+            \draw[edge] (unc.south) -- (cfg.north);
 
             % Downward Bus from Tier 3 to Tier 4
             \draw[edge] (data.south) |- (cfg.west);

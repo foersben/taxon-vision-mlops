@@ -149,26 +149,42 @@
 
                 % Left Node: dataset_manifest.parquet
                 \node[table_node] (parquet) {
-                    \textbf{dataset\_manifest.parquet}\\
-                    \scriptsize \texttt{uuid, hash, taxon\_id, url}
+                    \textbf{dataset\_manifest.parquet}\\[2pt]
+                    \scriptsize
+                    \begin{tabular}{|l|l|}
+                        \hline
+                        \textbf{Row} & \textbf{UUID / Taxon ID} \\
+                        \hline
+                        Row 0 & \texttt{a8f2...} $\cdot$ Taxon 104 \\
+                        Row 1 & \texttt{c3d9...} $\cdot$ Taxon 52 \\
+                        \dots & \dots \\
+                        Row $i$ & \texttt{e1b4...} $\cdot$ Taxon $k$ \\
+                        \hline
+                    \end{tabular}
                 };
 
                 % Right Node: Split Embeddings (.pt)
-                \node[array_node, right=3cm of parquet] (memmap) {
-                    \textbf{Split Tensors (.pt)}\\
-                    \scriptsize $z \in \mathbb{R}^{768}$ (PyTorch / CUDA)
+                \node[array_node, right=2.2cm of parquet] (memmap) {
+                    \textbf{Split Tensors (.pt)}\\[2pt]
+                    \scriptsize
+                    \begin{tabular}{|l|l|}
+                        \hline
+                        \textbf{Index} & \textbf{Feature Vector} \\
+                        \hline
+                        Index 0 & $\mathbf{z}_0 \in \mathbb{R}^{768}$ \\
+                        Index 1 & $\mathbf{z}_1 \in \mathbb{R}^{768}$ \\
+                        \dots & \dots \\
+                        Index $i$ & $\mathbf{z}_i \in \mathbb{R}^{768}$ \\
+                        \hline
+                    \end{tabular}
                 };
 
-                % Draw clean header dividers
-                \draw[TaxonPrimary, thick] ([yshift=0.15cm, xshift=-2.2cm]parquet.center) -- ([yshift=0.15cm, xshift=2.2cm]parquet.center);
-                \draw[TaxonSecondary, thick] ([yshift=0.15cm, xshift=-1.7cm]memmap.center) -- ([yshift=0.15cm, xshift=1.7cm]memmap.center);
-
                 % Draw arrows indicating 1:1 mapping
-                \draw[arrow, color=TaxonAccent] ([yshift=0.2cm]parquet.east) -- node[above, label_text, color=TaxonAccent] {Exact 1:1 Row Alignment} ([yshift=0.2cm]memmap.west);
-                \draw[arrow, color=TaxonAccent] ([yshift=-0.2cm]parquet.east) -- ([yshift=-0.2cm]memmap.west);
+                \draw[arrow, color=TaxonAccent] ([yshift=0.4cm]parquet.east) -- node[above, label_text, color=TaxonAccent] {Exact 1:1 Row Alignment} ([yshift=0.4cm]memmap.west);
+                \draw[arrow, color=TaxonAccent] ([yshift=-0.4cm]parquet.east) -- ([yshift=-0.4cm]memmap.west);
 
-                \node[below=0.6cm of parquet, text width=5cm, align=center] {\scriptsize Columnar metadata loaded rapidly into Pandas/Polars RAM};
-                \node[below=0.6cm of memmap, text width=4cm, align=center] {\scriptsize Disk-backed NVMe array sliced directly via PyTorch};
+                \node[below=0.4cm of parquet, text width=5cm, align=center] {\scriptsize Columnar metadata loaded rapidly into Pandas/Polars RAM};
+                \node[below=0.4cm of memmap, text width=4cm, align=center] {\scriptsize Disk-backed NVMe array sliced directly via PyTorch};
 
             \end{tikzpicture}
             }
@@ -287,8 +303,8 @@
         \draw[arrow] (dvc_ptr) -- node[right, label_text] {Commits lockfile} (git_repo);
         \draw[arrow, color=TaxonPrimary] (parquet) -- node[left, label_text, color=TaxonPrimary] {DVC push} (s3_remote);
 
-        % MLflow Lineage
-        \node[draw=TaxonDark, fill=white, rounded corners, rectangle, align=center, thick, right=1.5cm of git_repo] (mlflow) {
+        % MLflow Lineage (Increased horizontal spacing to 3.2cm to eliminate collisions)
+        \node[draw=TaxonDark, fill=white, rounded corners, rectangle, align=center, thick, right=3.2cm of git_repo] (mlflow) {
             \textbf{MLflow Tracking}\\
             \scriptsize Immutable Lineage
         };

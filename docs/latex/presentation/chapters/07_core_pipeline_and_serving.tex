@@ -63,20 +63,112 @@
     \qa{What is the purpose of INT8 quantization here?}{It reduces memory bandwidth pressure and allows classification heads to fit entirely within L2/L3 CPU caches or fast GPU registers, eliminating cache thrashing.}
 \end{frame}
 
-\begin{frame}{Inference Engineering}{ONNX Runtime: Static vs. Dynamic Execution Invariants}
-    \begin{block}{Execution \& Optimization Strategies}
-        \begin{itemize}\footnotesize
-            \item \textbf{Compilation \& Optimization Lifecycle:} Tracing with \texttt{torch.onnx.export(..., opset\_version=17)} $\to$ Graph Optimization (constant folding, redundant node fusions) $\to$ Compiled \texttt{InferenceSession}.
-            \item \textbf{Dynamic Axes Mechanics:} Batch dimension \texttt{\{0: "batch\_size"\}} is declared dynamic. Handles single real-time HTTP requests ($B=1$, sub-15ms) and offline batch feature extraction ($B=64$) in the same model graph without recompilation or graph rebuilding.
-            \item \textbf{Static Spatial Dimensions Mechanics:} Input spatial dimensions ($3 \times 224 \times 224$) are strictly static. Enables ahead-of-time memory planning and zero-allocation execution via pre-allocated \texttt{IOBinding} buffers on the hot path, preventing dynamic heap allocations.
-            \item \textbf{Quantization Strategy (PTQ INT8):} Post-Training Quantization (PTQ INT8) inserts Quantize/Dequantize (QDQ) operators. Compresses linear probe weights from 340 MB down to 86 MB ($4\times$ reduction) while retaining $\ge 99\%$ accuracy and sub-15ms p95 latency.
-        \end{itemize}
-    \end{block}
+\begin{frame}{Inference Engineering (1/2)}{ONNX Graph Compilation, Opset 17 Fusion \& IOBinding Memory Planning}
+    \providecolor{TaxonPrimary}{RGB}{34, 139, 34}      % Forest Green
+    \providecolor{TaxonSecondary}{RGB}{215, 110, 0}    % Amber / Orange
+    \providecolor{TaxonDark}{RGB}{0, 51, 102}          % Deep Navy Blue
 
+    \vspace{-0.25cm}
+    \begin{center}
+    \resizebox{0.96\textwidth}{!}{
+    \begin{tikzpicture}[
+        >=stealth, thick,
+        stage/.style={rectangle, rounded corners=3pt, draw=TaxonDark, fill=TaxonDark!10, text=TaxonDark!95!black, font=\scriptsize\bfseries, inner sep=4pt, align=center, minimum height=0.9cm},
+        opt/.style={rectangle, rounded corners=3pt, draw=TaxonSecondary, fill=TaxonSecondary!12, text=TaxonSecondary!90!black, font=\scriptsize\bfseries, inner sep=4pt, align=center, minimum height=0.9cm},
+        runtime/.style={rectangle, rounded corners=3pt, draw=TaxonPrimary, fill=TaxonPrimary!15, text=TaxonPrimary!90!black, font=\scriptsize\bfseries, inner sep=4pt, align=center, minimum height=0.9cm},
+        edge/.style={->, draw=TaxonDark!70, thick}
+    ]
+        \node[stage] (pyt) at (0, 0) {PyTorch Model\\{\tiny\normalfont Backbone + Head}};
+        \node[stage, right=0.9cm of pyt] (export) {\texttt{torch.onnx.export}\\{\tiny\normalfont Tracing $\cdot$ Opset 17}};
+        \node[opt, right=0.9cm of export] (fuse) {ORT Graph Optimizer\\{\tiny\normalfont Constant Folding $\cdot$ Node Fusion}};
+        \node[runtime, right=0.9cm of fuse] (iob) {\texttt{IOBinding} Session\\{\tiny\normalfont Pre-Allocated Tensor Arenas}};
 
-    \script{We export PyTorch models using Opset 17 for advanced graph fusions. Batch size is dynamic, allowing the same artifact to serve single API requests or bulk offline embeddings. However, we strictly freeze spatial dimensions ($3 \times 224 \times 224$). This enables ONNX Runtime to perform ahead-of-time memory planning. Combined with pre-allocated \texttt{IOBinding} buffers, we bypass dynamic heap allocations on the hot path. Finally, INT8 Post-Training Quantization inserts QDQ operators to shrink weights from 340 MB to 86 MB, fitting in cache while maintaining accuracy and sub-15ms latency.}
-    \qa{Why are spatial dimensions kept static?}{Dynamic dimensions force the runtime to compute offsets and allocate heap buffers per request. Static dimensions allow ahead-of-time memory planning and safe reuse of \texttt{IOBinding} buffers, eliminating overhead.}
-    \qa{How do \texttt{IOBinding} buffers work?}{They are fixed memory regions bound to the \texttt{InferenceSession}. We write incoming bytes directly into them, bypassing the Python object allocator.}
+        \draw[edge] (pyt) -- (export);
+        \draw[edge] (export) -- (fuse);
+        \draw[edge] (fuse) -- (iob);
+    \end{tikzpicture}
+    }
+    \end{center}
+
+    \vspace{-0.15cm}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Dynamic Batch Dimension ($B \in [1, 64]$)}
+                \begin{itemize}\scriptsize
+                    \item \textbf{Online Serving ($B=1$):} Executes sub-15ms real-time HTTP image queries via pre-allocated \texttt{IOBinding} memory.
+                    \item \textbf{Offline Caching ($B=64$):} Extracts bulk DVC feature embeddings without runtime graph recompilation.
+                    \item \textbf{Zero Recompilation Invariant:} Single exported ONNX model artifact serves both streaming and batch paradigms.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Static Spatial Dimensions ($3 \times 224 \times 224$)}
+                \begin{itemize}\scriptsize
+                    \item \textbf{AOT Memory Planning:} Freezes spatial resolution, allowing ONNX Runtime to plan deterministic tensor offsets.
+                    \item \textbf{Zero Heap Allocations:} Completely eliminates dynamic memory allocations on hot inference paths.
+                    \item \textbf{Cache Locality:} Fixed-size intermediate activation buffers remain strictly L2/L3 cache-resident.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \script{We export PyTorch models using Opset 17 for advanced graph fusions. Batch size is declared dynamic, enabling the identical ONNX artifact to serve single-image API queries or offline batch extractions. Meanwhile, spatial dimensions are frozen to 224x224. This allows ONNX Runtime to perform ahead-of-time memory planning and zero-allocation execution via pre-allocated IOBinding buffers.}
+    \qa{Why are spatial dimensions kept static?}{Dynamic dimensions force the runtime to compute tensor offsets per request. Static dimensions permit pre-allocated IOBinding memory arenas, eliminating memory reallocation.}
+\end{frame}
+
+\begin{frame}{Inference Engineering (2/2)}{Hybrid INT8/FP32 Quantization \& Dequantized Head Projection}
+    \providecolor{TaxonPrimary}{RGB}{34, 139, 34}      % Forest Green
+    \providecolor{TaxonSecondary}{RGB}{215, 110, 0}    % Amber / Orange
+    \providecolor{TaxonDark}{RGB}{0, 51, 102}          % Deep Navy Blue
+    \providecolor{herbired}{RGB}{178, 34, 34}          % Firebrick Red
+
+    \vspace{-0.25cm}
+    \begin{center}
+    \resizebox{0.96\textwidth}{!}{
+    \begin{tikzpicture}[
+        >=stealth, thick,
+        inputnode/.style={rectangle, rounded corners=3pt, draw=TaxonDark, fill=TaxonDark!10, font=\scriptsize\bfseries, inner sep=4pt, align=center, minimum height=0.85cm},
+        int8node/.style={rectangle, rounded corners=3pt, draw=herbired, fill=herbired!15, text=herbired!90!black, font=\scriptsize\bfseries, inner sep=4pt, align=center, minimum height=0.85cm},
+        fp32node/.style={rectangle, rounded corners=3pt, draw=TaxonPrimary, fill=TaxonPrimary!15, text=TaxonPrimary!90!black, font=\scriptsize\bfseries, inner sep=4pt, align=center, minimum height=0.85cm},
+        gatenode/.style={rectangle, rounded corners=3pt, draw=TaxonSecondary, fill=TaxonSecondary!15, text=TaxonSecondary!90!black, font=\scriptsize\bfseries, inner sep=4pt, align=center, minimum height=0.85cm},
+        edge/.style={->, draw=TaxonDark!70, thick}
+    ]
+        \node[inputnode] (img) at (0, 0) {Input Image\\{\tiny $[1, 3, 224, 224]$}};
+        \node[int8node, right=0.8cm of img] (backbone) {INT8 ViT Trunk\\{\tiny QDQ Static PTQ $\cdot$ 86 MB}};
+        \node[fp32node, right=0.8cm of backbone] (head) {\texttt{head\_projector.py}\\{\tiny FP32 Linear Head $[768, K]$}};
+        \node[gatenode, right=0.8cm of head] (safety) {Conformal \& OOD\\{\tiny $\hat{q}_\alpha$ Sets $\cdot$ Energy $E(x; T)$}};
+
+        \draw[edge] (img) -- (backbone);
+        \draw[edge] (backbone) -- node[above, font=\tiny\ttfamily] {Embedding $[1, 768]$} (head);
+        \draw[edge] (head) -- node[above, font=\tiny\ttfamily] {Logits $z \in \mathbb{R}^K$} (safety);
+    \end{tikzpicture}
+    }
+    \end{center}
+
+    \vspace{-0.15cm}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Backbone Quantization (Static INT8 PTQ)}
+                \begin{itemize}\scriptsize
+                    \item \textbf{$4\times$ Weight Reduction:} Compresses frozen ViT parameters from 340 MB down to 86 MB.
+                    \item \textbf{Calibration Protocol:} Calibrated with representative iNaturalist images via \texttt{TaxonCalibrationDataReader}.
+                    \item \textbf{Hardware Efficiency:} Fits entirely within GPU shared memory or CPU L3 caches, avoiding register spills.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Terminal Head Invariant (Uncompressed FP32)}
+                \begin{itemize}\scriptsize
+                    \item \textbf{Conformal Quantile Sensitivity:} Quantile threshold $\hat{q}_\alpha$ requires continuous probability distributions without 8-bit rounding artifacts.
+                    \item \textbf{Helmholtz Energy Stability:} Free energy $E(x; T) = -T \ln \sum e^{z_k/T}$ suffers numerical truncation if logits are quantized.
+                    \item \textbf{Zero Latency Penalty:} The linear head represents $<0.2\%$ of total FLOPs; preserving FP32 adds zero measurable overhead.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \script{Our serving graph uses a hybrid precision design: the heavy ViT backbone is statically quantized to INT8, cutting model size by 4x to 86 MB. However, the terminal linear projection head remains in full IEEE-754 FP32. This guarantees mathematical stability for Helmholtz free energy and conformal quantile cutoffs without any latency penalty.}
+    \qa{Why not quantize the linear classification head to INT8?}{INT8 quantization introduces discrete rounding bins into class logits. This degrades conformal coverage guarantees and causes catastrophic underflow in Helmholtz free energy calculations.}
 \end{frame}
 
 \begin{frame}{Architectural Topology}{Offline Training to Online Serving Boundary}
@@ -121,8 +213,8 @@
     \draw[arrow] (session) -- (conformal);
     \draw[arrow] (conformal) -- (api);
 
-    % Connection from Artifact to Serving Engine
-    \draw[dashedarrow] (onnx) -- node[right, font=\sffamily\scriptsize, text=TaxonSecondary] {Artifact Release} (session);
+    % Connection from Artifact to Serving Engine (Orthogonal route around right margin)
+    \draw[dashedarrow] (onnx.east) -- ++(0.6,0) |- node[near start, right, font=\sffamily\scriptsize, text=TaxonSecondary] {Artifact Release} (session.east);
 
     % Grouping boxes
     \begin{scope}[on background layer]
@@ -189,92 +281,74 @@
     \providecolor{TaxonDark}{RGB}{0, 51, 102}          % Deep Navy Blue
     \providecolor{herbired}{RGB}{178, 34, 34}          % Firebrick Red
 
-    \vspace{-0.60cm}
+    \vspace{-0.30cm}
+    % Top Half: Clean Horizontal Decision Flowchart
+    \begin{center}
+    \resizebox{0.96\textwidth}{!}{
+    \begin{tikzpicture}[
+        >=stealth, thick,
+        start/.style={draw=TaxonDark, fill=TaxonDark!10, rectangle, rounded corners=3pt, font=\sffamily\bfseries\scriptsize, inner sep=4pt, align=center},
+        process/.style={draw=TaxonDark, fill=TaxonDark!7, rectangle, rounded corners=3pt, font=\sffamily\scriptsize, inner sep=4pt, align=center},
+        decision/.style={draw=TaxonSecondary, fill=TaxonSecondary!15, diamond, aspect=2.2, font=\sffamily\bfseries\scriptsize, inner sep=2pt, align=center},
+        dest/.style={rectangle, rounded corners=3pt, font=\sffamily\bfseries\tiny, inner sep=3pt, align=center},
+        arrow/.style={->, >=stealth, thick, draw=TaxonDark!80}
+    ]
+        \node[start] (req) {1. Inference Request\\{\tiny Zero-Copy Ingress}};
+        \node[process, right=0.6cm of req] (onnx) {2. ONNX Runtime\\{\tiny INT8 ViT + FP32 Head}};
+        \node[process, right=0.6cm of onnx] (conformal) {3. Conformal Safety Gate\\{\tiny Quantile $\hat{q}_\alpha$ ($1-\alpha=0.95$)}};
+        \node[decision, right=0.8cm of conformal] (size) {Set Size\\$|\mathcal{C}(x)|$?};
+
+        \draw[arrow] (req) -- (onnx);
+        \draw[arrow] (onnx) -- (conformal);
+        \draw[arrow] (conformal) -- (size);
+
+        % Exit routing tags pointing to bottom cards
+        \node[dest, fill=TaxonPrimary!20, draw=TaxonPrimary, right=1.0cm of size, yshift=0.35cm] (p_fast) {$|\mathcal{C}|=1$ $\to$ Fast-Path};
+        \node[dest, fill=TaxonSecondary!20, draw=TaxonSecondary, right=1.0cm of size] (p_rag) {$|\mathcal{C}| \in [2, 3]$ $\to$ Vision-RAG};
+        \node[dest, fill=herbired!20, draw=herbired, right=1.0cm of size, yshift=-0.35cm] (p_human) {$|\mathcal{C}|>3 \lor \emptyset$ $\to$ Human Review};
+
+        \draw[arrow] (size.east) -- ++(0.3,0) |- (p_fast.west);
+        \draw[arrow] (size.east) -- (p_rag.west);
+        \draw[arrow] (size.east) -- ++(0.3,0) |- (p_human.west);
+    \end{tikzpicture}
+    }
+    \end{center}
+
+    \vspace{-0.20cm}
+    % Bottom Half: 3 Equal-Width Structured Outcome Cards (0.31\textwidth each)
     \begin{columns}[T, totalwidth=\textwidth]
-        % Left Column: Clean, Centered Flowchart (Strictly Contained)
-        \begin{column}{0.48\textwidth}
-            \begin{center}
-            \resizebox{\linewidth}{!}{
-            \begin{tikzpicture}[
-                node distance=0.24cm,
-                start/.style={draw=TaxonDark, fill=TaxonDark!12, rectangle, rounded corners=3pt, minimum width=4.1cm, minimum height=0.52cm, align=center, font=\sffamily\bfseries\scriptsize},
-                process/.style={draw=TaxonDark, fill=TaxonDark!7, rectangle, rounded corners=3pt, minimum width=4.1cm, minimum height=0.52cm, align=center, font=\sffamily\scriptsize},
-                decision/.style={draw=TaxonSecondary, fill=TaxonSecondary!15, diamond, aspect=2.4, minimum width=2.7cm, minimum height=0.68cm, align=center, font=\sffamily\bfseries\scriptsize},
-                endpoint/.style={draw=TaxonPrimary, fill=TaxonPrimary!20, rectangle, rounded corners=3pt, thick, minimum width=1.75cm, minimum height=0.56cm, align=center, font=\sffamily\bfseries\tiny},
-                ambigpoint/.style={draw=TaxonSecondary, fill=TaxonSecondary!20, rectangle, rounded corners=3pt, thick, minimum width=1.75cm, minimum height=0.56cm, align=center, font=\sffamily\bfseries\tiny},
-                oodpoint/.style={draw=herbired, fill=herbired!20, rectangle, rounded corners=3pt, thick, minimum width=1.75cm, minimum height=0.56cm, align=center, font=\sffamily\bfseries\tiny},
-                arrow/.style={->, >=stealth, thick, draw=TaxonDark!80}
-            ]
-
-                % Vertical sequential pipeline
-                \node[start] (req) {1. Inference Request\\[-1pt]{\tiny\normalfont\color{TaxonDark!75}Client Image Upload $\cdot$ Zero-Copy Ingress}};
-                \node[process, below=of req] (onnx) {2. ONNX Runtime Engine\\[-1pt]{\tiny\normalfont\color{TaxonDark!75}INT8 Quantized Head $\cdot$ Dynamic Batching}};
-                \node[process, below=of onnx] (conformal) {3. Split Conformal Gating\\[-1pt]{\tiny\normalfont\color{TaxonDark!75}Empirical Quantile $\hat{q}_\alpha$ ($1-\alpha=0.95$)}};
-                \node[decision, below=0.28cm of conformal] (size) {Set Size $|\mathcal{C}(x)|$?};
-
-                % Symmetrical branch endpoints (ambig centered; fast left; ood right)
-                \node[ambigpoint, below=0.65cm of size] (ambig) {\textbf{Vision-RAG}\\[-1pt]{\tiny Differential Card}};
-                \node[endpoint, left=0.20cm of ambig] (fast) {\textbf{Fast-Path}\\[-1pt]{\tiny $<15$\,ms (85\%)}};
-                \node[oodpoint, right=0.20cm of ambig] (ood) {\textbf{Human Triage}\\[-1pt]{\tiny Label Studio (3\%)}};
-
-                % Sequential arrows
-                \draw[arrow] (req) -- (onnx);
-                \draw[arrow] (onnx) -- (conformal);
-                \draw[arrow] (conformal) -- (size);
-
-                % Canonical 3-vertex diamond branching (zero collision)
-                \draw[arrow] (size.west) -| node[above, font=\sffamily\tiny, pos=0.4] {$|\mathcal{C}|=1$} (fast.north);
-                \draw[arrow] (size.south) -- node[right=2pt, font=\sffamily\tiny] {$|\mathcal{C}|>1$} (ambig.north);
-                \draw[arrow] (size.east) -| node[above, font=\sffamily\tiny, pos=0.4] {$|\mathcal{C}|=0$} (ood.north);
-
-            \end{tikzpicture}
-            }
-            \end{center}
+        \begin{column}{0.31\textwidth}
+            \begin{block}{\scriptsize\textcolor{TaxonPrimary!90!black}{$\blacktriangleright$ Fast-Path ($\sim 85\%$)}}
+                \begin{itemize}\tiny\setlength{\itemsep}{1pt}
+                    \item \textbf{Criterion:} $|\mathcal{C}(x)| = 1$ singleton set.
+                    \item \textbf{Latency SLA:} Sub-$15\text{ ms}$ $p95$ response.
+                    \item \textbf{Zero Overhead:} Emits species label + forward-hook CAM directly to client.
+                \end{itemize}
+            \end{block}
         \end{column}
 
-        % Right Column: Full-Width Structured Cards (Fits all 3 without clipping)
-        \begin{column}{0.50\textwidth}
-            % Card 1: Fast-Path
-            \begin{tikzpicture}
-            \node[draw=TaxonPrimary!80, fill=TaxonPrimary!6, rounded corners=3pt, thick, text width=0.94\linewidth] {
-                \textbf{\scriptsize\color{TaxonPrimary!90!black}$\blacktriangleright$ Fast-Path Automated Return ($|\mathcal{C}(x)| = 1$)} \hfill {\tiny\bfseries\color{TaxonPrimary!80!black}[$\sim$85\%]}\\
-                \tiny
-                \begin{itemize}\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}
-                    \item \textbf{SLA / Latency:} Sub-$15\text{ ms}$ $p95$ response on bare-metal hardware.
-                    \item \textbf{Zero Overhead:} Emits top label + forward-hook CAM; bypasses VLM.
+        \begin{column}{0.31\textwidth}
+            \begin{block}{\scriptsize\textcolor{TaxonSecondary!90!black}{$\blacktriangleright$ Vision-RAG ($\sim 12\%$)}}
+                \begin{itemize}\tiny\setlength{\itemsep}{1pt}
+                    \item \textbf{Criterion:} Ambiguous $|\mathcal{C}(x)| \in [2, 3]$.
+                    \item \textbf{Trigger:} Fine-grained sister-taxa mimicry.
+                    \item \textbf{Action:} Geo-filtered HNSW + RRF retrieval $\to$ VLM differential diagnosis card.
                 \end{itemize}
-            };
-            \end{tikzpicture}
-            \vspace{0.02cm}
+            \end{block}
+        \end{column}
 
-            % Card 2: Vision-RAG
-            \begin{tikzpicture}
-            \node[draw=TaxonSecondary!80, fill=TaxonSecondary!6, rounded corners=3pt, thick, text width=0.94\linewidth] {
-                \textbf{\scriptsize\color{TaxonSecondary!90!black}$\blacktriangleright$ Vision-RAG Triage Engine ($|\mathcal{C}(x)| > 1$)} \hfill {\tiny\bfseries\color{TaxonSecondary!80!black}[$\sim$12\%]}\\
-                \tiny
-                \begin{itemize}\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}
-                    \item \textbf{Trigger:} Fine-grained sister-taxa ambiguity \& morphological mimicry.
-                    \item \textbf{Action:} Geo-filtered HNSW + RRF $\to$ VLM differential diagnosis card.
+        \begin{column}{0.31\textwidth}
+            \begin{block}{\scriptsize\textcolor{herbired!90!black}{$\blacktriangleright$ Human Triage ($\sim 3\%$)}}
+                \begin{itemize}\tiny\setlength{\itemsep}{1pt}
+                    \item \textbf{Criterion:} Empty set $\emptyset$ or $|\mathcal{C}| > 3$.
+                    \item \textbf{Safety Gate:} Rejects uncalibrated guesses on OOD / corrupted images.
+                    \item \textbf{Active Learning:} Routed to Label Studio for priority expert annotation.
                 \end{itemize}
-            };
-            \end{tikzpicture}
-            \vspace{0.02cm}
-
-            % Card 3: Human Triage / OOD
-            \begin{tikzpicture}
-            \node[draw=herbired!80, fill=herbired!6, rounded corners=3pt, thick, text width=0.94\linewidth] {
-                \textbf{\scriptsize\color{herbired!90!black}$\blacktriangleright$ Human Expert Triage ($|\mathcal{C}(x)| = 0$ / OOD)} \hfill {\tiny\bfseries\color{herbired!80!black}[$\sim$3\%]}\\
-                \tiny
-                \begin{itemize}\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}
-                    \item \textbf{Safety Invariant:} All classes fail cutoff ($s_y > \hat{q}_\alpha$); rejects blind guesses.
-                    \item \textbf{Active Learning:} Enqueued into Label Studio for BADGE sampling.
-                \end{itemize}
-            };
-            \end{tikzpicture}
+            \end{block}
         \end{column}
     \end{columns}
 
-    \script{\footnotesize Every incoming request executes through our quantized ONNX Runtime head and split conformal calibration layer. When the prediction set is a singleton ($|\mathcal{C}|=1$), the classification resolves via the fast-path in under 15 milliseconds, covering $\sim$85\% of production traffic. If the set contains multiple sister taxa ($|\mathcal{C}|>1$), it routes to our lazy Vision-RAG engine for differential diagnosis. If empty ($|\mathcal{C}|=0$), the specimen is safely deferred as an epistemic outlier to Label Studio.}
+    \script{\footnotesize Every incoming request executes through our quantized ONNX Runtime head and split conformal calibration layer. When the prediction set is a singleton ($|\mathcal{C}|=1$), the classification resolves via the fast-path in under 15 milliseconds, covering $\sim$85\% of production traffic. If the set contains multiple sister taxa ($|\mathcal{C}| \in [2, 3]$), it routes to our lazy Vision-RAG engine for differential diagnosis. If empty ($|\mathcal{C}|=0$), the specimen is safely deferred as an epistemic outlier to Label Studio.}
     \qa{What is the performance advantage of this three-tiered decision routing?}{\footnotesize Decouples latency-critical serving from heavy multimodal retrieval. Approximately 85\% of clean queries resolve in sub-15ms on lightweight linear heads, reserving expensive vector searches and VLM diagnosis cards for genuinely ambiguous cases.}
     \qa{How does the empty set ($|\mathcal{C}(x)| = 0$) safeguard production databases?}{\footnotesize Standard softmax networks force uncalibrated point estimates on novel or corrupted inputs. In split conformal prediction, an empty set means no candidate meets the $1-\hat{q}_\alpha$ threshold, mathematically halting automated ingestion.}
 \end{frame}

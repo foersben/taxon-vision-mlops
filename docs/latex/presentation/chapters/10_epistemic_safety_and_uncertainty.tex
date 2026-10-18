@@ -67,8 +67,8 @@
                         axis line style={-},
                         title={Calibration Quantile Threshold $\hat{q}$}
                     ]
-                    \addplot[fill=TaxonPrimary!20, draw=TaxonPrimary, thick, domain=0:0.9, samples=100] {exp(-5*x^2)};
-                    \addplot[fill=TaxonAccent!30, draw=TaxonAccent, thick, domain=0.9:1, samples=50] {exp(-5*x^2)};
+                    \addplot[fill=TaxonPrimary!20, draw=TaxonPrimary, thick, domain=0:0.9, samples=100] {exp(-5*x^2)} \closedcycle;
+                    \addplot[fill=TaxonAccent!30, draw=TaxonAccent, thick, domain=0.9:1, samples=50] {exp(-5*x^2)} \closedcycle;
                     \draw[dashed, thick, TaxonAccent] (axis cs:0.9,0) -- (axis cs:0.9,1.15);
                     \node[fill=white, inner sep=1.5pt, font=\scriptsize, text=TaxonAccent] at (axis cs:0.82, 1.18) {$\hat{q}$ (95\%)};
                     \end{axis}
@@ -93,7 +93,7 @@
                 \end{itemize}
             \end{block}
         \end{column}
-        \begin{column}{0.5\textwidth}
+        \begin{column}{0.50\textwidth}
             \begin{center}
                 \providecolor{TaxonPrimary}{RGB}{0, 102, 204}
                 \providecolor{TaxonSecondary}{RGB}{102, 102, 102}
@@ -101,23 +101,23 @@
                 \providecolor{TaxonDark}{RGB}{0, 51, 102}
                 \resizebox{\linewidth}{!}{
                 \begin{tikzpicture}[
-                    node distance=1.2cm and 1cm,
-                    box/.style={rectangle, draw=TaxonDark, fill=TaxonPrimary!10, thick, text width=2.6cm, align=center, rounded corners, font=\scriptsize},
-                    decision/.style={diamond, draw=TaxonAccent, fill=TaxonAccent!10, thick, text width=1.5cm, align=center, inner sep=0pt, font=\tiny},
+                    node distance=0.5cm and 0.8cm,
+                    box/.style={rectangle, draw=TaxonDark, fill=TaxonPrimary!10, thick, text width=2.5cm, align=center, rounded corners, font=\scriptsize},
+                    decision/.style={diamond, draw=TaxonAccent, fill=TaxonAccent!10, thick, text width=1.3cm, align=center, inner sep=0pt, font=\tiny\bfseries},
                     arrow/.style={->, >=stealth, thick, TaxonSecondary}
                 ]
 
                 \node[box] (input) {Observation $X$};
-                \node[decision, below=0.6cm of input] (card) {$|C(X)|$};
+                \node[decision, right=0.7cm of input] (card) {$|C(X)|$};
 
-                \node[box, fill=green!10, draw=green!60!black, left=0.4cm of card] (auto) {Automated\\Ingestion};
-                \node[box, fill=yellow!10, draw=yellow!60!black, below=0.5cm of card] (diff) {Differential\\Diagnosis Card};
-                \node[box, fill=red!10, draw=red!60!black, right=0.4cm of card] (human) {Human Taxonomist\\Review Queue};
+                \node[box, fill=plantgreen!15, draw=plantgreen!80, text=plantgreen!90!black, right=0.9cm of card, yshift=1.1cm] (auto) {Automated Ingestion\\[-1pt]{\tiny $|\mathcal{C}(X)| = 1$}};
+                \node[box, fill=signalorange!15, draw=signalorange!80, text=signalorange!90!black, right=0.9cm of card] (diff) {Differential Card\\[-1pt]{\tiny $|\mathcal{C}(X)| \in [2, 3]$}};
+                \node[box, fill=herbired!15, draw=herbired!80, text=herbired!90!black, right=0.9cm of card, yshift=-1.1cm] (human) {Human Review Queue\\[-1pt]{\tiny $|\mathcal{C}(X)| > 3 \lor \emptyset$}};
 
                 \draw[arrow] (input) -- (card);
-                \draw[arrow] (card) -- node[above, font=\tiny] {$|C(X)| = 1$} (auto);
-                \draw[arrow] (card) -- node[right, font=\tiny] {$|C(X)| \in [2, 3]$} (diff);
-                \draw[arrow] (card) -- node[above, font=\tiny] {$|C(X)| > 3$ or $\emptyset$} (human);
+                \draw[arrow] (card) |- node[above, font=\tiny, pos=0.7] {$|\mathcal{C}| = 1$} (auto.west);
+                \draw[arrow] (card) -- node[above, font=\tiny] {$|\mathcal{C}| \in [2, 3]$} (diff.west);
+                \draw[arrow] (card) |- node[below, font=\tiny, pos=0.7] {$|\mathcal{C}| > 3 \lor \emptyset$} (human.west);
 
                 \end{tikzpicture}
                 }
@@ -127,6 +127,195 @@
 
     \script{In production, knowing WHEN you do not know is more valuable than making a blind guess. If our conformal prediction set has a size of 1, the model is confident and we automate the record. If the set has 2 or 3 species, we present a differential diagnosis card to the user. If the set is large or empty, our system routes it to a human review queue.}
     \qa{How often does an empty prediction set occur?}{Empty sets occur when the model's non-conformity score for every single known class exceeds the calibrated quantile $\hat{q}$.}
+\end{frame}
+
+\begin{frame}{Calibration Taxonomy}{Four Distinct Calibration Layers in TaxonVision}
+    \vspace{-0.25cm}
+    \begin{center}\scriptsize\renewcommand{\arraystretch}{0.95}
+        \begin{tabular}{>{\raggedright\arraybackslash}p{1.2cm} >{\raggedright\arraybackslash}p{2.1cm} >{\raggedright\arraybackslash}p{1.6cm} >{\raggedright\arraybackslash}p{2.5cm} >{\raggedright\arraybackslash}p{3.8cm}}
+            \toprule
+            \textbf{Layer} & \textbf{Calibration Target} & \textbf{Parameter} & \textbf{Pipeline Module} & \textbf{Mathematical Invariant / Guarantee} \\
+            \midrule
+            \textbf{Layer 1} & Logit Confidence & Temp.\ $T$ & \texttt{conformal.py} & Minimizes ECE via temperature-scaled logits $z/T$. \\
+            \midrule
+            \textbf{Layer 2} & Non-Conformity Set & Quantile $\hat{q}_\alpha$ & \texttt{pipelines/}\newline\texttt{calibrate.py} & Marginal coverage: $\mathbb{P}(Y \in \mathcal{C}(X)) \ge 1 - \alpha$. \\
+            \midrule
+            \textbf{Layer 3} & Semantic OOD Boundary & Energy Cutoff $\tau_{\text{OOD}}$ & \texttt{uncertainty/}\newline\texttt{ood\_detector.py} & 95\% in-distribution TPR: $E(x; T) \le \tau_{\text{OOD}}$. \\
+            \midrule
+            \textbf{Layer 4} & Static INT8 Activations & Scales $S$, ZPs $Z$ & \texttt{inference/}\newline\texttt{calibration.py} & Optimal QDQ dynamic range $[r_{\min}, r_{\max}]$ clipping. \\
+            \bottomrule
+        \end{tabular}
+    \end{center}
+    \vspace{-0.15cm}
+    \begin{block}{Architectural Layer Separation Principle}
+        \begin{itemize}\scriptsize
+            \item \textbf{Decoupled Safety Responsibilities:} Layer 4 optimizes runtime latency, Layer 1 calibrates relative class ranking, Layer 3 filters non-biological novelties, and Layer 2 enforces legal coverage guarantees.
+        \end{itemize}
+    \end{block}
+    \script{TaxonVision implements four distinct, non-overlapping calibration layers. Quantization scales optimize integer operations, temperature scaling aligns top-1 probabilities, free energy bounds out-of-distribution noise, and split conformal prediction guarantees finite-sample coverage.}
+    \qa{Why cannot a single calibration mechanism solve all uncertainty requirements?}{Quantization addresses numeric representation; temperature scaling modulates slope without changing argmax order; energy detects novel semantics; only conformal prediction outputs rigorous multi-class sets with distribution-free guarantees.}
+\end{frame}
+
+\begin{frame}{Conformal Calibration DAG}{Step-by-Step Split Conformal Pipeline (\texttt{calibrate.py})}
+    \vspace{-0.30cm}
+    \begin{columns}[T]
+        \begin{column}{0.51\textwidth}
+            \begin{block}{The 5-Step Calibration Walkthrough}\scriptsize
+                \begin{enumerate}\setlength{\itemsep}{1pt}
+                    \item \textbf{Holdout Ingestion:} Loads $N_{\text{cal}}$ exchangeable pairs $\{(x_i, y_i)\} \sim \mathcal{D}_{\text{cal}}$ from \texttt{cal\_embeddings.pt}.
+                    \item \textbf{Forward Projection:} Evaluates frozen linear head logits $z_i = \mathbf{W}x_i + \mathbf{b}$ and probabilities $\hat{\pi}(x_i) = \text{softmax}(z_i / T)$.
+                    \item \textbf{Residual Scoring:} Computes true-class residual non-conformity scores: $s_i = 1 - \hat{\pi}_{y_i}(x_i) \in [0, 1]$.
+                    \item \textbf{Finite-Sample Quantile Inflation:}
+                    \[
+                        p = \frac{\lceil(N_{\text{cal}} + 1)(1 - \alpha)\rceil}{N_{\text{cal}}}, \quad \hat{q}_\alpha = \text{Quantile}(\{s_i\}, p)
+                    \]
+                    \item \textbf{YAML Serialization:} Writes $\hat{q}_\alpha$ and $\tau_{\text{OOD}}$ to \texttt{config/conformal\_config.yaml}.
+                \end{enumerate}
+            \end{block}
+        \end{column}
+        \begin{column}{0.47\textwidth}
+            \begin{block}{Finite-Sample Correction Rationale}\scriptsize
+                \begin{itemize}\setlength{\itemsep}{2pt}
+                    \item \textbf{Why $\frac{N+1}{N}$ Inflation?} In finite samples, testing on unseen sample $N+1$ requires breaking ties conservatively to prevent coverage under-coverage.
+                    \item \textbf{Deterministic Serialization:} The calibrated threshold $\hat{q}_\alpha$ is tracked as a Git-committed artifact, ensuring online FastAPI pods evaluate identical bounds.
+                    \item \textbf{Zero Retraining:} Calibration operates entirely on cached embeddings in $<2.5$ seconds on CPU.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+    \script{Stage 6 of our DVC DAG computes the conformal calibration threshold in under three seconds. It feeds holdout calibration embeddings through the classification head, calculates true-class residual errors, inflates the finite-sample empirical quantile, and exports \texttt{conformal\_config.yaml}.}
+    \qa{Why does conformal calibration require the (N+1)/N inflation factor?}{Because the new test observation is the (N+1)-th sample. Conformal theory proves that taking the ceil((N+1)(1-alpha))/N quantile exactly accounts for finite-sample variance without asymptotic approximations.}
+\end{frame}
+
+\begin{frame}{Prediction Set Construction}{Finite-Sample Exchangeability \& Prediction Set Rule}
+    \vspace{-0.20cm}
+    \begin{columns}[T]
+        \begin{column}{0.50\textwidth}
+            \begin{block}{Distribution-Free Set Construction}\scriptsize
+                \begin{itemize}\setlength{\itemsep}{3pt}
+                    \item \textbf{The Conformal Decision Rule:} For any unseen test observation $x_{\text{test}}$, admit class $k$ if its predicted probability meets the conformal cutoff:
+                    \[
+                        \mathcal{C}(x_{\text{test}}) = \left\{ k \in \{1, \dots, K\} : \hat{\pi}_k(x_{\text{test}}) \ge 1 - \hat{q}_\alpha \right\}
+                    \]
+                    \item \textbf{Marginal Guarantee:} Under exchangeability:
+                    \[
+                        \mathbb{P}\left( Y_{\text{test}} \in \mathcal{C}(X_{\text{test}}) \right) \ge 1 - \alpha
+                    \]
+                    \item \textbf{Distribution-Free Property:} Holds unconditionally without Gaussian assumptions, linearity, or calibrated logits.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Strict Partition Isolation Invariant}\scriptsize
+                \begin{itemize}\setlength{\itemsep}{3pt}
+                    \item \textbf{Zero Leakage from \texttt{val\_embeddings.pt}:} The validation split guides Optuna HPO and early stopping. Its residuals are optimistically biased.
+                    \item \textbf{Untouched \texttt{cal\_embeddings.pt}:} Calibration split is strictly isolated from model gradient updates and hyperparameter selection.
+                    \item \textbf{Dynamic Adaptivity:} Clean canonical photos produce $|\mathcal{C}|=1$; fine-grained sister taxa yield multi-class sets; corruptions yield $\emptyset$.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+    \script{The conformal decision rule admits every candidate class whose model probability meets or exceeds $1 - \hat{q}$. When an observation is easy, only the top class satisfies the cutoff, producing a singleton set. When ambiguous, multiple candidate taxa are admitted, guaranteeing 1 minus alpha coverage.}
+    \qa{What breaks conformal coverage in production?}{Covariate shift violating sample exchangeability. If camera-trap hardware or geographic biomes change drastically between calibration and serving, coverage can drop, which our drift monitor flags.}
+\end{frame}
+
+\begin{frame}{Thermodynamic Dual Gate}{Helmholtz Free Energy \& Shannon Entropy Decomposition}
+    \vspace{-0.25cm}
+    \begin{columns}[T]
+        \begin{column}{0.54\textwidth}
+            \begin{block}{Thermodynamic Energy Derivation}\scriptsize
+                Helmholtz Free Energy $E(x; T)$ for logit vector $z \in \mathbb{R}^K$:
+                \[
+                    E(x; T) = -T \ln \sum_{k=1}^K \exp\left(\frac{z_k}{T}\right)
+                \]
+                Substituting Gibbs probabilities $\hat{\pi}_k(x) = \frac{\exp(z_k/T)}{\sum_j \exp(z_j/T)}$:
+                \[
+                    E(x; T) = \underbrace{\sum_{k=1}^K \hat{\pi}_k(x)(-z_k)}_{U(x) \text{ (Expected Internal Energy)}} - T \cdot \underbrace{\left(-\sum_{k=1}^K \hat{\pi}_k(x)\ln \hat{\pi}_k(x)\right)}_{H(\hat{\pi}) \text{ (Shannon Entropy)}}
+                \]
+            \end{block}
+        \end{column}
+        \begin{column}{0.44\textwidth}
+            \begin{block}{The Softmax Shift-Invariance Flaw}\scriptsize
+                \begin{itemize}\setlength{\itemsep}{2pt}
+                    \item \textbf{Softmax Compression:} $\text{softmax}(z) = \text{softmax}(z + c)$. If all logits are tiny ($z_k \approx -10$), softmax still forces $\sum \hat{\pi}_k = 1$, yielding false confidence on non-biological objects.
+                    \item \textbf{Energy Magnitude Preserved:} Free energy scales linearly with logit magnitudes:
+                    \[
+                        z_k \ll 0 \implies E(x; T) \gg \tau_{\text{OOD}}
+                    \]
+                    \item \textbf{Dual Role:} $U(x)$ measures activation deficit while $H(\hat{\pi})$ measures decision ambiguity.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+    \script{By decomposing Helmholtz Free Energy into internal energy U and Shannon entropy H, we uncover why standard softmax fails on non-biological anomalies. Softmax is shift-invariant and hallucinates confidence on tiny logits. Helmholtz Free Energy preserves total activation magnitude, reliably detecting out-of-domain outliers.}
+    \qa{How does Helmholtz Free Energy relate to probability density?}{In statistical mechanics, free energy is inversely proportional to the log-likelihood of the marginal data distribution p(x). High free energy indicates an input lies in an unpopulated region of feature space.}
+\end{frame}
+
+\begin{frame}{Predictive Entropy \& Triage}{Normalized Shannon Entropy for Clutter \& Outlier Rejection}
+    \vspace{-0.25cm}
+    \begin{columns}[T]
+        \begin{column}{0.50\textwidth}
+            \begin{block}{Normalized Entropy Formulation}\scriptsize
+                Normalized Shannon Entropy bounds predictive dispersion to $[0, 1]$:
+                \[
+                    \bar{H}(\hat{\pi}) = -\frac{1}{\ln K} \sum_{k=1}^K \hat{\pi}_k(x) \ln \hat{\pi}_k(x) \in [0, 1]
+                \]
+                \begin{itemize}\setlength{\itemsep}{1pt}
+                    \item \textbf{Empty Camera Traps / Blur:} Wind-blown foliage drives $\hat{\pi} \to \mathcal{U}(1/K)$, so $\bar{H}(\hat{\pi}) \to 1.0$.
+                    \item \textbf{Margin Sampling Pair:} Evaluates margin $M(x) = \hat{\pi}_{(1)}(x) - \hat{\pi}_{(2)}(x)$ in \texttt{active\_learning/query.py}.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            % 2D TikZ Quadrant Diagram: Energy vs. Normalized Entropy
+            \begin{center}
+            \resizebox{0.95\linewidth}{!}{
+            \begin{tikzpicture}[
+                >=stealth, thick,
+                font=\sffamily\tiny
+            ]
+                % Coordinate axes
+                \draw[->, thick, TaxonDark] (0, 0) -- (4.2, 0) node[right] {$\bar{H}(\hat{\pi})$};
+                \draw[->, thick, TaxonDark] (0, 0) -- (0, 3.6) node[above] {$E(x; T)$};
+
+                % Threshold dividers
+                \draw[dashed, gray!60] (2.1, 0) -- (2.1, 3.4);
+                \draw[dashed, red!70] (0, 1.8) -- (4.0, 1.8) node[right, red!85!black] {$\tau_{\text{OOD}}$};
+
+                % Quadrant 1: Bottom-Left (Inlier)
+                \node[align=center, fill=plantgreen!15, draw=plantgreen!80, rounded corners=2pt, inner sep=2pt] at (1.05, 0.9) {
+                    \textbf{Confident Inlier}\\[-1pt]
+                    $|\mathcal{C}(x)| = 1$\\[-1pt]
+                    \textcolor{plantgreen!90!black}{Fast-Path ($<15$\,ms)}
+                };
+
+                % Quadrant 2: Bottom-Right (Sister Taxa)
+                \node[align=center, fill=signalorange!15, draw=signalorange!80, rounded corners=2pt, inner sep=2pt] at (3.15, 0.9) {
+                    \textbf{Sister-Taxa}\\[-1pt]
+                    $|\mathcal{C}(x)| \in [2, 3]$\\[-1pt]
+                    \textcolor{signalorange!90!black}{Vision-RAG Card}
+                };
+
+                % Quadrant 3: Top-Right (Clutter)
+                \node[align=center, fill=gray!20, draw=gray!70, rounded corners=2pt, inner sep=2pt] at (3.15, 2.6) {
+                    \textbf{Diffuse Clutter}\\[-1pt]
+                    $\bar{H} \to 1 \land E > \tau$\\[-1pt]
+                    \textcolor{black!70}{Empty Frame Filter}
+                };
+
+                % Quadrant 4: Top-Left (Semantic OOD)
+                \node[align=center, fill=herbired!15, draw=herbired!80, rounded corners=2pt, inner sep=2pt] at (1.05, 2.6) {
+                    \textbf{Semantic OOD}\\[-1pt]
+                    $E(x; T) > \tau_{\text{OOD}}$\\[-1pt]
+                    \textcolor{herbired!90!black}{Human Review Queue}
+                };
+            \end{tikzpicture}
+            }
+            \end{center}
+        \end{column}
+    \end{columns}
+    \script{Normalized Shannon entropy provides a scale-invariant measure of probability dispersion. By plotting free energy on the vertical axis against normalized entropy on the horizontal axis, our system segments observations into four distinct operational regimes: confident inliers, sister-taxa ties, diffuse camera-trap clutter, and semantic out-of-domain outliers.}
+    \qa{How does the system distinguish diffuse background clutter from subtle sister-taxa ambiguity?}{Sister-taxa ambiguity exhibits low free energy (the model detects genuine biological features) but elevated entropy between two classes. Diffuse clutter exhibits high free energy and maximum entropy across all classes.}
 \end{frame}
 
 \begin{frame}{OOD Detection}{Energy-Based Out-of-Distribution Detection}

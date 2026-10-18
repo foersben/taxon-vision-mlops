@@ -46,7 +46,7 @@
             \providecolor{TaxonAccent}{RGB}{231, 76, 60}
 
             \node[box, fill=TaxonPrimary!20, draw=TaxonPrimary] (ingest) {\textbf{Raw Ingestion}};
-            \node[box, fill=TaxonSecondary!20, draw=TaxonSecondary, right=of ingest] (filter) {\textbf{Quality Filter} \\ \scriptsize Research Grade, CC licenses, >1024px};
+            \node[box, fill=TaxonSecondary!20, draw=TaxonSecondary, right=of ingest] (filter) {\textbf{Quality Filter} \\ \scriptsize Research Grade, CC licenses, $>1024$\,px};
             \node[box, fill=TaxonSecondary!20, draw=TaxonSecondary, right=of filter] (chunk) {\textbf{Visual Chunking} \\ \scriptsize ($I_{\text{child}}$ extraction)};
 
             \node[box, fill=TaxonDark!20, draw=TaxonDark, below=of chunk, yshift=-0.5cm] (hnsw) {\textbf{Single-Stage Filtered HNSW} \\ \scriptsize Spatial/Seasonal Predicates};

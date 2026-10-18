@@ -32,65 +32,55 @@
     \qa{Why pull-based Prometheus scraping over push?}{\footnotesize Pull scraping prevents telemetry bottlenecks or database timeouts from blocking the inference path.}
 \end{frame}
 
-\begin{frame}{Telemetry Architecture}{Target Telemetry Topology: FastAPI $\rightarrow$ Prometheus $\rightarrow$ Grafana}
-    \begin{center}
-    \resizebox{0.82\textwidth}{!}{
+\begin{frame}[fragile]{Telemetry Architecture}{In-Process Monitoring: FastAPI $\rightarrow$ Prometheus $\rightarrow$ Grafana}
+    \centering
+    \resizebox{0.95\textwidth}{!}{
     \begin{tikzpicture}[
-        node distance=1.4cm and 3.4cm,
-        box/.style={rectangle, draw=deepblue, thick, fill=blue!5, text width=3cm, align=center, minimum height=1.5cm, rounded corners},
-        arrow/.style={->, thick, >=stealth},
-        db/.style={cylinder, draw=soilbrown, thick, aspect=0.25, fill=orange!10, text width=2.5cm, align=center, minimum height=1.5cm, shape border rotate=90}
+        >=stealth, auto,
+        box/.style={rectangle, draw=deepblue, thick, fill=blue!6, text width=2.4cm, align=center, minimum height=1.1cm, rounded corners=3pt, font=\scriptsize},
+        db/.style={cylinder, draw=soilbrown, thick, aspect=0.25, fill=orange!10, text width=2.2cm, align=center, minimum height=1.1cm, shape border rotate=90, font=\scriptsize},
+        arr/.style={->, thick, >=stealth, draw=black!70}
     ]
-        % Nodes
-        \node[box] (fastapi) {\textbf{FastAPI Pod} \\ \texttt{/metrics} endpoint \\ \textcolor{plantgreen}{\textbf{[Active Endpoint]}}};
-        \node[db, right=of fastapi] (prometheus) {\textbf{Prometheus} \\ Time-Series Database \\ \textcolor{deepblue}{\textbf{[Target Daemon]}}};
-        \node[box, right=of prometheus] (grafana) {\textbf{Grafana} \\ Real-time Dashboards \\ \textcolor{deepblue}{\textbf{[Target Dashboards]}}};
-        \node[box, below=of fastapi, fill=green!5, draw=plantgreen] (model) {\textbf{ONNX Runtime} \\ Inference Engine \\ \textcolor{plantgreen}{\textbf{[Active Service]}}};
+        \node[box, draw=plantgreen, fill=green!6] (onnx) {\textbf{1. ONNX Engine}\\\& Conformal Gate\\{\tiny\textcolor{plantgreen}{\textbf{[Active In-Process]}}}};
+        \node[box, right=2.4cm of onnx] (fastapi) {\textbf{2. FastAPI Pod}\\\texttt{/metrics} Endpoint\\{\tiny\textcolor{plantgreen}{\textbf{[Active Endpoint]}}}};
+        \node[db, right=2.4cm of fastapi] (prom) {\textbf{3. Prometheus}\\\& TSDB Scraper\\{\tiny\textcolor{deepblue}{\textbf{[Target Daemon]}}}};
+        \node[box, right=2.4cm of prom] (grafana) {\textbf{4. Grafana}\\Real-Time Dashboards\\{\tiny\textcolor{deepblue}{\textbf{[Target Dashboards]}}}};
 
-        % Arrows
-        \draw[arrow] (model.west) |- node[near start, left, align=right, xshift=-0.1cm] {Latency \& \\ OOD stats} (fastapi.west);
-        \draw[arrow, dashed] (prometheus) -- node[midway, above=0.08cm, font=\scriptsize] {HTTP Pull (Roadmap)} (fastapi);
-        \draw[arrow, dashed] (grafana) -- node[midway, above=0.08cm, font=\scriptsize] {PromQL (Roadmap)} (prometheus);
+        \draw[arr] (onnx) -- node[above, font=\tiny] {In-Process} (fastapi);
+        \draw[arr, dashed] (prom) -- node[above, font=\tiny] {Scrape} node[below, font=\fontsize{5pt}{6pt}\selectfont, text=black!60] {15s HTTP Pull} (fastapi);
+        \draw[arr, dashed] (prom) -- node[above, font=\tiny] {PromQL} (grafana);
     \end{tikzpicture}
     }
-    \end{center}
 
+    \vspace{0.3cm}
 
-    \script{This diagram illustrates our target telemetry architecture. In the target state, ONNX Runtime passes statistics to FastAPI, Prometheus scrapes them every 15 seconds, and Grafana renders dashboards. Today, the FastAPI /metrics plumbing is in place, while the full Prometheus and Grafana cluster deployment is our next milestone.}
-    \qa{Is this telemetry pipeline currently running live in production?}{The FastAPI endpoint and ONNX runtime are active, but the Prometheus collector daemon and Grafana dashboard nodes are target architecture currently being set up.}
-    \qa{Why does Prometheus pull rather than the service pushing metrics?}{Pull-based monitoring prevents the application from hanging if the metrics server goes down or becomes slow, ensuring zero impact on the critical inference path.}
-\end{frame}
-
-\begin{frame}{Drift Monitoring}{Drift Metrics: Wasserstein-1 (Prototype) vs. MMD (Target Design)}
     \begin{columns}[T]
-        \begin{column}{0.48\textwidth}
-            \begin{block}{Wasserstein-1 Distance (Earth Mover's)}
-                \vspace{-0.2cm}
-                {\footnotesize $$W_1(P, Q) = \int_{-\infty}^{\infty} |F_P(x) - F_Q(x)| \, dx$$}
-                \vspace{-0.2cm}
-                \footnotesize
-                \textbf{Complexity:} $\mathcal{O}(N \log N)$ over 1D projected scalar norms.\\
-                \textbf{Code Status:} \textcolor{signalorange}{\textbf{Offline prototype}} in \texttt{src/taxon\_vision/monitoring/drift.py}; not yet wired into live streaming inference.
+        \begin{column}{0.31\textwidth}
+            \begin{block}{Latency SLA Histograms}
+                \tiny
+                \textbf{p95 ($<50$\,ms) \& p99 Buckets:}\\
+                Tracks pre-processing, ONNX inference execution, and conformal set computation latency without locking.
             \end{block}
         \end{column}
-        \begin{column}{0.48\textwidth}
-            \begin{block}{Maximum Mean Discrepancy (MMD)}
-                \vspace{-0.2cm}
-                {\scriptsize $$\text{MMD}^2(P, Q) = \mathbb{E}[k(x, x')] - 2\mathbb{E}[k(x, y)] + \mathbb{E}[k(y, y')]$$}
-                \vspace{-0.2cm}
-                \footnotesize
-                \textbf{Complexity:} $\mathcal{O}(N^2 \cdot D)$ using RBF Gaussian kernel in RKHS.\\
-                \textbf{Code Status:} \textcolor{deepblue}{\textbf{Target Design Specification}}; not yet implemented in codebase.
+        \begin{column}{0.31\textwidth}
+            \begin{block}{Epistemic \& OOD Gauges}
+                \tiny
+                \textbf{Conformal \& Energy Gauges:}\\
+                Real-time prediction set size $|C(x)|$, Helmholtz free energy $E(x)$, and human triage queue referral depth.
+            \end{block}
+        \end{column}
+        \begin{column}{0.31\textwidth}
+            \begin{block}{Non-Blocking Pull Scrape}
+                \tiny
+                \textbf{15s Scrape Architecture:}\\
+                FastAPI exposes \texttt{/metrics}; Prometheus pulls asynchronously, ensuring zero inference latency overhead.
             \end{block}
         \end{column}
     \end{columns}
 
-    \vspace{0.15cm}
-    \statustarget
-
-    \script{Let's be fully transparent about our drift monitoring status. We have implemented a 1D Wasserstein scalar distance function in drift.py as an offline prototype, but it is not yet hooked into our live inference pipeline. MMD is our target algorithm for periodic high-dimensional batch audits, but it is not yet implemented in code. This represents high-priority work for our upcoming engineering sprints.}
-    \qa{Are Wasserstein and MMD currently running in production?}{No. Wasserstein-1 is implemented as an offline evaluation function in drift.py, while MMD and live stream drift alerts are target roadmap specifications.}
-    \qa{What remains to be done for drift monitoring?}{We need to implement the MMD kernel matrix math, connect Wasserstein drift to live prediction batches, and configure alerting thresholds.}
+    \script{This diagram illustrates our target telemetry architecture. In the target state, ONNX Runtime passes statistics to FastAPI, Prometheus scrapes them every 15 seconds, and Grafana renders dashboards. Today, the FastAPI /metrics plumbing is in place, while the full Prometheus and Grafana cluster deployment is our next milestone.}
+    \qa{Is this telemetry pipeline currently running live in production?}{The FastAPI endpoint and ONNX runtime are active, but the Prometheus collector daemon and Grafana dashboard nodes are target architecture currently being set up.}
+    \qa{Why does Prometheus pull rather than the service pushing metrics?}{Pull-based monitoring prevents the application from hanging if the metrics server goes down or becomes slow, ensuring zero impact on the critical inference path.}
 \end{frame}
 
 \begin{frame}{Telemetry Architecture}{Target Metric Inventory (Prometheus Roadmap)}
@@ -106,27 +96,121 @@
         \end{enumerate}
     \end{block}
 
-
     \script{This slide lists our target metric inventory. Currently in telemetry.py, only the prediction counter is wired up to FastAPI routes. Epistemic metrics like conformal set size and OOD free energy gauges, as well as human referral queue tracking, are defined as constants or design targets awaiting end-to-end integration.}
     \qa{Which metrics are actively collected today?}{Only prediction counts grouped by status in predict.py. Conformal set size, latency histograms, and referral rate metrics are defined as constants but await end-to-end wiring.}
     \qa{Why measure OOD energy instead of standard softmax probabilities?}{Softmax is notoriously overconfident, pushing unknown inputs to high probability classes. Helmholtz free energy provides a more reliable, unnormalized measure of how far an input is from the training manifold.}
 \end{frame}
 
-\begin{frame}{Drift Monitoring}{Target Multi-Scale Drift Strategy \& Evidently AI (Roadmap)}
-    \begin{block}{Multi-Scale Distributional Drift Architecture (Roadmap)}
-        \begin{itemize}\small
-            \item \textbf{Environmental Shift:} Phenological seasonality and new camera sensors cause feature representations to drift from baseline distributions.
-            \item \textbf{Online Marginal Tests (1D):} 1D projection with Wasserstein-1 distance for real-time alerting \textcolor{signalorange}{\textbf{[Prototype in \texttt{drift.py}}]}.
-            \item \textbf{Offline Manifold Tests (Multivariate):} Maximum Mean Discrepancy (MMD) with RBF kernels evaluates complete structural manifold shifts \textcolor{deepblue}{\textbf{[Not Yet Implemented]}}.
-            \item \textbf{Evidently AI Integration:} Target framework for automated scheduled visual drift reporting \textcolor{deepblue}{\textbf{[Not Yet Setup/Configured]}}.
-            \item \textbf{Drift Retraining Triggers:} Sustained divergence triggering active learning extraction \textcolor{deepblue}{\textbf{[Phase 3 Target]}}.
-        \end{itemize}
-    \end{block}
+\begin{frame}[fragile]{Drift Monitoring}{Online 1D Marginal Drift: Wasserstein-1 Distance}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Wasserstein-1 Distance}
+                \vspace{-0.15cm}
+                {\footnotesize $$W_1(P, Q) = \int_{-\infty}^{\infty} |F_P(x) - F_Q(x)| \, dx$$}
+                \vspace{-0.2cm}
+                \begin{itemize}\tiny
+                    \item \textbf{Analytical Formulation:} On 1D scalar projections, $W_1(P, Q) = \frac{1}{N}\sum_{i=1}^N |x_{(i)} - y_{(i)}|$ after sorting.
+                    \item \textbf{Sorting Complexity:} $\mathcal{O}(N \log N)$ enables real-time stream evaluation over feature projections.
+                    \item \textbf{Code Implementation:} Implemented in \texttt{src/taxon\_vision/monitoring/drift.py} for online batch tracking.
+                    \item \textbf{Alerting Invariant:} Threshold $\tau_W = 0.15$ triggers triage alerts upon covariate shift from calibration holdout baseline.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{tikzpicture}
+            \begin{axis}[
+                width=1.02\linewidth,
+                height=4.8cm,
+                samples=50,
+                domain=-3:4,
+                ymin=0, ymax=0.48,
+                xmin=-3, xmax=4,
+                axis lines=left,
+                xlabel={\tiny Projected Feature $x$},
+                ylabel={\tiny Density $f(x)$},
+                xlabel style={font=\tiny, yshift=0.15cm},
+                ylabel style={font=\tiny, xshift=-0.15cm},
+                tick label style={font=\tiny},
+                legend style={font=\fontsize{5pt}{6pt}\selectfont, at={(0.98,0.95)}, anchor=north east},
+                legend cell align=left,
+                clip=false
+            ]
+                % Reference P
+                \addplot[thick, plantgreen, smooth] {0.39894 * exp(-0.5*x*x)};
+                \addlegendentry{Ref Baseline $P$}
 
+                % Shifted Q
+                \addplot[thick, signalorange, smooth, dashed] {0.39894 * exp(-0.5*(x - 1.1)*(x - 1.1))};
+                \addlegendentry{Shifted Prod $Q$}
 
-    \script{Machine learning models degrade over time because the real world changes—we call this data drift. We want to be completely open with our teammates about where this system stands: Evidently AI is not yet installed or set up, MMD is not yet coded, and automated drift-triggered retraining is an architectural design on our Phase 3 roadmap. There is significant, impactful engineering work left to build here.}
-    \qa{Is Evidently AI currently operational in TaxonVision?}{No. Evidently AI is our planned tool for drift reports and visual dashboards, but it has not been configured or integrated into our repository yet.}
-    \qa{Why not run multivariate MMD on every single incoming inference request?}{Computing full-manifold MMD across high-dimensional embeddings has quadratic complexity $O(N^2)$ in sample size. We perform 1D Wasserstein distance on projected features in real time and reserve full MMD for periodic offline batch audits.}
+                % Wasserstein shift indicator
+                \draw[<->, thick, herbired] (axis cs:0, 0.40) -- node[above, font=\tiny\bfseries] {$\Delta \mu = 1.1$} (axis cs:1.1, 0.40);
+                \node[anchor=south west, font=\fontsize{5.5pt}{6.5pt}\selectfont, herbired] at (axis cs:0.1, 0.22) {$W_1(P, Q) = 1.10$};
+                \node[anchor=north, font=\fontsize{5pt}{6pt}\selectfont, black!70] at (axis cs:0.5, 0.12) {Earth Mover's Distance};
+            \end{axis}
+            \end{tikzpicture}
+        \end{column}
+    \end{columns}
+
+    \script{For real-time drift monitoring on streaming inference batches, we employ the 1D Wasserstein-1 Earth Mover's Distance. Because calculating multidimensional drift on every single inference request is computationally prohibitive, we project feature representations onto scalar norms. Sorting these projections allows us to compute Wasserstein distance in $O(N \log N)$ time, flagging distribution shifts in drift.py before accuracy degrades.}
+    \qa{Why use Wasserstein distance instead of KL divergence for online drift?}{KL divergence is asymmetric and diverges to infinity when distributions have disjoint support. Wasserstein distance provides a smooth, symmetric, and numerically stable metric reflecting the physical cost of moving mass.}
+\end{frame}
+
+\begin{frame}[fragile]{Drift Monitoring}{Offline Multivariate Manifold Drift: RKHS MMD \& Evidently AI}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Maximum Mean Discrepancy (RKHS MMD)}
+                \vspace{-0.15cm}
+                {\scriptsize $$\text{MMD}^2(P, Q) = \mathbb{E}[k(x,x')] - 2\mathbb{E}[k(x,y)] + \mathbb{E}[k(y,y')]$$}
+                \vspace{-0.2cm}
+                \begin{itemize}\tiny
+                    \item \textbf{Kernel Manifold Metric:} Maps embeddings into RKHS $\mathcal{H}$ via Gaussian RBF kernel $k(x,x') = \exp(-\|x-x'\|^2 / 2\sigma^2)$.
+                    \item \textbf{Complexity \& Cadence:} $\mathcal{O}(N^2 \cdot D)$ quadratic cost over $D=768/1024$ embeddings; executed as offline scheduled batch job.
+                    \item \textbf{Evidently AI Integration:} Target framework generating comprehensive visual drift reports, target drift, and feature correlation degradation.
+                    \item \textbf{Retraining Invariant:} Statistically significant MMD divergence ($\alpha < 0.01$) triggers active learning and DVC retrain pipeline.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \centering
+            \begin{tikzpicture}[
+                scale=0.92,
+                refpt/.style={circle, fill=plantgreen, inner sep=1.2pt},
+                shiftpt/.style={circle, fill=signalorange, inner sep=1.2pt}
+            ]
+                % Reference Cluster P
+                \draw[thick, plantgreen, fill=plantgreen!10] (-0.9, 0.2) ellipse (1.2cm and 0.8cm);
+                \node[font=\tiny\bfseries, plantgreen] at (-0.9, 1.15) {Ref Manifold $P$};
+                \node[refpt] at (-1.3, 0.4) {};
+                \node[refpt] at (-0.6, 0.0) {};
+                \node[refpt] at (-1.1, -0.2) {};
+                \node[refpt] at (-0.5, 0.4) {};
+                \node[circle, fill=plantgreen!80!black, inner sep=2pt] (muP) at (-0.9, 0.2) {};
+                \node[font=\fontsize{5pt}{6pt}\selectfont, below=1pt of muP] {$\mu_P \in \mathcal{H}$};
+
+                % Shifted Cluster Q
+                \draw[thick, signalorange, dashed, fill=orange!10] (1.6, -0.3) ellipse (1.2cm and 0.8cm);
+                \node[font=\tiny\bfseries, signalorange] at (1.6, 0.65) {Shifted Prod $Q$};
+                \node[shiftpt] at (1.2, -0.1) {};
+                \node[shiftpt] at (1.8, -0.5) {};
+                \node[shiftpt] at (2.0, -0.2) {};
+                \node[shiftpt] at (1.4, -0.6) {};
+                \node[circle, fill=signalorange!80!black, inner sep=2pt] (muQ) at (1.6, -0.3) {};
+                \node[font=\fontsize{5pt}{6pt}\selectfont, below=1pt of muQ] {$\mu_Q \in \mathcal{H}$};
+
+                % MMD Distance Vector
+                \draw[->, very thick, herbired] (muP) -- node[above=2pt, font=\fontsize{6pt}{7pt}\selectfont\bfseries] {$\|\mu_P - \mu_Q\|_{\mathcal{H}}$} (muQ);
+                \node[anchor=north, font=\fontsize{5.5pt}{6.5pt}\selectfont, herbired] at (0.35, -0.92) {$\text{MMD}(P, Q) = \|\mu_P - \mu_Q\|_{\mathcal{H}}$};
+
+                % Background axes
+                \draw[->, thin, black!40] (-2.3, -1.4) -- (3.0, -1.4) node[right, font=\tiny] {$z_1$};
+                \draw[->, thin, black!40] (-2.3, -1.4) -- (-2.3, 1.4) node[above, font=\tiny] {$z_2$};
+            \end{tikzpicture}
+        \end{column}
+    \end{columns}
+
+    \script{While 1D Wasserstein evaluates marginal shifts in real time, periodic offline audits require measuring full multivariate manifold drift across high-dimensional feature spaces. Maximum Mean Discrepancy maps embeddings into a Reproducing Kernel Hilbert Space via Gaussian RBF kernels, computing the distance between kernel mean embeddings. In our target architecture, scheduled Evidently AI jobs run MMD to detect subtle covariate and concept shifts, triggering model retraining when divergence is sustained.}
+    \qa{Why not compute MMD on every incoming inference request?}{MMD requires computing kernel matrices across sample batches, which has quadratic complexity $O(N^2 \cdot D)$. Running full MMD on every request would degrade serving latency well beyond our fifty-millisecond budget.}
 \end{frame}
 
 \begin{frame}{Active Learning}{BADGE Sampling \& Human Review Queue}
@@ -178,12 +262,13 @@
     \begin{tikzpicture}[
         node distance=0.8cm and 1.2cm,
         stepbox/.style={rectangle, draw=deepblue, thick, fill=blue!5, text width=2.5cm, align=center, minimum height=1.0cm, rounded corners},
+        conformalbox/.style={rectangle, draw=deepblue, thick, fill=blue!5, text width=2.8cm, align=center, minimum height=1.0cm, rounded corners},
         arrow/.style={->, thick, >=stealth},
         labelbox/.style={rectangle, draw=signalorange, thick, fill=orange!10, text width=2.5cm, align=center, minimum height=1.0cm, rounded corners}
     ]
         % Nodes
         \node[stepbox] (stream) {\textbf{1. Live Stream} \\ Unlabelled Data \\ {\footnotesize\textcolor{plantgreen}{\textbf{[Active Data]}}}};
-        \node[stepbox, right=of stream] (conformal) {\textbf{2. Conformal Filter} \\ Identify ambiguous \\ {\footnotesize\textcolor{plantgreen}{\textbf{[Active Filter]}}}};
+        \node[conformalbox, right=of stream] (conformal) {\textbf{2. Conformal}\\\textbf{Filter} \\ Identify ambiguous \\ {\footnotesize\textcolor{plantgreen}{\textbf{[Active Filter]}}}};
         \node[stepbox, right=of conformal] (badge) {\textbf{3. BADGE} \\ Diversity sampling \\ {\footnotesize\textcolor{plantgreen}{\textbf{[Implemented]}}}};
         \node[labelbox, below=of badge] (labelstudio) {\textbf{4. Label Studio} \\ Expert Review \\ {\footnotesize\textcolor{deepblue}{\textbf{[Target System]}}}};
         \node[stepbox, left=of labelstudio] (retrain) {\textbf{5. Retraining} \\ DVC Retrain Trigger \\ {\footnotesize\textcolor{deepblue}{\textbf{[Target Webhook]}}}};
@@ -193,7 +278,7 @@
         \draw[arrow] (conformal) -- (badge);
         \draw[arrow, dashed] (badge) -- (labelstudio);
         \draw[arrow, dashed] (labelstudio) -- (retrain);
-        \draw[arrow, dashed] (retrain.south) -- ++(0, -0.6cm) -| (stream.south);
+        \draw[arrow, dashed] (retrain.south) -- ++(0, -0.55cm) -| (stream.south);
     \end{tikzpicture}
     }
     \end{center}

@@ -29,28 +29,90 @@
     \qa{How does the Cloudflare Zero Trust webhook enhance security?}{It acts as an outbound-authenticated tunnel, meaning our private Jenkins controller does not need a public IP or open inbound firewall ports to receive the merge event.}
 \end{frame}
 
-\begin{frame}{Cloud Quality Gates}{GitHub Actions Workflow Suite: Isolation \& Public PR Gating}
-    \begin{block}{Core Workflow: \texttt{.github/workflows/ci.yml} (PR \& Push Matrix)}
-        \begin{itemize}\tiny
-            \item \textbf{Job 1 (Code, Security \& Type Quality):} Ubuntu-latest CPU \texttt{ci-dev} environment; DagsHub DVC model checkpoint hydration; pre-commit hooks (\texttt{SKIP=enforce-author-identity,openwiki-sync}); OKF v0.2 validation; two-pass pytest (Pass 1: Unit + Coverage $\ge 80\%$, Pass 2: Integration + Conformal Invariants).
-            \item \textbf{Job 2 (Complexipy Cognitive Complexity):} SARIF scan enforcing cognitive complexity $\le 15$; results uploaded via CodeQL \texttt{upload-sarif@v4} directly to GitHub Code Scanning alerts.
-            \item \textbf{Job 3 (Architecture \& Line Count Profile):} Boyter SCC container scan (\texttt{ghcr.io/boyter/scc:master}) analyzing LOC and codebase composition.
-            \item \textbf{Job 4 (Documentation Strict Build):} Generates OKF D3 knowledge graph, compiles Zensical MkDocs with \texttt{-{}-strict}, publishes to GitHub Pages on \texttt{main} merge.
-            \item \textbf{Job 5 (Build \& Publish Serving Container):} Docker Buildx builds production image and publishes to GHCR tagged with commit SHA and \texttt{latest}.
-        \end{itemize}
-    \end{block}
+\begin{frame}[fragile]{Cloud Quality Gates}{\texttt{.github/workflows/ci.yml}: 5-Job Parallel \& Sequential DAG}
+    \centering
+    \resizebox{0.95\textwidth}{!}{
+    \begin{tikzpicture}[
+        >=stealth, auto,
+        job/.style={rectangle, draw=deepblue, thick, fill=blue!6, text width=2.4cm, align=center, minimum height=0.7cm, rounded corners=3pt, font=\fontsize{6pt}{7pt}\selectfont},
+        crit/.style={rectangle, draw=herbired, thick, fill=red!6, text width=2.4cm, align=center, minimum height=0.7cm, rounded corners=3pt, font=\fontsize{6pt}{7pt}\selectfont\bfseries},
+        sync/.style={rectangle, draw=plantgreen, thick, fill=green!6, text width=2.4cm, align=center, minimum height=0.7cm, rounded corners=3pt, font=\fontsize{6pt}{7pt}\selectfont\bfseries},
+        arr/.style={->, thick, >=stealth, draw=black!70}
+    ]
+        % Trigger Node
+        \node[rectangle, draw=signalorange, thick, fill=orange!10, text width=2.2cm, align=center, minimum height=0.7cm, rounded corners=3pt, font=\fontsize{6pt}{7pt}\selectfont\bfseries] (trigger) {Push / PR Event\\ \texttt{develop} / \texttt{main}};
 
-    \begin{block}{Auxiliary Workflows: Automated Repository Maintenance}
-        \begin{itemize}\tiny
-            \item \textbf{Scheduled Evidence Indexing (\texttt{openwiki-update.yml}):} Scheduled weekly cron (Monday 08:00 UTC) running Gemini 3.8 Flash to index claims, architecture, and tests into \texttt{openwiki/}.
-            \item \textbf{Semantic Tag Release Pipeline (\texttt{release.yaml}):} Triggers on \texttt{v*} tags; verifies version alignment between \texttt{pyproject.toml} and \texttt{taxon\_vision.\_\_version\_\_}, packages wheels, and drafts GitHub Releases.
-        \end{itemize}
-    \end{block}
+        % Parallel Jobs
+        \node[crit, right=1.0cm of trigger, yshift=0.85cm] (job1) {Job 1: Tests \& Quality\\ \scriptsize\textnormal{\texttt{ci-dev} / Pytest $\ge 80\%$}};
+        \node[job, right=1.0cm of trigger, yshift=0.0cm] (job2) {\textbf{Job 2: complexipy}\\ \scriptsize\textnormal{SARIF Scan $\le 15$}};
+        \node[job, right=1.0cm of trigger, yshift=-0.85cm] (job3) {\textbf{Job 3: Boyter SCC}\\ \scriptsize\textnormal{LOC \& Code Stats}};
 
+        % Downstream Sequential Jobs
+        \node[sync, right=1.0cm of job1] (job4) {Job 4: Zensical Docs\\ \scriptsize\textnormal{\texttt{-{}-strict} $\to$ Pages}};
+        \node[sync, right=1.0cm of job2] (job5) {Job 5: GHCR OCI\\ \scriptsize\textnormal{Docker Buildx Multi-Stage}};
 
-    \script{On our public cloud perimeter, GitHub Actions serves as the first line of defense. The primary CI workflow executes five decoupled jobs: static code quality with strict eighty percent coverage enforcement, SARIF-based cognitive complexity scanning with Complexipy, code profiling, Zensical documentation builds deployed to GitHub Pages, and container image publishing to GHCR. Two auxiliary workflows handle automated OpenWiki knowledge graphs every Monday and semantic release packaging whenever a tag is pushed. Crucially, public cloud runners never touch private bare-metal servers or production credentials.}
+        % Connections
+        \draw[arr] (trigger.east) -- ++(0.4,0) |- (job1.west);
+        \draw[arr] (trigger.east) -- (job2.west);
+        \draw[arr] (trigger.east) -- ++(0.4,0) |- (job3.west);
+
+        \draw[arr] (job1.east) -- node[above, font=\fontsize{5pt}{6pt}\selectfont] {\texttt{needs: [test]}} (job4.west);
+        \draw[arr] (job1.east) -- ++(0.4,0) |- (job5.west);
+        \draw[arr] (job2.east) -- (job5.west);
+    \end{tikzpicture}
+    }
+
+    \vspace{-0.05cm}
+
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Isolation \& Verification Boundary}
+                \begin{itemize}\tiny
+                    \item \textbf{Isolated CPU Runners:} Ubuntu-latest \texttt{ci-dev} runner; zero network ingress to bare-metal hardware or production secrets.
+                    \item \textbf{DagsHub Checkpoints:} Pulls minimal reference model checkpoints via DVC content-addressed cache.
+                    \item \textbf{Two-Pass Pytest:} Pass 1 enforces branch coverage $\ge 80\%$; Pass 2 verifies integration \& conformal guarantees.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Static Analysis \& Container Registry}
+                \begin{itemize}\tiny
+                    \item \textbf{Cognitive Complexity:} \texttt{complexipy} outputs SARIF, uploaded via \texttt{upload-sarif@v4} to GitHub Security tab.
+                    \item \textbf{Strict Documentation:} Zensical build compiles MkDocs with \texttt{-{}-strict}, publishing to GitHub Pages on \texttt{main}.
+                    \item \textbf{GHCR Packaging:} Docker Buildx creates multi-stage container tagged with Git SHA and \texttt{latest}.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \script{On our public cloud perimeter, GitHub Actions serves as the first line of defense. The primary CI workflow executes five decoupled jobs: static code quality with strict eighty percent coverage enforcement, SARIF-based cognitive complexity scanning with Complexipy, code profiling, Zensical documentation builds deployed to GitHub Pages, and container image publishing to GHCR. Crucially, public cloud runners never touch private bare-metal servers or production credentials.}
     \qa{Why split the test suite into two passes in ci.yml?}{Pass 1 runs fast unit tests and fails immediately if total branch coverage falls below eighty percent. Pass 2 executes heavier integration and conformal invariant tests in fail-fast mode.}
     \qa{How does the complexipy job integrate with GitHub security features?}{It generates an industry-standard SARIF report, uploaded via the CodeQL action directly into the GitHub Security tab as automated code-quality advisories.}
+\end{frame}
+
+\begin{frame}{Cloud Quality Gates}{Automated Repository Maintenance Workflows}
+    \begin{block}{Scheduled Evidence Indexing (\texttt{.github/workflows/openwiki-update.yml})}
+        \begin{itemize}\tiny
+            \item \textbf{Trigger \& Cadence:} Scheduled weekly cron (\texttt{0 8 * * 1}, Monday 08:00 UTC) with manual \texttt{workflow\_dispatch} fallback.
+            \item \textbf{Autonomous Indexer:} Executes Gemini 3.8 Flash via OpenWiki subagent protocol to audit codebase claims against ground-truth unit tests.
+            \item \textbf{Incremental Knowledge Bundle:} Updates markdown dossiers, dependency invariants, and claim verification receipts in \texttt{openwiki/}.
+            \item \textbf{Isolated Commit Bot:} Uses a dedicated GitHub Actions bot token to push signed documentation updates with zero impact on production pipelines.
+        \end{itemize}
+    \end{block}
+
+    \vspace{-0.05cm}
+
+    \begin{block}{Semantic Tag Release Pipeline (\texttt{.github/workflows/release.yaml})}
+        \begin{itemize}\tiny
+            \item \textbf{Semantic Tag Trigger:} Invoked automatically upon pushing annotated Git tags matching \texttt{v*.*.*}.
+            \item \textbf{Version Invariant Verification:} Strictly asserts version parity between \texttt{pyproject.toml} and runtime \texttt{taxon\_vision.\_\_version\_\_}.
+            \item \textbf{Hermetic Wheel Packaging:} Runs \texttt{pixi run -e dev flit build} to produce immutable wheels and source distribution tarballs.
+            \item \textbf{Cryptographic Release Draft:} Generates SHA256 checksums and drafts an official GitHub Release with automated changelogs.
+        \end{itemize}
+    \end{block}
+
+    \script{In addition to PR verification, GitHub Actions manages automated repository maintenance. Every Monday at 08:00 UTC, the OpenWiki workflow runs Gemini 3.8 Flash to index claims and unit tests into our persistent knowledge base. When a developer pushes a semantic version tag, release.yaml verifies version alignment across the codebase, packages hermetic wheels, and publishes a GitHub Release with cryptographic checksums.}
+    \qa{Why run OpenWiki on a scheduled cron rather than every commit?}{Indexing claims across the entire repository requires synthesizing code and test semantics. Running weekly avoids unnecessary token usage while keeping architecture documentation continuously fresh.}
 \end{frame}
 
 \begin{frame}{Jenkins Automation}{Jenkinsfile Execution: Step-by-Step Pipeline Trace}
@@ -71,56 +133,147 @@
     \qa{Why is \texttt{PYTHONUNBUFFERED=1} important for CI logs?}{By default, Python buffers stdout, which means logs might not appear in the Jenkins console for minutes during heavy ML training loops. Unbuffered logging flushes output instantly, allowing developers to monitor progress in real time.}
 \end{frame}
 
-\begin{frame}{On-Premise Automation}{Declarative Jenkinsfile: Parameters, Agent Pod \& 7-Stage DAG}
-    \vspace{-0.15cm}
-    \begin{block}{Declarative Pipeline Envelope \& Agent Specification}
-        \begin{itemize}\tiny
-            \item \textbf{Pipeline Parameters:} \texttt{RETRAIN\_MODEL} (boolean flag to force GPU retraining), \texttt{TUNE\_HYPERPARAMETERS} (boolean to trigger Optuna search), \texttt{EXTRACTOR} (string backbone selector, default \texttt{dinov3}).
-            \item \textbf{Kubernetes Ephemeral Agent:} Dynamically provisioned in \texttt{jenkins-ci} namespace; runs \texttt{ghcr.io/prefix-dev/pixi:latest}; mounts \texttt{emptyDir} \texttt{rattler-cache} at \texttt{/root/.cache/rattler/cache} for fast package caching.
-            \item \textbf{Build Governance \& Credentials:} \texttt{buildDiscarder} retains 15 builds/14 days; global 240m pipeline timeout; \texttt{DAGSHUB\_TOKEN} credential binding; \texttt{PYTHONUNBUFFERED=1} and thread limits (\texttt{OMP}, \texttt{MKL}, \texttt{OPENBLAS=4}).
-        \end{itemize}
-    \end{block}
+\begin{frame}{On-Premise Automation}{\texttt{Jenkinsfile}: Parameters, Agent Pod \& Secret Bindings}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Declarative Pipeline Parameters}
+                \begin{itemize}\footnotesize
+                    \item \textbf{\texttt{RETRAIN\_MODEL}:} Boolean switch (default: \texttt{false}); forces execution of Stage 6 GPU retraining and DVC reproduction.
+                    \item \textbf{\texttt{TUNE\_HYPERPARAMETERS}:} Boolean switch (default: \texttt{false}); enables Optuna Bayesian search over CBL loss and learning rate.
+                    \item \textbf{\texttt{EXTRACTOR}:} Choice parameter (\texttt{dinov3}, \texttt{bioclip2}, \texttt{dinov2}, \texttt{mobilenetv4}); selects candidate feature backbone.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Ephemeral K8s Agent \& Bindings}
+                \begin{itemize}\footnotesize
+                    \item \textbf{Agent Pod:} Dynamically provisioned in \texttt{jenkins-ci} namespace using \texttt{ghcr.io/prefix-dev/pixi:latest}.
+                    \item \textbf{Rattler Cache:} Mounts \texttt{emptyDir} volume at \texttt{/root/.cache/rattler/cache} for fast Conda solver cache.
+                    \item \textbf{Credential Ingestion:} Injects \texttt{DAGSHUB\_TOKEN} from Jenkins credentials store; Linux Secret Service integration.
+                    \item \textbf{Runtime Governance:} 240m pipeline timeout; \texttt{buildDiscarder} keeps 15 builds; \texttt{PYTHONUNBUFFERED=1}.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
 
-    \begin{block}{7-Stage Enterprise Execution Architecture}
-        \begin{itemize}\tiny
-            \item \textbf{Stage 1 (Prepare Toolchain):} Rattler cache mount, git/kubectl check, and DVC pull checkpoint hydration.
-            \item \textbf{Stage 2 (Static Quality \& Invariants):} Parallel execution of Ruff lint/format, Mypy strict typing, and license/OKF validation.
-            \item \textbf{Stage 3--4 (Unit \& Integration Tests):} Pytest unit suite; integration and conformal coverage invariants with coverage append ($\ge 80\%$).
-            \item \textbf{Stage 5 (Documentation Strict Build):} Automated OKF graph visualization and Zensical strict documentation build.
-            \item \textbf{Stage 6 (Model Training GPU):} Conditional on \texttt{develop}/\texttt{main} with changeset in \texttt{data/**}, \texttt{models/**}, \texttt{pipelines/**} or \texttt{RETRAIN\_MODEL}; swaps to GPU agent pod with 150m stage timeout.
-            \item \textbf{Stage 7 (Deploy to Kubernetes):} Rolling deployment to \texttt{taxon-vision} namespace via \texttt{kubectl apply -f deploy/k8s/api-deployment.yaml} and rollout status verification.
-        \end{itemize}
-    \end{block}
-
-
-    \script{When code merges to develop or main, on-premise Jenkins takes over via declarative pipeline with dynamic parameters. It runs on an ephemeral k3s agent, mounting an emptyDir Rattler cache for fast dependency hydration across seven stages: toolchain setup, parallel quality audits, unit tests, conformal invariants, documentation builds, GPU training in an isolated pod, and rolling production deployment.}
+    \script{When code merges to develop or main, on-premise Jenkins takes over via a declarative pipeline with dynamic parameters. It runs on an ephemeral k3s agent, mounting an emptyDir Rattler cache for fast dependency hydration. Developers can selectively trigger GPU retraining or Optuna Bayesian tuning via typed pipeline parameters, while production credentials like DAGSHUB\_TOKEN are injected in-flight securely.}
     \qa{Why mount an emptyDir volume for the Rattler package cache in the agent?}{Pixi uses the Rattler package solver and cache. Without an ephemeral cache mount, every build would re-download Conda packages from scratch.}
-    \qa{How does Jenkins ensure training only runs when relevant code changes?}{Stage 6 uses declarative changeset conditions matching data, models, or pipelines paths, or the RETRAIN\_MODEL parameter.}
+    \qa{What does the EXTRACTOR parameter control?}{It selects the candidate feature extractor backbone during training, allowing rapid comparison across DINOv3, BioCLIP-2, DINOv2, and MobileNetV4 without code changes.}
 \end{frame}
 
-\begin{frame}{Ephemeral GPU Runner}{K3s Pod Specification \& \texttt{jenkins\_gpu\_train.sh} Trace}
-    \begin{block}{GPU Pod Specification (\texttt{deploy/k8s/jenkins-gpu-pod.yaml})}
+\begin{frame}[fragile]{On-Premise Automation}{\texttt{Jenkinsfile}: 7-Stage Enterprise Execution Flow}
+    \centering
+    \resizebox{0.95\textwidth}{!}{
+    \begin{tikzpicture}[
+        >=stealth, auto,
+        stg/.style={rectangle, draw=deepblue, thick, fill=blue!6, text width=1.45cm, align=center, minimum height=0.95cm, rounded corners=3pt, font=\fontsize{5.5pt}{6.5pt}\selectfont},
+        gpu/.style={rectangle, draw=signalorange, thick, fill=orange!10, text width=1.45cm, align=center, minimum height=0.95cm, rounded corners=3pt, font=\fontsize{5.5pt}{6.5pt}\selectfont\bfseries},
+        deploy/.style={rectangle, draw=plantgreen, thick, fill=green!8, text width=1.45cm, align=center, minimum height=0.95cm, rounded corners=3pt, font=\fontsize{5.5pt}{6.5pt}\selectfont\bfseries},
+        arr/.style={->, thick, >=stealth, draw=black!70}
+    ]
+        \node[stg] (s1) {\textbf{1. Prepare}\\Toolchain\\\& Pixi};
+        \node[stg, right=0.35cm of s1] (s2) {\textbf{2. Quality}\\Ruff, Mypy\\\& OKF};
+        \node[stg, right=0.35cm of s2] (s3) {\textbf{3. Unit}\\Pytest Fast\\$\ge 80\%$ Cov};
+        \node[stg, right=0.35cm of s3] (s4) {\textbf{4. Invariants}\\Conformal\\\& Integr.};
+        \node[stg, right=0.35cm of s4] (s5) {\textbf{5. Docs}\\Zensical\\MkDocs};
+        \node[gpu, right=0.35cm of s5] (s6) {\textbf{6. GPU Train}\\Optuna / DVC\\(Conditional)};
+        \node[deploy, right=0.35cm of s6] (s7) {\textbf{7. Deploy}\\Rolling Apply\\k3s Prod};
+
+        \draw[arr] (s1) -- (s2);
+        \draw[arr] (s2) -- (s3);
+        \draw[arr] (s3) -- (s4);
+        \draw[arr] (s4) -- (s5);
+        \draw[arr] (s5) -- (s6);
+        \draw[arr] (s6) -- (s7);
+    \end{tikzpicture}
+    }
+
+    \vspace{0.2cm}
+
+    \begin{block}{Stages 1--5: Fast CPU Gating \& Verification}
         \begin{itemize}\tiny
-            \item \textbf{Cluster \& Namespace Isolation:} Deployed to \texttt{jenkins-ci} namespace under dedicated \texttt{jenkins-agent} ServiceAccount.
-            \item \textbf{Resource Quotas \& Time-Slicing:} Requests $2$ GiB RAM / $1000$m CPU; limits $16$ GiB RAM, $8$ CPU cores, and \texttt{nvidia.com/gpu: "1"} (1 virtual slice of RTX 5070 Ti).
-            \item \textbf{Persistent Host Storage Mounts:} Rattler \texttt{emptyDir} cache; hostPath mounts for HuggingFace model weights (\texttt{/var/lib/taxon-vision/hf-cache}), Optuna SQLite database (\texttt{/var/lib/taxon-vision/optuna}), and embedding tensors (\texttt{/var/lib/taxon-vision/embeddings}).
+            \item \textbf{Deterministic Environment:} Mounts Rattler package cache; parallelizes Ruff linting, Mypy strict typing, and OKF v0.2 validation.
+            \item \textbf{Two-Pass Testing \& Docs:} Fast unit suite fails immediately on regression; integration pass verifies conformal bounds; Zensical builds MkDocs.
+        \end{itemize}
+    \end{block}
+    \begin{block}{Stages 6--7: Conditional GPU Training \& Rolling Rollout}
+        \begin{itemize}\tiny
+            \item \textbf{Stage 6 Trigger Invariant:} Activates on \texttt{develop}/\texttt{main} if changesets touch \texttt{data/**}, \texttt{models/**}, \texttt{pipelines/**}, or \texttt{RETRAIN\_MODEL=true}. Swaps to GPU pod with 150m stage timeout.
+            \item \textbf{Stage 7 Production Release:} Applies \texttt{deploy/k8s/api-deployment.yaml} to \texttt{taxon-vision} namespace and monitors rollout status.
         \end{itemize}
     \end{block}
 
-    \begin{block}{Execution Lifecycle Trace (\texttt{scripts/ci/jenkins\_gpu\_train.sh})}
-        \begin{itemize}\tiny
-            \item \textbf{1. Bootstrap \& Credentials:} Installs git/kubectl via Pixi global; configures local SeaweedFS S3 credentials (\texttt{taxonadmin}).
-            \item \textbf{2. Embedding Cache Priming:} Checks \texttt{/var/lib/taxon-vision/embeddings/*.pt} on host or pulls from cluster \texttt{local-seaweedfs} to bypass expensive feature extraction.
-            \item \textbf{3. Pipeline Execution:} Invokes \texttt{dvc repro} with hyperparameter overrides (\texttt{-S training.tune=true}, \texttt{-S model.extractor=...}).
-            \item \textbf{4. Multi-Tier Cache Synchronization:} Copies newly generated \texttt{.pt} tensors to host tier and pushes Epistemic Diamond to \texttt{local-seaweedfs}.
-            \item \textbf{5. DagsHub Remote Push \& Lineage Lock:} Pushes \texttt{head.pt} and \texttt{model\_int8.onnx} to DagsHub S3 remote (\texttt{origin}); auto-commits \texttt{dvc.lock}, \texttt{conformal\_config.yaml}, and \texttt{reports/*.json} with \texttt{[skip ci]}.
-        \end{itemize}
+    \script{This pipeline diagram maps the 7 sequential stages of our declarative Jenkinsfile. The first five stages execute rapidly on CPU: toolchain setup, parallel quality audits, unit tests, conformal invariants, and documentation generation. Stages 6 and 7 handle conditional GPU model training and zero-downtime rolling deployment to our Kubernetes cluster.}
+    \qa{How does Jenkins ensure training only runs when relevant code changes?}{Stage 6 uses declarative changeset conditions matching data, models, or pipelines paths, or the RETRAIN\_MODEL parameter.}
+    \qa{Why is stage 7 decoupled from model training?}{Decoupling allows the pipeline to deploy configuration or API changes rapidly without waiting for long GPU training loops if model weights are already up to date.}
+\end{frame}
+
+\begin{frame}[fragile]{Ephemeral GPU Runner}{K3s GPU Pod Architecture \& Storage Hierarchy}
+    \begin{columns}[T]
+        \begin{column}{0.45\textwidth}
+            \begin{block}{Pod Specification Details}
+                \begin{itemize}\tiny
+                    \item \textbf{Namespace \& SA:} Deployed to \texttt{jenkins-ci} under dedicated \texttt{jenkins-agent} ServiceAccount.
+                    \item \textbf{Compute Limits:} Requests $2$ GiB RAM / $1$ CPU; limits $16$ GiB RAM, $8$ CPUs, and \texttt{nvidia.com/gpu: "1"}.
+                    \item \textbf{VRAM Partitioning:} Strict $5.0$\,GB ceiling enforced on virtual slice to prevent interfering with production serving.
+                    \item \textbf{Node Affinity:} Bound to physical host \texttt{hive-mind} with direct NVMe volume attachments.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.53\textwidth}
+            \resizebox{\linewidth}{!}{
+            \begin{tikzpicture}[
+                >=stealth, auto,
+                pod/.style={rectangle, draw=signalorange, thick, fill=orange!8, text width=3.4cm, align=center, minimum height=1.3cm, rounded corners=4pt, font=\scriptsize},
+                vol/.style={rectangle, draw=deepblue, thick, fill=blue!6, text width=3.7cm, align=center, minimum height=0.6cm, rounded corners=3pt, font=\tiny},
+                arr/.style={<->, thick, >=stealth, draw=black!70}
+            ]
+                \node[pod] (pod) {\textbf{Jenkins GPU Agent Pod}\\ {\tiny\texttt{ghcr.io/prefix-dev/pixi}}\\ \textcolor{signalorange}{\textbf{[nvidia.com/gpu: 1]}}};
+
+                \node[vol, above=0.35cm of pod] (rattler) {\textbf{rattler-cache} (\texttt{emptyDir})\\ \texttt{/root/.cache/rattler/cache}};
+                \node[vol, right=0.5cm of pod, yshift=1.0cm] (hf) {\textbf{hf-cache} (\texttt{hostPath})\\ \texttt{/var/lib/taxon-vision/hf-cache}};
+                \node[vol, right=0.5cm of pod, yshift=0.0cm] (optuna) {\textbf{optuna-db} (\texttt{PVC})\\ \texttt{/var/lib/taxon-vision/optuna}};
+                \node[vol, right=0.5cm of pod, yshift=-1.0cm] (emb) {\textbf{embeddings} (\texttt{hostPath})\\ \texttt{/var/lib/taxon-vision/embeddings}};
+
+                \draw[arr] (rattler) -- (pod);
+                \draw[arr] (hf) -- (pod.east);
+                \draw[arr] (optuna) -- (pod.east);
+                \draw[arr] (emb) -- (pod.east);
+            \end{tikzpicture}
+            }
+        \end{column}
+    \end{columns}
+
+    \script{For the GPU training stage, Jenkins dynamically schedules an ephemeral pod defined in jenkins-gpu-pod.yaml. This pod requests one virtual time-sliced GPU slice and mounts host directories for Hugging Face models, Optuna study databases, pre-extracted embeddings, and package caches. This hybrid volume strategy ensures that ephemeral pods retain high-speed access to heavy ML assets across rebuilds.}
+    \qa{Why do we need hostPath mounts for Hugging Face and embeddings?}{Downloading multi-gigabyte foundation model weights and recomputing embedding tensors on every CI run would saturate network bandwidth and waste hours of compute.}
+    \qa{How does the pod respect the 5.0 GB VRAM limit?}{The PyTorch training runner configures memory limits and Optuna batch size caps, ensuring the virtual GPU slice never exceeds its 5.0 GB allocation on the RTX 5070 Ti.}
+\end{frame}
+
+\begin{frame}{Ephemeral GPU Runner}{\texttt{jenkins\_gpu\_train.sh}: 5-Step Execution Lifecycle}
+    \vspace{-0.08cm}
+    \begin{block}{1. Bootstrap \& Credentials Ingestion}
+        \tiny Installs \texttt{git} and \texttt{kubectl} via Pixi global; validates SeaweedFS S3 credentials (\texttt{s3.json} / \texttt{taxonadmin}); configures local S3 endpoint \texttt{http://local-seaweedfs:8333}.
+    \end{block}
+    \vspace{-0.15cm}
+    \begin{block}{2. Embedding Cache Priming (Host \& SeaweedFS Tier)}
+        \tiny Checks \texttt{/var/lib/taxon-vision/embeddings/*.pt} on host NVMe or syncs from \texttt{s3://dvc/embeddings}; bypasses redundant ViT/DINOv3 backbone extraction for identical manifests.
+    \end{block}
+    \vspace{-0.15cm}
+    \begin{block}{3. DVC Pipeline Execution (\texttt{dvc repro})}
+        \tiny Invokes \texttt{dvc repro} with Optuna overrides (\texttt{-S training.tune=true}, \texttt{-S model.extractor=...}); trains Class-Balanced Loss head; exports INT8 quantized ONNX model.
+    \end{block}
+    \vspace{-0.15cm}
+    \begin{block}{4. Multi-Tier Cache Synchronization}
+        \tiny Synchronizes newly generated \texttt{.pt} tensors back to host NVMe tier; pushes intermediate Epistemic Diamond artifacts to in-cluster \texttt{local-seaweedfs}.
+    \end{block}
+    \vspace{-0.15cm}
+    \begin{block}{5. DagsHub Remote Push \& Lineage Lock}
+        \tiny Pushes production checkpoints (\texttt{head.pt}, \texttt{model\_int8.onnx}) to DagsHub S3 remote (\texttt{origin}); auto-commits updated \texttt{dvc.lock}, \texttt{conformal\_config.yaml}, and evaluation reports with \texttt{[skip ci]}.
     \end{block}
 
-
-    \script{For the GPU training stage, Jenkins dynamically schedules an ephemeral pod defined in jenkins-gpu-pod.yaml. This pod requests one virtual time-sliced GPU slice and mounts host directories for Hugging Face models, Optuna study databases, and pre-extracted embeddings. The script jenkins\_gpu\_train.sh bootstraps the environment, primes embeddings from the local host tier or SeaweedFS, runs dvc repro with any requested Optuna overrides, synchronizes fresh checkpoints across local and remote S3 tiers, and finally commits the updated dvc.lock and evaluation reports back to Git with a skip-ci annotation.}
-    \qa{Why do we prime embeddings from a host directory before running dvc repro?}{Feature extraction over large image manifests is computationally expensive. If embeddings have not changed, copying pre-computed tensors from the host SSD saves hours of GPU compute.}
+    \script{The execution script jenkins\_gpu\_train.sh bootstraps the environment, primes embeddings from the local host tier or SeaweedFS, runs dvc repro with any requested Optuna overrides, synchronizes fresh checkpoints across local and remote S3 tiers, and finally commits the updated dvc.lock and evaluation reports back to Git with a skip-ci annotation.}
     \qa{Why does jenkins\_gpu\_train.sh push to both local SeaweedFS and DagsHub?}{Local SeaweedFS provides ultra-fast in-cluster caching for low-latency pod restarts, while DagsHub acts as our immutable external cloud backup and team collaboration hub.}
+    \qa{Why is the [skip ci] tag essential in Step 5?}{When the script commits dvc.lock back to the Git branch, [skip ci] prevents an infinite loop of CI pipeline triggers.}
 \end{frame}
 
 \begin{frame}{Code Quality}{Cognitive Complexity Gates: complexipy $\le 15$ \& Strict Typing}
@@ -172,28 +325,64 @@
     \qa{What is the difference between a liveness probe and a readiness probe?}{A liveness probe checks if the process is alive; if it fails, Kubernetes restarts the pod. A readiness probe checks if the pod is ready to accept HTTP traffic; if it fails, traffic is diverted without killing the container.}
 \end{frame}
 
-\begin{frame}{Cluster Topology}{Kubernetes Manifest Encyclopedia: RBAC, Storage \& Time-Slicing}
-    \vspace{-0.15cm}
-    \begin{block}{API Deployment \& Cluster Ingress (\texttt{api-deployment.yaml})}
+\begin{frame}{Cluster Topology}{Production API Deployment \& Zero-Trust RBAC}
+    \begin{block}{Production API Deployment (\texttt{deploy/k8s/api-deployment.yaml})}
         \begin{itemize}\tiny
-            \item \textbf{Deployment Strategy:} 2 replicas with \texttt{RollingUpdate} (\texttt{maxSurge: 1}, \texttt{maxUnavailable: 0}) ensuring zero dropped connections.
-            \item \textbf{Security Context:} Runs non-root (\texttt{runAsUser: 10001}, \texttt{runAsGroup: 10001}); read-only volume mount for checkpoints (\texttt{/app/models/checkpoints}).
-            \item \textbf{Health Probing:} HTTP Liveness (\texttt{/health}, 15s delay, 20s period) and Readiness (\texttt{/health/ready}, 5s delay, 5s period, 2 failure threshold); exposed via NodePort service (\texttt{30080}).
+            \item \textbf{High-Availability Replicas:} 2 pods with \texttt{RollingUpdate} strategy (\texttt{maxSurge: 1}, \texttt{maxUnavailable: 0}) ensuring zero connection drops during rollouts.
+            \item \textbf{Zero-Root Security Context:} Pod runs as non-root user (\texttt{runAsUser: 10001}, \texttt{runAsGroup: 10001}); mounts read-only volume for ONNX checkpoints (\texttt{/app/models/checkpoints}).
+            \item \textbf{Dual Health Probes:}
+            \begin{itemize}\tiny
+                \item \textbf{Liveness Probe:} HTTP GET \texttt{/health} (initial delay: 15s, period: 20s); restarts stuck containers.
+                \item \textbf{Readiness Probe:} HTTP GET \texttt{/health/ready} (initial delay: 5s, period: 5s, failure threshold: 2); prevents traffic ingress until ONNX sessions warm up.
+            \end{itemize}
+            \item \textbf{Service Exposure:} NodePort service on port \texttt{30080} routed through Traefik ingress.
         \end{itemize}
     \end{block}
 
-    \begin{block}{RBAC, S3 Storage \& GPU Time-Slicing Subsystems}
+    \vspace{-0.05cm}
+
+    \begin{block}{Zero-Trust Namespace Isolation \& RBAC (\texttt{deploy/k8s/jenkins-agent-rbac.yaml})}
         \begin{itemize}\tiny
-            \item \textbf{Namespace Isolation \& RBAC (\texttt{jenkins-agent-rbac.yaml}):} \texttt{jenkins-ci} and \texttt{taxon-vision} namespaces; ServiceAccount \texttt{jenkins-agent} granted pod lifecycle rights in CI and deployment rollout rights in production.
-            \item \textbf{In-Cluster S3 \& Optuna (\texttt{mlops-storage-and-optuna.yaml}):} SeaweedFS S3 server (\texttt{port 8333}) configured via \texttt{s3.json} (\texttt{taxon-operator} admin keys); persistent volumes for Optuna SQLite study DB and raw parquet datasets.
-            \item \textbf{GPU Multiplexing (\texttt{nvidia-time-slicing-config.yaml}):} NVIDIA Device Plugin ConfigMap partitioning the single physical RTX 5070 Ti (16 GB) into 4 virtual slices (\texttt{replicas: 4}), allowing concurrent CI, serving, and training.
+            \item \textbf{Namespace Segmentation:} Strict perimeter separating \texttt{jenkins-ci} (untrusted build workloads) from \texttt{taxon-vision} (production inference).
+            \item \textbf{ServiceAccount Privileges:} \texttt{jenkins-agent} is granted fine-grained verbs (\texttt{create}, \texttt{delete}, \texttt{get}, \texttt{list}, \texttt{watch}) solely on Pods in \texttt{jenkins-ci}.
+            \item \textbf{Deployment Rollout Rights:} Constrained to patch/update \texttt{deployments} in \texttt{taxon-vision}; cannot inspect secrets or alter cluster network policies.
         \end{itemize}
     \end{block}
 
-
-    \script{Our Kubernetes deployment on bare-metal k3s is governed by declarative manifests in deploy/k8s. The API runs two replicas with rolling update semantics, non-root user isolation, and liveness/readiness probes. RBAC policies enforce boundaries between jenkins-ci and taxon-vision. SeaweedFS provides in-cluster S3 storage for DVC and Optuna. NVIDIA time-slicing partitions our RTX 5070 Ti into four virtual GPU slices, preventing device deadlocks.}
+    \script{Our Kubernetes deployment on bare-metal k3s is governed by declarative manifests in deploy/k8s. The API runs two replicas with rolling update semantics, non-root user isolation, and liveness/readiness probes. RBAC policies enforce boundaries between jenkins-ci and taxon-vision, granting the Jenkins agent minimal privileges to update deployments without accessing production secrets.}
     \qa{How does the readiness probe prevent 502 errors during rollouts?}{The readiness probe queries /health/ready, confirming ONNX Runtime sessions are fully initialized. Traefik routes zero traffic to new pods until it returns HTTP 200.}
+    \qa{Why separate jenkins-ci and taxon-vision into distinct namespaces?}{Namespace isolation ensures that even if an arbitrary code execution vulnerability exists in a CI build step, the Jenkins pod cannot read production secrets or alter network policies.}
+\end{frame}
+
+\begin{frame}{Cluster Topology}{In-Cluster Storage, Optuna PVC \& GPU Time-Slicing}
+    \begin{block}{In-Cluster S3 Edge Storage \& Optuna PVC (\texttt{deploy/k8s/mlops-storage-and-optuna.yaml})}
+        \begin{itemize}\tiny
+            \item \textbf{SeaweedFS S3 Edge Server:} Lightweight in-cluster S3 daemon on port \texttt{8333}; configured with \texttt{s3.json} for fast local DVC tensor caching.
+            \item \textbf{Ultra-Low Latency:} Provides $<2$\,ms read access for embedding tensors during training, eliminating cloud roundtrip latency.
+            \item \textbf{Persistent Volumes:} HostPath-backed Persistent Volume Claims for the shared Optuna SQLite study database (\texttt{/var/lib/taxon-vision/optuna}) and raw Parquet manifests.
+            \item \textbf{Dual-Remote Architecture:} SeaweedFS acts as ephemeral high-speed local cache; DagsHub serves as canonical cloud cold storage.
+        \end{itemize}
+    \end{block}
+
+    \vspace{-0.15cm}
+
+    \begin{block}{NVIDIA GPU Time-Slicing DaemonSet (\texttt{deploy/k8s/nvidia-time-slicing-config.yaml})}
+        \begin{itemize}\tiny
+            \item \textbf{Hardware Constraint:} Single physical NVIDIA RTX 5070 Ti (16 GB VRAM) on bare-metal host \texttt{hive-mind}.
+            \item \textbf{Virtual Partitioning:} NVIDIA Device Plugin ConfigMap splits the physical GPU into 4 virtual slices (\texttt{replicas: 4}).
+            \item \textbf{Workload Multiplexing:}
+            \begin{itemize}\tiny
+                \item \textbf{Slice 1 \& 2:} Production FastAPI inference pods (500 MB model session each).
+                \item \textbf{Slice 3:} Jenkins CI ephemeral training pod (strict 5.0 GB VRAM boundary).
+                \item \textbf{Slice 4:} Interactive research, Jupyter notebooks, or CAM explainability requests.
+            \end{itemize}
+            \item \textbf{Deadlock Prevention:} Prevents exclusive GPU locking, ensuring CI runs never starve production serving.
+        \end{itemize}
+    \end{block}
+
+    \script{SeaweedFS provides in-cluster S3 storage for DVC and Optuna with sub-2-millisecond latency. NVIDIA time-slicing partitions our RTX 5070 Ti into four virtual GPU slices, preventing device deadlocks and allowing CI pipelines to train models alongside live inference without resource starvation.}
     \qa{Why is NVIDIA time-slicing essential on a single-GPU bare-metal node?}{Consumer RTX GPUs lack hardware MIG. Without time-slicing, the first pod requesting a GPU locks the entire card exclusively, leaving other pods stuck in Pending.}
+    \qa{What happens if total VRAM across all 4 slices exceeds 16 GB?}{Time-slicing multiplexes compute but does not provide memory isolation at the driver level. If total VRAM exceeds 16 GB, the GPU driver throws an Out of Memory error. That is why we enforce strict software VRAM boundaries on training pods.}
 \end{frame}
 
 \begin{frame}[fragile]{Pipeline Architecture Visualized}{Dual CI/CD Lifecycle Diagram}
