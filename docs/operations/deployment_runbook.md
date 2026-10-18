@@ -63,9 +63,9 @@ The packet flow visualizes the path from client to backend:
 
 ```mermaid
 flowchart LR
-    A[Client] --> B[Cloudflare Edge PoP (WAF & Access Filter)]
-    B --> C[Cloudflare Tunnel (cloudflared)]
-    C --> D[FastAPI ASGI / ONNX Runtime Service]
+    A["Client"] --> B["Cloudflare Edge PoP<br/>(WAF & Access Filter)"]
+    B --> C["Cloudflare Tunnel<br/>(cloudflared)"]
+    C --> D["FastAPI ASGI /<br/>ONNX Runtime Service"]
 ```
 
 ## Section 4: Restricted Private Access Control Topology
