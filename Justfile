@@ -234,11 +234,13 @@ verify-deployment namespace="taxon-vision":
 # Build Zensical documentation site
 [group("docs")]
 docs:
+	pixi run --frozen -e dev python scripts/governance/visualize_okf.py
 	pixi run --frozen -e dev zensical build
 
 # Build and serve Zensical documentation locally on port 9000
 [group("docs")]
 serve:
+	pixi run --frozen -e dev python scripts/governance/visualize_okf.py
 	pixi run --frozen -e dev zensical build
 	pixi run --frozen -e dev zensical serve -a localhost:9000
 
