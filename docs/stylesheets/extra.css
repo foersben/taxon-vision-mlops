@@ -492,6 +492,134 @@
 }
 
 /* ==========================================================================
+   DVC DAG & Live Metrics Inspector Widget
+   ========================================================================== */
+
+.dvc-explorer {
+    margin: 1.5rem 0 2.5rem 0;
+    border: 1px solid var(--tv-border-subtle);
+    border-radius: 8px;
+    background: var(--tv-card-bg);
+    box-shadow: var(--tv-card-shadow);
+    overflow: hidden;
+}
+
+.dvc-metrics-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    padding: 1.25rem;
+    background: var(--md-code-bg-color);
+    border-bottom: 1px solid var(--tv-border-subtle);
+}
+
+.dvc-metric-pill {
+    background: var(--md-default-bg-color);
+    border: 1px solid var(--tv-border-subtle);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.dvc-metric-pill .title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.75;
+    margin-bottom: 0.35rem;
+}
+
+.dvc-metric-pill .value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--tv-primary);
+    font-family: var(--md-code-font-family, monospace);
+}
+
+.dvc-metric-pill .subtext {
+    font-size: 0.75rem;
+    opacity: 0.7;
+    margin-top: 0.2rem;
+}
+
+.dvc-stage-nav {
+    display: flex;
+    overflow-x: auto;
+    background: var(--md-default-bg-color);
+    border-bottom: 1px solid var(--tv-border-subtle);
+    padding: 0.5rem 1rem;
+    gap: 0.5rem;
+}
+
+.dvc-stage-tab {
+    padding: 0.5rem 0.9rem;
+    border-radius: 6px;
+    border: 1px solid var(--tv-border-subtle);
+    background: var(--md-code-bg-color);
+    color: var(--md-default-fg-color);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.dvc-stage-tab:hover {
+    border-color: var(--tv-primary);
+    color: var(--tv-primary);
+}
+
+.dvc-stage-tab.active {
+    background: var(--tv-primary);
+    color: #ffffff;
+    border-color: var(--tv-primary);
+}
+
+.dvc-stage-body {
+    padding: 1.5rem;
+}
+
+.dvc-stage-header {
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--tv-border-subtle);
+}
+
+.dvc-stage-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--tv-primary);
+    margin: 0 0 0.25rem 0;
+}
+
+.dvc-blast-radius-box {
+    margin-top: 1.25rem;
+    padding: 1rem;
+    border-radius: 6px;
+    border-left: 4px solid var(--tv-accent);
+    background: rgba(255, 87, 34, 0.08);
+}
+
+.dvc-blast-radius-box .header {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--tv-accent);
+    margin-bottom: 0.4rem;
+}
+
+.dvc-grid-two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+/* ==========================================================================
    Responsive adjustments
    ========================================================================== */
 
@@ -510,5 +638,8 @@
         max-height: 240px;
         border-right: none;
         border-bottom: 1px solid var(--tv-border-subtle);
+    }
+    .dvc-grid-two-col {
+        grid-template-columns: 1fr;
     }
 }

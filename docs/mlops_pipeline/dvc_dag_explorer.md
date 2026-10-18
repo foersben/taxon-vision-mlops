@@ -4,15 +4,15 @@ title: DVC DAG & Epistemic Diamond Explorer
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
 version: 1.0
-description: Detailed technical reference for the 7-stage Epistemic Diamond DVC execution graph, stage parameters, and cryptographic artifacts.
-tags: [dvc, pipeline, dag, artifacts, reproducibility, metrics]
-generated: {by: process:docs-librarian, at: "2026-10-18T12:00:00Z"}
-verified: {by: process:docs-librarian, at: "2026-10-18T12:00:00Z"}
+description: Comprehensive architectural reference for the 7-stage Epistemic Diamond DVC DAG, stage dependencies, and interactive live metrics explorer.
+tags: [dvc, dag, epistemic-diamond, pipelines, artifacts, metrics, reproducibility]
+generated: {by: "process:docs-librarian", at: "2026-10-18T12:00:00Z"}
+verified: {by: "process:docs-librarian", at: "2026-10-18T12:00:00Z"}
 ---
 
 # DVC DAG & Epistemic Diamond Explorer
 
-The TaxonVision-MLOps training and evaluation lifecycle is governed by an immutable Directed Acyclic Graph (DAG) declared in `dvc.yaml`. Dubbed the **Epistemic Diamond**, this pipeline expands a single validated dataset manifest into four strictly partitioned embedding tensors, and then converges into a calibrated, quantized ONNX runtime bundle without cross-split data leakage.
+The training, quantization, calibration, and evaluation lifecycle of TaxonVision-MLOps is governed by an immutable Directed Acyclic Graph (DAG) declared in root `dvc.yaml`. Known as the **Epistemic Diamond**, this pipeline expands a single validated observation manifest into four strictly partitioned embedding tensors, and then converges into a calibrated, quantized ONNX runtime bundle without cross-split data leakage.
 
 ```mermaid
 flowchart TD
@@ -32,77 +32,69 @@ flowchart TD
 
 ---
 
-## 1. The Seven Canonical Stages
+## 1. Interactive DVC Stage & Live Metrics Inspector
 
-### Stage 1: `ingestion` (Citizen-Science Data Sourcing)
+Click any of the 7 pipeline stages below to inspect its exact execution command, inputs, outputs, tracked hyperparameters, execution algorithm, and invalidation blast radius:
 
-* **Command:** `python -m taxon_vision.pipelines.ingest`
-* **Dependencies:** `config/taxa_catalog.yaml`, `src/taxon_vision/data/inat_client.py`
-* **Tracked Parameters:** `ingestion.per_page`, `ingestion.taxa_to_fetch`
-* **Primary Output:** `data/manifests/raw_manifest.parquet`
-* **Safety Invariant:** Stores image URLs and observation metadata without downloading raw JPEGs, keeping manifest size under 500 KB.
-
-### Stage 2: `audit_license` (Legal Compliance Gate)
-
-* **Command:** `python -m taxon_vision.pipelines.audit_license`
-* **Dependencies:** `data/manifests/raw_manifest.parquet`, `src/taxon_vision/data/license_filter.py`
-* **Primary Output:** `data/manifests/dataset_manifest.parquet`
-* **Generated Metric:** `reports/license_audit.json` (`cache: false`)
-* **Safety Invariant:** Enforces 100% adherence to Creative Commons open licenses (CC0, CC-BY, CC-BY-NC) and preserves photographer attribution.
-
-### Stage 3: `extract_features` (Foundation Feature Caching)
-
-* **Command:** `python -m taxon_vision.pipelines.extract_features`
-* **Dependencies:** `data/manifests/dataset_manifest.parquet`, `src/taxon_vision/data/s3_streamer.py`, `src/taxon_vision/models/factory.py`
-* **Tracked Parameters:** `model.extractor`, `model.image_size`, `training.val_split`, `training.cal_split`, `training.test_split`
-* **Primary Outputs:** 4 stratified PyTorch tensors (`train_embeddings.pt`, `val_embeddings.pt`, `cal_embeddings.pt`, `test_embeddings.pt`) pushed to SeaweedFS S3.
-* **Safety Invariant:** Strict 4-way stratified splitting prevents test and calibration leakage into training sets.
-
-### Stage 4: `train` (Class-Balanced Convex Optimization)
-
-* **Command:** `python -m taxon_vision.pipelines.train`
-* **Dependencies:** `train_embeddings.pt`, `val_embeddings.pt`, `src/taxon_vision/models/loss.py`
-* **Tracked Parameters:** `training.epochs`, `training.lr`, `training.cb_beta`, `training.tune`
-* **Primary Output:** `models/checkpoints/head.pt`
-* **Generated Metric:** `reports/train_metrics.json`
-* **Safety Invariant:** Trains linear probe head with Class-Balanced Loss directly on cached embeddings in under 2 seconds on GPU.
-
-### Stage 5: `export_onnx` (Graph Fusion & INT8 PTQ)
-
-* **Command:** `python -m taxon_vision.pipelines.export_onnx`
-* **Dependencies:** `models/checkpoints/head.pt`, `src/taxon_vision/inference/onnx_exporter.py`
-* **Tracked Parameters:** `model.image_size`
-* **Primary Output:** `models/checkpoints/model_int8.onnx` pushed to DagsHub S3.
-* **Safety Invariant:** Fuses backbone and linear head into unified opset 17 computational graph with dynamic batch axes.
-
-### Stage 6: `calibrate` (Conformal Quantile & Energy Thresholding)
-
-* **Command:** `python -m taxon_vision.pipelines.calibrate`
-* **Dependencies:** `cal_embeddings.pt`, `models/checkpoints/model_int8.onnx`, `src/taxon_vision/uncertainty/conformal.py`
-* **Tracked Parameters:** `calibration.alpha`, `calibration.ood_tpr`
-* **Primary Output:** `config/conformal_config.yaml` (committed to Git)
-* **Generated Metric:** `reports/conformal_metrics.json`
-* **Safety Invariant:** Computes true-class residual non-conformity scores and derives finite-sample inflated quantile $\hat{q}_\alpha$ on unseen calibration observations.
-
-### Stage 7: `evaluate` (Pareto Evaluation & Latency SLA Gate)
-
-* **Command:** `python -m taxon_vision.pipelines.evaluate`
-* **Dependencies:** `test_embeddings.pt`, `models/checkpoints/model_int8.onnx`, `config/conformal_config.yaml`
-* **Tracked Parameters:** `evaluation.latency_sla_ms`
-* **Primary Outputs:** `reports/pareto_evaluation.json`, `docs/assets/pareto_results.json`
-* **Safety Invariant:** Asserts empirical coverage $\ge 1 - \alpha$ on the holdout test set and verifies sub-50ms CPU latency SLA. Exits with code 1 upon violation.
+<div id="taxon-dvc-explorer">
+    <div style="padding: 2rem; text-align: center; opacity: 0.7;">
+        Initializing DVC Stage & Live Metrics Inspector...
+    </div>
+</div>
 
 ---
 
-## 2. Pipeline Execution Commands
+## 2. Complete DVC Artifact & Dependency Registry
+
+The pipeline tracks 9 core data and model artifacts across local storage and remote S3 targets:
+
+| Artifact Identifier | Canonical Filesystem Path | Producing DVC Stage | Storage Target & Remote | Cryptographic Invariant |
+| :--- | :--- | :--- | :--- | :--- |
+| **Raw Manifest** | `data/manifests/raw_manifest.parquet` | `ingestion` | Local Git/DVC Workspace | Content hash of initial observation metadata and photo URLs. |
+| **Dataset Manifest** | `data/manifests/dataset_manifest.parquet` | `audit_license` | Local Git/DVC Workspace | 100% CC0, CC-BY, or CC-BY-NC validated citizen-science records. |
+| **Train Embeddings** | `data/embeddings/train_embeddings.pt` | `extract_features` | In-Cluster SeaweedFS S3 (`local-seaweedfs`) | 70% stratified training split ($1,182 \times 384$ tensor). |
+| **Val Embeddings** | `data/embeddings/val_embeddings.pt` | `extract_features` | In-Cluster SeaweedFS S3 (`local-seaweedfs`) | 10% stratified validation split ($169 \times 384$ tensor). |
+| **Cal Embeddings** | `data/embeddings/cal_embeddings.pt` | `extract_features` | In-Cluster SeaweedFS S3 (`local-seaweedfs`) | 10% stratified conformal calibration split ($169 \times 384$ tensor). |
+| **Test Embeddings** | `data/embeddings/test_embeddings.pt` | `extract_features` | In-Cluster SeaweedFS S3 (`local-seaweedfs`) | 10% stratified evaluation test split ($169 \times 384$ tensor). |
+| **Taxa Perimeter** | `config/taxa_catalog.yaml` | Git Tracked | Local Repository Root | 10 biological taxa definitions forming Level 1 classification boundary. |
+| **Head Checkpoint** | `models/checkpoints/head.pt` | `train` | Cloud Remote (`s3://dvc` at DagsHub) | Linear probe weights $\mathbf{W}$ optimized via Class-Balanced Loss. |
+| **INT8 ONNX Bundle** | `models/checkpoints/model_int8.onnx` | `export` | Cloud Remote (`s3://dvc` at DagsHub) | Fused backbone + linear head quantized via MinMax static PTQ. |
+
+---
+
+## 3. Live Pipeline Manifest Definition (`dvc.yaml`)
+
+The complete DAG configuration transcluded directly from the repository's root `dvc.yaml`:
+
+```yaml
+--8<-- "dvc.yaml"
+```
+
+---
+
+## 4. Live Hyperparameter Manifest Definition (`params.yaml`)
+
+The DVC-tracked pipeline parameters transcluded directly from root `params.yaml`:
+
+```yaml
+--8<-- "params.yaml"
+```
+
+---
+
+## 5. Pipeline Execution Runbook
 
 ```bash
-# Execute entire pipeline from beginning to end
+# Reproduce entire DAG from scratch or resume from last cached stage
 pixi run -e dev dvc repro
 
-# Check status of modified dependencies
+# Inspect stage cache status and modified dependencies
 pixi run -e dev dvc status
 
-# Force re-execution of a specific downstream stage
-pixi run -e dev dvc repro -f calibrate
+# Force re-execution of calibration and evaluation stages
+pixi run -e dev dvc repro -f calibrate eval
+
+# Push verified tensors and model checkpoints to remotes
+pixi run -e dev dvc push -r local-seaweedfs
+pixi run -e dev dvc push -r origin
 ```
