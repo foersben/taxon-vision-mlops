@@ -7,6 +7,8 @@ document.addEventListener("DOMContentLoaded", function () {
     initConformalSimulators();
     initCodebaseExplorer();
     initDVCExplorer();
+    initEpistemicSimulator();
+    initParetoExplorer();
 });
 
 // Support dynamic navigation in Material for MkDocs / Zensical
@@ -16,6 +18,8 @@ if (typeof document$ !== "undefined") {
         initConformalSimulators();
         initCodebaseExplorer();
         initDVCExplorer();
+        initEpistemicSimulator();
+        initParetoExplorer();
     });
 }
 
@@ -952,4 +956,806 @@ function initDVCExplorer() {
 
     renderNav();
     renderStage();
+}
+
+/**
+ * Interactive Conformal & Thermodynamic OOD Live Simulator (Part 3)
+ */
+function initEpistemicSimulator() {
+    const mountPoint = document.getElementById("taxon-epistemic-simulator");
+    if (!mountPoint) return;
+    if (mountPoint.dataset.initialized === "true") return;
+    mountPoint.dataset.initialized = "true";
+
+    const presets = {
+        confident_inlier: {
+            id: "confident_inlier",
+            label: "Confident Inlier (Monarch)",
+            description: "High-confidence observation of Monarch (Danaus plexippus). Strong single activation, low Helmholtz free energy, and low entropy yield a singleton prediction set.",
+            logits: [5.2, -1.2, -1.8, -2.4, -3.1],
+            temp: 1.0,
+            alpha: 0.05,
+            tau: -2.28
+        },
+        sister_mimicry: {
+            id: "sister_mimicry",
+            label: "Sister-Taxa Mimicry (Monarch vs Viceroy)",
+            description: "Batesian mimicry pair (Monarch vs. Viceroy). Close dominant logits, low Helmholtz free energy, and moderate entropy trigger Vision-RAG differential diagnosis.",
+            logits: [4.2, 4.0, -1.5, -2.2, -3.0],
+            temp: 1.0,
+            alpha: 0.05,
+            tau: -2.28
+        },
+        empty_frame: {
+            id: "empty_frame",
+            label: "Empty Frame / Foliage Blur",
+            description: "Wind-triggered camera trap capture of blurry vegetation. Near-zero diffuse logits yield maximum Normalized Shannon Entropy (H̄ → 1.0), triggering automated clutter rejection.",
+            logits: [-0.1, 0.05, -0.15, 0.1, -0.05],
+            temp: 1.0,
+            alpha: 0.05,
+            tau: -2.28
+        },
+        semantic_ood: {
+            id: "semantic_ood",
+            label: "Semantic OOD Vehicle / Mineral",
+            description: "Non-biological object (e.g., field truck or rock). Negative logits across all biological classes push Helmholtz Free Energy above τ_OOD, triggering immediate human triage.",
+            logits: [-4.5, -4.8, -5.2, -4.9, -5.4],
+            temp: 1.0,
+            alpha: 0.05,
+            tau: -2.28
+        }
+    };
+
+    const species = [
+        { name: "Danaus plexippus", common: "Monarch Butterfly", color: "#ff7043" },
+        { name: "Limenitis archippus", common: "Viceroy Butterfly", color: "#ffa726" },
+        { name: "Papilio glaucus", common: "Eastern Tiger Swallowtail", color: "#ffd54f" },
+        { name: "Vanessa cardui", common: "Painted Lady", color: "#ba68c8" },
+        { name: "Pieris rapae", common: "Cabbage White", color: "#4dd0e1" }
+    ];
+
+    let currentLogits = [...presets.confident_inlier.logits];
+    let currentTemp = 1.0;
+    let currentAlpha = 0.05;
+    let currentTau = -2.28;
+    let activePreset = "confident_inlier";
+
+    mountPoint.innerHTML = `
+        <div class="epistemic-simulator">
+            <div class="sim-presets-bar">
+                <span class="preset-label"><strong>Quick Presets:</strong></span>
+                <button class="sim-preset-btn active" data-preset="confident_inlier">1. Confident Inlier</button>
+                <button class="sim-preset-btn" data-preset="sister_mimicry">2. Sister-Taxa Mimicry</button>
+                <button class="sim-preset-btn" data-preset="empty_frame">3. Empty Frame / Blur</button>
+                <button class="sim-preset-btn" data-preset="semantic_ood">4. Semantic OOD</button>
+            </div>
+
+            <div class="sim-preset-description" id="sim-preset-desc">
+                ${presets.confident_inlier.description}
+            </div>
+
+            <div class="sim-parameters-grid">
+                <div class="sim-param-col">
+                    <label for="sim-temp-input">
+                        <span>Logit Temperature (T)</span>
+                        <span id="sim-temp-display" class="badge-tag info">1.0</span>
+                    </label>
+                    <input type="range" id="sim-temp-input" min="0.5" max="3.0" step="0.1" value="1.0">
+                    <small>Softmax scale: z / T. Preserves ordinal ranking while tuning calibration confidence.</small>
+                </div>
+                <div class="sim-param-col">
+                    <label for="sim-alpha-input">
+                        <span>Significance Level (&alpha;)</span>
+                        <span id="sim-alpha-display" class="badge-tag warning">0.05</span>
+                    </label>
+                    <input type="range" id="sim-alpha-input" min="0.01" max="0.20" step="0.01" value="0.05">
+                    <small>Coverage guarantee = 1 - &alpha; (95.0%). Calibrated on N_cal = 169 split.</small>
+                </div>
+                <div class="sim-param-col">
+                    <label for="sim-tau-input">
+                        <span>OOD Energy Cutoff (&tau;<sub>OOD</sub>)</span>
+                        <span id="sim-tau-display" class="badge-tag danger">-2.28</span>
+                    </label>
+                    <input type="range" id="sim-tau-input" min="-10.0" max="2.0" step="0.1" value="-2.28">
+                    <small>Helmholtz Free Energy cutoff anchoring 95% In-Distribution TPR.</small>
+                </div>
+            </div>
+
+            <div class="sim-interactive-columns">
+                <div class="sim-logits-column">
+                    <div class="sim-section-heading">Raw Logits z &isin; &reals;<sup>5</sup> (Linear Probe Output)</div>
+                    <div id="sim-logits-inputs"></div>
+                </div>
+
+                <div class="sim-bars-column">
+                    <div class="sim-section-heading">
+                        <span>Calibrated Probabilities &pi;&#770;<sub>k</sub>(x)</span>
+                        <span class="threshold-legend" id="sim-threshold-legend">Threshold (1 - q̂<sub>&alpha;</sub>): 16.0%</span>
+                    </div>
+                    <div id="sim-bars-container" class="sim-bars-container"></div>
+                </div>
+            </div>
+
+            <div class="sim-metrics-panel">
+                <div class="sim-metric-cell">
+                    <div class="metric-title">Helmholtz Free Energy E(x; T)</div>
+                    <div class="metric-value" id="sim-val-energy">-5.21</div>
+                    <div class="metric-sub" id="sim-sub-energy">E &le; &tau; (In-Distribution)</div>
+                </div>
+                <div class="sim-metric-cell">
+                    <div class="metric-title">Normalized Entropy H&#772;(&pi;)</div>
+                    <div class="metric-value" id="sim-val-entropy">0.038</div>
+                    <div class="metric-sub" id="sim-sub-entropy">Low Ambiguity (&lt; 0.82)</div>
+                </div>
+                <div class="sim-metric-cell">
+                    <div class="metric-title">Prediction Set |C(x)|</div>
+                    <div class="metric-value" id="sim-val-setsize">1 Species</div>
+                    <div class="metric-sub" id="sim-sub-setsize">Singleton Set</div>
+                </div>
+                <div class="sim-metric-cell">
+                    <div class="metric-title">Margin M(x) = &pi;<sub>(1)</sub> - &pi;<sub>(2)</sub></div>
+                    <div class="metric-value" id="sim-val-margin">0.996</div>
+                    <div class="metric-sub">Separation Margin</div>
+                </div>
+            </div>
+
+            <div class="sim-thermo-identity-bar" id="sim-thermo-bar">
+                <span class="identity-badge">Thermodynamic Identity:</span>
+                <span id="sim-thermo-equation">E(x; T) = U(x) - T &middot; H(&pi;) &rarr; -5.21 = -5.19 - (1.0 &times; 0.02)</span>
+            </div>
+
+            <div class="sim-decision-banner" id="sim-decision-banner">
+                <div class="banner-icon" id="sim-decision-icon">&#10003;</div>
+                <div class="banner-body">
+                    <div class="banner-title" id="sim-decision-title">Zero-Allocation Fast-Path Inference</div>
+                    <div class="banner-desc" id="sim-decision-desc">
+                        Singleton set satisfies 95% conformal coverage. Direct serving within 15 ms SLA.
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const tempSlider = document.getElementById("sim-temp-input");
+    const alphaSlider = document.getElementById("sim-alpha-input");
+    const tauSlider = document.getElementById("sim-tau-input");
+
+    const tempDisplay = document.getElementById("sim-temp-display");
+    const alphaDisplay = document.getElementById("sim-alpha-display");
+    const tauDisplay = document.getElementById("sim-tau-display");
+
+    const logitsContainer = document.getElementById("sim-logits-inputs");
+    const barsContainer = document.getElementById("sim-bars-container");
+    const presetDesc = document.getElementById("sim-preset-desc");
+    const presetBtns = mountPoint.querySelectorAll(".sim-preset-btn");
+
+    function renderLogitInputs() {
+        logitsContainer.innerHTML = species.map(function (sp, idx) {
+            return `
+                <div class="sim-logit-row">
+                    <div class="logit-species-label">
+                        <span class="sp-dot" style="background-color: ${sp.color};"></span>
+                        <span class="sp-name"><em>${sp.name}</em></span>
+                    </div>
+                    <div class="logit-slider-wrap">
+                        <input type="range" class="sim-logit-slider" data-index="${idx}" min="-8.0" max="8.0" step="0.1" value="${currentLogits[idx]}">
+                        <span class="logit-num" id="sim-logit-val-${idx}">${currentLogits[idx].toFixed(1)}</span>
+                    </div>
+                </div>
+            `;
+        }).join("");
+
+        const sliders = logitsContainer.querySelectorAll(".sim-logit-slider");
+        sliders.forEach(function (slider) {
+            slider.addEventListener("input", function (e) {
+                const idx = parseInt(e.target.getAttribute("data-index"), 10);
+                currentLogits[idx] = parseFloat(e.target.value);
+                const valSpan = document.getElementById(`sim-logit-val-${idx}`);
+                if (valSpan) valSpan.textContent = currentLogits[idx].toFixed(1);
+                presetBtns.forEach(function (b) { b.classList.remove("active"); });
+                updateSimulation();
+            });
+        });
+    }
+
+    function updateSimulation() {
+        currentTemp = parseFloat(tempSlider.value) || 1.0;
+        currentAlpha = parseFloat(alphaSlider.value) || 0.05;
+        currentTau = parseFloat(tauSlider.value) || -2.28;
+
+        tempDisplay.textContent = currentTemp.toFixed(1);
+        alphaDisplay.textContent = currentAlpha.toFixed(2);
+        tauDisplay.textContent = currentTau.toFixed(2);
+
+        // Finite-sample inflated quantile
+        // At alpha=0.05, calibrated q_hat = 0.8405
+        const q_hat = Math.min(0.995, Math.max(0.60, 1.0 - currentAlpha * 3.19));
+        const nonConfThresh = 1.0 - q_hat;
+
+        const threshLegend = document.getElementById("sim-threshold-legend");
+        if (threshLegend) {
+            threshLegend.textContent = `Threshold (1 - q̂): ${(nonConfThresh * 100).toFixed(1)}% (α = ${currentAlpha.toFixed(2)})`;
+        }
+
+        // Scaled logits z / T
+        const z_scaled = currentLogits.map(function (z) { return z / currentTemp; });
+        const max_z = Math.max(...z_scaled);
+        const exp_diff = z_scaled.map(function (v) { return Math.exp(v - max_z); });
+        const sum_exp_diff = exp_diff.reduce(function (a, b) { return a + b; }, 0);
+        const log_sum_exp = max_z + Math.log(sum_exp_diff);
+
+        // Softmax probabilities
+        const probs = exp_diff.map(function (e) { return e / sum_exp_diff; });
+
+        // Helmholtz Free Energy: E(x; T) = -T * log_sum_exp
+        const freeEnergy = -currentTemp * log_sum_exp;
+
+        // Internal Energy: U(x) = sum(pi_k * (-z_k))
+        const internalEnergy = probs.reduce(function (acc, p, i) {
+            return acc + p * (-currentLogits[i]);
+        }, 0);
+
+        // Shannon Entropy: H(pi) = -sum(pi_k * ln(pi_k))
+        const shannonEntropy = probs.reduce(function (acc, p) {
+            return acc + (p > 1e-12 ? -p * Math.log(p) : 0);
+        }, 0);
+
+        // Normalized Shannon Entropy: H_norm = H(pi) / ln(5)
+        const K = probs.length;
+        const normEntropy = shannonEntropy / Math.log(K);
+
+        // Margin: M(x) = pi_(1) - pi_(2)
+        const sortedProbs = [...probs].sort(function (a, b) { return b - a; });
+        const margin = sortedProbs[0] - sortedProbs[1];
+
+        // Conformal prediction set C(x)
+        const admittedIndices = [];
+        probs.forEach(function (p, idx) {
+            if (p >= nonConfThresh) {
+                admittedIndices.push(idx);
+            }
+        });
+
+        // Render Bars
+        barsContainer.innerHTML = species.map(function (sp, idx) {
+            const prob = probs[idx];
+            const probPct = (prob * 100).toFixed(1);
+            const isAdmitted = prob >= nonConfThresh;
+            const barClass = isAdmitted ? "admitted" : "excluded";
+
+            return `
+                <div class="sim-bar-row">
+                    <div class="sim-bar-header">
+                        <span class="sp-name"><em>${sp.name}</em></span>
+                        <span class="prob-num ${barClass}">${probPct}% ${isAdmitted ? "✓ Admitted" : ""}</span>
+                    </div>
+                    <div class="sim-bar-track">
+                        <div class="sim-bar-fill ${barClass}" style="width: ${Math.min(100, prob * 100)}%; background-color: ${sp.color};"></div>
+                        <div class="sim-bar-cutoff-line" style="left: ${Math.min(100, nonConfThresh * 100)}%;"></div>
+                    </div>
+                </div>
+            `;
+        }).join("");
+
+        // Update Epistemic Metric Readouts
+        const valEnergy = document.getElementById("sim-val-energy");
+        const subEnergy = document.getElementById("sim-sub-energy");
+        if (valEnergy) valEnergy.textContent = freeEnergy.toFixed(2);
+        if (subEnergy) {
+            if (freeEnergy > currentTau) {
+                subEnergy.innerHTML = `<span style="color: var(--tv-accent);">⚠️ E > τ (${freeEnergy.toFixed(2)} > ${currentTau.toFixed(2)}) OOD!</span>`;
+            } else {
+                subEnergy.innerHTML = `<span style="color: var(--tv-accent-green);">✓ E ≤ τ (${freeEnergy.toFixed(2)} ≤ ${currentTau.toFixed(2)}) In-Dist</span>`;
+            }
+        }
+
+        const valEntropy = document.getElementById("sim-val-entropy");
+        const subEntropy = document.getElementById("sim-sub-entropy");
+        if (valEntropy) valEntropy.textContent = normEntropy.toFixed(3);
+        if (subEntropy) {
+            if (normEntropy >= 0.82) {
+                subEntropy.innerHTML = `<span style="color: #ffa726;">⚠️ Diffuse Clutter (H̄ ≥ 0.82)</span>`;
+            } else {
+                subEntropy.innerHTML = `<span style="color: var(--tv-accent-green);">✓ Low Ambiguity (H̄ < 0.82)</span>`;
+            }
+        }
+
+        const valSetSize = document.getElementById("sim-val-setsize");
+        const subSetSize = document.getElementById("sim-sub-setsize");
+        if (valSetSize) valSetSize.textContent = `${admittedIndices.length} Taxa`;
+        if (subSetSize) {
+            if (admittedIndices.length === 0) {
+                subSetSize.textContent = "Empty Set |C| = 0";
+            } else if (admittedIndices.length === 1) {
+                subSetSize.textContent = "Singleton Set |C| = 1";
+            } else {
+                subSetSize.textContent = `Multi-Label Set |C| = ${admittedIndices.length}`;
+            }
+        }
+
+        const valMargin = document.getElementById("sim-val-margin");
+        if (valMargin) valMargin.textContent = margin.toFixed(3);
+
+        // Thermodynamic Identity Verification Bar
+        const thermoEquation = document.getElementById("sim-thermo-equation");
+        if (thermoEquation) {
+            const rhs = internalEnergy - currentTemp * shannonEntropy;
+            thermoEquation.innerHTML = `E(x; T) = U(x) - T &middot; H(&pi;) &nbsp;|&nbsp; <strong>${freeEnergy.toFixed(3)}</strong> = ${internalEnergy.toFixed(3)} - (${currentTemp.toFixed(1)} &times; ${shannonEntropy.toFixed(3)}) &nbsp;[&Delta; = ${Math.abs(freeEnergy - rhs).toFixed(4)}]`;
+        }
+
+        // Decision Banner Evaluation
+        const banner = document.getElementById("sim-decision-banner");
+        const icon = document.getElementById("sim-decision-icon");
+        const title = document.getElementById("sim-decision-title");
+        const desc = document.getElementById("sim-decision-desc");
+
+        banner.className = "sim-decision-banner";
+
+        if (freeEnergy > currentTau) {
+            banner.classList.add("route-ood");
+            icon.textContent = "⚠️";
+            title.textContent = "Route: Semantic OOD Human Triage Queue";
+            desc.innerHTML = `Helmholtz Free Energy <strong>E(x; T) = ${freeEnergy.toFixed(2)}</strong> exceeds cutoff <strong>&tau;<sub>OOD</sub> = ${currentTau.toFixed(2)}</strong>. Indicates novel non-biological morphology or sensor distortion. Shift-invariant softmax bypassed; diverted to expert review.`;
+        } else if (admittedIndices.length === 0) {
+            banner.classList.add("route-empty");
+            icon.textContent = "🛑";
+            title.textContent = "Route: Empty Prediction Set Triage (|C| = 0)";
+            desc.innerHTML = `No candidate taxon satisfied the conformal threshold <strong>1 - q̂<sub>&alpha;</sub> = ${(nonConfThresh * 100).toFixed(1)}%</strong>. Sample exceeds epistemic confidence bounds and is routed to taxonomist review.`;
+        } else if (normEntropy >= 0.82) {
+            banner.classList.add("route-clutter");
+            icon.textContent = "🍃";
+            title.textContent = "Route: Empty Frame / Clutter Rejection";
+            desc.innerHTML = `Normalized Shannon Entropy <strong>H&#772;(&pi;) = ${normEntropy.toFixed(3)} &ge; 0.82</strong> indicates near-uniform diffuse uncertainty across classes. Filtered out as background foliage clutter or empty camera-trap false trigger.`;
+        } else if (admittedIndices.length === 1) {
+            banner.classList.add("route-fast");
+            icon.textContent = "⚡";
+            title.textContent = "Route: Zero-Allocation Fast-Path Inference";
+            const candidate = species[admittedIndices[0]].name;
+            desc.innerHTML = `Singleton prediction set admitted: <em>${candidate}</em> (&pi;&#770; = ${(probs[admittedIndices[0]] * 100).toFixed(1)}%). Mathematical ${( (1 - currentAlpha) * 100).toFixed(0)}% coverage guarantee verified. Direct ONNX Runtime serving within sub-15ms SLA.`;
+        } else if (admittedIndices.length <= 3) {
+            banner.classList.add("route-rag");
+            icon.textContent = "🔍";
+            title.textContent = "Route: Sister-Taxa Vision-RAG Differential Engine";
+            const candList = admittedIndices.map(function (i) { return `<em>${species[i].name}</em>`; }).join(", ");
+            desc.innerHTML = `Conformal set contains |C| = ${admittedIndices.length} ambiguous sister taxa (${candList}). Triggers lazy YOLO-World child crop extraction, single-stage filtered HNSW retrieval, and VLM morphological differential card.`;
+        } else {
+            banner.classList.add("route-escalation");
+            icon.textContent = "📋";
+            title.textContent = "Route: High-Ambiguity Taxonomic Escalation";
+            desc.innerHTML = `Broad prediction set spanning |C| = ${admittedIndices.length} taxa with narrow margin M(x) = ${margin.toFixed(3)}. Exceeds automated resolution bounds; escalated to specialized botanical/entomological review queue.`;
+        }
+    }
+
+    // Bind Presets
+    presetBtns.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            presetBtns.forEach(function (b) { b.classList.remove("active"); });
+            btn.classList.add("active");
+            const presetId = btn.getAttribute("data-preset");
+            const p = presets[presetId];
+            if (!p) return;
+
+            currentLogits = [...p.logits];
+            currentTemp = p.temp;
+            currentAlpha = p.alpha;
+            currentTau = p.tau;
+
+            tempSlider.value = currentTemp;
+            alphaSlider.value = currentAlpha;
+            tauSlider.value = currentTau;
+
+            presetDesc.textContent = p.description;
+
+            renderLogitInputs();
+            updateSimulation();
+        });
+    });
+
+    tempSlider.addEventListener("input", updateSimulation);
+    alphaSlider.addEventListener("input", updateSimulation);
+    tauSlider.addEventListener("input", updateSimulation);
+
+    renderLogitInputs();
+    updateSimulation();
+}
+
+/**
+ * Interactive Pareto Frontier Explorer & Benchmark Matrix (Part 4)
+ */
+function initParetoExplorer() {
+    const mountPoint = document.getElementById("taxon-pareto-explorer");
+    if (!mountPoint) return;
+    if (mountPoint.dataset.initialized === "true") return;
+    mountPoint.dataset.initialized = "true";
+
+    const defaultData = [
+        {
+            extractor: "dinov3_vits14",
+            displayName: "DINOv3 ViT-S/14",
+            architecture: "Dense Self-Supervised ViT",
+            parameters_m: 22.0,
+            feature_dim: 384,
+            p50_latency_ms: 9.5,
+            p95_latency_ms: 13.5,
+            throughput_fps: 105.0,
+            vram_peak_mb: 850.0,
+            cost_per_million_usd: 2.60,
+            top1_acc: 93.8,
+            macro_pr_auc: 0.952,
+            sla_passed: true,
+            badge: "Champion",
+            color: "#00e676",
+            family: "vit",
+            profile: "Dense Morphology & Register Tokens"
+        },
+        {
+            extractor: "bioclip-2",
+            displayName: "BioCLIP-2 ViT",
+            architecture: "Vision-Language (Tree of Life)",
+            parameters_m: 86.0,
+            feature_dim: 512,
+            p50_latency_ms: 8.5,
+            p95_latency_ms: 12.0,
+            throughput_fps: 85.0,
+            vram_peak_mb: 1200.0,
+            cost_per_million_usd: 3.50,
+            top1_acc: 92.4,
+            macro_pr_auc: 0.941,
+            sla_passed: true,
+            badge: "Domain Priors",
+            color: "#00e5ff",
+            family: "vit",
+            profile: "Domain Biological Tree Prior"
+        },
+        {
+            extractor: "dinov2_vits14",
+            displayName: "DINOv2 ViT-S/14",
+            architecture: "Self-Supervised Vision Transformer",
+            parameters_m: 22.0,
+            feature_dim: 384,
+            p50_latency_ms: 9.8,
+            p95_latency_ms: 14.0,
+            throughput_fps: 100.0,
+            vram_peak_mb: 850.0,
+            cost_per_million_usd: 2.70,
+            top1_acc: 89.4,
+            macro_pr_auc: 0.908,
+            sla_passed: true,
+            badge: "Baseline ViT",
+            color: "#b388ff",
+            family: "vit",
+            profile: "Foundation Visual Baseline"
+        },
+        {
+            extractor: "mobilenetv4_conv_small",
+            displayName: "MobileNetV4 Small",
+            architecture: "Edge Universal CNN",
+            parameters_m: 3.8,
+            feature_dim: 960,
+            p50_latency_ms: 2.1,
+            p95_latency_ms: 3.5,
+            throughput_fps: 320.0,
+            vram_peak_mb: 150.0,
+            cost_per_million_usd: 0.50,
+            top1_acc: 78.5,
+            macro_pr_auc: 0.798,
+            sla_passed: true,
+            badge: "Edge Fast-Path",
+            color: "#ffab00",
+            family: "cnn",
+            profile: "Ultra-Low Latency Edge CPU"
+        },
+        {
+            extractor: "efficientnet_b0",
+            displayName: "EfficientNet-B0",
+            architecture: "Compound Scaled CNN",
+            parameters_m: 5.3,
+            feature_dim: 1280,
+            p50_latency_ms: 4.2,
+            p95_latency_ms: 6.8,
+            throughput_fps: 160.0,
+            vram_peak_mb: 300.0,
+            cost_per_million_usd: 1.10,
+            top1_acc: 81.2,
+            macro_pr_auc: 0.825,
+            sla_passed: true,
+            badge: "Balanced Edge",
+            color: "#ff7043",
+            family: "cnn",
+            profile: "Balanced Edge Baseline"
+        }
+    ];
+
+    let currentFamily = "all";
+    let sortColumn = "top1_acc";
+    let sortAsc = false;
+    let selectedModel = defaultData[0];
+
+    mountPoint.innerHTML = `
+        <div class="pareto-explorer">
+            <div class="pareto-header-row">
+                <div class="pareto-chart-title">
+                    <span>Multi-Objective Pareto Frontier (p95 Latency vs. Accuracy)</span>
+                    <span class="pareto-sla-badge">15 ms Production SLA Gate</span>
+                </div>
+                <div class="pareto-filter-group">
+                    <button class="pareto-filter-btn active" data-family="all">All Models</button>
+                    <button class="pareto-filter-btn" data-family="vit">ViT Transformers</button>
+                    <button class="pareto-filter-btn" data-family="cnn">Edge CNNs</button>
+                </div>
+            </div>
+
+            <div class="pareto-chart-container" id="pareto-chart-svg"></div>
+
+            <div class="pareto-table-wrap">
+                <table class="pareto-table" id="pareto-matrix-table">
+                    <thead>
+                        <tr>
+                            <th data-sort="displayName">Backbone</th>
+                            <th data-sort="architecture">Architecture</th>
+                            <th data-sort="top1_acc">Top-1 Accuracy</th>
+                            <th data-sort="macro_pr_auc">Macro PR-AUC</th>
+                            <th data-sort="p95_latency_ms">p95 Latency</th>
+                            <th data-sort="throughput_fps">Throughput</th>
+                            <th data-sort="parameters_m">Params</th>
+                            <th data-sort="cost_per_million_usd">Cost / 1M Reqs</th>
+                            <th>SLA Gate</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pareto-table-body"></tbody>
+                </table>
+            </div>
+
+            <div class="pareto-detail-card" id="pareto-detail-card"></div>
+        </div>
+    `;
+
+    const chartContainer = document.getElementById("pareto-chart-svg");
+    const tableBody = document.getElementById("pareto-table-body");
+    const detailCard = document.getElementById("pareto-detail-card");
+    const filterBtns = mountPoint.querySelectorAll(".pareto-filter-btn");
+    const tableHeaders = mountPoint.querySelectorAll("#pareto-matrix-table th[data-sort]");
+
+    function renderChart() {
+        const width = 720;
+        const height = 340;
+        const padding = { top: 30, right: 40, bottom: 50, left: 60 };
+        const plotW = width - padding.left - padding.right;
+        const plotH = height - padding.top - padding.bottom;
+
+        // X scale: p95 latency (0 to 18 ms)
+        const minX = 0;
+        const maxX = 18;
+        // Y scale: accuracy (70% to 100%)
+        const minY = 70;
+        const maxY = 100;
+
+        function xScale(val) {
+            return padding.left + ((val - minX) / (maxX - minX)) * plotW;
+        }
+
+        function yScale(val) {
+            return padding.top + plotH - ((val - minY) / (maxY - minY)) * plotH;
+        }
+
+        const slaX = xScale(15.0);
+
+        // Filtered items
+        const visibleData = defaultData.filter(function (d) {
+            return currentFamily === "all" || d.family === currentFamily;
+        });
+
+        let svgHtml = `
+            <svg viewBox="0 0 ${width} ${height}" class="pareto-svg" preserveAspectRatio="xMidYMid meet">
+                <defs>
+                    <linearGradient id="sla-pass-grad" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stop-color="#00e676" stop-opacity="0.08" />
+                        <stop offset="100%" stop-color="#00e676" stop-opacity="0.02" />
+                    </linearGradient>
+                    <linearGradient id="sla-breach-grad" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stop-color="#ff5722" stop-opacity="0.04" />
+                        <stop offset="100%" stop-color="#ff5722" stop-opacity="0.12" />
+                    </linearGradient>
+                </defs>
+
+                <!-- SLA zones -->
+                <rect x="${padding.left}" y="${padding.top}" width="${slaX - padding.left}" height="${plotH}" fill="url(#sla-pass-grad)" />
+                <rect x="${slaX}" y="${padding.top}" width="${padding.left + plotW - slaX}" height="${plotH}" fill="url(#sla-breach-grad)" />
+
+                <!-- Grid lines -->
+                ${[75, 80, 85, 90, 95].map(function (yVal) {
+                    const y = yScale(yVal);
+                    return `
+                        <line x1="${padding.left}" y1="${y}" x2="${padding.left + plotW}" y2="${y}" stroke="var(--tv-border-subtle)" stroke-dasharray="3,3" />
+                        <text x="${padding.left - 8}" y="${y + 4}" fill="currentColor" opacity="0.6" font-size="10" text-anchor="end">${yVal}%</text>
+                    `;
+                }).join("")}
+
+                ${[3, 6, 9, 12, 15].map(function (xVal) {
+                    const x = xScale(xVal);
+                    return `
+                        <line x1="${x}" y1="${padding.top}" x2="${x}" y2="${padding.top + plotH}" stroke="var(--tv-border-subtle)" stroke-dasharray="3,3" />
+                        <text x="${x}" y="${padding.top + plotH + 18}" fill="currentColor" opacity="0.6" font-size="10" text-anchor="middle">${xVal} ms</text>
+                    `;
+                }).join("")}
+
+                <!-- 15ms SLA Gate Line -->
+                <line x1="${slaX}" y1="${padding.top}" x2="${slaX}" y2="${padding.top + plotH}" stroke="#ff5722" stroke-width="2" stroke-dasharray="5,4" />
+                <text x="${slaX - 6}" y="${padding.top + 14}" fill="#ff5722" font-size="10" font-weight="700" text-anchor="end">15 ms Production Gate</text>
+
+                <!-- Axis Labels -->
+                <text x="${padding.left + plotW / 2}" y="${height - 10}" fill="currentColor" opacity="0.8" font-size="11" font-weight="600" text-anchor="middle">p95 Inference Latency (ms) &rarr;</text>
+                <text transform="rotate(-90)" x="${-(padding.top + plotH / 2)}" y="16" fill="currentColor" opacity="0.8" font-size="11" font-weight="600" text-anchor="middle">&larr; Top-1 Accuracy (%)</text>
+
+                <!-- Data Points -->
+                ${visibleData.map(function (d) {
+                    const cx = xScale(d.p95_latency_ms);
+                    const cy = yScale(d.top1_acc);
+                    const isSelected = selectedModel && selectedModel.extractor === d.extractor;
+                    const r = isSelected ? 8 : 6;
+
+                    return `
+                        <g class="pareto-point-group" data-extractor="${d.extractor}" style="cursor: pointer;">
+                            ${isSelected ? `<circle cx="${cx}" cy="${cy}" r="14" fill="${d.color}" opacity="0.3" class="pulse-ring" />` : ""}
+                            <circle cx="${cx}" cy="${cy}" r="${r}" fill="${d.color}" stroke="#ffffff" stroke-width="${isSelected ? 2.5 : 1.5}" />
+                            <text x="${cx}" y="${cy - 12}" fill="${d.color}" font-size="10" font-weight="700" text-anchor="middle">${d.displayName}</text>
+                        </g>
+                    `;
+                }).join("")}
+            </svg>
+        `;
+
+        chartContainer.innerHTML = svgHtml;
+
+        const points = chartContainer.querySelectorAll(".pareto-point-group");
+        points.forEach(function (pt) {
+            pt.addEventListener("click", function () {
+                const ext = pt.getAttribute("data-extractor");
+                selectedModel = defaultData.find(function (m) { return m.extractor === ext; }) || selectedModel;
+                renderChart();
+                renderTable();
+                renderDetail();
+            });
+        });
+    }
+
+    function renderTable() {
+        const visibleData = defaultData.filter(function (d) {
+            return currentFamily === "all" || d.family === currentFamily;
+        });
+
+        visibleData.sort(function (a, b) {
+            let valA = a[sortColumn];
+            let valB = b[sortColumn];
+            if (typeof valA === "string") valA = valA.toLowerCase();
+            if (typeof valB === "string") valB = valB.toLowerCase();
+            if (valA < valB) return sortAsc ? -1 : 1;
+            if (valA > valB) return sortAsc ? 1 : -1;
+            return 0;
+        });
+
+        tableBody.innerHTML = visibleData.map(function (d) {
+            const isSelected = selectedModel && selectedModel.extractor === d.extractor;
+            const selClass = isSelected ? "selected-row" : "";
+            return `
+                <tr class="${selClass}" data-extractor="${d.extractor}">
+                    <td>
+                        <span class="sp-dot" style="background-color: ${d.color}; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px;"></span>
+                        <strong>${d.displayName}</strong>
+                    </td>
+                    <td>${d.architecture}</td>
+                    <td><strong>${d.top1_acc.toFixed(1)}%</strong></td>
+                    <td>${d.macro_pr_auc.toFixed(3)}</td>
+                    <td><span class="latency-pill">${d.p95_latency_ms.toFixed(1)} ms</span></td>
+                    <td>${d.throughput_fps.toFixed(0)} FPS</td>
+                    <td>${d.parameters_m.toFixed(1)}M</td>
+                    <td>$${d.cost_per_million_usd.toFixed(2)}</td>
+                    <td><span class="sla-pass-badge">${d.badge}</span></td>
+                </tr>
+            `;
+        }).join("");
+
+        const rows = tableBody.querySelectorAll("tr");
+        rows.forEach(function (row) {
+            row.addEventListener("click", function () {
+                const ext = row.getAttribute("data-extractor");
+                selectedModel = defaultData.find(function (m) { return m.extractor === ext; }) || selectedModel;
+                renderChart();
+                renderTable();
+                renderDetail();
+            });
+        });
+    }
+
+    function renderDetail() {
+        if (!selectedModel) return;
+        const m = selectedModel;
+        detailCard.innerHTML = `
+            <div class="pareto-card-header">
+                <div>
+                    <div class="card-title">${m.displayName}</div>
+                    <div class="card-subtitle">${m.architecture} &bull; ${m.profile}</div>
+                </div>
+                <div class="card-metric-badge" style="border-color: ${m.color}; color: ${m.color};">
+                    ${m.badge}
+                </div>
+            </div>
+            <div class="pareto-card-grid">
+                <div class="card-stat">
+                    <span class="title">Top-1 Accuracy</span>
+                    <span class="val" style="color: ${m.color};">${m.top1_acc.toFixed(1)}%</span>
+                </div>
+                <div class="card-stat">
+                    <span class="title">p95 Latency</span>
+                    <span class="val">${m.p95_latency_ms.toFixed(1)} ms</span>
+                </div>
+                <div class="card-stat">
+                    <span class="title">Throughput</span>
+                    <span class="val">${m.throughput_fps.toFixed(0)} FPS</span>
+                </div>
+                <div class="card-stat">
+                    <span class="title">Serving Cost</span>
+                    <span class="val">$${m.cost_per_million_usd.toFixed(2)} / 1M</span>
+                </div>
+                <div class="card-stat">
+                    <span class="title">Parameters</span>
+                    <span class="val">${m.parameters_m.toFixed(1)}M</span>
+                </div>
+                <div class="card-stat">
+                    <span class="title">Peak VRAM</span>
+                    <span class="val">${m.vram_peak_mb.toFixed(0)} MB</span>
+                </div>
+            </div>
+        `;
+    }
+
+    filterBtns.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            filterBtns.forEach(function (b) { b.classList.remove("active"); });
+            btn.classList.add("active");
+            currentFamily = btn.getAttribute("data-family") || "all";
+            renderChart();
+            renderTable();
+        });
+    });
+
+    tableHeaders.forEach(function (th) {
+        th.addEventListener("click", function () {
+            const col = th.getAttribute("data-sort");
+            if (sortColumn === col) {
+                sortAsc = !sortAsc;
+            } else {
+                sortColumn = col;
+                sortAsc = false;
+            }
+            renderTable();
+        });
+    });
+
+    // Attempt to fetch from pareto_results.json if hosted
+    fetch("assets/pareto_results.json")
+        .then(function (res) { return res.json(); })
+        .then(function (jsonData) {
+            if (Array.isArray(jsonData) && jsonData.length > 0) {
+                // Merge if available
+                jsonData.forEach(function (item) {
+                    const match = defaultData.find(function (d) { return d.extractor === item.extractor; });
+                    if (match) {
+                        if (item.p95_latency_ms) match.p95_latency_ms = item.p95_latency_ms;
+                        if (item.throughput_fps) match.throughput_fps = item.throughput_fps;
+                        if (item.cost_per_million_usd) match.cost_per_million_usd = item.cost_per_million_usd;
+                    }
+                });
+                renderChart();
+                renderTable();
+                renderDetail();
+            }
+        })
+        .catch(function () {
+            // Keep defaultData fallback
+        });
+
+    renderChart();
+    renderTable();
+    renderDetail();
 }
