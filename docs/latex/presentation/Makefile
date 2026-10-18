@@ -5,11 +5,13 @@ FILE = presentation
 
 all: $(FILE).pdf $(FILE)_notes.pdf
 
-$(FILE).pdf: $(FILE).tex
+CHAPTERS = $(wildcard chapters/*.tex)
+
+$(FILE).pdf: $(FILE).tex $(CHAPTERS)
 	$(LATEX) $(FILE).tex
 	$(LATEX) $(FILE).tex
 
-$(FILE)_notes.pdf: $(FILE).tex
+$(FILE)_notes.pdf: $(FILE).tex $(CHAPTERS)
 	# Automatically swap the setbeameroption for the notes version
 	sed 's/\\setbeameroption{hide notes}/\\setbeameroption{show only notes}/' $(FILE).tex > $(FILE)_notes.tex
 	$(LATEX) $(FILE)_notes.tex

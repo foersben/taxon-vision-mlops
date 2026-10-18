@@ -1,4 +1,4 @@
-% Chapter 6: Data Engineering & Content-Addressable Storage
+% Chapter 8: Data Engineering & Content-Addressable Storage
 \providecolor{TaxonPrimary}{HTML}{1976D2}
 \providecolor{TaxonSecondary}{HTML}{388E3C}
 \providecolor{TaxonAccent}{HTML}{F57C00}
@@ -14,7 +14,7 @@
     \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
     \statusdone
     \vfill
-    \script{In Chapter 6, we examine our data tier: escaping the 50 Terabyte Storage Trap through zero-copy S3 streaming, Parquet columnar indexing, and DVC content-addressable storage.}
+    \script{In Chapter 8, we examine our data tier: escaping the 50 Terabyte Storage Trap through zero-copy S3 streaming, Parquet columnar indexing, and DVC content-addressable storage.}
     \qa{How does TaxonVision avoid exhausting local disk space with terabytes of images?}{By storing lightweight Parquet metadata manifests with remote S3 image URLs and memory-mapped NumPy embedding vectors, streaming raw pixels only when necessary.}
 \end{frame}
 

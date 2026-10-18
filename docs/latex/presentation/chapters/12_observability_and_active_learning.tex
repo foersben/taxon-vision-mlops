@@ -1,4 +1,4 @@
-% Chapter 10: Observability, Drift Monitoring & Active Learning
+% Chapter 12: Observability, Drift Monitoring & Active Learning
 
 \begin{frame}[plain]
     \vfill
@@ -10,7 +10,7 @@
     \textcolor{deepblue}{\rule{0.55\linewidth}{1.2pt}} \\[0.5cm]
     \statuspartial
     \vfill
-    \script{In Chapter 10, we present our observability and active learning architecture. We must be completely candid about implementation reality: while our core inference pipeline and basic metric endpoints are operational, full drift monitoring, Evidently AI, Prometheus/Grafana scrape daemons, and Label Studio triage loops are high-priority target roadmap items currently in progress or planned for upcoming sprints.}
+    \script{In Chapter 12, we present our observability and active learning architecture. We must be completely candid about implementation reality: while our core inference pipeline and basic metric endpoints are operational, full drift monitoring, Evidently AI, Prometheus/Grafana scrape daemons, and Label Studio triage loops are high-priority target roadmap items currently in progress or planned for upcoming sprints.}
     \qa{How does MLOps observability differ from traditional software monitoring?}{An ML API can return HTTP 200 OK while failing silently; we monitor average conformal prediction set sizes and drift distances to detect data shifts in real time.}
 \end{frame}
 
