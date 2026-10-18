@@ -35,7 +35,7 @@ ACTOR_PATTERN = re.compile(r"^(?:human:[a-zA-Z0-9_\-]+|process:[a-zA-Z0-9_\-]+|[
 MARKDOWN_LINK_PATTERN = re.compile(r"\]\(([^:\s#)]+\.md)(?:#[^)]+)?\)")
 LOG_DATE_HEADING_PATTERN = re.compile(r"^##\s+(\d{4}-\d{2}-\d{2})\b")
 
-ALLOWED_STATUSES = {"draft", "stable", "deprecated"}
+ALLOWED_STATUSES = {"draft", "stable", "deprecated", "verified"}
 
 
 class OKFAuditStats:
@@ -208,7 +208,7 @@ def _validate_bundle_root_index(content: str) -> tuple[str, list[str]]:
 
 
 def _validate_sub_index(content: str) -> tuple[str, list[str]]:
-    """Validate subdirectory index has no frontmatter (Option A).
+    """Validate subdirectory index under Option A (no frontmatter) or Option B (valid frontmatter).
 
     Args:
         content: The content of the document.
@@ -219,13 +219,34 @@ def _validate_sub_index(content: str) -> tuple[str, list[str]]:
     if not content.startswith("---"):
         return content, []
 
-    errors = [
-        "Subdirectory index.md must not contain YAML frontmatter (OKF v0.2 §8). "
-        "Retain rich overview prose and section headings directly in the Markdown body."
-    ]
-    parts = content.split("---", 2)
-    content_to_check = parts[2] if len(parts) >= 3 else content
-    return content_to_check, errors
+    fm, body, parse_errors = _parse_frontmatter_block(content)
+    if parse_errors:
+        return body, parse_errors
+
+    errors: list[str] = []
+    if fm is not None:
+        allowed = {
+            "okf_version",
+            "type",
+            "title",
+            "status",
+            "stale_after",
+            "version",
+            "description",
+            "tags",
+            "generated",
+            "verified",
+            "sources",
+            "trust_tier",
+        }
+        non_allowed = set(fm.keys()) - allowed
+        if non_allowed:
+            errors.append(f"Subdirectory index.md contains unexpected frontmatter keys: {non_allowed}")
+        if "type" in fm and not str(fm["type"]).strip():
+            errors.append("Field 'type' must not be empty.")
+        if "status" in fm and fm["status"] not in ALLOWED_STATUSES:
+            errors.append(f"Invalid status '{fm['status']}'. OKF v0.2 allows: {', '.join(sorted(ALLOWED_STATUSES))}.")
+    return body, errors
 
 
 def _validate_index_links(content_to_check: str, file_path: Path, root_path: Path) -> list[str]:
