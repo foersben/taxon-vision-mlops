@@ -102,19 +102,19 @@
         part/.style={draw=deepblue, thick, align=center, font=\scriptsize\bfseries, minimum height=0.72cm}
     ]
         % Partition Bar: Total width = 12.0cm
-        % Train 60% = 7.2cm
-        \node[part, fill=plantgreen!80, text=white, minimum width=7.2cm, anchor=west] at (0, 0) (p_train) {%
-            60\% Train Split (\texttt{train\_embeddings.pt})\\[-2pt]%
+        % Train 70% = 8.4cm
+        \node[part, fill=plantgreen!80, text=white, minimum width=8.4cm, anchor=west] at (0, 0) (p_train) {%
+            70\% Train Split (\texttt{train\_embeddings.pt})\\[-2pt]%
             {\tiny Linear Classification Head \& CBL Optimization}%
         };
-        % Val 15% = 1.8cm
-        \node[part, fill=signalorange!85, text=white, minimum width=1.8cm, anchor=west] at (p_train.east) (p_val) {%
-            15\% Val\\[-2pt]%
-            {\tiny Optuna Tuning}%
+        % Val 10% = 1.2cm
+        \node[part, fill=signalorange!85, text=white, minimum width=1.2cm, anchor=west] at (p_train.east) (p_val) {%
+            10\% Val\\[-2pt]%
+            {\tiny Optuna}%
         };
-        % Cal 15% = 1.8cm
-        \node[part, fill=deepblue!85, text=white, minimum width=1.8cm, anchor=west] at (p_val.east) (p_cal) {%
-            15\% Cal\\[-2pt]%
+        % Cal 10% = 1.2cm
+        \node[part, fill=deepblue!85, text=white, minimum width=1.2cm, anchor=west] at (p_val.east) (p_cal) {%
+            10\% Cal\\[-2pt]%
             {\tiny Conformal $\hat{q}$}%
         };
         % Test 10% = 1.2cm
@@ -138,9 +138,9 @@
         \begin{column}{0.48\textwidth}
             \begin{block}{The Four Strategic Tensors (\texttt{.pt})}
                 \begin{itemize}\scriptsize
-                    \item \textbf{\texttt{train\_embeddings.pt}} ($60\%$): Feeds the linear classification head during Class-Balanced focal loss optimization.
-                    \item \textbf{\texttt{val\_embeddings.pt}} ($15\%$): Guides Optuna Bayesian hyperparameter optimization and early stopping callbacks.
-                    \item \textbf{\texttt{cal\_embeddings.pt}} ($15\%$): Exclusively reserved for Split Conformal Prediction calibration ($\hat{q}$).
+                    \item \textbf{\texttt{train\_embeddings.pt}} ($70\%$): Feeds the linear classification head during Class-Balanced Loss (CBL) optimization.
+                    \item \textbf{\texttt{val\_embeddings.pt}} ($10\%$): Guides Optuna Bayesian hyperparameter optimization and early stopping callbacks.
+                    \item \textbf{\texttt{cal\_embeddings.pt}} ($10\%$): Exclusively reserved for Split Conformal Prediction calibration ($\hat{q}$).
                     \item \textbf{\texttt{test\_embeddings.pt}} ($10\%$): Pure holdout set for final Pareto latency/accuracy benchmarking.
                 \end{itemize}
             \end{block}
