@@ -7,11 +7,12 @@ from __future__ import annotations
 import io
 import logging
 import time
+from pathlib import Path
 from typing import Annotated, Any
 
 import anyio
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
-from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
 
@@ -22,6 +23,8 @@ from taxon_vision.service.inference import load_taxa_catalog
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1")
+templates_dir = Path(__file__).parent.parent / "templates"
+templates = Jinja2Templates(directory=str(templates_dir))
 
 
 class ExplainResponse(BaseModel):
@@ -168,28 +171,14 @@ async def explain_prediction(
     elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
     if request.headers.get("HX-Request") == "true":
-        html_content = (
-            f'<div class="cam-overlay">'
-            f'  <div class="cam-header">'
-            f'    <span class="cam-title">Diagnostic Morphological Key (CAM)</span>'
-            f'    <span class="cam-latency-tag">⚡ {elapsed_ms:.1f} ms</span>'
-            f"  </div>"
-            f'  <div class="cam-image-wrapper">'
-            f'    <img src="data:image/png;base64,{overlay_b64}" alt="CAM Saliency Overlay" class="cam-heatmap-img" />'
-            f"  </div>"
-            f'  <div class="cam-legend">'
-            f'    <div class="legend-bar"></div>'
-            f'    <div class="legend-labels">'
-            f"      <span>Background Context</span>"
-            f"      <span>Diagnostic Morphological Features</span>"
-            f"    </div>"
-            f"  </div>"
-            f'  <p class="caption">'
-            f"    Analytical forward projection of terminal features against target head weights."
-            f"  </p>"
-            f"</div>"
+        return templates.TemplateResponse(
+            request=request,
+            name="partials/cam_overlay.html",
+            context={
+                "elapsed_ms": elapsed_ms,
+                "overlay_b64": overlay_b64,
+            },
         )
-        return HTMLResponse(content=html_content)
 
     return ExplainResponse(
         heatmap_status=status_str,
