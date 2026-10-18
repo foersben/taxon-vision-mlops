@@ -324,207 +324,55 @@ The Jenkins Kubernetes plugin manages agent pod lifecycles using the following c
 
 ## 6. Jenkinsfile Architecture & Pipeline Specification
 
-The declarative pipeline logic is declared in [Jenkinsfile](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/Jenkinsfile).
+The declarative pipeline logic is maintained in [`Jenkinsfile`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/Jenkinsfile).
 
 ### 6.1 Complete Declarative Pipeline Definition
 
 ```groovy
-pipeline {
-  agent {
-    kubernetes {
-      cloud 'k3s'
-      defaultContainer 'ml-runner'
-      yaml '''
-apiVersion: v1
-kind: Pod
-metadata:
-  namespace: jenkins-ci
-  labels:
-    app.kubernetes.io/name: taxon-vision-jenkins-agent
-spec:
-  serviceAccountName: jenkins-agent
-  containers:
-  - name: ml-runner
-    image: ghcr.io/prefix-dev/pixi:latest
-    command: ["sleep"]
-    args: ["99d"]
-    tty: true
-    volumeMounts:
-    - name: rattler-cache
-      mountPath: /root/.cache/rattler/cache
-    resources:
-      limits:
-        memory: "8Gi"
-        cpu: "4"
-      requests:
-        memory: "512Mi"
-        cpu: "200m"
-  volumes:
-  - name: rattler-cache
-    emptyDir: {}
-'''
-    }
-  }
+--8<-- "Jenkinsfile"
+```
 
-  options {
-    buildDiscarder(logRotator(numToKeepStr: '15', daysToKeepStr: '14'))
-    timeout(time: 45, unit: 'MINUTES')
-    timestamps()
-    disableConcurrentBuilds(abortPrevious: true)
-  }
+### 6.2 Ephemeral GPU Runner Pod Specification
 
-  stages {
-    stage('Prepare Toolchain') {
-      steps {
-        container('ml-runner') {
-          sh '''
-            echo ">>> Setting up toolchain in ephemeral agent..."
-            which git >/dev/null 2>&1 || pixi global install git
-            git config --global --add safe.directory "*"
-            pixi --version
-            pixi install --frozen -e ci-dev
-          '''
-        }
-      }
-    }
+Heavy training, feature extraction, and Pareto benchmarking execute inside an ephemeral GPU pod defined in [`deploy/k8s/jenkins-gpu-pod.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/jenkins-gpu-pod.yaml):
 
-    stage('Static Quality & Invariants') {
-      parallel {
-        stage('Lint & Format') {
-          steps {
-            container('ml-runner') {
-              sh '''
-                pixi run --frozen -e ci-dev ruff check .
-                pixi run --frozen -e ci-dev ruff format --check .
-              '''
-            }
-          }
-        }
-        stage('Type Checking') {
-          steps {
-            container('ml-runner') {
-              sh '''
-                pixi run --frozen -e ci-dev mypy src scripts
-              '''
-            }
-          }
-        }
-        stage('Compliance & OKF Audits') {
-          steps {
-            container('ml-runner') {
-              sh '''
-                pixi run --frozen -e ci-dev python -m taxon_vision.pipelines.audit_license
-                pixi run --frozen -e ci-dev python scripts/governance/validate_okf.py
-              '''
-            }
-          }
-        }
-      }
-    }
+```yaml
+--8<-- "deploy/k8s/jenkins-gpu-pod.yaml"
+```
 
-    stage('Unit Tests & Coverage') {
-      steps {
-        container('ml-runner') {
-          sh '''
-            pixi run --frozen -e ci-dev pytest tests/ \
-              --cov=src/taxon_vision \
-              --cov-report=xml:coverage.xml \
-              --cov-fail-under=80 \
-              -o "addopts="
-          '''
-        }
-      }
-    }
+### 6.3 Dual CI/CD Bridge & GPU Execution Sequence Trace
 
-    stage('Integration & Conformal Invariants') {
-      steps {
-        container('ml-runner') {
-          sh '''
-            pixi run --frozen -e ci-dev pytest tests/integration/ tests/invariants/ -x -q -o "addopts="
-          '''
-        }
-      }
-    }
+When a developer or AI agent merges code to `develop` or `main`, execution traverses the **Dual CI/CD Bridge** connecting the cloud GitHub environment with the on-premise bare-metal GPU cluster:
 
-    stage('Documentation Strict Build') {
-      steps {
-        container('ml-runner') {
-          sh '''
-            pixi run --frozen -e ci-dev python scripts/governance/visualize_okf.py
-            pixi run --frozen -e ci-dev zensical build --strict
-          '''
-        }
-      }
-    }
+```mermaid
+sequenceDiagram
+    autonumber
+    participant GH as GitHub Actions Enclave
+    participant CF as Cloudflare Zero Trust WAF
+    participant JC as Jenkins Controller (hive-mind)
+    participant K3S as k3s Cluster API
+    participant POD as GPU Pod (jenkins-gpu-pod.yaml)
+    participant SW as SeaweedFS In-Cluster S3
+    participant DH as DagsHub Remote S3
+    participant GIT as GitHub Git Origin
 
-    stage('Model Training & Checkpoint (GPU)') {
-      when {
-        anyOf {
-          branch 'main'
-          branch 'feature/phase1-foundations'
-        }
-      }
-      agent {
-        kubernetes {
-          cloud 'k3s'
-          defaultContainer 'ml-runner'
-          yamlFile 'deploy/k8s/jenkins-gpu-pod.yaml'
-        }
-      }
-      steps {
-        container('ml-runner') {
-          sh 'bash scripts/ci/jenkins_gpu_train.sh'
-        }
-      }
-    }
-
-    stage('Deploy to Kubernetes') {
-      when {
-        anyOf {
-          branch 'main'
-          branch 'develop'
-        }
-      }
-      steps {
-        container('ml-runner') {
-          sh '''
-            export PATH="/root/.pixi/bin:$PATH"
-            echo ">>> Executing zero-downtime rolling deployment to Kubernetes cluster..."
-            kubectl version --client
-
-            # Configure SeaweedFS credentials in case models are in local cache
-            if kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
-              pixi run --frozen -e ci-dev dvc config --local remote.local-seaweedfs.access_key_id taxonadmin
-              pixi run --frozen -e ci-dev dvc config --local remote.local-seaweedfs.secret_access_key taxonadmin
-            fi
-
-            # Hydrate model checkpoints from DVC
-            echo ">>> Hydrating model checkpoints from DVC remotes..."
-            pixi run --frozen -e ci-dev dvc pull -r origin models/checkpoints/head.pt models/checkpoints/model_int8.onnx || \
-            pixi run --frozen -e ci-dev dvc pull models/checkpoints/head.pt models/checkpoints/model_int8.onnx || \
-            echo ">>> Warning: Remote checkpoints not found in DVC; falling back to existing host volume checkpoints."
-
-            # Synchronize checkpoints to host volume if available
-            if [ -d "/home/benni/taxon-vision-mlops/models/checkpoints" ] && [ -f "models/checkpoints/head.pt" ]; then
-              cp -f models/checkpoints/* /home/benni/taxon-vision-mlops/models/checkpoints/
-            fi
-
-            kubectl apply -f deploy/k8s/api-deployment.yaml
-            kubectl rollout restart deployment/taxon-vision-api -n taxon-vision
-            kubectl rollout status deployment/taxon-vision-api -n taxon-vision --timeout=120s
-            echo ">>> Deployment successfully verified."
-          '''
-        }
-      }
-    }
-  }
-
-  post {
-    always {
-      cleanWs()
-    }
-  }
-}
+    GH->>CF: Signed Webhook Event (/github-webhook/)
+    CF->>JC: Tunnel Proxy Delivery (hive-mind-tunnel)
+    JC->>K3S: Schedule Ephemeral Agent Pod
+    K3S->>POD: Instantiate Pod with nvidia.com/gpu: 1
+    Note over POD: Step 1: Toolchain & Rattler Cache Sync<br/>pixi install --frozen -e dev
+    POD->>SW: Step 2: Feature Cache Retrieval (data/embeddings/*.pt)
+    alt Cache Miss
+        POD->>POD: Extract representations via S3 streaming
+    else Cache Hit
+        SW-->>POD: Fast stream 4-way stratified tensors
+    end
+    Note over POD: Step 3: Unified 7-Stage DVC Pipeline<br/>dvc repro (extract, train, export, calibrate, eval)
+    POD->>SW: Step 4a: Push Diamond artifacts to local SeaweedFS S3
+    POD->>DH: Step 4b: Push release model_int8.onnx & head.pt to DagsHub
+    POD->>GIT: Step 5: Commit dvc.lock & reports/*.json [skip ci]
+    POD-->>JC: Execution Success (Exit Code 0)
+    JC->>K3S: Delete Ephemeral GPU Pod (podRetention: Never)
 ```
 
 ### 6.2 Architectural Rationale of Pipeline Components
