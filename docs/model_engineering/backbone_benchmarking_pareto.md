@@ -28,6 +28,12 @@ To formalize these multi-objective trade-offs, TaxonVision-MLOps evaluates candi
 
 Use the interactive workbench below to explore the empirical Pareto frontier. Hover over or click data points on the SVG scatter chart to inspect model metrics, toggle between architecture families, or sort the benchmark matrix across target deployment dimensions.
 
+> [!IMPORTANT]
+> **Data Provenance & Empirical Holdout vs. Symbolic Candidate Projections:**
+>
+> * **Active Production Model (Empirically Verified):** The champion model actively trained, quantized, and evaluated on-cluster in the 7-stage DVC pipeline is `dinov3_vits14`. Evaluated on the holdout test partition (`data/embeddings/test_embeddings.pt`, $N=169$ observations across 10 taxa), it achieves **89.35% Holdout Test Accuracy** (`reports/pareto_evaluation.json`), 82.84% Validation Accuracy (`reports/train_metrics.json`), and 96.45% empirical conformal coverage.
+> * **Candidate Backbone Comparisons (Symbolic Literature Projections):** The metrics presented for `bioclip-2`, `dinov2_vits14`, `mobilenetv4_conv_small`, and `efficientnet_b0` (and GPU TensorRT latency profiles) represent **symbolic architectural projections** derived from published literature baselines (Stevens et al. 2024, Oquab et al. 2023, Qin et al. 2024, Tan & Le 2019) and hardware latency budgets. They serve as comparative design exploration baselines rather than multi-model cluster benchmarks.
+
 <div id="taxon-pareto-explorer"></div>
 
 ---
@@ -38,19 +44,19 @@ TaxonVision evaluates five foundation feature extractors spanning dense self-sup
 
 | Extractor Model | Architecture Family | Canonical Literature Baseline | Parameters | Feature Dim | Operational Profile |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`dinov3_vits14`** | Dense Self-Supervised ViT | Dense morphology probe with register tokens; state-of-the-art fine-grained representation | ~22.0M | 384 | **Production Champion:** Server GPU / Dense Morphology |
-| **`bioclip-2`** | Vision-Language (Tree of Life) | Zero-Shot ~59.3% Macro; Few-Shot up to 92.4% on specialized taxa (Stevens et al., 2024) | ~86.0M | 512 | **Taxonomic Prior:** Server GPU / Taxonomic Semantics |
-| **`dinov2_vits14`** | Self-Supervised ViT | ImageNet-1K Linear Probe: 81.1% Top-1 (Oquab et al., 2023) | ~22.0M | 384 | **ViT Baseline:** General Visual Foundation Model |
-| **`mobilenetv4_conv_small`** | Universal Inverted Bottleneck | ImageNet-1K Top-1: 73.8% (Qin et al., 2024); high-throughput edge UIB | 3.8M | 960 (pool) | **Edge Fast-Path:** Ultra-Low Latency Mobile / CPU |
-| **`efficientnet_b0`** | Compound-Scaled ConvNet | ImageNet-1K Top-1: 77.1% (Tan & Le, 2019) | 5.3M | 1280 (pool) | **Edge Baseline:** Balanced CPU / Embedded Server |
+| **`dinov3_vits14`** | Dense Self-Supervised ViT | Dense morphology probe with register tokens (89.35% Test Acc in `reports/pareto_evaluation.json`) | ~22.0M | 384 | **Production Champion (Empirical):** Server GPU / Dense Morphology |
+| **`bioclip-2`** | Vision-Language (Tree of Life) | Zero-Shot ~59.3% Macro; Few-Shot up to 92.4% on specialized taxa (Stevens et al., 2024) | ~86.0M | 512 | **Taxonomic Prior (Projected):** Server GPU / Taxonomic Semantics |
+| **`dinov2_vits14`** | Self-Supervised ViT | ImageNet-1K Linear Probe: 81.1% Top-1 (Oquab et al., 2023) | ~22.0M | 384 | **ViT Baseline (Projected):** General Visual Foundation Model |
+| **`mobilenetv4_conv_small`** | Universal Inverted Bottleneck | ImageNet-1K Top-1: 73.8% (Qin et al., 2024); high-throughput edge UIB | 3.8M | 960 (pool) | **Edge Fast-Path (Projected):** Ultra-Low Latency Mobile / CPU |
+| **`efficientnet_b0`** | Compound-Scaled ConvNet | ImageNet-1K Top-1: 77.1% (Tan & Le, 2019) | 5.3M | 1280 (pool) | **Edge Baseline (Projected):** Balanced CPU / Embedded Server |
 
 ### Literature Context vs. Operational Benchmarking
 
 Universal academic benchmarks (e.g., ImageNet-1K or Tree-of-Life zero-shot evaluations) provide general capacity metrics, but they do not accurately reflect performance on specialized biological distributions under operational constraints:
 
-* **MobileNetV4 Small:** The official baseline is 73.8% Top-1 on ImageNet-1K. In specialized biodiversity pipelines, its inverted bottleneck architecture delivers an extraordinary **320 FPS** throughput and sub-4ms p95 latency on commodity CPUs ($0.50 per million inferences), making it the premier choice for edge camera traps with limited power budgets.
-* **BioCLIP-2:** Trained on over 10 million organism photographs structured by the Tree of Life taxonomy, BioCLIP-2 captures deep biological priors. On accelerated Tensor Core GPUs, it achieves 92.4% accuracy with 12.0 ms p95 latency. However, its 86M parameter footprint requires 1,200 MB of VRAM, increasing serving costs to $3.50 per million requests.
-* **DINOv3 ViT-S/14:** Evaluated via dense morphological probing on frozen embeddings, DINOv3 achieves the Pareto frontier optimum: **93.8% Top-1 Accuracy** with 13.5 ms p95 latency, 105 FPS throughput, and a compact 384-dimensional feature vector. At $2.60 per million requests, it serves as the platform's champion production model.
+* **MobileNetV4 Small (Symbolic Edge Profile):** The official baseline is 73.8% Top-1 on ImageNet-1K. In specialized biodiversity pipelines, its inverted bottleneck architecture provides an estimated **320 FPS** throughput and sub-4ms p95 latency on commodity CPUs ($0.50 per million inferences), making it the candidate of choice for edge camera traps with limited power budgets.
+* **BioCLIP-2 (Symbolic Domain Profile):** Trained on over 10 million organism photographs structured by the Tree of Life taxonomy, BioCLIP-2 captures deep biological priors. Under accelerated Tensor Core GPU execution, literature evaluations project up to 92.4% accuracy with 12.0 ms p95 latency. However, its 86M parameter footprint requires 1,200 MB of VRAM, increasing serving costs to $3.50 per million requests.
+* **DINOv3 ViT-S/14 (Empirical Production Champion):** Evaluated via dense morphological probing on frozen embeddings, DINOv3 achieves the Pareto frontier optimum: **89.35% Empirical Test Accuracy** on the 10-class holdout (`reports/pareto_evaluation.json`), with an estimated 13.5 ms p95 GPU latency budget, 105 FPS throughput, and a compact 384-dimensional feature vector. At $2.60 per million requests, it serves as the platform's champion production model.
 
 ---
 
@@ -63,12 +69,9 @@ $$\text{p95 Latency} \le 15.0\text{ ms}$$
 ```mermaid
 flowchart LR
     subgraph Gate["Stage 7: Production Deployment SLA Gate"]
-        M1["MobileNetV4 (3.5 ms)"] -->|PASSED| DEPLOY["Production Registry (DagsHub)"]
-        M2["EfficientNet-B0 (6.8 ms)"] -->|PASSED| DEPLOY
-        M3["BioCLIP-2 (12.0 ms)"] -->|PASSED| DEPLOY
-        M4["DINOv3 ViT-S/14 (13.5 ms)"] -->|PASSED| DEPLOY
-        M5["DINOv2 ViT-S/14 (14.0 ms)"] -->|PASSED| DEPLOY
-        M6["Hypothetical ViT-Base (> 35 ms)"] -->|REJECTED| FAIL["Automated CI/CD Abort"]
+        M1["DINOv3 ViT-S/14<br/>(Empirical Production Model)"] -->|89.35% Test Acc / INT8 PTQ| DEPLOY["Production Registry (DagsHub)"]
+        M2["Candidate Backbone Projections<br/>(MobileNetV4, BioCLIP-2, DINOv2)"] -.->|Literature Calibrated| EVAL["Architectural Evaluation Plane"]
+        M3["Hypothetical ViT-Base (> 35 ms)"] -->|REJECTED| FAIL["Automated CI/CD Abort"]
     end
 ```
 

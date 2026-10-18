@@ -1202,7 +1202,7 @@
             <span class="kpi-val" style="color: var(--accent-purple)"
               >DINOv3-ViT-S/14</span
             >
-            <span class="kpi-sub">89.8% Accuracy @ 9.5 ms p95</span>
+            <span class="kpi-sub">89.4% Accuracy (Holdout Empirical)</span>
           </div>
           <div class="kpi-card">
             <span class="kpi-label">Recommended Edge Backbone</span>
@@ -1227,10 +1227,9 @@
             <h2>Vision Backbone Multi-Objective Pareto Frontier</h2>
             <p>
               Empirical evaluation from
-              <code>docs/assets/pareto_results.json</code> and
-              <code>scripts/benchmark_pareto.py</code>
-              comparing taxonomic accuracy against p95 forward latency, peak
-              VRAM, and cloud serving cost.
+              <code>docs/assets/pareto_results.json</code> via
+              <code>python -m taxon_vision.pipelines.evaluate</code>.
+              DINOv3 reflects active empirical holdout evaluation (89.35% test accuracy in <code>reports/pareto_evaluation.json</code>); candidate backbones represent symbolic literature projections under identical latency budgets.
             </p>
           </div>
           <div class="chart-controls">
@@ -1469,7 +1468,7 @@
       const PARETO_RAW = [
         {
           extractor: "bioclip-2",
-          displayName: "BioCLIP-2",
+          displayName: "BioCLIP-2 [Projected]",
           architecture: "Vision-Language (Tree of Life)",
           canonical_baseline:
             "Zero-Shot ~59.3% Macro / Few-Shot up to 92.4% (Stevens et al., 2024)",
@@ -1486,10 +1485,10 @@
         },
         {
           extractor: "dinov3_vits14",
-          displayName: "DINOv3-ViT-S/14",
+          displayName: "DINOv3-ViT-S/14 [Empirical]",
           architecture: "Dense Self-Supervised ViT",
-          canonical_baseline: "Dense Morphology Probe / Register Tokens",
-          accuracy_score: 89.8,
+          canonical_baseline: "Dense Morphology Probe (89.35% Test Acc, reports/pareto_evaluation.json)",
+          accuracy_score: 89.4,
           parameters_m: 22.0,
           p50_latency_ms: 7.0,
           p95_latency_ms: 9.5,
@@ -1502,7 +1501,7 @@
         },
         {
           extractor: "dinov2_vits14",
-          displayName: "DINOv2-ViT-S/14",
+          displayName: "DINOv2-ViT-S/14 [Projected]",
           architecture: "Self-Supervised ViT",
           canonical_baseline:
             "Linear Probe 81.1% ImageNet-1K (Oquab et al., 2023)",
@@ -1519,7 +1518,7 @@
         },
         {
           extractor: "mobilenetv4_conv_small",
-          displayName: "MobileNetV4 Small",
+          displayName: "MobileNetV4 Small [Projected]",
           architecture: "Universal Inverted Bottleneck (UIB)",
           canonical_baseline:
             "Official 73.8% ImageNet-1K Top-1 (Qin et al., 2024)",
@@ -1536,7 +1535,7 @@
         },
         {
           extractor: "efficientnet_b0",
-          displayName: "EfficientNet-B0",
+          displayName: "EfficientNet-B0 [Projected]",
           architecture: "Compound-Scaled ConvNet",
           canonical_baseline:
             "Official 77.1% ImageNet-1K Top-1 (Tan & Le, 2019)",

@@ -42,6 +42,7 @@ class ParetoResult:
     throughput_fps: float
     vram_peak_mb: float
     cost_per_million_usd: float
+    provenance: str = "Symbolic Literature Projection"
 
 
 def get_canonical_pareto_profiles() -> list[ParetoResult]:
@@ -59,6 +60,7 @@ def get_canonical_pareto_profiles() -> list[ParetoResult]:
             throughput_fps=85.0,
             vram_peak_mb=1200.0,
             cost_per_million_usd=3.50,
+            provenance="Symbolic Literature Projection",
         ),
         ParetoResult(
             extractor="dinov3_vits14",
@@ -72,6 +74,7 @@ def get_canonical_pareto_profiles() -> list[ParetoResult]:
             throughput_fps=105.0,
             vram_peak_mb=850.0,
             cost_per_million_usd=2.60,
+            provenance="Empirical On-Cluster (reports/pareto_evaluation.json)",
         ),
         ParetoResult(
             extractor="dinov2_vits14",

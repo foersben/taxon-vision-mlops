@@ -99,6 +99,8 @@ When an autonomous model is presented with an out-of-domain photograph (such as 
 
 $$\mathbf{z}_{\text{car}} = [-14.2, -14.8, -15.1, -13.9, -14.6, -15.0, -14.3, -14.7, -15.2, -14.9]^T$$
 
+*(Note: $\mathbf{z}_{\text{car}}$ is an illustrative symbolic toy vector demonstrating the mathematical failure mode of shift-invariance under small negative activations.)*
+
 Because $-13.9$ is slightly less negative than $-15.2$, standard softmax normalizes these tiny numbers into high confidence:
 
 $$\hat{\pi}_4(x) = \frac{\exp(-13.9)}{\sum_{j=1}^{10} \exp(z_j)} \approx 0.38$$

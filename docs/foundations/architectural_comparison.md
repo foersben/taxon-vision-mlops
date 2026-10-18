@@ -102,7 +102,7 @@ The table below summarizes the key architectural dimensions across both paradigm
 
 ##### Comparative Verdict & Trade-off: Storage Topology
 
-* *Storage Efficiency:* Zero local image storage required; 518 observations consume only 10.7 KB of manifest storage instead of gigabytes of raw images.
+* *Storage Efficiency:* Zero local image storage required; 1,689 verified observations consume only ~34 KB of manifest storage (`data/manifests/dataset_manifest.parquet`) instead of gigabytes of raw images.
 * *DevOps Overhead:* Zero database daemons to configure, patch, or maintain.
 * *The Trade-off:* Streaming requires consistent network connectivity during training batches. If internet access is intermittent, a local cache of reference exemplar crops (strictly capped at 50 crops per species, consuming ~4.5 GB) acts as a fallback buffer.
 

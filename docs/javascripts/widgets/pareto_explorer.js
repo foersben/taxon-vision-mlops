@@ -23,13 +23,13 @@ function initParetoExplorer() {
             throughput_fps: 105.0,
             vram_peak_mb: 850.0,
             cost_per_million_usd: 2.60,
-            top1_acc: 93.8,
+            top1_acc: 89.4,
             macro_pr_auc: 0.952,
             sla_passed: true,
-            badge: "Champion",
+            badge: "Champion (Empirical)",
             color: "#00e676",
             family: "vit",
-            profile: "Dense Morphology & Register Tokens"
+            profile: "Dense Morphology & Register Tokens (Active Trained Model)"
         },
         {
             extractor: "bioclip-2",
@@ -45,10 +45,10 @@ function initParetoExplorer() {
             top1_acc: 92.4,
             macro_pr_auc: 0.941,
             sla_passed: true,
-            badge: "Domain Priors",
+            badge: "Priors (Projected)",
             color: "#00e5ff",
             family: "vit",
-            profile: "Domain Biological Tree Prior"
+            profile: "Domain Biological Tree Prior (Literature Projection)"
         },
         {
             extractor: "dinov2_vits14",
@@ -64,10 +64,10 @@ function initParetoExplorer() {
             top1_acc: 89.4,
             macro_pr_auc: 0.908,
             sla_passed: true,
-            badge: "Baseline ViT",
+            badge: "Baseline (Projected)",
             color: "#b388ff",
             family: "vit",
-            profile: "Foundation Visual Baseline"
+            profile: "Foundation Visual Baseline (Literature Projection)"
         },
         {
             extractor: "mobilenetv4_conv_small",
@@ -83,10 +83,10 @@ function initParetoExplorer() {
             top1_acc: 78.5,
             macro_pr_auc: 0.798,
             sla_passed: true,
-            badge: "Edge Fast-Path",
+            badge: "Edge (Projected)",
             color: "#ffab00",
             family: "cnn",
-            profile: "Ultra-Low Latency Edge CPU"
+            profile: "Ultra-Low Latency Edge CPU (Literature Projection)"
         },
         {
             extractor: "efficientnet_b0",
@@ -102,10 +102,10 @@ function initParetoExplorer() {
             top1_acc: 81.2,
             macro_pr_auc: 0.825,
             sla_passed: true,
-            badge: "Balanced Edge",
+            badge: "Edge (Projected)",
             color: "#ff7043",
             family: "cnn",
-            profile: "Balanced Edge Baseline"
+            profile: "Balanced Edge Baseline (Literature Projection)"
         }
     ];
 
@@ -116,6 +116,9 @@ function initParetoExplorer() {
 
     mountPoint.innerHTML = `
         <div class="pareto-explorer">
+            <div class="pareto-provenance-banner" style="margin-bottom: 1rem; padding: 0.75rem 1rem; background: rgba(0, 230, 118, 0.08); border-left: 3px solid #00e676; border-radius: 4px; font-size: 0.82rem; line-height: 1.4;">
+                <strong>Benchmark Data Provenance:</strong> DINOv3 ViT-S/14 reflects empirical on-cluster evaluation on 1,689 verified observations (89.35% holdout test accuracy, <code>reports/pareto_evaluation.json</code>). Candidate backbones (BioCLIP-2, DINOv2, MobileNetV4, EfficientNet) represent symbolic projections calibrated against published peer-reviewed literature under identical tensor constraints.
+            </div>
             <div class="pareto-header-row">
                 <div class="pareto-chart-title">
                     <span>Multi-Objective Pareto Frontier (p95 Latency vs. Accuracy)</span>

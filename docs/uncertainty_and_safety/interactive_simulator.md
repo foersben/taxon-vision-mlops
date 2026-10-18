@@ -12,7 +12,7 @@ verified: {by: process:docs-librarian, at: "2026-10-18T12:00:00Z"}
 
 # Interactive Conformal & Thermodynamic OOD Simulator
 
-Explore the epistemic decision mechanics governing TaxonVision-MLOps uncertainty bounds. Adjust the significance level $\alpha$, Helmholtz Free Energy cutoff $\tau_{\text{OOD}}$, and logit temperature $T$, or select real-world observation presets to observe real-time impacts on coverage guarantees, empirical quantiles, and human triage dispatch routes.
+Explore the epistemic decision mechanics governing TaxonVision-MLOps uncertainty bounds. Adjust the significance level $\alpha$, Helmholtz Free Energy cutoff $\tau_{\text{OOD}}$, and logit temperature $T$, or select illustrative synthetic presets (symbolic logit scenarios representing inlier, mimicry, clutter, and semantic OOD behavior) to observe real-time impacts on coverage guarantees, empirical quantiles, and human triage dispatch routes.
 
 ---
 
@@ -23,6 +23,9 @@ Explore the epistemic decision mechanics governing TaxonVision-MLOps uncertainty
 ---
 
 ## 2. Interactive Presets & Diagnostic Scenarios
+
+> [!NOTE]
+> **Synthetic Diagnostic Fixtures:** The scenarios below are illustrative synthetic presets with curated logit vectors designed to demonstrate the behavioral mechanics of conformal prediction, Shannon entropy filtering, and Helmholtz free energy gating in a sandbox environment. They represent didactic diagnostic vectors rather than raw camera-trap captures.
 
 The simulator models an operational 5-class biological perimeter containing challenging insect taxa, non-biological anomalies, and corrupted camera-trap triggers:
 

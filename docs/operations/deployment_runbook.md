@@ -82,14 +82,17 @@ The preview/operator service is exposed to a selected external audience using tw
 
 ## Section 5: Dataset Scaling Horizons
 
-The architectural breakdown details how TaxonVision-MLOps scales across data horizons.
+> [!NOTE]
+> **Data Horizon Provenance:** The Dev Baseline reflects the active verified ground truth of the repository (1,689 verified observations across 10 biological taxa in `data/manifests/dataset_manifest.parquet` filtered from 2,000 ingested records). Horizons 1 through 3 represent forward-looking architectural scaling roadmap milestones and capacity planning projections, rather than completed runs.
+
+The architectural breakdown details how TaxonVision-MLOps scales across data horizons:
 
 | Horizon | Scale | Infrastructure & Architecture Details | Validation & Verification |
 | --- | --- | --- | --- |
-| Dev Baseline (Current) | 518 observations, 10 taxa | Local SQLite & disk cache | Rapid offline unit/conformal testing |
-| Horizon 1 (Pilot Perimeter) | ~5,000 observations, 10 curated target taxa | Single GPU training, DVC versioning on DagsHub | Strict CC-BY/CC0 verification |
-| Horizon 2 (Regional Production) | ~50,000 observations, 100 taxa | Multi-GPU Distributed Data Parallel (DDP), S3/SeaweedFS bucket versioning | Automated concept drift detection |
-| Horizon 3 (Global Scale) | 100,000+ exemplars, ~50 TB raw imagery | Distributed zero-copy streaming with Ray Data and PyTorch WebDataset, fine-tuning foundation vision backbones (DINOv2, BioCLIP-2) | Conformal calibration on stratified holdouts |
+| Dev Baseline (Current) | 1,689 verified observations, 10 taxa | Local SQLite & disk cache | Rapid offline unit/conformal testing |
+| Horizon 1 (Pilot Perimeter, Projected) | ~5,000 observations, 10 curated target taxa | Single GPU training, DVC versioning on DagsHub | Strict CC-BY/CC0 verification |
+| Horizon 2 (Regional Production, Projected) | ~50,000 observations, 100 taxa | Multi-GPU Distributed Data Parallel (DDP), S3/SeaweedFS bucket versioning | Automated concept drift detection |
+| Horizon 3 (Global Scale, Projected) | 100,000+ exemplars, ~50 TB raw imagery | Distributed zero-copy streaming with Ray Data and PyTorch WebDataset, fine-tuning foundation vision backbones (DINOv2, BioCLIP-2) | Conformal calibration on stratified holdouts |
 
 ## Section 6: Cluster Bootstrapping vs. Continuous Delivery Lifecycle
 

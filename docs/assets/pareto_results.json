@@ -10,7 +10,8 @@
     "p95_latency_ms": 12.0,
     "throughput_fps": 85.0,
     "vram_peak_mb": 1200.0,
-    "cost_per_million_usd": 3.5
+    "cost_per_million_usd": 3.5,
+    "provenance": "Symbolic Literature Projection"
   },
   {
     "extractor": "dinov3_vits14",
@@ -23,7 +24,8 @@
     "p95_latency_ms": 13.5,
     "throughput_fps": 105.0,
     "vram_peak_mb": 850.0,
-    "cost_per_million_usd": 2.6
+    "cost_per_million_usd": 2.6,
+    "provenance": "Empirical On-Cluster (reports/pareto_evaluation.json)"
   },
   {
     "extractor": "dinov2_vits14",
@@ -36,7 +38,8 @@
     "p95_latency_ms": 14.0,
     "throughput_fps": 100.0,
     "vram_peak_mb": 850.0,
-    "cost_per_million_usd": 2.7
+    "cost_per_million_usd": 2.7,
+    "provenance": "Symbolic Literature Projection"
   },
   {
     "extractor": "mobilenetv4_conv_small",
@@ -49,7 +52,8 @@
     "p95_latency_ms": 3.5,
     "throughput_fps": 320.0,
     "vram_peak_mb": 150.0,
-    "cost_per_million_usd": 0.5
+    "cost_per_million_usd": 0.5,
+    "provenance": "Symbolic Literature Projection"
   },
   {
     "extractor": "efficientnet_b0",
@@ -62,6 +66,7 @@
     "p95_latency_ms": 6.8,
     "throughput_fps": 160.0,
     "vram_peak_mb": 300.0,
-    "cost_per_million_usd": 1.1
+    "cost_per_million_usd": 1.1,
+    "provenance": "Symbolic Literature Projection"
   }
 ]

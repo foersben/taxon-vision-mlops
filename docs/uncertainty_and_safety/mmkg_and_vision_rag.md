@@ -49,6 +49,9 @@ flowchart TD
 
 ## 1. Conformal-Driven Lazy Invocation Trigger
 
+> [!NOTE]
+> **Target Architecture & Symbolic Operational Projections:** The Vision-RAG and Multimodal Knowledge Graph (MMKG) architecture documented in this section represents a target production design pattern and future capability roadmap (elaborated in Chapter 5 of the Technical Strategy Report). Traffic percentages (e.g., ~82% singleton, ~15% ambiguity, ~3% triage) and downstream VLM pipelines reflect projected production scaling targets rather than active serving telemetry from the initial 10-taxa baseline.
+
 In high-throughput biological monitoring (e.g., continuous camera-trap streams or automated citizen-science feeds), executing full multimodal retrieval and Vision-Language Model (VLM) generation on every query image would collapse serving infrastructure and balloon operational costs.
 
 TaxonVision-MLOps enforces a **lazy invocation trigger** governed strictly by Split Conformal Prediction set cardinality:
