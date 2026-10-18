@@ -185,57 +185,81 @@
 \end{frame}
 
 \begin{frame}{GPU Memory Allocation}{Time-Sliced VRAM Partitioning \& Process Capping}
-    \begin{columns}[c]
-        \begin{column}{0.44\textwidth}
+    \vspace{-0.2cm}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
             \centering
-            \resizebox{0.88\linewidth}{!}{
+            \resizebox{0.98\linewidth}{!}{
             \begin{tikzpicture}[
                 font=\sffamily,
-                slot/.style={draw=TaxonDark, thick, minimum width=2.4cm, align=center, font=\scriptsize\bfseries}
+                slot/.style={draw=TaxonDark, thick, minimum width=5.0cm, text width=4.8cm, align=center, font=\scriptsize\bfseries}
             ]
-                % Physical VRAM Vertical Stack (Scale: 1 GB = 0.30cm; 16 GB = 4.80cm)
-                % Slot 1: FastAPI (3.5 GB -> 1.05cm)
-                \node[slot, fill=plantgreen!75, text=white, minimum height=1.05cm, anchor=south] at (0, 0) (s1) {Slot 1: FastAPI\\{\tiny 3.5 GB Serving}};
+                % Physical VRAM Vertical Stack (Scale: 1 GB = 0.25cm; 16 GB = 4.00cm)
+                % Slot 1: FastAPI Serving (2.7 GB -> 0.68cm)
+                \node[slot, fill=plantgreen!75, text=white, minimum height=0.68cm, anchor=south] at (0, 0) (s1) {%
+                    Slot 1: FastAPI Serving\\[-1pt]%
+                    {\scriptsize 2.7 GB $\cdot$ ONNX Runtime INT8}%
+                };
 
-                % Slot 2: Jenkins (3.5 GB -> 1.05cm)
-                \node[slot, fill=signalorange!85, text=white, minimum height=1.05cm, anchor=south] at (s1.north) (s2) {Slot 2: Jenkins CI\\{\tiny 3.5 GB Runner}};
+                % Slot 2: Jenkins CI Runner (3.5 GB -> 0.88cm)
+                \node[slot, fill=signalorange!85, text=white, minimum height=0.88cm, anchor=south] at (s1.north) (s2) {%
+                    Slot 2: Jenkins CI Runner\\[-1pt]%
+                    {\scriptsize 3.5 GB $\cdot$ Ephemeral Test Pod}%
+                };
 
-                % Slot 3: PyTorch/Optuna (5.0 GB -> 1.50cm)
-                \node[slot, fill=deepblue!85, text=white, minimum height=1.50cm, anchor=south] at (s2.north) (s3) {Slot 3: PyTorch / Optuna\\{\tiny 5.0 GB HPO / Probing}};
+                % Slot 3: PyTorch / Optuna HPO (5.0 GB -> 1.25cm)
+                \node[slot, fill=deepblue!85, text=white, minimum height=1.25cm, anchor=south] at (s2.north) (s3) {%
+                    Slot 3: PyTorch / Optuna HPO\\[-1pt]%
+                    {\scriptsize 5.0 GB $\cdot$ \texttt{memory\_fraction(0.3125)}}%
+                };
 
-                % Slot 4: Elastic Headroom (4.0 GB -> 1.20cm)
-                \node[slot, fill=gray!35, text=TaxonDark, minimum height=1.20cm, anchor=south] at (s3.north) (s4) {Slot 4: Headroom\\{\tiny 4.0 GB Buffer}};
+                % Slot 4: Elastic Headroom (4.8 GB -> 1.19cm)
+                \node[slot, fill=gray!25, text=TaxonDark, minimum height=1.19cm, anchor=south] at (s3.north) (s4) {%
+                    Slot 4: Elastic Headroom\\[-1pt]%
+                    {\scriptsize 4.8 GB (30\%) $\cdot$ Driver \& OS Buffer}%
+                };
 
-                % 70% Hard Container Ceiling at 11.2 GB (3.36cm)
-                \draw[thick, dashed, red] (-1.35, 3.36) -- (1.55, 3.36);
-                \node[anchor=west, text=red, font=\tiny\bfseries] at (1.55, 3.36) {11.2 GB (70\% Cap)};
+                % 70% Hard Container Software Ceiling at 11.2 GB (2.81cm = s3.north)
+                \draw[line width=1.5pt, dashed, red] (-2.65, 2.81) -- (2.65, 2.81);
+                \node[anchor=west, text=red!85!black, font=\scriptsize\bfseries] at (2.68, 2.81) {%
+                    $\leftarrow$ 11.2 GB (70\% Cap)%
+                };
 
-                % Total VRAM bracket on left
-                \draw[decorate,decoration={brace,amplitude=4pt},thick] (-1.35, 4.8) -- (-1.35, 0) node[midway,left=0.15cm, font=\tiny\bfseries, align=center] {16 GB\\Total};
+                % Left braces: Active Pool (70%) vs Headroom (30%)
+                \draw[decorate,decoration={brace,amplitude=4pt},thick, plantgreen!80!black] (-2.6, 2.81) -- (-2.6, 0)
+                    node[midway,left=0.08cm, font=\scriptsize\bfseries, align=right, text=plantgreen!80!black] {Active 70\%\\(11.2 GB)};
+
+                \draw[decorate,decoration={brace,amplitude=4pt},thick, gray!60!black] (-2.6, 4.00) -- (-2.6, 2.81)
+                    node[midway,left=0.08cm, font=\scriptsize\bfseries, align=right, text=gray!60!black] {Buffer 30\%\\(4.8 GB)};
+
+                % Hardware label underneath
+                \node[anchor=north, font=\scriptsize\bfseries\sffamily, text=TaxonDark] at (0, -0.08) {%
+                    NVIDIA RTX 5070 Ti $\cdot$ 16.0 GB GDDR7 Total%
+                };
 
             \end{tikzpicture}
             }
         \end{column}
-        \begin{column}{0.52\textwidth}
-            \begin{block}{Temporal Time-Slicing}
-                \scriptsize
-                \texttt{replicas: 4} in \texttt{nvidia-time-slicing-} \newline \texttt{config.yaml} virtualizes the RTX 5070 Ti for concurrent container pods without context thrashing.
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Resource Virtualization \& Workload Budgets}
+                \begin{itemize}\scriptsize
+                    \item \textbf{4 Virtual Slices:} Declared in \texttt{nvidia-time-slicing-config.yaml}.
+                    \item \textbf{PyTorch / Optuna (Slot 3):} Confined to 5.0 GB physical VRAM via \texttt{memory\_fraction(0.3125)}.
+                    \item \textbf{FastAPI Serving (Slot 1):} Zero-allocation INT8 ONNX Runtime engine requires $< 2.7\text{ GB}$.
+                \end{itemize}
             \end{block}
-            \vspace{0.08cm}
-            \begin{block}{Process-Level Memory Capping}
-                \scriptsize
-                \texttt{torch.cuda.set\_per\_process\_} \newline \texttt{memory\_fraction(0.3125)} explicitly restricts PyTorch/Optuna to exactly 5.0 GB of physical VRAM.
-            \end{block}
-            \vspace{0.08cm}
-            \begin{block}{OOM Isolation Invariants}
-                \scriptsize
-                The 70\% container ceiling (11.2 GB) prevents memory fragmentation and protects production FastAPI endpoints from background CI spikes.
+            \vspace{0.02cm}
+            \begin{block}{The 70\% OOM Isolation Invariant}
+                \begin{itemize}\scriptsize
+                    \item \textbf{11.2 GB Active Ceiling:} Cumulative active pod memory cannot exceed 70\%, eliminating cascading OOM panics.
+                    \item \textbf{4.8 GB (30\%) Buffer Margin:} Reserved as elastic headroom for OS displays and CUDA drivers.
+                \end{itemize}
             \end{block}
         \end{column}
     \end{columns}
 
-    \script{This diagram shows the 16 GB VRAM physical capacity broken down into our 4 time-sliced slots. Slot 1 runs our FastAPI serving at up to 3.5 GB. Slot 2 is our Jenkins CI agent. Slot 3 is gated for PyTorch training at 5 GB. We deliberately leave Slot 4 as elastic headroom. The red dashed line illustrates our 70\% container software ceiling, ensuring no single pod can monopolize the card and cause OOM cascading failures.}
-    \qa{How is the 5.0 GB limit for PyTorch enforced?}{We invoke \texttt{torch.cuda.set\_per\_process\_}\allowbreak\texttt{memory\_fraction(0.3125)} to explicitly restrict PyTorch to exactly 5.0 GB of the 16.0 GB total, guaranteeing it respects its designated slot bounds.}
+    \script{This diagram details our 16 GB VRAM budgeting under 4-slot Kubernetes time-slicing. Because consumer RTX GPUs lack hardware MIG, VRAM isolation must be strictly enforced in software. We allocate 2.7 GB for FastAPI INT8 serving, 3.5 GB for the ephemeral Jenkins CI runner, and 5.0 GB for PyTorch Optuna training. Combined, these active workloads total exactly 11.2 GB—our 70\% software ceiling. The remaining 4.8 GB (30\%) is permanently preserved as elastic headroom against CUDA driver fragmentation.}
+    \qa{How is the 5.0 GB limit for PyTorch enforced?}{We invoke \texttt{torch.cuda.set\_per\_process\_memory\_fraction(0.3125)} at startup, restricting PyTorch to exactly 5.0 GB of physical VRAM and preventing multi-tenant OOM panics.}
 \end{frame}
 
 \begin{frame}{Network Security}{Cloudflare Zero Trust Tunnel \& Ingress Decoupling}
