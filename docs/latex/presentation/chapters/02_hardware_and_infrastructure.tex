@@ -220,17 +220,17 @@
                 };
 
                 % 70% Hard Container Software Ceiling at 11.2 GB (2.81cm = s3.north)
-                \draw[line width=1.5pt, dashed, red] (-2.65, 2.81) -- (2.65, 2.81);
+                \draw[line width=1.5pt, dashed, red] (-2.55, 2.81) -- (2.65, 2.81);
                 \node[anchor=west, text=red!85!black, font=\scriptsize\bfseries] at (2.68, 2.81) {%
                     $\leftarrow$ 11.2 GB (70\% Cap)%
                 };
 
                 % Left braces: Active Pool (70%) vs Headroom (30%)
-                \draw[decorate,decoration={brace,amplitude=4pt},thick, plantgreen!80!black] (-2.6, 2.81) -- (-2.6, 0)
-                    node[midway,left=0.08cm, font=\scriptsize\bfseries, align=right, text=plantgreen!80!black] {Active 70\%\\(11.2 GB)};
+                \draw[decorate,decoration={brace,amplitude=5pt},thick, plantgreen!80!black] (-2.75, 0) -- (-2.75, 2.81)
+                    node[midway,left=0.15cm, font=\scriptsize\bfseries, align=right, text=plantgreen!80!black] {Active 70\%\\(11.2 GB)};
 
-                \draw[decorate,decoration={brace,amplitude=4pt},thick, gray!60!black] (-2.6, 4.00) -- (-2.6, 2.81)
-                    node[midway,left=0.08cm, font=\scriptsize\bfseries, align=right, text=gray!60!black] {Buffer 30\%\\(4.8 GB)};
+                \draw[decorate,decoration={brace,amplitude=5pt},thick, gray!60!black] (-2.75, 2.81) -- (-2.75, 4.00)
+                    node[midway,left=0.15cm, font=\scriptsize\bfseries, align=right, text=gray!60!black] {Buffer 30\%\\(4.8 GB)};
 
                 % Hardware label underneath
                 \node[anchor=north, font=\scriptsize\bfseries\sffamily, text=TaxonDark] at (0, -0.08) {%
