@@ -116,3 +116,9 @@ $$L_{\text{CAM}}^c = \text{ReLU}\left(\sum_{k} w_k^c A^k\right)$$
 Where $A^k$ represents the spatial feature activations captured during the forward pass, and $w_k^c$ is the static weight connecting channel $k$ to class $c$.
 
 This operation computes pixel-level anatomical heatmaps with minimal forward-pass overhead (targeted under 2 to 5 milliseconds), fully preserving the forward-only, quantization-friendly execution paradigm.
+
+### Operational Serving & UI Integration
+
+* **Zero-Allocation Fast Path:** Primary automated camera-trap traffic hits `POST /api/v1/predict` with `explain=false` (default), bypassing CAM extraction entirely to strictly enforce the $\le 15.0\text{ ms}$ p95 latency invariant.
+* **On-Demand Client Flag:** Interactive applications and field mobile devices pass `explain=true` to receive a base64-encoded PNG overlay (`cam_heatmap_base64`) aligned with the top-1 predicted taxon.
+* **HTMX Operator Cockpit:** In `/ui/predict-htmx`, the prediction card renders an on-demand button (`#btn-inspect-cam`) that lazily targets `POST /api/v1/explain` with `HX-Request: true` to inject a styled Viridis attribution card into the DOM without full page refresh.

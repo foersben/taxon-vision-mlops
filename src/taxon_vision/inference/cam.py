@@ -13,6 +13,8 @@ global average pooling, and w_k^c is the linear classification head weight for c
 
 from __future__ import annotations
 
+import base64
+import io
 import logging
 from typing import Protocol, runtime_checkable
 
@@ -244,10 +246,9 @@ def generate_heatmap(
             logger.error("Failed to resolve classifier for CAM attribution: %s", exc)
             raise SaliencyExtractionError(f"Classifier model is not available for saliency extraction: {exc}") from exc
 
-    if isinstance(model, TaxonClassifier):
-        backbone = model.backbone
-        head = model.head
-    elif isinstance(model, ClassifierWithBackboneAndHead):
+    backbone: nn.Module
+    head: nn.Module
+    if isinstance(model, (TaxonClassifier, ClassifierWithBackboneAndHead)):
         backbone = model.backbone
         head = model.head
     else:
@@ -284,3 +285,74 @@ def generate_heatmap(
         eps = float(get_settings().model.cam_numerical_epsilon)
         norm = (cam_np - c_min) / (c_max - c_min + eps)
         return norm.astype(np.float32)
+
+
+def overlay_cam_on_image(
+    image: Image.Image,
+    heatmap: npt.NDArray[np.float32],
+    alpha: float = 0.5,
+) -> Image.Image:
+    """Alpha-blend normalized 2D CAM heatmap over an RGB image using a colormap.
+
+    Why:
+        Ecologists and operators need an interpretable, visual representation of where
+        the vision foundation model attended when predicting a taxon. Blending the
+        attribution map over the raw photograph highlights morphological keys.
+
+    How:
+        Applies a viridis colormap to the 2D float32 attribution map, scales to RGB,
+        and alpha-blends with the source image using PIL Image.blend.
+
+    Complexity:
+        O(H * W) element-wise operations.
+
+    Args:
+        image: Original input PIL Image.
+        heatmap: 2D float32 numpy array with values in [0.0, 1.0].
+        alpha: Blending transparency factor between image and heatmap overlay.
+
+    Returns:
+        Alpha-blended RGB PIL Image.
+    """
+    import matplotlib.cm as cm
+
+    width, height = image.size
+    colored = cm.viridis(heatmap)
+    heatmap_rgb = (colored[:, :, :3] * 255).astype(np.uint8)
+    heatmap_img = Image.fromarray(heatmap_rgb).resize((width, height), resample=Image.Resampling.BILINEAR)
+    return Image.blend(image.convert("RGB"), heatmap_img, alpha=alpha)
+
+
+def generate_cam_overlay(
+    image: Image.Image,
+    classifier: nn.Module | None = None,
+    target_class: int | None = None,
+    alpha: float = 0.5,
+) -> str:
+    """Generate CAM attribution, blend with the original image, and encode as base64 PNG.
+
+    Why:
+        Provides a single-call helper for API endpoints and web UI partials to produce
+        ready-to-render image overlays without exposing intermediate numpy buffers.
+
+    How:
+        Invokes `generate_heatmap`, overlays on the input image via `overlay_cam_on_image`,
+        and serializes to an in-memory PNG buffer encoded as a UTF-8 base64 string.
+
+    Complexity:
+        O(1) forward model pass plus O(H * W) interpolation and image blending.
+
+    Args:
+        image: Original input PIL Image.
+        classifier: Optional TaxonClassifier instance. If None, resolves from service cache.
+        target_class: Target class index to explain. If None, defaults to argmax prediction.
+        alpha: Overlay blending opacity factor.
+
+    Returns:
+        Base64-encoded PNG image string.
+    """
+    heatmap = generate_heatmap(image, classifier=classifier, target_class=target_class)
+    overlay = overlay_cam_on_image(image, heatmap, alpha=alpha)
+    buf = io.BytesIO()
+    overlay.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode("utf-8")

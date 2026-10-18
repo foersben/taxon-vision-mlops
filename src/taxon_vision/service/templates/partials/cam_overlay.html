@@ -1,0 +1,19 @@
+<div class="cam-overlay">
+  <div class="cam-header">
+    <span class="cam-title">Diagnostic Morphological Key (CAM)</span>
+    <span class="cam-latency-tag">⚡ {{ "%.1f"|format(elapsed_ms) }} ms</span>
+  </div>
+  <div class="cam-image-wrapper">
+    <img src="data:image/png;base64,{{ overlay_b64 }}" alt="CAM Saliency Overlay" class="cam-heatmap-img" />
+  </div>
+  <div class="cam-legend">
+    <div class="legend-bar"></div>
+    <div class="legend-labels">
+      <span>Background Context</span>
+      <span>Diagnostic Morphological Features</span>
+    </div>
+  </div>
+  <p class="caption">
+    Analytical forward projection of terminal features against target head weights.
+  </p>
+</div>

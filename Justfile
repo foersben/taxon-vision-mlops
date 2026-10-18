@@ -180,27 +180,27 @@ predict image="data/sample/406185885_taxon_47120.jpg":
 download-samples per_taxon="1":
 	pixi run --frozen -e dev python scripts/data/download_samples.py --per-taxon {{per_taxon}}
 
-# Push tracked datasets & models to DagsHub using in-memory Secret Service credentials
+# Push tracked datasets & models to DagsHub or local remote
 [group("mlops")]
-dvc-push:
+dvc-push remote="origin":
 	@TOKEN=$(secret-tool lookup Title DagsHub 2>/dev/null || secret-tool lookup service dagshub 2>/dev/null); \
-	if [ -z "$TOKEN" ]; then \
+	if [ -z "$TOKEN" ] && [ "{{remote}}" = "origin" ]; then \
 		echo "❌ Error: KeePassXC is locked or DagsHub token not found in Secret Service." >&2; \
 		exit 1; \
 	fi; \
 	AWS_ACCESS_KEY_ID="$TOKEN" AWS_SECRET_ACCESS_KEY="$TOKEN" \
-	pixi run --frozen -e dev dvc push
+	pixi run --frozen -e dev dvc push -r {{remote}}
 
-# Pull tracked datasets & models from DagsHub
+# Pull tracked datasets & models from DagsHub or local remote
 [group("mlops")]
-dvc-pull:
+dvc-pull remote="origin":
 	@TOKEN=$(secret-tool lookup Title DagsHub 2>/dev/null || secret-tool lookup service dagshub 2>/dev/null); \
-	if [ -z "$TOKEN" ]; then \
+	if [ -z "$TOKEN" ] && [ "{{remote}}" = "origin" ]; then \
 		echo "❌ Error: KeePassXC is locked or DagsHub token not found in Secret Service." >&2; \
 		exit 1; \
 	fi; \
 	AWS_ACCESS_KEY_ID="$TOKEN" AWS_SECRET_ACCESS_KEY="$TOKEN" \
-	pixi run --frozen -e dev dvc pull
+	pixi run --frozen -e dev dvc pull -r {{remote}}
 
 # Display DVC pipeline Directed Acyclic Graph
 [group("mlops")]

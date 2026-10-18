@@ -55,18 +55,10 @@ stages:
       - model.extractor
       - model.image_size
     outs:
-      - data/embeddings/train_embeddings.pt:
-          remote: local-seaweedfs
-          push: true
-      - data/embeddings/val_embeddings.pt:
-          remote: local-seaweedfs
-          push: true
-      - data/embeddings/cal_embeddings.pt:
-          remote: local-seaweedfs
-          push: true
-      - data/embeddings/test_embeddings.pt:
-          remote: local-seaweedfs
-          push: true
+      - data/embeddings/train_embeddings.pt
+      - data/embeddings/val_embeddings.pt
+      - data/embeddings/cal_embeddings.pt
+      - data/embeddings/test_embeddings.pt
 
   train:
     cmd: >-
@@ -94,8 +86,7 @@ stages:
       - training.tune
       - training.weight_decay
     outs:
-      - models/checkpoints/head.pt:
-          remote: origin
+      - models/checkpoints/head.pt
     metrics:
       - reports/train_metrics.json:
           cache: false
@@ -120,8 +111,7 @@ stages:
       - model.extractor
       - model.image_size
     outs:
-      - models/checkpoints/model_int8.onnx:
-          remote: origin
+      - models/checkpoints/model_int8.onnx
 
   calibrate:
     cmd: >-

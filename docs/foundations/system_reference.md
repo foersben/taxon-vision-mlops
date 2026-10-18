@@ -111,8 +111,8 @@ The TaxonVision platform relies on specialized, purpose-built storage technologi
 | **Apache Parquet / Polars** | `data/manifests/*.parquet` | Snappy Columnar Parquet | High-performance columnar scan and predicate pushdown for metadata filtering without reading image payload bytes. |
 | **PyTorch Tensors** | `data/embeddings/*.pt` | Serialized FP32 Tensors | Decoupled 4-way embedding splits (`train`, `val`, `cal`, `test`) allowing linear classification head training in seconds on cached representations. |
 | **SQLite (PVC)** | `/workspace/optuna/optuna_studies.db` | Relational SQL DB | Persistent RDB backend for Optuna Bayesian hyperparameter studies, ensuring search trials resume seamlessly across pod restarts. |
-| **SeaweedFS S3** | `s3://taxon-vision/` (`local-seaweedfs`) | S3 Object Store API | Fast in-cluster distributed object store deployed on NVMe storage inside Kubernetes, avoiding public egress during training. |
-| **DagsHub DVC S3** | `s3://dvc-remote/` (`origin`) | Content-Addressed Hash | Cryptographically hashed DVC remote repository for immutable public releases, pipeline lockfiles, and global dataset replication. |
+| **SeaweedFS S3** | `s3://taxon-dvc-cache` (`local-seaweedfs`) | S3 Object Store API | Fast in-cluster distributed object store deployed on NVMe storage inside Kubernetes, acting as local NVMe edge cache ($< 2\text{ ms}$). |
+| **DagsHub DVC S3** | `s3://dvc` (`origin`) | Content-Addressed Hash | Cryptographically hashed DVC remote repository storing canonical cloud mirror for all 8 pipeline artifacts (~25 MB total). |
 | **MLflow Model Registry** | Remote DagsHub Registry | Artifacts + Schema Metadata | Centralized experiment tracking server storing training loss curves, Macro PR-AUC scores, and model versions with input/output `TensorSpec` contracts. |
 | **Prometheus / Evidently** | `/metrics` endpoint | Time-Series Metrics & JSON | Real-time monitoring of p95 latency SLAs, HTTP status distributions, prediction set cardinality, and feature representation drift. |
 
@@ -231,3 +231,17 @@ Controls metrics scraping intervals for real-time latency and drift telemetry:
 | `scrape_configs.job_name` | `str` | `'fastapi-app'` | Job identifier for TaxonVision API metrics collection. |
 | `scrape_configs.metrics_path` | `str` | `'/metrics'` | HTTP endpoint exposing Prometheus formatted metrics. |
 | `scrape_configs.static_configs.targets` | `list[str]` | `['host.docker.internal:8000']` | Target service hostnames and TCP ports. |
+
+### 3.6 REST API & HTMX Service Endpoints (`src/taxon_vision/service/`)
+
+Exposes synchronous inference, visual explainability, and operator UI views:
+
+| Route | Method | Module & Function | Description |
+| :--- | :--- | :--- | :--- |
+| `/` | `GET` | `views.py:index` | Server-rendered operator dashboard with responsive dropzone and instant image preview. |
+| `/ui/predict-htmx` | `POST` | `views.py:predict_htmx` | HTMX partial endpoint returning server-rendered prediction card with conformal sets and CAM inspector. |
+| `/api/v1/predict` | `POST` | `predict.py:predict_species` | Primary visual inference endpoint with conformal sets, OOD detection, human triage staging, and optional `explain=true` CAM overlay. |
+| `/api/v1/explain` | `POST` | `explain.py:explain_prediction` | Forward-only Class Activation Mapping endpoint returning JSON attribution metrics or server-rendered HTML fragments (`HX-Request: true`). |
+| `/health` | `GET` | `health.py:health` | Basic Kubernetes liveness probe endpoint. |
+| `/health/ready` | `GET` | `health.py:health_ready` | Kubernetes readiness probe verifying model checkpoint availability. |
+| `/metrics` | `GET` | `health.py:metrics` | Prometheus exposition endpoint for real-time latency and prediction counters. |

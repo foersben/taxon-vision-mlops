@@ -76,17 +76,17 @@ Large-scale computer vision workflows frequently suffer from severe network bott
 * Rather than mirroring terabytes of static imagery locally, the ingestion pipeline stores only image URLs and observation identifiers in `data/manifests/raw_manifest.parquet` ($< 500\text{ KB}$).
 * Images stream directly into ephemeral memory buffers during Stage 3 (`extract_features`) and are discarded immediately after forward-pass embedding generation.
 
-### Tier 1: In-Cluster Edge Cache (`http://seaweedfs-s3:8333`)
+### Tier 1: In-Cluster Edge Cache (`http://seaweedfs-s3:8333` / `local-seaweedfs`)
 
-* High-performance, distributed SeaweedFS object store running directly on bare-metal Kubernetes nodes with NVMe backing.
-* Stores intermediate feature tensors (`train_embeddings.pt`, `val_embeddings.pt`, `cal_embeddings.pt`, `test_embeddings.pt`).
-* Downstream stages (`train`, `calibrate`, `eval`) pull tensors locally over loopback networking with read latencies $< 2\text{ ms}$, eliminating cloud egress charges and external network latency.
+* High-performance, distributed SeaweedFS object store running directly on bare-metal Kubernetes nodes with NVMe backing in `namespace: taxon-vision`.
+* Functions as an accelerated NVMe read mirror for immediate local loopback access ($< 2\text{ ms}$) during cluster GPU feature extraction and Optuna HPO training sweeps.
+* Intermediate feature tensors (`train_embeddings.pt`, `val_embeddings.pt`, `cal_embeddings.pt`, `test_embeddings.pt`) and manifests are synchronized here to eliminate cloud egress charges and external latency during multi-trial runs.
 
-### Tier 2: Cloud Sync Remote (DagsHub `s3://dvc`)
+### Tier 2: Cloud Sync Remote (DagsHub `s3://dvc` / `origin`)
 
-* Acts as the immutable cloud source of truth for all verified model releases.
-* Only lightweight artifacts that have passed the full 7-stage quality gate (`head.pt`, `model_int8.onnx`, and `.dvc` tracking files) are pushed to DagsHub.
-* Guarantees that any developer or CI runner can reproduce production inference bundles without local cluster access.
+* Acts as the immutable, canonical cloud source of truth archiving all 8 Epistemic Diamond pipeline artifacts (~25 MB total).
+* Stores both manifests (`raw_manifest.parquet`, `dataset_manifest.parquet`), the 4 embedding tensors (~2.6 MB combined), the trained head checkpoint (`head.pt`), and the quantized INT8 ONNX bundle (`model_int8.onnx`).
+* Guarantees that external developers and CI runners can clone the repository and execute `just dvc-pull` or `pixi run -e dev dvc pull` seamlessly without requiring private Kubernetes cluster network access.
 
 ---
 

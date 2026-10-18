@@ -1585,13 +1585,13 @@
               role: "@api-and-ui-developer",
               path: "src/taxon_vision/service/routes/predict.py",
               description:
-                "High-throughput endpoint receiving observation image uploads. Executes zero-copy preprocessing, cached TaxonClassifier forward pass, Helmholtz energy OOD scoring, and Split Conformal Prediction sets.",
+                "High-throughput endpoint receiving observation image uploads. Executes zero-copy preprocessing, cached TaxonClassifier forward pass, Helmholtz energy OOD scoring, Split Conformal Prediction sets, and optional on-demand forward CAM saliency map generation (?explain=true).",
               invariants:
                 "Dual SLA: <= 15.0ms bare-metal GPU target, <= 25.0ms CPU/CI ceiling (Rule 02). Zero dynamic memory allocation.",
               formula:
                 "\\text{Card}(C(x)) \\le k_{\\max} \\implies \\text{Auto-Assign}, \\quad \\text{else} \\implies \\text{Refer}",
               config:
-                "Returns: PredictionResponse(top_prediction, conformal_set, is_ood, requires_human_review)",
+                "Params: explain: bool = False. Returns: PredictionResponse(top_prediction, conformal_set, is_ood, requires_human_review, cam_heatmap_base64)",
             },
           },
           {

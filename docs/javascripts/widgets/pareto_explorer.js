@@ -406,9 +406,13 @@ function initParetoExplorer() {
     renderDetail();
 }
 
-    if (typeof document$ !== "undefined") {
-        document$.subscribe(initParetoExplorer);
-    } else {
+    if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", initParetoExplorer);
+    } else {
+        initParetoExplorer();
+    }
+
+    if (typeof document$ !== "undefined" && typeof document$.subscribe === "function") {
+        document$.subscribe(initParetoExplorer);
     }
 })();

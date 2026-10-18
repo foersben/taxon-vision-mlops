@@ -70,12 +70,13 @@ spec:
             echo ">>> Setting up toolchain in ephemeral agent..."
             which git >/dev/null 2>&1 || pixi global install git
             which kubectl >/dev/null 2>&1 || pixi global install kubernetes-client
+            which curl >/dev/null 2>&1 || pixi global install curl
             export PATH="/root/.pixi/bin:$PATH"
             git config --global --add safe.directory "*"
             pixi --version
             pixi install --frozen -e ci-dev
             echo ">>> Pulling DVC tracked datasets and model checkpoints from DagsHub..."
-            pixi run --frozen -e ci-dev dvc pull \
+            pixi run --frozen -e ci-dev dvc pull --force \
               data/manifests/raw_manifest.parquet \
               data/manifests/dataset_manifest.parquet \
               data/embeddings/train_embeddings.pt \
@@ -175,8 +176,10 @@ spec:
           anyOf {
             expression { params.RETRAIN_MODEL == true }
             changeset "data/**"
-            changeset "src/taxon_vision/models/**"
-            changeset "src/taxon_vision/pipelines/**"
+            changeset "config/**"
+            changeset "params.yaml"
+            changeset "dvc.yaml"
+            changeset "src/taxon_vision/**"
           }
         }
       }
@@ -217,10 +220,10 @@ spec:
 
             # Hydrate model checkpoints from DVC
             echo ">>> Hydrating model checkpoints from DVC remotes..."
-            pixi run --frozen -e ci-dev dvc pull -r origin \
+            pixi run --frozen -e ci-dev dvc pull --force -r origin \
               models/checkpoints/head.pt \
               models/checkpoints/model_int8.onnx || \
-            pixi run --frozen -e ci-dev dvc pull \
+            pixi run --frozen -e ci-dev dvc pull --force \
               models/checkpoints/head.pt \
               models/checkpoints/model_int8.onnx || \
             echo ">>> Warning: Remote checkpoints not found in DVC; falling back to existing host volume checkpoints."
