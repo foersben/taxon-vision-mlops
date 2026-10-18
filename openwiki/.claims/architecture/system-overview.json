@@ -11,11 +11,11 @@
           "version": "repo-lines-v1:sha256:3b789372010863b6d6d8fe3c8b1533cdf7875293a7060c7d809ba362697bd125:eyJzZWxlY3RlZExpbmVDb3VudCI6NzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQzZmY0OTYyMmE0OWY3NzEyMDgyYzliZGRiNTkxZGMxNzg4NTA2MDY2NzQxODUyYzk1OWYwZjUxZDE5MjcwZDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgwM2ZlODA2ZGY5Mzg1NWE5M2RhMTIyYjBlYTdjOWJjNTM2MGFjZjM1OGI5NGM3YjYxMDNjYzFmNmI3YTA5MmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         },
         {
-          "resource": "repo://src/taxon_vision/config.py#L313-L355",
+          "resource": "repo://src/taxon_vision/config/loader.py#L313-L355",
           "version": "repo-lines-v1:sha256:0e1aa15bd9a86f3462eaa0aac33ee4ef51c2fa8f00b604bf0e6d5cf5efef33dc:eyJzZWxlY3RlZExpbmVDb3VudCI6NDMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkNmYxOWY4ZTlkMGU5YmQwYjI5MDkxNzU0Mzc5OGZhMTUwNzhmMDY5OWEyYTk5NGUzNDY5NjUwYjZmODk5NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMzZGRiMTQ4YmIyMmIyYzQ3MjgzNTMyMDRjMWJkZDMxN2M2NDQ1MzhiNDc4N2UwNWI3YjJkZmEyZDZjMDM2ZTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFhYTU5YWRmZTZiMzk3ZTIzOWI0MzgwMDFmMDcxOTBkZGY0ZDAyZmY5MjkwYTQxNWJiMTA2Y2VmODk4NGNjOTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         },
         {
-          "resource": "repo://src/taxon_vision/config.py#L7-L11",
+          "resource": "repo://src/taxon_vision/config/loader.py#L7-L11",
           "version": "repo-lines-v1:sha256:e9643d91b56d16e5daf7d9f5b57792eba3d3f14754cc566d8633b7f4334960d4:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZjAwM2MxNmY0ODIyZDFkYTE0ZjU1ZDYxYmUzOWEyNjdhNDE1NzlhMWEzMzE2ODg3YzdhMWNiYjI4ZDQ1YmUyMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYWFhODUyY2QwZGFlMDViOWMwYzQxNmYyODQ1NjA5YTIyOGYzZDRlNWVkODkxNzczZDdiOTc5Y2Y3NmZjMDdhYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDgyYTM5OTRjMjZhNTcwZDBjZTllMzdjMWM3MGU2ZDIwZGVhOGQ2Yjk2MWZhYWIzNjRjMDBhY2M5MjFhYTBlZCJ9"
         }
       ]
@@ -25,11 +25,11 @@
       "statement": "Global application settings are validated against strongly typed Pydantic v2 schemas—including ServiceConfig, ModelConfig, TrainingConfig, IngestionConfig, MLflowConfig, ConformalConfig, and OODConfig—and cached in-memory via an LRU cache to prevent redundant disk I/O and validation overhead.",
       "evidence": [
         {
-          "resource": "repo://src/taxon_vision/config.py#L313-L328",
+          "resource": "repo://src/taxon_vision/config/loader.py#L313-L328",
           "version": "repo-lines-v1:sha256:626ec3e531c7faf4a82a558404fd6ae3703caaa057ca638fdcf7ec51401bcfab:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkNmYxOWY4ZTlkMGU5YmQwYjI5MDkxNzU0Mzc5OGZhMTUwNzhmMDY5OWEyYTk5NGUzNDY5NjUwYjZmODk5NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE2YTcxNTI1NzJlZTg0ZjEwOTA2Yzc0YjlmMmE5MjQzNGRkYWIwZTNjNDI4MTNiMDRlNTk3ZWZjZWM5NTFiMjYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFhYTU5YWRmZTZiMzk3ZTIzOWI0MzgwMDFmMDcxOTBkZGY0ZDAyZmY5MjkwYTQxNWJiMTA2Y2VmODk4NGNjOTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFhMmJjNDViODFiNzk2MWMzYzdmZjE2YTBjZjU2N2E1ZDBjNzE5ZmVhY2JkMmY2N2Q3ODJkYjNiM2RiYjFjMTYifQ"
         },
         {
-          "resource": "repo://src/taxon_vision/config.py#L32-L205",
+          "resource": "repo://src/taxon_vision/config/schemas.py#L32-L205",
           "version": "repo-lines-v1:sha256:361c611564233bf5cfee925dad52e0bcc01c0aad4ff944a7bf9ef5e117dbe551:eyJzZWxlY3RlZExpbmVDb3VudCI6MTc0LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJmY2U3MzI5ODIxNzRiMDE3MTdmNDk1OTVkMWVkZDg4NGQyMDhiYmY2MjYwNTNiNzQ4MzMxYTZmOTBjMDdkN2M0IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIwMWJhNDcxOWM4MGI2ZmU5MTFiMDkxYTdjMDUxMjRiNjRlZWVjZTk2NGUwOWMwNThlZjhmOTgwNWRhY2E1NDZiIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI2ZGMxMTYyNjk0ZGZmYTcwNDY1OTAwNjExMTUwYmMxODk1ZjllZjRkYjVkMTIzYzJhZTM5MjEyMzRhNWNhNjY4IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI2MDFmNjU1NGVmNjA0YjhmNjE1MmFiNDk1MTBjODdhZTE1NTM5MzA1MjQ2ZWEyMmY5OWMyYzU0OGM4NDM0MjgyIn0"
         }
       ]

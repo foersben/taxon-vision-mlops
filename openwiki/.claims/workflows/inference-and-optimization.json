@@ -132,14 +132,14 @@
     },
     {
       "id": "claim_18b0850849d140e9ad047311214a7b40",
-      "statement": "The evaluation pipeline and Pareto benchmark script (src/taxon_vision/pipelines/evaluate.py, scripts/benchmark_pareto.py) evaluate candidate vision backbones across accuracy baselines, P50/P95 latency, throughput, peak memory, and serving cost per million inferences to characterize architectural trade-offs between cloud GPU serving and edge CPU deployment.",
+      "statement": "The evaluation pipeline (src/taxon_vision/pipelines/evaluate.py) evaluates candidate vision backbones across accuracy baselines, P50/P95 latency, throughput, peak memory, and serving cost per million inferences to characterize architectural trade-offs between cloud GPU serving and edge CPU deployment.",
       "evidence": [
         {
-          "resource": "repo://scripts/benchmark_pareto.py#L155-L200",
+          "resource": "repo://src/taxon_vision/pipelines/evaluate.py#L155-L200",
           "version": "repo-lines-v1:sha256:c865843eb904db9e0bb57b773b0e942f4004c4aa5d0dbbcfee687c6a220cb0c4:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkMzgxMjE2MTVhZjg4MjQ5OTQ4OGVmODVlYzQ0Y2VlOTNmNWVkZjY1MzZjYjBjNzU4NTIyNDM5ZDU2MmU0MGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE0ZDM1ZWM1MDUwNzBhMTAxNzY5ODU1ODk5YTc4ZmE2OWY5NGUyYzY2M2MyNzQ5NWU1ZDY0MGMzMzRlNGMxNzMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAzMmU2OTIyNTE4NDY1ZGVlOTg3MGU3NjAxNjU0YWVkZWI4OThiODQ5ZmJmNmMzZjA0OGM4YzE5MmY3M2JmMGUifQ"
         },
         {
-          "resource": "repo://scripts/benchmark_pareto.py#L28-L140",
+          "resource": "repo://src/taxon_vision/pipelines/evaluate.py#L28-L140",
           "version": "repo-lines-v1:sha256:76fcd55a97007e7222b650684d2d5d976f3d8457f54a69d27a7ad4b2aef40dd4:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEzLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJiNmZiYWUwYjkxZDQ0ZmMwZDQ5ZjVkZTY5MWRhNmZjNDMxZjI2MDEzNGJmNzMxZTBlMjFmNzY0ODA5NDMzNGNiIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJhZGQyNDQ1ODJiNmZiMDNkMjNiODQxNWFiZWNkMzQ2YjBjOWY0NjZiNmY3NTJiMDY4MTg5Y2U3ZTlhMmRjMzUwIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI2MjAwOTdlNGFhNTAwNjhiYTE1N2Y5YTI3MzlmYWQ4Njk5NWUxZTBjZGNjZGFkYzU4OTdjMjAzNGM3NGQzZWZhIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJmODc4ZWI0Mjk3ODAxY2UxZWNiNDhiZjZiMWM5N2E2ZjQ0OWUyODNmOTg0MWE1MWUyZTIzYzJkNDYxMjg2OTYxIn0"
         }
       ]

@@ -11,7 +11,7 @@
           "version": "repo-lines-v1:sha256:76e4f9a1fe3964784824ae2269e79fb3fbd983cc257c6deb5abd9312a464fefc:eyJzZWxlY3RlZExpbmVDb3VudCI6NTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBkZGMxZTc0ZjM3MWNiNjM3YTYyMjk3YzgyNTk1ZmNmMGU5NzkwMTljYzA0NmE0NGVhMmZhZTM0ODcwYzEzZGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ3YTc3YTVkMWIwOTRjYjQyMzU2YTA0MTg4NjFjY2EyYmE3NWE1YWQ1MjRiYzhmZTAzNzdiMjZiYWFhMjgwMjQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE3MWRlMDViMTBjYmFiZGViOTAwYzlmMGY4M2EwMzhlMGIxNmE5MGMxNGZiMmU1M2JhYWFhZWNmZDE2MWYwYzQifQ"
         },
         {
-          "resource": "repo://scripts/local_ci.sh#L44-L49",
+          "resource": "repo://scripts/ci/local_ci.sh#L44-L49",
           "version": "repo-lines-v1:sha256:2a7e855ca04a898d731f7525d638aca4d6eafacd64ba96c48664ef9621f071e1:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWRmNzg0ZjQ3Nzc3MmNjN2RhYmE3ZDg0YzY1NTI1Y2Y1NDkxNzMzNzc0MmQyNWY1YjczZWJkMjMwNDE4NzFjYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzVmYzkwZmY4YTQ0MTRjNTQ0MWQwZjY3N2M1Y2JmZGEzOGI0NzRlNTFiZmQ1NTlhNTU1OWRlMGY4NzcwNTUyNCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZGJiZTVhYzUyOThjNDFhYjJlYjgyZjdjMDE2M2U5YTk1M2VmMTM2MTkzMmRjY2IyNzE2ODU3ZDY2Yzc2MzRmOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiN2ZkYTA3MWJiN2ZmZWI0YzhiZmU0YjA0ODExZDc3YTI4YWVhOGM4MTg4OTVjYzk5Y2ViYzllYTcxMGJhYTllMiJ9"
         },
         {
@@ -43,11 +43,11 @@
           "version": "repo-lines-v1:sha256:3b789372010863b6d6d8fe3c8b1533cdf7875293a7060c7d809ba362697bd125:eyJzZWxlY3RlZExpbmVDb3VudCI6NzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQzZmY0OTYyMmE0OWY3NzEyMDgyYzliZGRiNTkxZGMxNzg4NTA2MDY2NzQxODUyYzk1OWYwZjUxZDE5MjcwZDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgwM2ZlODA2ZGY5Mzg1NWE5M2RhMTIyYjBlYTdjOWJjNTM2MGFjZjM1OGI5NGM3YjYxMDNjYzFmNmI3YTA5MmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         },
         {
-          "resource": "repo://src/taxon_vision/config.py#L186-L206",
+          "resource": "repo://src/taxon_vision/config/schemas.py#L186-L206",
           "version": "repo-lines-v1:sha256:91e61f1c450b1adfd9afae7048a2fe683688c4ab769427abb45d0b4adcef2db5:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjODYzMzFjOTBiNzhjZGI5MTdmZDViZDY5ZmMwNzE0ZDVhNWZlODQ2MGQ4NzYyNzllMTVmZjQyZmZjNzIzNWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQwZjc4ZDRjZDFiZjc3YWZhNzU2Yzg1MzE5MGQ5ZmJiYTJkY2ZjMThmM2I4NWMzYTc3ODZkZTcwNTc0MGZmMjMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE1ZDIxMjQ3ZWYwODM5MTMyMzQxMWRmNGRiNTJkZTNmN2YwYTA4YmMzODVmNjczOGI3MTBhODEyZDYzNTZkOTkifQ"
         },
         {
-          "resource": "repo://src/taxon_vision/config.py#L313-L355",
+          "resource": "repo://src/taxon_vision/config/loader.py#L313-L355",
           "version": "repo-lines-v1:sha256:0e1aa15bd9a86f3462eaa0aac33ee4ef51c2fa8f00b604bf0e6d5cf5efef33dc:eyJzZWxlY3RlZExpbmVDb3VudCI6NDMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkNmYxOWY4ZTlkMGU5YmQwYjI5MDkxNzU0Mzc5OGZhMTUwNzhmMDY5OWEyYTk5NGUzNDY5NjUwYjZmODk5NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMzZGRiMTQ4YmIyMmIyYzQ3MjgzNTMyMDRjMWJkZDMxN2M2NDQ1MzhiNDc4N2UwNWI3YjJkZmEyZDZjMDM2ZTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFhYTU5YWRmZTZiMzk3ZTIzOWI0MzgwMDFmMDcxOTBkZGY0ZDAyZmY5MjkwYTQxNWJiMTA2Y2VmODk4NGNjOTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         }
       ]
@@ -57,7 +57,7 @@
       "statement": "Test execution is automatically isolated from remote pre-trained weights and production storage by a shared pytest fixture setting TAXON_ALLOW_UNTRAINED_FALLBACK='true' and redirecting flagged observation storage to a temporary directory.",
       "evidence": [
         {
-          "resource": "repo://src/taxon_vision/config.py#L290-L310",
+          "resource": "repo://src/taxon_vision/config/schemas.py#L290-L310",
           "version": "repo-lines-v1:sha256:16494f67e930d8e9ef7ca03be64210286ac38f9728642f3fb24889f10e56627c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA1MjIwMzI0MGZiNDc5NmIyYzdmYjNiODczNTM1NDNjYWY3NWI3M2MyY2E5ZDFkMDEyMjU0ZTUwNmQ1M2Q5NDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY5MzIxN2QwZjAxOGQ1ZDUxYTg4ZDcxMWRhZWU3M2RiNzZiNTFmMWJhNWZiMDRkY2Q1YjVjYmMyOTI1MjE3OGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjlhOGJjNDhlN2FmMTg1ZmRjNTgwNzFhMjdjNTc4ZDkzY2U0YjE3ZWIxMTJhYjM3OTk5OThjMzA0ZmM5N2Q4OWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRiYTY0OGMxNjI3ZDg5ZjM5YTQwNTVkZDA5NTZjZjBlZTQyYjZiZGJjYjRlYjdmZWI2MTdhMmQyMzk2NzE0YzEifQ"
         },
         {
@@ -68,14 +68,14 @@
     },
     {
       "id": "claim_d951f5bd866d459d99973de1c9ff1310",
-      "statement": "The local CI harness (scripts/local_ci.sh) replicates multi-pass pipeline validation across pure Pixi enforcement, Markdown formatting (Rule 04), Ruff linting, MyPy type checks, pytest test suites with coverage thresholds, license compliance audits, OKF frontmatter validation, and strict documentation builds.",
+      "statement": "The local CI harness (scripts/ci/local_ci.sh) replicates multi-pass pipeline validation across pure Pixi enforcement, Markdown formatting (Rule 04), Ruff linting, MyPy type checks, pytest test suites with coverage thresholds, license compliance audits, OKF frontmatter validation, and strict documentation builds.",
       "evidence": [
         {
           "resource": "repo://Justfile#L111-L120",
           "version": "repo-lines-v1:sha256:67ac28305fcb6376abb9f9c4c0fb459bf264367948c18f2c7ad5d88550359436:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQyZDFmYTU3NzQ4MDBjZjkyNWJmMjE3YTcwYTczZjE3NjllM2RlMWY2NTJlYzhkZGEwYWI5YjM0MWE2ODQ5ZGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU5NTliMDdiZWNjY2FmNDM5MDQzMjkwYzUwYzU4MDM4NjY3ZDAwZWRkMWU4MTQ4OWNkNTEwYTAyYjU5ODZhNWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZhMDgyZDkwZmQ1MTU4MzlhYTIwZWFkOWJkNzkzMTBkYzUwNzY4MzMzZGMyZjYxNWJlNTAyYWNiZjI2ZDEzNWMifQ"
         },
         {
-          "resource": "repo://scripts/local_ci.sh#L44-L77",
+          "resource": "repo://scripts/ci/local_ci.sh#L44-L77",
           "version": "repo-lines-v1:sha256:9dfd8184a57a2272b29d98ebf52591f6143ef890bb3236e4dc080cee533f42b1:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVkZjc4NGY0Nzc3NzJjYzdkYWJhN2Q4NGM2NTUyNWNmNTQ5MTczMzc3NDJkMjVmNWI3M2ViZDIzMDQxODcxY2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRiYmU1YWM1Mjk4YzQxYWIyZWI4MmY3YzAxNjNlOWE5NTNlZjEzNjE5MzJkY2NiMjcxNjg1N2Q2NmM3NjM0ZjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM0OTQ4NjA5YTM4ZDQ3ZjIxMTAwMzllM2U4MDFhZDcwYTUyMjhlZDg5ZmZmMTk2MWEzYmZiODI1ZDkxMmM3MjIifQ"
         }
       ]
@@ -111,7 +111,7 @@
           "version": "repo-lines-v1:sha256:201965aaf8486f8796411aa7ef8834e0add270a8c2c325368d1784727d553620:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDgwNGE4YjRhMjkxMDk1OTgxNTk1OGIzZmZiMTk0ZjRkNzJhNThlMjBlMGRhZmQ0MTNjNjc2ODM0YzkzMzc4NyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjEsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDNmZjQ5NjIyYTQ5Zjc3MTIwODJjOWJkZGI1OTFkYzE3ODg1MDYwNjY3NDE4NTJjOTU5ZjBmNTFkMTkyNzBkNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZGJkMTdkNGJmMGNkODZlOTExMzM3ZTA1MDIzZjhkYTE2YWIyOGUzYjFlZTE2ZjJjNTEwYjU2NGRlMDg5NTkxOSJ9"
         },
         {
-          "resource": "repo://src/taxon_vision/config.py#L32-L50",
+          "resource": "repo://src/taxon_vision/config/schemas.py#L32-L50",
           "version": "repo-lines-v1:sha256:e22ffbfcc8650e819c58a49209c43333de4b84c6dd55d8fd6e7f55c65fea1e1d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjZTczMjk4MjE3NGIwMTcxN2Y0OTU5NWQxZWRkODg0ZDIwOGJiZjYyNjA1M2I3NDgzMzFhNmY5MGMwN2Q3YzQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZkYzExNjI2OTRkZmZhNzA0NjU5MDA2MTExNTBiYzE4OTVmOWVmNGRiNWQxMjNjMmFlMzkyMTIzNGE1Y2E2NjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAzZDMzZjU5MWM2NzA3YjM3MGYzOGVmNjRiMzk2YjFmNGM5YTMyNTJmZmFiNmU1YWMwYmZkN2MxODM0N2E1YzEifQ"
         }
       ]

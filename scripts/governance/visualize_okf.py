@@ -69,9 +69,11 @@ MERMAID_CLICK_RE = re.compile(r'click\s+\w+\s+"([^"\s#]+)(?:#[^"]+)?"')
 BACKTICK_RE = re.compile(r"`([^`]+\.md)`")
 
 
-def _extract_trust_tier(verified: Any) -> str:
-    """Determine trust tier from OKF verified metadata."""
+def _extract_trust_tier(verified: Any, rel_id: str = "") -> str:
+    """Determine trust tier from OKF verified metadata, assigning Machine-Confirmed to repository indices."""
     if not verified:
+        if rel_id.startswith("openwiki/") or rel_id in (".agents/index.md", ".agents/log.md"):
+            return "Machine-Confirmed"
         return "Unverified"
     v_list = [verified] if isinstance(verified, dict) else verified
     if any(isinstance(v, dict) and str(v.get("by", "")).startswith("human:") for v in v_list):
@@ -90,13 +92,16 @@ def _determine_domain(rel_id: str) -> str:
     return "Docs & Architecture"
 
 
+GENERIC_HEADINGS: set[str] = {"files", "directories", "mandates", "directives"}
+
+
 def _extract_h1_title(content: str) -> str | None:
-    """Find the first level-1 markdown heading (# Heading), ignoring subheadings."""
+    """Find the first level-1 markdown heading (# Heading), ignoring subheadings and generic titles."""
     for line in content.splitlines():
         line = line.strip()
         if line.startswith("# ") and not line.startswith("##"):
-            title = line.lstrip("#").strip()
-            if title:
+            title = line[2:].strip()
+            if title and title.lower() not in GENERIC_HEADINGS:
                 return title
     return None
 
@@ -107,13 +112,30 @@ def _format_stem_title(stem: str) -> str:
     return clean.replace("_", " ").replace("-", " ").title()
 
 
-def _resolve_node_title(fm_title: str | None, content: str, file_path: Path) -> str:
-    """Resolve node title using (1) frontmatter, (2) # H1, (3) filename stem."""
+def _derive_index_title(rel_id: str) -> str:
+    """Derive clean descriptive title for directory index files lacking explicit title."""
+    if rel_id == "openwiki/index.md":
+        return "OpenWiki Root Index"
+    if rel_id.startswith("openwiki/") and rel_id.endswith("/index.md"):
+        subdir = rel_id[len("openwiki/") : -len("/index.md")].strip("/")
+        return f"OpenWiki: {subdir.title()} Index"
+    if rel_id == ".agents/index.md":
+        return "Agent Ecosystem Index"
+    if rel_id.endswith("/index.md"):
+        parent_dir = Path(rel_id).parent.name
+        return f"{_format_stem_title(parent_dir)} Index"
+    return _format_stem_title(Path(rel_id).stem)
+
+
+def _resolve_node_title(fm_title: str | None, content: str, rel_id: str, file_path: Path) -> str:
+    """Resolve node title using (1) frontmatter, (2) # H1, (3) index derivation, (4) filename stem."""
     if fm_title and fm_title.strip():
         return fm_title.strip()
     h1 = _extract_h1_title(content)
     if h1:
         return h1
+    if rel_id.endswith("/index.md") or rel_id == "index.md":
+        return _derive_index_title(rel_id)
     return _format_stem_title(file_path.stem)
 
 
@@ -406,10 +428,10 @@ def _extract_doc_metadata(
             except Exception:
                 pass
 
-    title = _resolve_node_title(fm_dict.get("title"), content, f)
+    title = _resolve_node_title(fm_dict.get("title"), content, rel_id, f)
     node_type = _determine_node_type(rel_id, fm_dict.get("type"))
     domain = _determine_domain(rel_id)
-    trust_tier = _extract_trust_tier(fm_dict.get("verified"))
+    trust_tier = _extract_trust_tier(fm_dict.get("verified"), rel_id)
     status = str(fm_dict.get("status", "stable"))
     version = str(fm_dict.get("version", "1.0"))
     stale_after = str(fm_dict.get("stale_after", ""))

@@ -1,5 +1,5 @@
 ---
-type: System Pattern
+type: Specification
 title: Vision-RAG & Multimodal Knowledge Graph (MMKG) Architecture
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
@@ -11,6 +11,10 @@ verified: {by: process:docs-librarian, at: "2026-10-18T12:00:00Z"}
 ---
 
 # Vision-RAG & Multimodal Knowledge Graph (MMKG) Architecture
+
+> [!IMPORTANT]
+> **Phase 3 Architectural Specification:**
+> This document specifies the planned Phase 3 multimodal retrieval architecture (lazy Vision-RAG, parent-child visual chunking, LanceDB biogeographical HNSW, and grammar-constrained VLM diagnosis cards). There is currently zero runtime code for these components in `src/taxon_vision/`. Production operations currently route ambiguous predictions ($\lvert \mathcal{C}(x) \rvert > 3$) directly to the human triage staging store (`service/storage.py`).
 
 When Split Conformal Prediction yields an ambiguous prediction set admitting multiple sister taxa ($|\mathcal{C}(x)| \in [2, 3]$), forcing an uncalibrated argmax top-1 point prediction leads to catastrophic biological misidentifications. In fine-grained biodiversity monitoring, sister taxa frequently exhibit Batesian mimicry, cryptic speciation, or minute morphological differentiators (e.g., wing venation patterns or floral spur lengths) that cannot be reliably resolved by global image embeddings alone.
 

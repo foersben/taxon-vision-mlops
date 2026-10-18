@@ -102,10 +102,15 @@ $$W_1(P_{\text{ref}}, P_{\text{curr}}) \approx \left| \mathbb{E}\left[\|\mathbf{
 
 * **Computational Complexity:** $\mathcal{O}(N \cdot D)$, where $N$ is the batch size and $D$ is the embedding dimension ($D = 384$ for DINOv3). This executes in under $1\text{ ms}$ on CPU, enabling inline execution per micro-batch.
 * **Alert Trigger:** If $W_1(P_{\text{ref}}, P_{\text{curr}}) > \tau_{\text{drift}} = 0.15$, Prometheus emits a warning metric, signaling that physical camera conditions or biological morphology have drifted from calibration baselines.
+* **Implementation Status:** Component-verified in `tests/unit/test_monitoring.py`. Runtime invocation over a live rolling window inside `/api/v1/predict` and Prometheus gauge exposition are scheduled for Phase 2.5.
 
 ---
 
-## 4. Offline Multivariate Manifold Drift: RKHS Maximum Mean Discrepancy (MMD)
+## 4. Offline Multivariate Manifold Drift: RKHS Maximum Mean Discrepancy (MMD) (Roadmap Specification)
+
+> [!NOTE]
+> **Phase 3 Architectural Specification:**
+> Multivariate RKHS $\text{MMD}^2$ is a Phase 3 architectural specification (zero runtime code in `src/`). Production drift detection currently relies on the component-verified 1D Wasserstein-1 scalar norm calculation.
 
 While 1D norm projection provides ultra-fast online alerts, certain subtle domain shifts (e.g., orientation rotations or subtle color temperature variations) preserve overall vector lengths while distorting the high-dimensional manifold.
 
@@ -123,8 +128,8 @@ Given sample sets $X = \{x_1, \dots, x_m\} \sim P$ and $Y = \{y_1, \dots, y_n\} 
 
 $$\text{MMD}_u^2(X, Y) = \frac{1}{m(m - 1)} \sum_{i=1}^m \sum_{j \ne i}^m k(x_i, x_j) - \frac{2}{mn} \sum_{i=1}^m \sum_{j=1}^n k(x_i, y_j) + \frac{1}{n(n - 1)} \sum_{i=1}^n \sum_{j \ne i}^n k(y_i, y_j)$$
 
-* **Evidently AI Roadmap:** MMD drift calculations are executed inside scheduled Jenkins pipeline stages, generating HTML drift reports using Evidently AI.
-* **Automated Action:** An MMD score exceeding the critical permutation threshold ($p < 0.01$) automatically triggers DVC stage 3 (`extract_features`) and stage 4 (`train`) to incorporate newly acquired observations.
+* **Evidently AI Roadmap:** MMD drift calculations are planned for scheduled Jenkins pipeline stages, generating HTML drift reports using Evidently AI.
+* **Automated Action:** An MMD score exceeding the critical permutation threshold ($p < 0.01$) is designed to trigger DVC stage 3 (`extract_features`) and stage 4 (`train`) to incorporate newly acquired observations.
 
 ---
 
@@ -169,4 +174,4 @@ Where:
 
 * $\hat{\pi}_{(1)}(x)$ and $\hat{\pi}_{(2)}(x)$ represent the top two highest predicted class probabilities.
 * Observations with $\hat{\pi}_{(1)} \approx \hat{\pi}_{(2)}$ yield an uncertainty score near $1.0$, indicating maximum decision-boundary ambiguity.
-* These samples are pushed directly to the `TriageQueue`, where human taxonomists in Label Studio review and annotate the most informative specimens first, maximizing the model's sample efficiency upon retraining.
+* **Operational Status:** Both `margin_sampling` and `TriageQueue` are component-verified in `tests/unit/test_active_learning.py`. In current production serving (`/api/v1/predict`), flagged observations are atomically staged to `.npy` feature files, `.json` decision metadata, and appended to `manifest.jsonl` via `service/storage.py`; live in-memory heap wiring and Label Studio webhook synchronization are scheduled for Phase 2.5/3.

@@ -1074,7 +1074,7 @@
           <span class="chip-dot"></span> Prometheus &amp; Drift (6)
         </div>
         <div class="layer-chip active" data-layer="pipeline">
-          <span class="chip-dot"></span> DVC, MLflow &amp; Training (9)
+          <span class="chip-dot"></span> DVC, MLflow &amp; Training (12)
         </div>
       </div>
 
@@ -1762,14 +1762,14 @@
             data: {
               id: "human_triage",
               label: "Human Triage Queue\ntriage_queue.py",
-              subtitle: "HITL Expert Taxonomist Backlog",
+              subtitle: "In-Memory Max-Heap (Component Verified; Unwired)",
               layer: "uncertainty",
               col: 1,
               row: 5.5,
               role: "@active-learning-engineer",
               path: "src/taxon_vision/active_learning/triage_queue.py",
               description:
-                "Manages priority backlog of ambiguous and OOD observations referred for expert morphological verification.",
+                "Component-verified in-memory binary max-heap (TriageQueue via heapq) for prioritizing uncertain observations. Note: /api/v1/predict currently persists flagged specimens to .npy + manifest.jsonl via service/storage.py; live heap wiring is pending.",
               invariants:
                 "Zero unverified auto-assignments on ambiguous specimens.",
               config:
@@ -1832,14 +1832,14 @@
             data: {
               id: "drift_detector",
               label: "Embedding Drift Monitor\ndrift.py",
-              subtitle: "Wasserstein / Covariate Shift",
+              subtitle: "1D Wasserstein-1 Norm Drift (Component Verified; Unwired)",
               layer: "telemetry",
               col: 2,
               row: 4.6,
               role: "@observability-engineer",
               path: "src/taxon_vision/monitoring/drift.py",
               description:
-                "Computes distributional divergence between incoming production feature embeddings and reference calibration splits to trigger retraining.",
+                "Computes O(N*D) 1D Wasserstein-1 Earth Mover's Distance over L2 embedding norms. Standalone unit-tested in test_monitoring.py; pending live rolling-window invocation in /api/v1/predict.",
               invariants:
                 "Detects seasonal and geographic domain shift before accuracy degrades.",
               config: "Module: src/taxon_vision/monitoring/drift.py",
@@ -1882,18 +1882,18 @@
           {
             data: {
               id: "active_learning",
-              label: "Active Learning Query\nquery.py (BADGE/CoreSet)",
-              subtitle: "Uncertainty + Diversity Sampling",
+              label: "Active Learning Query\nquery.py (margin_sampling)",
+              subtitle: "Margin Uncertainty Scorer (Component Verified; Unwired)",
               layer: "pipeline",
               col: 3,
               row: 0,
               role: "@active-learning-engineer",
               path: "src/taxon_vision/active_learning/query.py",
               description:
-                "Selects highest-value informative specimens from the human triage queue using gradient magnitude and CoreSet geometric diversity.",
+                "Component-verified margin_sampling (1 - (p_top1 - p_top2)) unit-tested in test_active_learning.py. Pending async worker wiring; BADGE gradient acquisition is a Phase 2.5 specification.",
               invariants: "Maximizes accuracy gain per annotated specimen.",
               formula:
-                "\\text{Score}(x) = \\| g_x \\|_2 \\cdot \\min_{s \\in \\mathcal{S}} d(x, s)",
+                "\\text{Score}(x) = 1.0 - (\\hat{\\pi}_{(1)}(x) - \\hat{\\pi}_{(2)}(x))",
               config: "Workflow: .agents/workflows/active-learning-cycle.md",
             },
           },
@@ -2953,15 +2953,15 @@
         if (isOod) {
           banner.className = "sim-verdict ood";
           banner.innerText = `OOD DIVERGENT SPECIMEN • Energy E(x) = ${energy.toFixed(2)} > -4.50 • Routed to Human Triage`;
-          telemetryOut.innerHTML = `<code>is_ood = True | requires_human_review = True<br>taxon_predictions_total{status="ood_divergent"} += 1<br>taxon_human_referrals_active.inc()</code>`;
+          telemetryOut.innerHTML = `<code>is_ood = True | requires_human_review = True (Staged to .npy + manifest.jsonl via service/storage.py)<br>taxon_predictions_total{status="ood_divergent"} += 1<br>taxon_human_referrals_active.inc()</code>`;
         } else if (cardinality === 0) {
           banner.className = "sim-verdict refer";
           banner.innerText = `EMPTY PREDICTION SET (|C(x)| = 0) • All 1 - p_i > q_hat • Routed to Human Triage`;
-          telemetryOut.innerHTML = `<code>is_ood = False | requires_human_review = True (Empty Set)<br>taxon_predictions_total{status="needs_review"} += 1<br>taxon_human_referrals_active.inc()</code>`;
+          telemetryOut.innerHTML = `<code>is_ood = False | requires_human_review = True (Empty Set; Staged to .npy + manifest.jsonl via service/storage.py)<br>taxon_predictions_total{status="needs_review"} += 1<br>taxon_human_referrals_active.inc()</code>`;
         } else if (cardinality > 3) {
           banner.className = "sim-verdict refer";
           banner.innerText = `AMBIGUOUS PREDICTION SET (|C(x)| = ${cardinality} > k_max = 3) • Routed to Human Triage`;
-          telemetryOut.innerHTML = `<code>is_ood = False | requires_human_review = True (Cardinality > 3)<br>taxon_predictions_total{status="needs_review"} += 1<br>taxon_human_referrals_active.inc()</code>`;
+          telemetryOut.innerHTML = `<code>is_ood = False | requires_human_review = True (Cardinality > 3; Staged to .npy + manifest.jsonl via service/storage.py)<br>taxon_predictions_total{status="needs_review"} += 1<br>taxon_human_referrals_active.inc()</code>`;
         } else {
           banner.className = "sim-verdict pass";
           banner.innerText = `AUTO-ASSIGNED • |C(x)| = ${cardinality} <= k_max (3) • Guaranteed 95% Marginal Coverage`;
