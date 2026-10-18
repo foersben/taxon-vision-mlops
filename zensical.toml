@@ -10,6 +10,7 @@ site_dir = "site"
 language = "en"
 
 exclude_docs = """
+/Species identification.pdf
 /.archive/
 /latex/**/*.tex
 /latex/**/*.aux
@@ -108,72 +109,76 @@ toc = { permalink = true, toc_depth = 4 }
 ] }
 
 # ==============================================================================
-# Navigation Hierarchy (7 Top-Level Tabs)
+# Navigation Hierarchy (4 Consolidated Top-Level Tabs with Sidebar Sections)
 # ==============================================================================
 
 [[project.nav]]
-"Home & Interactive Hub" = [
-    { "Platform Overview" = "index.md" },
-    { "Interactive Architecture Hub" = "interactive_hub.md" },
+"Overview & Domain" = [
+    { "Portal & Visualizers" = [
+        { "Platform Overview" = "index.md" },
+        { "Interactive Architecture & OKF Hub" = "interactive_hub.md" },
+    ] },
+    { "Biological & Domain Foundations" = [
+        { "Domain Overview" = "foundations/index.md" },
+        { "iNaturalist & Open Licensing" = "foundations/inaturalist_data_ecosystem.md" },
+        { "Taxonomy & DarwinCore" = "foundations/taxonomy_and_darwincore.md" },
+        { "Curriculum vs. Production" = "foundations/architectural_comparison.md" },
+        { "Unified System Reference" = "foundations/system_reference.md" },
+    ] },
 ]
 
 [[project.nav]]
-"Foundations & Domain" = [
-    { "Chapter Overview" = "foundations/index.md" },
-    { "iNaturalist Data Ecosystem" = "foundations/inaturalist_data_ecosystem.md" },
-    { "Taxonomy & DarwinCore" = "foundations/taxonomy_and_darwincore.md" },
-    { "Architectural Comparison" = "foundations/architectural_comparison.md" },
-    { "System Reference" = "foundations/system_reference.md" },
+"Architecture & Data" = [
+    { "Software & Config Architecture" = [
+        { "Architecture Overview" = "architecture/index.md" },
+        { "Config & Parameter Encyclopedia" = "architecture/repository_and_config_encyclopedia.md" },
+        { "Package & Call Graph" = "architecture/package_and_call_graph.md" },
+        { "Interactive Codebase Explorer" = "architecture/codebase_explorer.md" },
+    ] },
+    { "MLOps Pipelines & Storage" = [
+        { "Pipelines Overview" = "mlops_pipeline/index.md" },
+        { "Asymmetric Dual-Pipeline" = "mlops_pipeline/dual_pipeline_architecture.md" },
+        { "Arrow S3 & DVC Versioning" = "mlops_pipeline/ingestion_and_versioning.md" },
+        { "Polyglot Storage & Databases" = "mlops_pipeline/storage_and_databases.md" },
+        { "Interactive DVC DAG Explorer" = "mlops_pipeline/dvc_dag_explorer.md" },
+    ] },
 ]
 
 [[project.nav]]
-"Software & Config Architecture" = [
-    { "Chapter Overview" = "architecture/index.md" },
-    { "Repository & Config Encyclopedia" = "architecture/repository_and_config_encyclopedia.md" },
-    { "Package & Call Graph" = "architecture/package_and_call_graph.md" },
-    { "Codebase Explorer" = "architecture/codebase_explorer.md" },
+"Models & Safety" = [
+    { "Model & Inference Engineering" = [
+        { "Model Engineering Overview" = "model_engineering/index.md" },
+        { "Backbones & Class-Balanced Loss" = "model_engineering/model_architecture.md" },
+        { "Head Training, Optuna & MLflow" = "model_engineering/training_pipeline.md" },
+        { "ONNX INT8 & Forward CAM" = "model_engineering/onnx_optimization_and_latency.md" },
+        { "Interactive Pareto Benchmark" = "model_engineering/backbone_benchmarking_pareto.md" },
+    ] },
+    { "Epistemic Safety & Vision-RAG" = [
+        { "Safety & Uncertainty Overview" = "uncertainty_and_safety/index.md" },
+        { "Split Conformal Theory" = "uncertainty_and_safety/conformal_prediction_theory.md" },
+        { "Four Calibration Layers" = "uncertainty_and_safety/calibration_layers_deep_dive.md" },
+        { "Helmholtz Energy & Shannon Entropy" = "uncertainty_and_safety/ood_and_empty_frame_detection.md" },
+        { "Interactive Conformal Simulator" = "uncertainty_and_safety/interactive_simulator.md" },
+        { "Active Learning & HITL Triage" = "uncertainty_and_safety/active_learning_and_hitl.md" },
+        { "Vision-RAG & Multimodal KG" = "uncertainty_and_safety/mmkg_and_vision_rag.md" },
+    ] },
 ]
 
 [[project.nav]]
-"MLOps Pipeline & Storage" = [
-    { "Chapter Overview" = "mlops_pipeline/index.md" },
-    { "Dual Pipeline Architecture" = "mlops_pipeline/dual_pipeline_architecture.md" },
-    { "Ingestion & Versioning" = "mlops_pipeline/ingestion_and_versioning.md" },
-    { "Storage & Database Tiers" = "mlops_pipeline/storage_and_databases.md" },
-    { "DVC DAG Explorer" = "mlops_pipeline/dvc_dag_explorer.md" },
-]
-
-[[project.nav]]
-"Model & Inference Engineering" = [
-    { "Chapter Overview" = "model_engineering/index.md" },
-    { "Model Architecture" = "model_engineering/model_architecture.md" },
-    { "Training Pipeline" = "model_engineering/training_pipeline.md" },
-    { "ONNX Optimization & Latency" = "model_engineering/onnx_optimization_and_latency.md" },
-    { "Backbone Pareto Benchmarking" = "model_engineering/backbone_benchmarking_pareto.md" },
-]
-
-[[project.nav]]
-"Epistemic Safety & Vision-RAG" = [
-    { "Chapter Overview" = "uncertainty_and_safety/index.md" },
-    { "Conformal Prediction Theory" = "uncertainty_and_safety/conformal_prediction_theory.md" },
-    { "Calibration Layers Deep Dive" = "uncertainty_and_safety/calibration_layers_deep_dive.md" },
-    { "OOD & Empty Frame Detection" = "uncertainty_and_safety/ood_and_empty_frame_detection.md" },
-    { "Interactive Conformal Simulator" = "uncertainty_and_safety/interactive_simulator.md" },
-    { "Active Learning & Human Review" = "uncertainty_and_safety/active_learning_and_hitl.md" },
-    { "MMKG & Vision-RAG" = "uncertainty_and_safety/mmkg_and_vision_rag.md" },
-]
-
-[[project.nav]]
-"Operations & Governance" = [
-    { "Chapter Overview" = "operations/index.md" },
-    { "Current Infrastructure" = "operations/current_infrastructure.md" },
-    { "GPU Resource Scheduling" = "operations/gpu_resource_scheduling.md" },
-    { "Jenkins CI/CD Infrastructure" = "operations/jenkins_ci_infrastructure.md" },
-    { "Deployment Runbook" = "operations/deployment_runbook.md" },
-    { "Prometheus Observability" = "operations/prometheus_and_observability.md" },
-    { "API Reference" = "operations/api_reference.md" },
-    { "Agentic Governance & OKF" = "operations/agentic_governance_and_okf.md" },
-    { "Implementation Status" = "operations/implementation_status.md" },
+"Operations & QA" = [
+    { "Infrastructure & CI/CD" = [
+        { "Operations Overview" = "operations/index.md" },
+        { "Bare-Metal & k3s Topology" = "operations/current_infrastructure.md" },
+        { "GPU Time-Slicing & Scheduling" = "operations/gpu_resource_scheduling.md" },
+        { "Jenkins Ephemeral CI/CD" = "operations/jenkins_ci_infrastructure.md" },
+        { "Deployment & Scaling Runbook" = "operations/deployment_runbook.md" },
+    ] },
+    { "Service, Telemetry & Governance" = [
+        { "FastAPI & OpenAPI Reference" = "operations/api_reference.md" },
+        { "Prometheus & Drift Telemetry" = "operations/prometheus_and_observability.md" },
+        { "Agentic Governance & OKF v0.2" = "operations/agentic_governance_and_okf.md" },
+        { "Implementation Status & Roadmap" = "operations/implementation_status.md" },
+    ] },
 ]
 
 [project.plugins.htmlproofer]
