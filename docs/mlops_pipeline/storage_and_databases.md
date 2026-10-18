@@ -173,14 +173,10 @@ from mlflow.types.schema import Schema, TensorSpec
 import numpy as np
 
 # Input: Batch of normalized image tensors (Float32, [Batch, 3, 224, 224])
-input_schema = Schema([
-    TensorSpec(np.dtype(np.float32), (-1, 3, 224, 224), name="image")
-])
+input_schema = Schema([TensorSpec(np.dtype(np.float32), (-1, 3, 224, 224), name="image")])
 
 # Output: Logits vector across 10 taxa perimeter (Float32, [Batch, 10])
-output_schema = Schema([
-    TensorSpec(np.dtype(np.float32), (-1, 10), name="logits")
-])
+output_schema = Schema([TensorSpec(np.dtype(np.float32), (-1, 10), name="logits")])
 
 signature = ModelSignature(inputs=input_schema, outputs=output_schema)
 ```

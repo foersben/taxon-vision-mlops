@@ -104,6 +104,7 @@ $$\mathbb{P}\left(Y_{\text{test}} \in \mathcal{C}(X_{\text{test}})\right) \ge 1 
 # Exact implementation from src/taxon_vision/uncertainty/conformal.py
 import numpy as np
 
+
 def calibrate_split_conformal(cal_probs: np.ndarray, cal_labels: np.ndarray, alpha: float = 0.05) -> float:
     n = len(cal_labels)
     # True-class non-conformity score: s_i = 1 - pi_{y_i}
@@ -154,6 +155,7 @@ class TaxonCalibrationDataReader(CalibrationDataReader):
 
     Synthetic Gaussian noise is strictly forbidden by project invariants.
     """
+
     def __init__(self, image_paths: list[Path], batch_size: int = 32):
         self.image_paths = image_paths
         self.batch_size = batch_size
