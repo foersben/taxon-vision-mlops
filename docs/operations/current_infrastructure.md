@@ -137,6 +137,29 @@ kubectl get nodes "-o=custom-columns=NAME:.metadata.name,GPU:.status.allocatable
 
 The output confirms 4 allocatable `nvidia.com/gpu` virtual units on the `hive-mind` node, permitting concurrent multi-tenant execution across Web API inference, PyTorch batch training, and CI test runners without exclusive locking.
 
+### CoreDNS Upstream Resilience for Cluster DNS Resolution
+
+By default, k3s configures CoreDNS to inherit upstream resolvers from the host's `/etc/resolv.conf`. In home-lab environments with dual-stack consumer routers (such as AVM Fritz!Box), advertised link-local IPv6 DNS addresses can cause intermittent `SERVFAIL` errors, preventing pods from resolving external endpoints (e.g. `github.com` or container registries).
+
+To decouple the entire Kubernetes cluster from host-level DNS flakiness, apply a declarative custom upstream override in namespace `kube-system`:
+
+```bash
+kubectl apply -f - << 'EOF'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+data:
+  upstream.override: |
+    forward . 1.1.1.1 8.8.8.8
+EOF
+
+kubectl rollout restart deployment/coredns -n kube-system
+```
+
+This guarantees that all workloads (including ARC runners, Jenkins ephemeral agents, and SeaweedFS) resolve external domains directly through resilient public anycast nameservers.
+
 ### Live Production Ingress
 
 The live API and server-rendered operator dashboard are publicly accessible at `https://taxon.benjamin-foerster.eu/`. Edge traffic terminates on Cloudflare and routes through an outbound-initiated Cloudflare Tunnel (`cloudflared`) directly to the Kubernetes NodePort service (`30080`) in the `taxon-vision` namespace, maintaining a zero-open-inbound-ports posture on the host network.
