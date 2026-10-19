@@ -108,6 +108,7 @@ class TrainingConfig(BaseModel):
     test_split: float = Field(default=0.10, ge=0.0, lt=1.0)
     random_seed: int = Field(default=42)
     extractor: str = "dinov3"
+    tune: bool = Field(default=False)
 
 
 class IngestionConfig(BaseModel):

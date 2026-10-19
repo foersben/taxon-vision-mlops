@@ -1,5 +1,6 @@
 stages:
   ingestion:
+    frozen: true
     cmd: >-
       pixi run -e dev python -m taxon_vision.pipelines.ingest
       --out data/manifests/raw_manifest.parquet

@@ -75,7 +75,8 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--tune",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=settings.training.tune,
         help="Execute Optuna Bayesian hyperparameter search before final head training",
     )
     parser.add_argument(

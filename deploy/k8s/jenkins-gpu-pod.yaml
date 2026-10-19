@@ -34,7 +34,9 @@ spec:
         nvidia.com/gpu: "1"
   volumes:
   - name: rattler-cache
-    emptyDir: {}
+    hostPath:
+      path: /var/lib/taxon-vision/rattler-cache
+      type: DirectoryOrCreate
   - name: hf-cache
     hostPath:
       path: /var/lib/taxon-vision/hf-cache
