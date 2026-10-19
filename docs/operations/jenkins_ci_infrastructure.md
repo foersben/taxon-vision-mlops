@@ -428,7 +428,7 @@ During the continuous deployment cycle of Build #33, the pipeline passed all qua
 The deployment stage was hardened against these failure modes:
 
 * **Dynamic Credential Provisioning:** The deployment script checks for the active existence of `service/seaweedfs` in namespace `taxon-vision` and dynamically injects `taxonadmin` access keys into the ephemeral `.dvc/config.local` prior to any S3 network calls.
-* **Resilient Dual-Remote Hydration with Host-Tier Fallback:** Rather than enforcing a brittle fail-fast checkout, DVC attempts hydration sequentially from `origin` (DagsHub S3) and `local-seaweedfs`. If remote artifacts are absent (e.g. during a non-training documentation or configuration commit), the script gracefully emits a warning and falls back to existing model checkpoints already mounted from the host NVMe drive (`/home/benni/taxon-vision-mlops/models/checkpoints/`). This guarantees continuous zero-downtime rolling deployments while preserving release model consistency.
+* **Resilient Dual-Remote Hydration with Host-Tier Fallback:** Rather than enforcing a brittle fail-fast checkout, DVC attempts hydration sequentially from `local-seaweedfs` and `origin` (DagsHub S3). If remote artifacts are absent (e.g. during a non-training documentation or configuration commit), the script gracefully emits a warning and falls back to existing model checkpoints already mounted from the host NVMe drive (`/var/lib/taxon-vision/checkpoints/`). This guarantees continuous zero-downtime rolling deployments while preserving release model consistency.
 
 ---
 

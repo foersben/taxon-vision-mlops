@@ -22,7 +22,7 @@ spec:
     - name: rattler-cache
       mountPath: /root/.cache/rattler/cache
     - name: host-checkpoints
-      mountPath: /home/benni/taxon-vision-mlops/models/checkpoints
+      mountPath: /var/lib/taxon-vision/checkpoints
     resources:
       limits:
         memory: "8Gi"
@@ -35,7 +35,7 @@ spec:
     emptyDir: {}
   - name: host-checkpoints
     hostPath:
-      path: /home/benni/taxon-vision-mlops/models/checkpoints
+      path: /var/lib/taxon-vision/checkpoints
       type: DirectoryOrCreate
 '''
     }
@@ -245,10 +245,10 @@ spec:
             fi
 
             # Synchronize checkpoints to host volume if available and ensure read permissions for non-root API pod (UID 10001)
-            if [ -d "/home/benni/taxon-vision-mlops/models/checkpoints" ] && [ -f "models/checkpoints/head.pt" ]; then
-              echo ">>> Synchronizing checkpoints to host volume /home/benni/taxon-vision-mlops/models/checkpoints/..."
-              cp -f models/checkpoints/* /home/benni/taxon-vision-mlops/models/checkpoints/
-              chmod -R a+rX /home/benni/taxon-vision-mlops/models/checkpoints
+            if [ -d "/var/lib/taxon-vision/checkpoints" ] && [ -f "models/checkpoints/head.pt" ]; then
+              echo ">>> Synchronizing checkpoints to host volume /var/lib/taxon-vision/checkpoints/..."
+              cp -f models/checkpoints/* /var/lib/taxon-vision/checkpoints/
+              chmod -R a+rX /var/lib/taxon-vision/checkpoints
             fi
 
             # Apply API deployment and service manifests

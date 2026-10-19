@@ -57,10 +57,10 @@ if [ -d "/var/lib/taxon-vision/embeddings" ] && [ -f "data/embeddings/train_embe
 fi
 
 # Persist generated checkpoints to host volume cache
-if [ -d "/home/benni/taxon-vision-mlops/models/checkpoints" ] && [ -f "models/checkpoints/head.pt" ]; then
+if [ -d "/var/lib/taxon-vision/checkpoints" ] && [ -f "models/checkpoints/head.pt" ]; then
   echo ">>> Persisting freshly trained checkpoints to host volume cache..."
-  cp -f models/checkpoints/* /home/benni/taxon-vision-mlops/models/checkpoints/ 2>/dev/null || true
-  chmod -R a+rX /home/benni/taxon-vision-mlops/models/checkpoints 2>/dev/null || true
+  cp -f models/checkpoints/* /var/lib/taxon-vision/checkpoints/ 2>/dev/null || true
+  chmod -R a+rX /var/lib/taxon-vision/checkpoints 2>/dev/null || true
 fi
 
 # 1. Sync to in-cluster SeaweedFS (Tier 1 Edge Cache)

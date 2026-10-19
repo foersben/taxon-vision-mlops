@@ -22,7 +22,7 @@ spec:
     - name: host-embeddings
       mountPath: /var/lib/taxon-vision/embeddings
     - name: host-checkpoints
-      mountPath: /home/benni/taxon-vision-mlops/models/checkpoints
+      mountPath: /var/lib/taxon-vision/checkpoints
     resources:
       limits:
         memory: "16Gi"
@@ -49,5 +49,5 @@ spec:
       type: DirectoryOrCreate
   - name: host-checkpoints
     hostPath:
-      path: /home/benni/taxon-vision-mlops/models/checkpoints
+      path: /var/lib/taxon-vision/checkpoints
       type: DirectoryOrCreate
