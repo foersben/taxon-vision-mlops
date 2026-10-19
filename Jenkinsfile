@@ -21,6 +21,8 @@ spec:
     volumeMounts:
     - name: rattler-cache
       mountPath: /root/.cache/rattler/cache
+    - name: host-checkpoints
+      mountPath: /var/lib/taxon-vision/checkpoints
     resources:
       limits:
         memory: "8Gi"
@@ -31,6 +33,10 @@ spec:
   volumes:
   - name: rattler-cache
     emptyDir: {}
+  - name: host-checkpoints
+    hostPath:
+      path: /var/lib/taxon-vision/checkpoints
+      type: DirectoryOrCreate
 '''
     }
   }
@@ -212,25 +218,37 @@ spec:
             echo ">>> Executing zero-downtime rolling deployment to Kubernetes cluster..."
             kubectl version --client
 
-            # Configure SeaweedFS credentials in case models are in local cache
+            # Hydrate model checkpoints from DVC (prefer in-cluster SeaweedFS edge cache, fallback to DagsHub origin)
+            echo ">>> Hydrating model checkpoints from DVC remotes..."
+            PULLED=false
             if kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
               pixi run --frozen -e ci-dev dvc config --local remote.local-seaweedfs.access_key_id taxonadmin
               pixi run --frozen -e ci-dev dvc config --local remote.local-seaweedfs.secret_access_key taxonadmin
+              echo ">>> Attempting checkpoint pull from in-cluster SeaweedFS (local-seaweedfs)..."
+              if pixi run --frozen -e ci-dev dvc pull --force -r local-seaweedfs \
+                  models/checkpoints/head.pt \
+                  models/checkpoints/model_int8.onnx; then
+                PULLED=true
+                echo ">>> Checkpoints successfully hydrated from local-seaweedfs."
+              fi
             fi
 
-            # Hydrate model checkpoints from DVC
-            echo ">>> Hydrating model checkpoints from DVC remotes..."
-            pixi run --frozen -e ci-dev dvc pull --force -r origin \
-              models/checkpoints/head.pt \
-              models/checkpoints/model_int8.onnx || \
-            pixi run --frozen -e ci-dev dvc pull --force \
-              models/checkpoints/head.pt \
-              models/checkpoints/model_int8.onnx || \
-            echo ">>> Warning: Remote checkpoints not found in DVC; falling back to existing host volume checkpoints."
+            if [ "$PULLED" != "true" ]; then
+              echo ">>> Pulling checkpoints from DagsHub archive (origin)..."
+              pixi run --frozen -e ci-dev dvc pull --force -r origin \
+                models/checkpoints/head.pt \
+                models/checkpoints/model_int8.onnx || \
+              pixi run --frozen -e ci-dev dvc pull --force \
+                models/checkpoints/head.pt \
+                models/checkpoints/model_int8.onnx || \
+              echo ">>> Warning: Remote checkpoints not found in DVC; falling back to existing host volume checkpoints."
+            fi
 
-            # Synchronize checkpoints to host volume if available
-            if [ -d "/home/benni/taxon-vision-mlops/models/checkpoints" ] && [ -f "models/checkpoints/head.pt" ]; then
-              cp -f models/checkpoints/* /home/benni/taxon-vision-mlops/models/checkpoints/
+            # Synchronize checkpoints to host volume if available and ensure read permissions for non-root API pod (UID 10001)
+            if [ -d "/var/lib/taxon-vision/checkpoints" ] && [ -f "models/checkpoints/head.pt" ]; then
+              echo ">>> Synchronizing checkpoints to host volume /var/lib/taxon-vision/checkpoints/..."
+              cp -f models/checkpoints/* /var/lib/taxon-vision/checkpoints/
+              chmod -R a+rX /var/lib/taxon-vision/checkpoints
             fi
 
             # Apply API deployment and service manifests

@@ -21,6 +21,8 @@ spec:
       mountPath: /workspace/optuna
     - name: host-embeddings
       mountPath: /var/lib/taxon-vision/embeddings
+    - name: host-checkpoints
+      mountPath: /var/lib/taxon-vision/checkpoints
     resources:
       limits:
         memory: "16Gi"
@@ -44,4 +46,8 @@ spec:
   - name: host-embeddings
     hostPath:
       path: /var/lib/taxon-vision/embeddings
+      type: DirectoryOrCreate
+  - name: host-checkpoints
+    hostPath:
+      path: /var/lib/taxon-vision/checkpoints
       type: DirectoryOrCreate

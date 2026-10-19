@@ -56,6 +56,13 @@ if [ -d "/var/lib/taxon-vision/embeddings" ] && [ -f "data/embeddings/train_embe
   cp -f data/embeddings/*.pt /var/lib/taxon-vision/embeddings/ 2>/dev/null || true
 fi
 
+# Persist generated checkpoints to host volume cache
+if [ -d "/var/lib/taxon-vision/checkpoints" ] && [ -f "models/checkpoints/head.pt" ]; then
+  echo ">>> Persisting freshly trained checkpoints to host volume cache..."
+  cp -f models/checkpoints/* /var/lib/taxon-vision/checkpoints/ 2>/dev/null || true
+  chmod -R a+rX /var/lib/taxon-vision/checkpoints 2>/dev/null || true
+fi
+
 # 1. Sync to in-cluster SeaweedFS (Tier 1 Edge Cache)
 if kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
   echo ">>> Synchronizing Epistemic Diamond artifacts to SeaweedFS (local-seaweedfs)..."

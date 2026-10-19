@@ -39,10 +39,24 @@ PORT=$(kubectl get svc "${SERVICE}" -n "${NAMESPACE}" -o jsonpath='{.spec.ports[
 TARGET_URL="http://${CLUSTER_IP}:${PORT}"
 echo "    Found Service ClusterIP: ${TARGET_URL}"
 
+# Wait for old pods to terminate and fully disappear from EndpointSlices before probing
+echo "    Waiting for old terminating replicas to drain..."
+for _ in {1..30}; do
+    TERMINATING_COUNT=$(kubectl get pods -n "$NAMESPACE" -l app=taxon-vision-api \
+        --no-headers 2>/dev/null | grep -c "Terminating" || true)
+    if [ "$TERMINATING_COUNT" -eq 0 ]; then
+        break
+    fi
+    sleep 1
+done
+
+# Reusable curl flags to retry if connection is refused
+CURL_OPTS=(-s --retry 5 --retry-delay 2 --retry-connrefused)
+
 # 4. Probe Health and Readiness Endpoints
 echo "==> Step 4/5: Probing HTTP endpoints..."
-LIVENESS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${TARGET_URL}/health" || echo "FAILED")
-READINESS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${TARGET_URL}/health/ready" || echo "FAILED")
+LIVENESS_STATUS=$(curl "${CURL_OPTS[@]}" -o /dev/null -w "%{http_code}" "${TARGET_URL}/health" || echo "FAILED")
+READINESS_STATUS=$(curl "${CURL_OPTS[@]}" -o /dev/null -w "%{http_code}" "${TARGET_URL}/health/ready" || echo "FAILED")
 
 echo "    Liveness Probe (/health): HTTP ${LIVENESS_STATUS}"
 echo "    Readiness Probe (/health/ready): HTTP ${READINESS_STATUS}"
@@ -54,10 +68,10 @@ fi
 
 # 5. Execute Prediction Inference & Metrics Scrape
 echo "==> Step 5/5: Testing live prediction and telemetry..."
-PREDICT_RESP=$(curl -s -X POST "${TARGET_URL}/api/v1/predict" -F 'file=@/dev/null;filename=probe.jpg;type=image/jpeg')
+PREDICT_RESP=$(curl "${CURL_OPTS[@]}" -X POST "${TARGET_URL}/api/v1/predict" -F 'file=@/dev/null;filename=probe.jpg;type=image/jpeg')
 echo "    Prediction Response: ${PREDICT_RESP}"
 
-METRICS_MATCH=$(curl -s "${TARGET_URL}/metrics" | grep -c "taxon_predictions_total" || true)
+METRICS_MATCH=$(curl "${CURL_OPTS[@]}" "${TARGET_URL}/metrics" | grep -c "taxon_predictions_total" || true)
 echo "    Prometheus metrics verified (${METRICS_MATCH} matches for taxon_predictions_total)"
 
 echo "=================================================================="
