@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ "main", "develop" ]
 
+concurrency:
+  # Cancel any other running CI workflow jobs when a new one starts on the same branch
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
   pages: write
