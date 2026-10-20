@@ -40,14 +40,27 @@ fi
 
 # Execute unified 7-stage DVC pipeline
 echo ">>> Executing unified 7-stage DVC pipeline..."
-if [ "${TUNE_HYPERPARAMETERS:-false}" = "true" ]; then
-  echo ">>> Bayesian optimization enabled: updating training.tune=true in params.yaml..."
-  sed -i -E "s/^([[:space:]]*tune:[[:space:]]*).*/\1true/" params.yaml
-fi
-if [ -n "${EXTRACTOR:-}" ] && [ "${EXTRACTOR}" != "dinov3" ]; then
-  echo ">>> Updating model.extractor=${EXTRACTOR} in params.yaml..."
-  sed -i -E "s/^([[:space:]]*extractor:[[:space:]]*).*/\1\"${EXTRACTOR}\"/" params.yaml
-fi
+# Safely apply parameter overrides via PyYAML if explicitly requested by Jenkins parameters
+pixi run --frozen -e dev python -c '
+import os, yaml
+from pathlib import Path
+
+p = Path("params.yaml")
+data = yaml.safe_load(p.read_text())
+changed = False
+
+if os.environ.get("TUNE_HYPERPARAMETERS") == "true":
+    data.setdefault("training", {})["tune"] = True
+    changed = True
+
+extractor = os.environ.get("EXTRACTOR", "")
+if extractor and extractor != data.get("model", {}).get("extractor"):
+    data.setdefault("model", {})["extractor"] = extractor
+    changed = True
+
+if changed:
+    p.write_text(yaml.safe_dump(data, sort_keys=False))
+'
 
 # Check if live ingestion from iNaturalist is requested
 if [ "${INGEST_DATA:-false}" = "true" ]; then
