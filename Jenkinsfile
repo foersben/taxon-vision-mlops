@@ -182,7 +182,8 @@ spec:
         timeout(time: 150, unit: 'MINUTES')
       }
       environment {
-        INGEST_DATA = "${params.INGEST_DATA || currentBuild.getBuildCauses().any { it.toString().contains('TimerTrigger') }}"
+        // INGEST_DATA = "${params.INGEST_DATA || currentBuild.getBuildCauses().any { it.toString().contains('TimerTrigger') }}"
+        INGEST_DATA = "${params.INGEST_DATA}"
         TUNE_HYPERPARAMETERS = "${params.TUNE_HYPERPARAMETERS}"
         EXTRACTOR = "${params.EXTRACTOR}"
       }
@@ -216,7 +217,11 @@ spec:
         checkout scm
         container('ml-runner') {
           sh '''
-            # If config/taxa_catalog.yaml was modified in recent commits, force INGEST_DATA=true
+            # Enable ingestion on scheduled monthly runs or taxa catalog modifications
+            if echo "$BUILD_CAUSE" | grep -q "TIMER" || [ "$INGEST_DATA" = "true" ]; then
+              export INGEST_DATA=true
+            fi
+
             if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -q "config/taxa_catalog.yaml"; then
               echo ">>> config/taxa_catalog.yaml was modified; forcing INGEST_DATA=true"
               export INGEST_DATA=true
