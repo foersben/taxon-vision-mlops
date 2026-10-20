@@ -135,7 +135,7 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared-tunnel
     restart: unless-stopped
-    command: tunnel --no-autoupdate run --token <TUNNEL_TOKEN>
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
     depends_on:
       - jenkins
 ```
@@ -143,6 +143,7 @@ services:
 * **Storage Persistence:** Controller state, plugin binaries, job definitions, and credentials reside in `/home/benni/jenkins/jenkins_home`.
 * **Zero Setup Wizard:** The environment flag `JAVA_OPTS=-Djenkins.install.runSetupWizard=false` allows programmatic bootstrap without default setup wizard blocks.
 * **Service Dependency:** The tunnel daemon declares `depends_on: [jenkins]`, ensuring local endpoints are available before tunnel links register.
+* **Secret Isolation via `.env`:** The Cloudflare tunnel token is strictly decoupled from the compose specification and housed within an access-restricted environment file (`/home/benni/jenkins/.env`, permission `chmod 600`), interpolated at container start via `${TUNNEL_TOKEN}` to prevent credential leakage in process tables and configuration logs.
 
 ### 3.2 Controller Hardening Measures
 
@@ -162,12 +163,15 @@ The automated build ingestion pipeline integrates four core elements:
 
 ### 4.1 Webhook Verification & HMAC Signatures
 
-GitHub webhook deliveries are verified using an HMAC shared secret stored within Jenkins Global Credentials (`github-webhook-hmac-secret`). When GitHub dispatches payload data, Jenkins evaluates the `X-Hub-Signature-256` header against this secret before queuing pipeline jobs, preventing unauthorized job triggers.
+GitHub webhook deliveries are cryptographically validated using an HMAC shared secret stored within Jenkins Global Credentials (`github-webhook-secret`). When GitHub dispatches payload data, the Jenkins GitHub plugin evaluates the `X-Hub-Signature-256` digest header against this secret before queuing pipeline jobs, preventing unauthorized job triggers.
 
-### 4.2 GitHub API & Repository Access
+### 4.2 GitHub App Authentication & Checks API Integration
 
-* **GitHub Server Binding:** A system-level GitHub Server configuration connects to `https://api.github.com` using a scoped Personal Access Token (`github-ci-pat`). This allows Jenkins to manage commit statuses and PR checks.
-* **Branch Source Authentication:** Standard Git cloning operations require basic HTTPS credentials. A dedicated credential (`github-branch-source-pat`) is linked to the GitHub Branch Source plugin for repository checkouts.
+Rather than relying on legacy Personal Access Tokens (PATs) bound to a single user account, Jenkins authenticates using a dedicated GitHub App (`jenkins-ci-hivemind`, App ID `5392046`) via asymmetric RSA-2048 private key cryptography (`.pem`):
+
+* **Checks API vs. Personal Access Token Restrictions:** GitHub's Checks API (`POST /repos/{owner}/{repo}/check-runs`) strictly rejects Personal Access Tokens with an HTTP 403 Forbidden status. Authenticating as a registered GitHub App enables Jenkins to publish rich, stage-by-stage check runs directly to the pull request interface, displaying individual unit test results, coverage metrics, and build durations.
+* **Granular Least-Privilege Scopes:** The GitHub App is constrained strictly to necessary capabilities (`Checks: Read & write`, `Commit statuses: Read & write`, `Contents: Read-only`, `Pull requests: Read & write`, `Metadata: Read-only`), preventing broader account-level compromise.
+* **Branch Source Integration:** The GitHub Branch Source plugin utilizes the `jenkins-github-app` credential for automated branch and pull request discovery, eliminating basic-auth HTTPS credentials for Git checkout operations.
 
 ### 4.3 Multibranch Pipeline Discovery & Governance
 

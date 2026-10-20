@@ -40,16 +40,46 @@ fi
 
 # Execute unified 7-stage DVC pipeline
 echo ">>> Executing unified 7-stage DVC pipeline..."
-EXTRA_DVC_OPTS=""
-if [ "${TUNE_HYPERPARAMETERS:-false}" = "true" ]; then
-  echo ">>> Bayesian optimization enabled: running with training.tune=true..."
-  EXTRA_DVC_OPTS="-S training.tune=true"
-fi
-if [ -n "${EXTRACTOR:-}" ] && [ "${EXTRACTOR}" != "dinov3" ]; then
-  EXTRA_DVC_OPTS="${EXTRA_DVC_OPTS} -S model.extractor=${EXTRACTOR}"
+# Safely apply parameter overrides via PyYAML if explicitly requested by Jenkins parameters
+pixi run --frozen -e dev python -c '
+import os, yaml
+from pathlib import Path
+
+p = Path("params.yaml")
+data = yaml.safe_load(p.read_text())
+changed = False
+
+if os.environ.get("TUNE_HYPERPARAMETERS") == "true":
+    data.setdefault("training", {})["tune"] = True
+    changed = True
+
+extractor = os.environ.get("EXTRACTOR", "")
+if extractor and extractor != data.get("model", {}).get("extractor"):
+    data.setdefault("model", {})["extractor"] = extractor
+    changed = True
+
+if changed:
+    p.write_text(yaml.safe_dump(data, sort_keys=False))
+'
+
+# Check if live ingestion from iNaturalist is requested
+if [ "${INGEST_DATA:-false}" = "true" ]; then
+  echo ">>> INGEST_DATA is true: Unfreezing ingestion stage and fetching fresh data..."
+
+  # If any command fails during live ingestion, restore dvc.yaml's frozen state
+  trap 'echo ">>> Ingestion failed! Restoring dvc.yaml frozen state..."; git checkout -- dvc.yaml 2>/dev/null || true' ERR
+
+  pixi run --frozen -e dev dvc unfreeze ingestion
+  pixi run --frozen -e dev dvc repro ingestion
+  pixi run --frozen -e dev dvc freeze ingestion
+
+  # Clear the trap once ingestion and re-freezing succeed
+  trap - ERR
+else
+  echo ">>> Using existing cached raw_manifest.parquet (ingestion stage remains frozen)."
 fi
 
-pixi run --frozen -e dev dvc repro ${EXTRA_DVC_OPTS}
+pixi run --frozen -e dev dvc repro
 
 # Persist generated features to host volume cache
 if [ -d "/var/lib/taxon-vision/embeddings" ] && [ -f "data/embeddings/train_embeddings.pt" ]; then
@@ -58,9 +88,13 @@ fi
 
 # Persist generated checkpoints to host volume cache
 if [ -d "/var/lib/taxon-vision/checkpoints" ] && [ -f "models/checkpoints/head.pt" ]; then
-  echo ">>> Persisting freshly trained checkpoints to host volume cache..."
-  cp -f models/checkpoints/* /var/lib/taxon-vision/checkpoints/ 2>/dev/null || true
-  chmod -R a+rX /var/lib/taxon-vision/checkpoints 2>/dev/null || true
+  echo ">>> Atomically staging checkpoints to host volume /var/lib/taxon-vision/checkpoints/..."
+  for ckpt in models/checkpoints/*; do
+    fname=$(basename "$ckpt")
+    cp -f "$ckpt" "/var/lib/taxon-vision/checkpoints/.${fname}.tmp"
+    chmod a+r "/var/lib/taxon-vision/checkpoints/.${fname}.tmp"
+    mv -f "/var/lib/taxon-vision/checkpoints/.${fname}.tmp" "/var/lib/taxon-vision/checkpoints/${fname}"
+  done
 fi
 
 # 1. Sync to in-cluster SeaweedFS (Tier 1 Edge Cache)
@@ -75,7 +109,7 @@ pixi run --frozen -e dev dvc push -r origin
 
 # Stage and commit updated DVC lockfile and evaluation reports to Git
 echo ">>> Committing updated pipeline lockfile and evaluation reports to Git..."
-git add dvc.lock config/conformal_config.yaml docs/assets/pareto_results.json reports/*.json
+git add params.yaml dvc.lock config/conformal_config.yaml docs/assets/pareto_results.json reports/*.json
 if ! git diff --staged --quiet; then
   git commit -m "chore(pipeline): update dvc.lock and evaluation reports [skip ci]" || echo "Git commit skipped."
   git push origin HEAD:"${BRANCH_NAME:-develop}" || echo "Git push skipped."

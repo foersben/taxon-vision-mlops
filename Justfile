@@ -123,6 +123,34 @@ ci job="all":
 ci-test:
 	./scripts/ci/local_ci.sh tests
 
+# Fast static contract & syntax validation (< 3 seconds, zero GPU/network required)
+[group("quality")]
+verify-contracts:
+	@echo ">>> 1. Checking shell script syntax..."
+	bash -n scripts/ci/jenkins_gpu_train.sh
+	bash -n scripts/ci/verify_deployment.sh
+	bash -n scripts/ci/local_ci.sh
+	@echo ">>> 2. Validating DVC DAG structure & dry-run execution plan..."
+	pixi run --frozen -e ci-dev dvc dag
+	pixi run --frozen -e ci-dev dvc repro --dry
+	@if command -v kubectl >/dev/null 2>&1; then \
+		echo ">>> 3. Validating Kubernetes manifests with kubectl..."; \
+		kubectl apply -f deploy/k8s/ --dry-run=client; \
+	else \
+		echo ">>> 3. kubectl not found on workstation (skipping client-side K8s manifest validation)."; \
+	fi
+
+# Render visual DVC pipeline Mermaid graph to inspect stage boundaries
+[group("mlops")]
+visualize-dag:
+	pixi run --frozen -e ci-dev dvc dag --mermaid
+
+# Micro-canary end-to-end pipeline verification (tests ONNX export, INT8 quantization, and conformal calibration offline)
+[group("testing")]
+test-canary:
+	@echo ">>> Running offline micro-canary verification..."
+	TAXON_ALLOW_UNTRAINED_FALLBACK=true pixi run --frozen -e ci-dev pytest tests/integration/ tests/invariants/ -v -o "addopts="
+
 # ── MLOps & Pipelines ───────────────────────────────────────────────────────
 
 # Stream sample image batch from S3 into local cache for inspection

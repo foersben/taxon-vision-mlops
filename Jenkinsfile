@@ -32,7 +32,9 @@ spec:
         cpu: "200m"
   volumes:
   - name: rattler-cache
-    emptyDir: {}
+    hostPath:
+      path: /var/lib/taxon-vision/rattler-cache
+      type: DirectoryOrCreate
   - name: host-checkpoints
     hostPath:
       path: /var/lib/taxon-vision/checkpoints
@@ -44,6 +46,7 @@ spec:
   parameters {
     booleanParam(name: 'RETRAIN_MODEL', defaultValue: false, description: 'Force GPU feature extraction and model retraining on deployment')
     booleanParam(name: 'TUNE_HYPERPARAMETERS', defaultValue: false, description: 'Run Optuna Bayesian hyperparameter optimization during training')
+    booleanParam(name: 'INGEST_DATA', defaultValue: false, description: 'Unfreeze DVC ingestion stage and fetch fresh observations from iNaturalist')
     string(name: 'EXTRACTOR', defaultValue: 'dinov3', description: 'Vision foundation backbone extractor')
   }
 
@@ -52,6 +55,11 @@ spec:
     timeout(time: 240, unit: 'MINUTES')
     timestamps()
     disableConcurrentBuilds(abortPrevious: true)
+  }
+
+  triggers {
+    // Runs at 02:00 UTC on the 1st day of every month
+    cron('0 2 1 * *')
   }
 
   environment {
@@ -173,19 +181,27 @@ spec:
       options {
         timeout(time: 150, unit: 'MINUTES')
       }
+      environment {
+        INGEST_DATA = "${params.INGEST_DATA || currentBuild.getBuildCauses().any { it.toString().contains('TimerTrigger') }}"
+        TUNE_HYPERPARAMETERS = "${params.TUNE_HYPERPARAMETERS}"
+        EXTRACTOR = "${params.EXTRACTOR}"
+      }
       when {
-        allOf {
-          anyOf {
-            branch 'main'
+        anyOf {
+          triggeredBy 'TimerTrigger'
+          expression { params.INGEST_DATA == true }
+          expression { params.RETRAIN_MODEL == true }
+          allOf {
             branch 'develop'
-          }
-          anyOf {
-            expression { params.RETRAIN_MODEL == true }
-            changeset "data/**"
-            changeset "config/**"
-            changeset "params.yaml"
-            changeset "dvc.yaml"
-            changeset "src/taxon_vision/**"
+            anyOf {
+              changeset "config/taxa_catalog.yaml"
+              changeset "data/**"
+              changeset "config/**"
+              changeset "params.yaml"
+              changeset "dvc.yaml"
+              changeset "src/taxon_vision/models/**"
+              changeset "src/taxon_vision/pipelines/**"
+            }
           }
         }
       }
@@ -199,7 +215,15 @@ spec:
       steps {
         checkout scm
         container('ml-runner') {
-          sh 'bash scripts/ci/jenkins_gpu_train.sh'
+          sh '''
+            # If config/taxa_catalog.yaml was modified in recent commits, force INGEST_DATA=true
+            if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -q "config/taxa_catalog.yaml"; then
+              echo ">>> config/taxa_catalog.yaml was modified; forcing INGEST_DATA=true"
+              export INGEST_DATA=true
+            fi
+
+            bash scripts/ci/jenkins_gpu_train.sh
+          '''
         }
       }
     }
@@ -246,9 +270,13 @@ spec:
 
             # Synchronize checkpoints to host volume if available and ensure read permissions for non-root API pod (UID 10001)
             if [ -d "/var/lib/taxon-vision/checkpoints" ] && [ -f "models/checkpoints/head.pt" ]; then
-              echo ">>> Synchronizing checkpoints to host volume /var/lib/taxon-vision/checkpoints/..."
-              cp -f models/checkpoints/* /var/lib/taxon-vision/checkpoints/
-              chmod -R a+rX /var/lib/taxon-vision/checkpoints
+              echo ">>> Atomically staging checkpoints to host volume /var/lib/taxon-vision/checkpoints/..."
+              for ckpt in models/checkpoints/*; do
+                  fname=$(basename "$ckpt")
+                  cp -f "$ckpt" "/var/lib/taxon-vision/checkpoints/.${fname}.tmp"
+                  chmod a+r "/var/lib/taxon-vision/checkpoints/.${fname}.tmp"
+                  mv -f "/var/lib/taxon-vision/checkpoints/.${fname}.tmp" "/var/lib/taxon-vision/checkpoints/${fname}"
+              done
             fi
 
             # Apply API deployment and service manifests

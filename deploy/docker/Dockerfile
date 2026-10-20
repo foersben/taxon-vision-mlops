@@ -7,8 +7,8 @@ WORKDIR /app
 
 # Ensure non-root app user exists and owns working directory
 RUN groupadd -g 10001 appgroup && \
-    useradd -u 10001 -g appgroup -s /bin/bash -m appuser && \
-    chown -R appuser:appgroup /app
+  useradd -u 10001 -g appgroup -s /bin/bash -m appuser && \
+  chown -R appuser:appgroup /app
 
 USER appuser
 
@@ -22,14 +22,14 @@ RUN pixi install --frozen -e ci
 # Copy configuration, model checkpoints, and default parameters
 COPY --chown=appuser:appgroup config/ config/
 COPY --chown=appuser:appgroup params.yaml ./params.yaml
-COPY --chown=appuser:appgroup models/checkpoints/ models/checkpoints/
+RUN mkdir -p models/checkpoints && chown -R appuser:appgroup models/checkpoints
 
 # Expose FastAPI HTTP serving port
 EXPOSE 8000
 
 ENV PORT=8000 \
-    HOST=0.0.0.0 \
-    PYTHONUNBUFFERED=1
+  HOST=0.0.0.0 \
+  PYTHONUNBUFFERED=1
 
 # Healthcheck hitting the readiness probe (validating model warmup & cache)
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \

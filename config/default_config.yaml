@@ -65,6 +65,7 @@ training:
   test_split: 0.10
   random_seed: 42
   extractor: "dinov3"
+  tune: false
 
 ingestion:
   taxa_to_fetch:
