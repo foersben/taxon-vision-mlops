@@ -74,6 +74,7 @@ models/checkpoints/*
 *.onnx
 *.pth
 *.pt
+*.parquet
 
 # UV ban
 uv.lock

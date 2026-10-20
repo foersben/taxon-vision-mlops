@@ -64,10 +64,10 @@ spec:
 
   environment {
     DAGSHUB_TOKEN = credentials('dagshub-token')
-    AWS_ACCESS_KEY_ID = "${DAGSHUB_TOKEN}"
-    AWS_SECRET_ACCESS_KEY = "${DAGSHUB_TOKEN}"
+    AWS_ACCESS_KEY_ID = credentials('dagshub-token')
+    AWS_SECRET_ACCESS_KEY = credentials('dagshub-token')
     MLFLOW_TRACKING_USERNAME = 'foersben'
-    MLFLOW_TRACKING_PASSWORD = "${DAGSHUB_TOKEN}"
+    MLFLOW_TRACKING_PASSWORD = credentials('dagshub-token')
     PYTHONUNBUFFERED = '1'
     OMP_NUM_THREADS = '4'
     MKL_NUM_THREADS = '4'

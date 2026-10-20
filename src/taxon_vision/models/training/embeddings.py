@@ -239,6 +239,7 @@ def train_head_on_cached_embeddings(
         "val_accuracy": [],
         "val_f1": [],
         "val_pr_auc": [],
+        "learning_rate": [],
     }
 
     num_samples = data.train_embeddings.shape[0]
@@ -283,6 +284,7 @@ def train_head_on_cached_embeddings(
         history["val_accuracy"].append(val_acc)
         history["val_f1"].append(val_f1)
         history["val_pr_auc"].append(val_pr_auc)
+        history["learning_rate"].append(float(optimizer.param_groups[0]["lr"]))
 
         if scheduler is not None:
             scheduler.step(val_pr_auc)

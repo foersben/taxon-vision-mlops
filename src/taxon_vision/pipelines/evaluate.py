@@ -347,6 +347,25 @@ def evaluate_cli(argv: list[str] | None = None) -> int:
         with args.metrics_out.open("w", encoding="utf-8") as f:
             json.dump(export_payload, f, indent=2)
         print(f"Evaluation metrics exported to {args.metrics_out}")
+
+    from taxon_vision.models.training.tracking import log_stage_metrics_to_parent_run
+
+    eval_telemetry: dict[str, Any] = {
+        "p50_latency_ms": p50,
+        "p95_latency_ms": p95,
+        "throughput_fps": fps,
+        "latency_sla_satisfied": 1.0 if sla_met else 0.0,
+    }
+    if test_metrics:
+        eval_telemetry.update(
+            {
+                "test_accuracy": test_metrics.get("test_accuracy", 0.0),
+                "test_empirical_coverage": test_metrics.get("test_empirical_coverage", 0.0),
+                "mean_set_size": test_metrics.get("mean_set_size", 0.0),
+                "referral_rate": test_metrics.get("referral_rate", 0.0),
+            }
+        )
+    log_stage_metrics_to_parent_run(eval_telemetry, prefix="eval.")
     return 0
 
 

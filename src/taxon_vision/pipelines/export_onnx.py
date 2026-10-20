@@ -151,6 +151,17 @@ def export_onnx_cli(argv: list[str] | None = None) -> int:
                 registered_model_name="taxon_vision_onnx",
             )
 
+        from taxon_vision.models.training.tracking import log_stage_metrics_to_parent_run
+
+        file_size_mb = target_artifact.stat().st_size / (1024 * 1024) if target_artifact.exists() else 0.0
+        log_stage_metrics_to_parent_run(
+            metrics={
+                "onnx_model_size_mb": round(file_size_mb, 2),
+                "quantized_int8": 1.0 if args.quantize_int8 else 0.0,
+            },
+            prefix="export.",
+        )
+
         return _finalize_export_artifacts(target_artifact, args.output, args.quantize_int8)
 
     except Exception as err:

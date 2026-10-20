@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock
 
 import mlflow
@@ -214,3 +215,125 @@ def test_tune_hyperparameters_custom_study_and_reset(
     )
     assert study.study_name == "custom_test_study"
     assert len(study.trials) == 1
+
+
+def test_load_persisted_best_params(tmp_path: Path) -> None:
+    """Verify _load_persisted_best_params handles absent files, corrupt yaml, and valid entries."""
+    from taxon_vision.models.training.runner import _load_persisted_best_params
+
+    # Non-existent file returns None
+    assert _load_persisted_best_params("test_extractor", tmp_path / "nonexistent.yaml") is None
+
+    # Valid YAML with best_params
+    yaml_file = tmp_path / "best_params.yaml"
+    yaml_file.write_text(
+        """
+test_model:
+  best_params:
+    learning_rate: 0.0025
+    cb_beta: 0.999
+    weight_decay: 0.0001
+    dropout: 0.2
+    batch_size: 64
+    noise_std: 0.05
+  best_val_pr_auc: 0.912
+other_model:
+  learning_rate: 0.001
+""",
+        encoding="utf-8",
+    )
+    loaded = _load_persisted_best_params("test_model", yaml_file)
+    assert loaded is not None
+    assert loaded["learning_rate"] == 0.0025
+    assert loaded["cb_beta"] == 0.999
+
+    # Model with flat dictionary
+    loaded_other = _load_persisted_best_params("other_model", yaml_file)
+    assert loaded_other is not None
+    assert loaded_other["learning_rate"] == 0.001
+
+    # Missing extractor returns None
+    assert _load_persisted_best_params("missing_model", yaml_file) is None
+
+
+def test_resolve_tier_hyperparameters(
+    synthetic_split: EmbeddingSplit, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Verify 3-tier hyperparameter resolution: live study, persisted yaml, and defaults."""
+    from taxon_vision.config import get_settings
+    from taxon_vision.models.training.runner import _resolve_tier_hyperparameters
+
+    settings = get_settings()
+
+    # Tier 1: tune=True -> optuna_live_study
+    monkeypatch.setattr("taxon_vision.models.training.tuning._setup_mlflow", lambda _cfg=None: False)
+    monkeypatch.setattr("taxon_vision.models.training.tuning._log_best_run", MagicMock())
+    monkeypatch.setattr("taxon_vision.models.training.tuning._log_optuna_diagnostic_plots", MagicMock())
+
+    tier1_res = _resolve_tier_hyperparameters(
+        extractor="tier1_extractor",
+        tune=True,
+        n_trials=1,
+        epochs=1,
+        batch_size=16,
+        learning_rate=0.001,
+        seed=42,
+        data=synthetic_split,
+        num_classes=2,
+        study_name=None,
+        reset_study=False,
+        settings=settings,
+    )
+    assert tier1_res.hyperparameter_source == "optuna_live_study"
+    assert tier1_res.learning_rate > 0.0
+
+    # Tier 2: tune=False, persisted best_params.yaml exists
+    mock_persisted = {
+        "learning_rate": 0.0042,
+        "cb_beta": 0.995,
+        "weight_decay": 0.0002,
+        "dropout": 0.15,
+        "batch_size": 32,
+        "noise_std": 0.02,
+    }
+
+    def _mock_loader(extractor: str) -> dict[str, Any] | None:
+        return mock_persisted if extractor == "tier2_extractor" else None
+
+    monkeypatch.setattr("taxon_vision.models.training.runner._load_persisted_best_params", _mock_loader)
+
+    tier2_res = _resolve_tier_hyperparameters(
+        extractor="tier2_extractor",
+        tune=False,
+        n_trials=1,
+        epochs=1,
+        batch_size=16,
+        learning_rate=0.001,
+        seed=42,
+        data=synthetic_split,
+        num_classes=2,
+        study_name=None,
+        reset_study=False,
+        settings=settings,
+    )
+    assert tier2_res.hyperparameter_source == "persisted_best_params"
+    assert tier2_res.learning_rate == 0.0042
+    assert tier2_res.cb_beta == 0.995
+
+    # Tier 3: tune=False, no persisted file -> params_yaml_default
+    tier3_res = _resolve_tier_hyperparameters(
+        extractor="tier3_extractor",
+        tune=False,
+        n_trials=1,
+        epochs=1,
+        batch_size=16,
+        learning_rate=0.001,
+        seed=42,
+        data=synthetic_split,
+        num_classes=2,
+        study_name=None,
+        reset_study=False,
+        settings=settings,
+    )
+    assert tier3_res.hyperparameter_source == "params_yaml_default"
+    assert tier3_res.learning_rate == 0.001

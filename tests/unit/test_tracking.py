@@ -205,10 +205,12 @@ def test_promote_model_initial_production(monkeypatch: pytest.MonkeyPatch) -> No
     """Verify first registered model is tagged as Production when no baseline exists."""
     dummy_model = nn.Sequential(nn.Dropout(0.2), nn.Linear(32, 5))
 
-    mock_model_info = MagicMock()
+    mock_model_info = MagicMock(model_uri="runs:/123/model")
     mock_model_info.registered_model_version = "1"
     monkeypatch.setattr(mlflow.pytorch, "log_model", MagicMock(return_value=mock_model_info))
     monkeypatch.setattr(mlflow, "log_metric", MagicMock())
+    monkeypatch.setattr(mlflow, "set_tag", MagicMock())
+    monkeypatch.setattr(mlflow, "register_model", MagicMock(return_value=MagicMock(version="1")))
 
     mock_client = MagicMock()
     mock_client.get_model_version_by_alias.side_effect = Exception("No alias found")
@@ -220,13 +222,15 @@ def test_promote_model_initial_production(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_promote_model_challenger(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify new superior model is tagged as Challenger for canary evaluation."""
+    """Verify new superior model is registered and tagged as Challenger for canary evaluation."""
     dummy_model = nn.Sequential(nn.Linear(64, 10))
 
-    mock_model_info = MagicMock()
+    mock_model_info = MagicMock(model_uri="runs:/123/model")
     mock_model_info.registered_model_version = "2"
     monkeypatch.setattr(mlflow.pytorch, "log_model", MagicMock(return_value=mock_model_info))
     monkeypatch.setattr(mlflow, "log_metric", MagicMock())
+    monkeypatch.setattr(mlflow, "set_tag", MagicMock())
+    monkeypatch.setattr(mlflow, "register_model", MagicMock(return_value=MagicMock(version="2")))
 
     mock_prod_version = MagicMock(run_id="prod_run_123")
     mock_prod_run = MagicMock()
@@ -242,14 +246,17 @@ def test_promote_model_challenger(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_client.set_registered_model_alias.assert_called_once_with("taxon_vision_classifier", "Challenger", "2")
 
 
-def test_promote_model_archived(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify underperforming model is tagged as Archived."""
+def test_promote_model_skipped_below_incumbent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify underperforming model is not registered and tagged as skipped_below_incumbent."""
     dummy_model = nn.Sequential(nn.Linear(64, 10))
 
-    mock_model_info = MagicMock()
-    mock_model_info.registered_model_version = "3"
+    mock_model_info = MagicMock(model_uri="runs:/123/model")
     monkeypatch.setattr(mlflow.pytorch, "log_model", MagicMock(return_value=mock_model_info))
     monkeypatch.setattr(mlflow, "log_metric", MagicMock())
+    mock_set_tag = MagicMock()
+    monkeypatch.setattr(mlflow, "set_tag", mock_set_tag)
+    mock_register_model = MagicMock()
+    monkeypatch.setattr(mlflow, "register_model", mock_register_model)
 
     mock_prod_version = MagicMock(run_id="prod_run_123")
     mock_prod_run = MagicMock()
@@ -260,9 +267,16 @@ def test_promote_model_archived(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_client.get_run.return_value = mock_prod_run
     monkeypatch.setattr("mlflow.tracking.MlflowClient", lambda: mock_client)
 
+    # 1. Inferior score (0.80 < 0.85) -> skipped_below_incumbent
     alias = _promote_model_if_better(dummy_model, pr_auc=0.80)
-    assert alias == "Archived"
-    mock_client.set_registered_model_alias.assert_called_once_with("taxon_vision_classifier", "Archived", "3")
+    assert alias == "skipped_below_incumbent"
+    mock_register_model.assert_not_called()
+    mock_set_tag.assert_any_call("registry.status", "skipped_below_incumbent")
+
+    # 2. Equal score (0.85 == 0.85) -> strictly beats required -> skipped_below_incumbent
+    alias_tie = _promote_model_if_better(dummy_model, pr_auc=0.85)
+    assert alias_tie == "skipped_below_incumbent"
+    mock_register_model.assert_not_called()
 
 
 def test_promote_model_serialization_failure(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -280,11 +294,13 @@ def test_promote_model_with_real_val_embeddings(monkeypatch: pytest.MonkeyPatch)
     dummy_model = nn.Sequential(nn.Linear(32, 5))
     val_embeddings = torch.randn(10, 32)
 
-    mock_model_info = MagicMock()
+    mock_model_info = MagicMock(model_uri="runs:/123/model")
     mock_model_info.registered_model_version = "4"
     mock_log_model = MagicMock(return_value=mock_model_info)
     monkeypatch.setattr(mlflow.pytorch, "log_model", mock_log_model)
     monkeypatch.setattr(mlflow, "log_metric", MagicMock())
+    monkeypatch.setattr(mlflow, "set_tag", MagicMock())
+    monkeypatch.setattr(mlflow, "register_model", MagicMock(return_value=MagicMock(version="4")))
 
     mock_client = MagicMock()
     mock_client.get_model_version_by_alias.side_effect = Exception("No alias found")
@@ -315,7 +331,9 @@ def test_promote_model_with_real_val_embeddings(monkeypatch: pytest.MonkeyPatch)
 def test_log_training_visualizations(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify log_training_visualizations emits confusion matrix, PR curves, and energy distribution."""
     mock_log_figure = MagicMock()
+    mock_log_metric = MagicMock()
     monkeypatch.setattr(mlflow, "log_figure", mock_log_figure)
+    monkeypatch.setattr(mlflow, "log_metric", mock_log_metric)
     monkeypatch.setattr(mlflow, "active_run", lambda: True)
 
     val_logits = np.random.randn(20, 5)
@@ -334,6 +352,10 @@ def test_log_training_visualizations(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "visualizations/confusion_matrix.png" in artifact_paths
     assert "visualizations/precision_recall_curves.png" in artifact_paths
     assert "visualizations/energy_distribution.png" in artifact_paths
+
+    logged_metric_keys = [call.args[0] for call in mock_log_metric.call_args_list]
+    assert "worst_class_ap" in logged_metric_keys
+    assert "median_class_ap" in logged_metric_keys
 
 
 def test_determine_promotion_alias_tie_break() -> None:

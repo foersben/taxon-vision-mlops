@@ -93,16 +93,31 @@ class TrainingConfig(BaseModel):
         epochs (int): Default number of training epochs for linear probing.
         batch_size (int): Mini-batch size for training and feature extraction.
         learning_rate (float): Initial learning rate for optimization.
+        weight_decay (float): Initial weight decay coefficient for regularization.
+        cb_beta (float): Class-Balanced Loss effective sample weighting parameter beta.
+        dropout (float): Dropout probability for classifier head regularization.
+        noise_std (float): Standard deviation of Gaussian noise injected into embeddings.
+        early_stopping_patience (int): Number of epochs without improvement before early stopping.
+        reduce_lr_patience (int): Number of epochs without improvement before reducing learning rate.
+        warmup_epochs (int): Number of initial warmup epochs.
         val_split (float): Validation split fraction.
         cal_split (float): Calibration split fraction for conformal prediction.
         test_split (float): Final test evaluation split fraction.
         random_seed (int): Deterministic PRNG seed for reproducible splits.
         extractor (str): Default backbone identifier for training.
+        tune (bool): Whether to run Optuna Bayesian hyperparameter search.
     """
 
-    epochs: int = Field(default=5, gt=0)
+    epochs: int = Field(default=30, gt=0)
     batch_size: int = Field(default=32, gt=0)
     learning_rate: float = Field(default=0.001, gt=0.0)
+    weight_decay: float = Field(default=0.0001, ge=0.0)
+    cb_beta: float = Field(default=0.9999, gt=0.0, lt=1.0)
+    dropout: float = Field(default=0.2, ge=0.0, lt=1.0)
+    noise_std: float = Field(default=0.01, ge=0.0)
+    early_stopping_patience: int = Field(default=5, gt=0)
+    reduce_lr_patience: int = Field(default=2, gt=0)
+    warmup_epochs: int = Field(default=3, ge=0)
     val_split: float = Field(default=0.10, ge=0.0, lt=1.0)
     cal_split: float = Field(default=0.10, ge=0.0, lt=1.0)
     test_split: float = Field(default=0.10, ge=0.0, lt=1.0)
@@ -131,8 +146,8 @@ class MLflowConfig(BaseModel):
         experiment_name (str): Target experiment grouping name for training runs.
     """
 
-    tracking_uri: str
-    experiment_name: str
+    tracking_uri: str = "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
+    experiment_name: str = "taxon-vision-head-tuning"
 
 
 class ConformalConfig(BaseModel):
@@ -213,10 +228,18 @@ class OptunaConfig(BaseModel):
     Attributes:
         optuna_storage_uri (str): SQLAlchemy database URI or RDB URL for persisting Optuna study records.
         optuna_study_prefix (str): Prefix prepended to generated Optuna study names.
+        n_trials (int): Total number of hyperparameter evaluation trials.
+        epochs (int): Maximum training epochs allocated to each trial.
+        min_resource (int): Minimum resource allocation for successive halving pruning.
+        reduction_factor (int): Reduction factor for successive halving pruning.
     """
 
     optuna_storage_uri: str = "sqlite:///data/optuna/optuna_studies.db"
     optuna_study_prefix: str = "taxon_vision"
+    n_trials: int = Field(default=20, gt=0)
+    epochs: int = Field(default=20, gt=0)
+    min_resource: int = Field(default=3, gt=0)
+    reduction_factor: int = Field(default=2, gt=1)
 
 
 class EvaluationConfig(BaseModel):

@@ -208,6 +208,18 @@ def calibrate_cli(argv: list[str] | None = None) -> int:
         sample_size=sample_size,
         empirical_coverage=empirical_coverage,
     )
+
+    from taxon_vision.models.training.tracking import log_stage_metrics_to_parent_run
+
+    log_stage_metrics_to_parent_run(
+        metrics={
+            "q_hat": q_hat,
+            "empirical_calibration_coverage": empirical_coverage,
+            "tau_ood": tau_ood if tau_ood is not None else 0.0,
+            "num_calibration_samples": sample_size,
+        },
+        prefix="conformal.",
+    )
     return 0
 
 

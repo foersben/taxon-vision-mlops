@@ -33,8 +33,22 @@ def test_default_settings_loading(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.evaluation.latency_sla_ms == 25.0
     assert settings.ood.energy_threshold == -2.40
     assert settings.ood.entropy_threshold == 1.60
-    assert settings.training.epochs == 5
+    assert settings.training.epochs == 30
     assert settings.training.batch_size == 32
+    assert settings.training.learning_rate == 0.001
+    assert settings.training.weight_decay == 0.0001
+    assert settings.training.cb_beta == 0.9999
+    assert settings.training.dropout == 0.2
+    assert settings.training.noise_std == 0.01
+    assert settings.training.early_stopping_patience == 5
+    assert settings.training.reduce_lr_patience == 2
+    assert settings.training.warmup_epochs == 3
+    assert settings.training.val_split == 0.10
+    assert settings.training.cal_split == 0.10
+    assert settings.training.test_split == 0.10
+    assert settings.training.random_seed == 42
+    assert settings.training.extractor == "dinov3"
+    assert settings.training.tune is False
     assert len(settings.ingestion.taxa_to_fetch) == 10
     assert settings.ingestion.per_page == 200
     assert settings.streaming.http_max_retries == 5
@@ -45,6 +59,10 @@ def test_default_settings_loading(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.streaming.min_extraction_success_ratio == 0.95
     assert settings.optuna.optuna_storage_uri == "sqlite:///data/optuna/optuna_studies.db"
     assert settings.optuna.optuna_study_prefix == "taxon_vision"
+    assert settings.optuna.n_trials == 20
+    assert settings.optuna.epochs == 20
+    assert settings.optuna.min_resource == 3
+    assert settings.optuna.reduction_factor == 2
 
 
 def test_custom_settings_override(tmp_path: Path) -> None:
