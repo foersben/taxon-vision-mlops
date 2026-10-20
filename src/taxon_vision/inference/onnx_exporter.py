@@ -29,6 +29,7 @@ class _ONNXDualOutputModule(nn.Module):
 
     Why:
         Standard PyTorch classifiers return only the final projection logits. Exporting an ONNX graph that provides both class logits and dense feature embeddings allows downstream inference systems (OOD detection, drift monitoring, active learning query strategies) to consume embeddings directly without running an additional feature extraction pass.
+        The emitted `embeddings` tensor represents the pre-normalized penultimate feature activation vectors (unnormalized), ensuring that downstream drift monitoring (`drift.py`) accurately evaluates activation magnitude distributions rather than suffering a 1.0 vs 1.0 unit-norm collapse. Downstream consumers requiring unit vectors (e.g. LanceDB cosine indexers) normalize at point of ingestion.
 
     How:
         Delegates forward execution to `classifier.forward_with_embeddings(x)`.
@@ -53,7 +54,7 @@ class _ONNXDualOutputModule(nn.Module):
             x: Input 4D image tensor of shape (batch_size, channels, height, width).
 
         Returns:
-            Tuple of (logits, embeddings).
+            Tuple of (logits, embeddings) where embeddings are pre-normalized penultimate features.
         """
         return self.classifier.forward_with_embeddings(x)
 

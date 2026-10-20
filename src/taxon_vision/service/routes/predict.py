@@ -16,12 +16,35 @@ from taxon_vision.config import get_settings
 from taxon_vision.inference.cam import generate_cam_overlay
 from taxon_vision.monitoring.telemetry import PREDICTION_COUNTER
 from taxon_vision.service.inference import InvalidImageError, ModelNotReadyError, load_taxa_catalog, run_prediction
-from taxon_vision.service.schemas import PredictionResponse, TaxonPrediction
+from taxon_vision.service.schemas import ConformalRoutingTier, PredictionResponse, TaxonPrediction
 from taxon_vision.service.storage import persist_flagged_observation
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Inference"])
+
+
+def _resolve_routing_tier(
+    raw_tier: str,
+    pred_set: list[str],
+    confidence: float,
+    min_confidence: float,
+    k_max: int,
+) -> ConformalRoutingTier:
+    """Safely map raw prediction tier string or infer from prediction set metrics."""
+    try:
+        return ConformalRoutingTier(raw_tier)
+    except ValueError:
+        cardinality = len(pred_set)
+        if cardinality == 0:
+            return ConformalRoutingTier.ABSTENTION
+        if cardinality == 1:
+            return (
+                ConformalRoutingTier.DECISIVE if confidence >= min_confidence else ConformalRoutingTier.SEVERE_AMBIGUITY
+            )
+        if cardinality <= k_max:
+            return ConformalRoutingTier.MODERATE_AMBIGUITY
+        return ConformalRoutingTier.SEVERE_AMBIGUITY
 
 
 def _build_live_prediction(
@@ -87,10 +110,19 @@ def _build_live_prediction(
     pred_set = [str(s) for s in pred["conformal_set"]]
     is_ood = bool(pred.get("is_ood", False))
 
+    routing_tier = _resolve_routing_tier(
+        raw_tier=str(pred.get("routing_tier", "")),
+        pred_set=pred_set,
+        confidence=confidence,
+        min_confidence=settings.conformal.min_confidence_threshold,
+        k_max=settings.conformal.k_max,
+    )
+
     return PredictionResponse(
         top_prediction=top,
         top_candidates=candidates,
         conformal_prediction_set=pred_set,
+        routing_tier=routing_tier,
         is_conformal_ambiguous=len(pred_set) > settings.conformal.k_max or len(pred_set) == 0,
         is_ood_flagged=is_ood,
         requires_human_review=bool(pred["requires_human_review"]),

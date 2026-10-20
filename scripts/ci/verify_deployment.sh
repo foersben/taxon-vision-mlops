@@ -17,8 +17,8 @@ if ! command -v curl >/dev/null 2>&1; then
 fi
 
 NAMESPACE="${1:-taxon-vision}"
-DEPLOYMENT="taxon-vision-api"
-SERVICE="taxon-vision-api"
+DEPLOYMENT="${DEPLOYMENT:-taxon-vision-serving}"
+SERVICE="${SERVICE:-taxon-vision-serving}"
 
 echo "=================================================================="
 echo "   TaxonVision-MLOps Kubernetes Deployment Verification"
@@ -42,13 +42,14 @@ echo "    Found Service ClusterIP: ${TARGET_URL}"
 # Wait for old pods to terminate and fully disappear from EndpointSlices before probing
 echo "    Waiting for old terminating replicas to drain..."
 for _ in {1..30}; do
-    TERMINATING_COUNT=$(kubectl get pods -n "$NAMESPACE" -l app=taxon-vision-api \
+    TERMINATING_COUNT=$(kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name="${DEPLOYMENT}" \
         --no-headers 2>/dev/null | grep -c "Terminating" || true)
     if [ "$TERMINATING_COUNT" -eq 0 ]; then
         break
     fi
     sleep 1
 done
+
 
 # Reusable curl flags to retry if connection is refused
 CURL_OPTS=(-s --retry 5 --retry-delay 2 --retry-connrefused)

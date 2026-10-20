@@ -1,10 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: taxon-vision-api
+  name: taxon-vision-serving
   namespace: taxon-vision
   labels:
-    app.kubernetes.io/name: taxon-vision-api
+    app.kubernetes.io/name: taxon-vision-serving
     app.kubernetes.io/part-of: taxon-vision-mlops
 spec:
   replicas: 2
@@ -15,11 +15,11 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      app.kubernetes.io/name: taxon-vision-api
+      app.kubernetes.io/name: taxon-vision-serving
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: taxon-vision-api
+        app.kubernetes.io/name: taxon-vision-serving
     spec:
       securityContext:
         runAsNonRoot: true
@@ -46,11 +46,11 @@ spec:
           requests:
             cpu: "200m"
             memory: "512Mi"
+            nvidia.com/gpu: "1"
           limits:
             cpu: "2"
-            memory: "2Gi"
-            # In clusters with NVIDIA time-slicing enabled, uncomment below to mount a virtual GPU slice:
-            # nvidia.com/gpu: "1"
+            memory: "1536Mi"
+            nvidia.com/gpu: "1"
         volumeMounts:
         - name: checkpoints-volume
           mountPath: /app/models/checkpoints
@@ -80,15 +80,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: taxon-vision-api
+  name: taxon-vision-serving
   namespace: taxon-vision
   labels:
-    app.kubernetes.io/name: taxon-vision-api
+    app.kubernetes.io/name: taxon-vision-serving
     app.kubernetes.io/part-of: taxon-vision-mlops
 spec:
   type: NodePort
   selector:
-    app.kubernetes.io/name: taxon-vision-api
+    app.kubernetes.io/name: taxon-vision-serving
   ports:
   - name: http
     port: 8000

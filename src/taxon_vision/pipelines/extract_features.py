@@ -235,9 +235,10 @@ def extract_batch_representations(
 
     Why:
         Encapsulates tensor batch collation and device dispatch into an isolated, unit-testable function. Enforces `torch.no_grad()` to prevent activation graph construction, drastically bounding VRAM consumption during high-throughput feature caching.
+        Emits pre-normalized penultimate feature activation vectors (unnormalized), preserving activation magnitudes so downstream drift monitoring (`drift.py`) can accurately evaluate Wasserstein-1 drift without norm collapse. Downstream consumers requiring unit vectors (e.g. LanceDB HNSW) normalize at ingestion time.
 
     How:
-        Stacks individual 3D image tensors `(3, H, W)` into a contiguous 4D batch tensor `(B, 3, H, W)`, transfers the tensor to the designated accelerator device, invokes `extract_features`, and returns the detached representation matrix `(B, D)` residing in host CPU memory.
+        Stacks individual 3D image tensors `(3, H, W)` into a contiguous 4D batch tensor `(B, 3, H, W)`, transfers the tensor to the designated accelerator device, invokes `extract_features`, and returns the detached pre-normalized representation matrix `(B, D)` residing in host CPU memory.
 
     Args:
         backbone: Frozen vision foundation model in evaluation mode (`eval()`).
@@ -245,7 +246,7 @@ def extract_batch_representations(
         device: Hardware device (`cuda` or `cpu`) executing the forward matrix multiplications.
 
     Returns:
-        2D tensor of dense representations of shape `(batch_size, feature_dim)` on CPU.
+        2D tensor of dense pre-normalized representations of shape `(batch_size, feature_dim)` on CPU.
     """
     if not image_tensors:
         return torch.empty((0, 0), dtype=torch.float32)
