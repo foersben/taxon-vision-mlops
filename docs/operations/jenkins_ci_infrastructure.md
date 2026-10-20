@@ -122,9 +122,6 @@ services:
     ports:
       - "8080:8080"
       - "50000:50000"
-    dns:
-      - 1.1.1.1
-      - 8.8.8.8
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -132,7 +129,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /usr/bin/docker:/usr/bin/docker:ro
     environment:
-      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false -Djava.net.preferIPv4Stack=true -Djava.net.preferIPv6Addresses=false -Dsun.net.inetaddr.negative.ttl=0
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
 
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -144,16 +141,13 @@ services:
 ```
 
 * **Storage Persistence:** Controller state, plugin binaries, job definitions, and credentials reside in `/home/benni/jenkins/jenkins_home`.
-* **Zero Setup Wizard:** The environment flag `-Djenkins.install.runSetupWizard=false` allows programmatic bootstrap without default setup wizard blocks.
+* **Zero Setup Wizard:** The environment flag `JAVA_OPTS=-Djenkins.install.runSetupWizard=false` allows programmatic bootstrap without default setup wizard blocks.
 * **Service Dependency:** The tunnel daemon declares `depends_on: [jenkins]`, ensuring local endpoints are available before tunnel links register.
 
-### 3.2 Controller Hardening Measures & JVM Networking Invariants
+### 3.2 Controller Hardening Measures
 
 * **Built-In Node Deprovisioning:** The built-in Jenkins node is configured with 0 executors. This ensures untrusted pipeline scripts cannot execute commands directly on the controller container or access mounted host sockets.
 * **Canonical URL Configuration:** The canonical Jenkins URL is designated as `https://jenkins.benjamin-foerster.eu/`. Local administrative access occurs over LAN (`http://192.168.178.30:8080`), bypassing the external WAF block.
-* **Explicit Upstream DNS Decoupling:** Container-level DNS is pinned to `1.1.1.1` and `8.8.8.8`. This prevents the container runtime from inheriting the host `systemd-resolved` stub (`127.0.0.53`), which can suffer from intermittent `SERVFAIL` drops caused by local router IPv6 link-local DNS advertisements.
-* **Forced IPv4 Precedence in JVM:** By passing `-Djava.net.preferIPv4Stack=true` and `-Djava.net.preferIPv6Addresses=false` to OpenJDK 25, the controller avoids non-deterministic delays and connection timeouts when resolving dual-stack external hostnames such as `api.github.com`.
-* **Zero Negative DNS Cache Retention:** Setting `-Dsun.net.inetaddr.negative.ttl=0` guarantees that transient lookup errors are never permanently cached in the JVM's memory, ensuring immediate recovery upon network blips without requiring container restarts.
 
 ---
 
@@ -175,22 +169,12 @@ GitHub webhook deliveries are verified using an HMAC shared secret stored within
 * **GitHub Server Binding:** A system-level GitHub Server configuration connects to `https://api.github.com` using a scoped Personal Access Token (`github-ci-pat`). This allows Jenkins to manage commit statuses and PR checks.
 * **Branch Source Authentication:** Standard Git cloning operations require basic HTTPS credentials. A dedicated credential (`github-branch-source-pat`) is linked to the GitHub Branch Source plugin for repository checkouts.
 
-### 4.4 GitHub Checks API & Stage-Level Telemetry
+### 4.3 Multibranch Pipeline Discovery & Governance
 
-In addition to repository branch discovery, the Jenkins controller integrates deeply with the GitHub Checks API via two complementary plugins:
+The pipeline project (`taxon-vision-mlops`) is configured as a Multibranch Pipeline:
 
-* **`checks-api`:** Provides a generalised, vendor-neutral Jenkins Pipeline step abstraction (`withChecks('<name>') { ... }`).
-* **`github-checks`:** The GitHub implementation publisher that binds the Checks API abstraction to GitHub REST and GraphQL check suites.
-
-#### Fine-Grained PR Check Visibility
-
-Prior to this integration, Jenkins reported a single monolithic commit status (`continuous-integration/jenkins/branch`) upon pipeline completion. If static analysis passed but long-running integration tests timed out, the developer or reviewer had no programmatic insight into which specific sub-stage failed without inspecting multi-megabyte raw console logs.
-
-Wrapping declarative pipeline stages within `withChecks('...')` enables real-time, stage-by-stage check runs directly on pull request commits:
-
-* Each stage (`Authorization & Policy Gate`, `Prepare Toolchain`, `Static Quality & Invariants`, `Unit Tests`, `Integration & Conformal Invariants`, `Documentation Strict Build`, `Model Training & Checkpoint (GPU)`) publishes its own distinct GitHub Check Run.
-* When a stage commences, its status transitions to `in_progress`. Upon conclusion, it publishes `completed` with conclusion `success`, `failure`, or `skipped`.
-* GitHub branch protection rules can enforce required status checks at the granularity of individual test suites rather than waiting for downstream model training or deployment stages.
+* **PR Branch De-duplication:** The branch discovery strategy explicitly excludes branches that have open pull requests, preventing redundant parallel executions on identical commit hashes.
+* **Orphaned Item Cleanup:** An automated pruning policy (`Days to keep: 7`, `Max # to keep: 10`) terminates active builds and removes cached job items if a feature branch or pull request is deleted on GitHub.
 
 ---
 
@@ -327,6 +311,7 @@ The manifest declares eight Kubernetes objects designed to isolate runtime compu
 
 * **8. RoleBinding (`jenkins-deployer-binding`): Cross-Namespace Deployment Authorization**
     * Maps the `jenkins-agent` identity in `jenkins-ci` to `jenkins-deployer-role` in `taxon-vision`.
+    * Enables the in-cluster runner to execute `kubectl apply -f deploy/k8s/api-deployment.yaml` and `kubectl rollout restart deployment/taxon-vision-api` seamlessly upon successful test completion.
 
 ### 5.2 Kubernetes Cloud Configuration in Jenkins
 
@@ -336,35 +321,6 @@ The Jenkins Kubernetes plugin manages agent pod lifecycles using the following c
 * **Internal Routing Policy:** The **Jenkins URL** is designated as `http://192.168.178.30:8080`. This directs agent traffic over the internal bridge network, avoiding the public Cloudflare WAF barrier.
 * **WebSocket Multiplexing:** Communication between agents and the controller utilizes HTTP WebSocket streaming, eliminating the need to expose dedicated JNLP TCP listener ports (e.g. `50000`).
 * **Concurrency & Retention Limits:** Maximum agent concurrency is restricted to 2 pods, and pod retention is set to `Never` with garbage collection enabled to guarantee immediate resource recycling upon build termination.
-
-### 5.3 Cluster CoreDNS Upstream Resilience (`coredns-custom`)
-
-By default, k3s configures CoreDNS to inherit upstream nameservers directly from the host node's `/etc/resolv.conf`. On Ubuntu hosts running `systemd-resolved`, this forwards cluster queries to the local stub resolver (`127.0.0.53`).
-
-#### The Consumer Router IPv6 Breakdown
-
-In bare-metal home-lab environments operating behind consumer dual-stack routers (such as AVM Fritz!Box), DHCP advertises both an IPv4 DNS server (`192.168.178.1`) and a link-local IPv6 DNS server (`fd00::...`). When the router's IPv6 DNS endpoint fails to forward WAN queries, `systemd-resolved` encounters intermittent `SERVFAIL` errors.
-
-Because CoreDNS forwarded all external queries through `/etc/resolv.conf`, ephemeral agent pods scheduled in `jenkins-ci` were unable to resolve external hostnames during pipeline setup, triggering fatal `Could not resolve host: github.com` checkout failures during `git fetch`.
-
-#### Declarative CoreDNS Decoupling
-
-Rather than mutating volatile host-level networking files or altering `/etc/systemd/resolved.conf`, the cluster DNS resolution pipeline was hardened declaratively using k3s's native CoreDNS extension mechanism:
-
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: coredns-custom
-  namespace: kube-system
-data:
-  upstream.override: |
-    forward . 1.1.1.1 8.8.8.8
-```
-
-* **CoreDNS Extension Mechanics:** The k3s CoreDNS template includes an `import /etc/coredns/custom/*.override` directive inside the primary server block (`.:53`).
-* **Direct Public Anycast Forwarding:** Applying the `coredns-custom` ConfigMap causes CoreDNS to route non-cluster queries directly to Cloudflare (`1.1.1.1`) and Google (`8.8.8.8`) public resolvers.
-* **Immediate Zero-Downtime Rollout:** A rollout restart of `deployment/coredns` in `kube-system` updates active CoreDNS pods in <5 seconds without disrupting in-flight internal cluster service discovery.
 
 ---
 
@@ -473,67 +429,6 @@ The deployment stage was hardened against these failure modes:
 
 * **Dynamic Credential Provisioning:** The deployment script checks for the active existence of `service/seaweedfs` in namespace `taxon-vision` and dynamically injects `taxonadmin` access keys into the ephemeral `.dvc/config.local` prior to any S3 network calls.
 * **Resilient Dual-Remote Hydration with Host-Tier Fallback:** Rather than enforcing a brittle fail-fast checkout, DVC attempts hydration sequentially from `local-seaweedfs` and `origin` (DagsHub S3). If remote artifacts are absent (e.g. during a non-training documentation or configuration commit), the script gracefully emits a warning and falls back to existing model checkpoints already mounted from the host NVMe drive (`/var/lib/taxon-vision/checkpoints/`). This guarantees continuous zero-downtime rolling deployments while preserving release model consistency.
-
-### 6.6 Root-Cause Analysis and Hardening of Controller & Cluster DNS Topology (Build #43 & #75)
-
-During the multibranch ingestion and execution cycle of Build #43 and PR #75, two distinct but causally coupled DNS failures halted the automated CI/CD pipeline:
-
-1. **Controller-Level Name Resolution Outage (Build #43):**
-   Prior to checking out the repository `Jenkinsfile` or scheduling agent pods, the Jenkins controller crashed during the branch indexing stage with `java.net.UnknownHostException: api.github.com: Temporary failure in name resolution` originating in `SCMBinder.create` $\rightarrow$ `GitHubSCMSource.retrieve` $\rightarrow$ `ApiRateLimitChecker.verifyConnection`.
-2. **Ephemeral Agent Pod Name Resolution Outage (PR #75, Build #1):**
-   Immediately following the controller-level resolution fix, the controller successfully scheduled agent pod `taxon-vision-mlops-pr-75-1-...` on `k3s`. However, the runner failed at the `Declarative: Checkout SCM` stage with `fatal: unable to access 'https://github.com/foersben/taxon-vision-mlops.git/': Could not resolve host: github.com`.
-
-#### Forensic Diagnosis: The Three-Tier DNS Failure Chain
-
-A rigorous forensic audit of the host operating system, Docker networking, and the k3s CoreDNS service identified three compounding factors:
-
-* **1. Consumer Router Dual-Stack DHCP Stalling:**
-  The physical bare-metal host (`hive-mind`) connects to a local AVM Fritz!Box router. The router advertises both an IPv4 DNS gateway (`192.168.178.1`) and an IPv6 link-local DNS gateway (`fd00::e228:6dff:fef8:c477`). The IPv6 DNS interface on the router dropped WAN recursive lookups intermittently, returning `SERVFAIL` to querying clients.
-* **2. Host Resolver Stub & JVM Dual-Stack Fallback Stalling:**
-  The host Ubuntu operating system operates `systemd-resolved` with a local stub resolver on `127.0.0.53`. When the controller container (`jenkins-ci`) issued HTTP requests, it forwarded lookups to the host stub. Inside the OpenJDK 25 JVM runtime, the default networking stack initiated parallel IPv4 (A) and IPv6 (AAAA) queries via `java.base/java.net.Inet6AddressImpl.lookupAllHostAddr(Native Method)`. Because the link-local IPv6 server failed to respond, the AAAA query stalled and timed out, triggering an immediate `UnknownHostException` before the A record could be utilised. Furthermore, default JVM security properties cached negative lookups, prolonging the outage.
-* **3. CoreDNS `/etc/resolv.conf` Forwarding Inheritance in k3s:**
-  The k3s Kubernetes distribution defaults to forwarding non-cluster DNS queries to the host's `/etc/resolv.conf` (`forward . /etc/resolv.conf`). Consequently, newly scheduled pods inside the `jenkins-ci` namespace inherited the same broken host stub resolver chain. While the controller was temporarily able to reach GitHub after a manual reload, the ephemeral agent pods remained completely isolated from the WAN, unable to clone repository source code.
-
-#### Multi-Tier Architectural Hardening Implemented
-
-To render both the controller and dynamic agent runners permanently resilient against router-level IPv6 misconfigurations, a four-tier remediation was implemented:
-
-```mermaid
-flowchart TD
-    subgraph ControllerTier ["1. Controller Tier (/home/benni/jenkins/docker-compose.yml)"]
-        J_DNS["Explicit Container DNS:<br/>1.1.1.1, 8.8.8.8"]
-        J_JVM["JVM Network Invariants:<br/>-Djava.net.preferIPv4Stack=true<br/>-Dsun.net.inetaddr.negative.ttl=0"]
-        J_DNS --> J_Master_Box["jenkins-ci Container"]
-        J_JVM --> J_Master_Box
-    end
-
-    subgraph ClusterTier ["2. Cluster DNS Tier (k3s kube-system)"]
-        K_CM["ConfigMap: coredns-custom<br/>upstream.override: forward . 1.1.1.1 8.8.8.8"]
-        K_Core["CoreDNS Deployment<br/>(Rollout Restarted)"]
-        K_CM --> K_Core
-    end
-
-    subgraph TelemetryTier ["3. Telemetry Tier (Jenkins & GitHub)"]
-        Plugin["github-checks Plugin<br/>(Installed via jenkins-plugin-cli)"]
-        CheckStep["withChecks('<stage>')<br/>(Live PR Check Suite Streaming)"]
-        Plugin --> CheckStep
-    end
-
-    subgraph PolicyTier ["4. Policy & State Tier (Jenkinsfile & train.py)"]
-        PolicyGate["Authorization & Policy Gate<br/>(Enforces Roles & Parameters)"]
-        CLIFlag["CLI Argument: --tune<br/>(settings.training.tune Alignment)"]
-        PolicyGate --> CLIFlag
-    end
-```
-
-* **1. Controller DNS Decoupling & JVM Invariant Enforcement:**
-  The controller `docker-compose.yml` was configured with explicit external DNS resolvers (`1.1.1.1`, `8.8.8.8`), completely bypassing the host's `systemd-resolved` stub. The JVM was configured with `-Djava.net.preferIPv4Stack=true`, `-Djava.net.preferIPv6Addresses=false`, and `-Dsun.net.inetaddr.negative.ttl=0`, forcing deterministic IPv4 resolution and disabling negative DNS caching.
-* **2. Declarative CoreDNS Cluster Decoupling:**
-  A declarative `coredns-custom` ConfigMap was applied to the `kube-system` namespace, injecting `forward . 1.1.1.1 8.8.8.8` into CoreDNS via `import /etc/coredns/custom/*.override`. This guarantees that all current and future Kubernetes pods across all namespaces resolve external hostnames directly through reliable anycast servers.
-* **3. Stage-Level GitHub Checks Publishing:**
-  The `github-checks` plugin was installed directly into the Jenkins runtime, and all pipeline stages in `Jenkinsfile` were wrapped with `withChecks('...')`, ensuring real-time progress reporting on pull requests.
-* **4. Policy Gate & Hyperparameter Flag Synchronization:**
-  A formal `Authorization & Policy Gate` stage was introduced to validate trigger parameters (`INGEST_DATA`, `RETRAIN_MODEL`, `TUNE_HYPERPARAMETERS`, `EXTRACTOR`) and prevent parameter spoofing. In addition, the training pipeline CLI (`src/taxon_vision/pipelines/train.py`) was augmented with `--tune` (supporting `--no-tune`) wired directly to `settings.training.tune`.
 
 ---
 
