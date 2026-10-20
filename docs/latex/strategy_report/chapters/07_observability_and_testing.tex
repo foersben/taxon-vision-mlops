@@ -42,9 +42,9 @@ Rather than packaging the fast-path ONNX classifier and the multi-gigabyte Visio
 
 An ingress controller inspects incoming network payloads and load-balances observation traffic across the \texttt{taxon-vision-serving} pods. The serving engine executes the 4-tier conformal routing contract:
 \begin{enumerate}
-    \item If the prediction set cardinality evaluates to $|\hat{C}(X)| = 1$, the primary pod returns the classification directly through the ingress to the client within the sub-$25\text{ ms}$ SLA, bypassing secondary retrieval.
+    \item If the prediction set cardinality evaluates to $|\hat{C}(X)| = 1$ and top-1 confidence satisfies $\hat{\pi}_{\max}(X) \ge \tau_{\text{conf}}$ (calibrated to $\tau_{\text{conf}} = 0.60$), the primary pod returns the classification directly through the ingress to the client within the sub-$25\text{ ms}$ SLA, bypassing secondary retrieval.
     \item If the conformal layer indicates moderate ambiguity ($1 < |\hat{C}(X)| \le k_{\max}$, with $k_{\max} = 3$), it triggers a single-stage filtered HNSW traversal over LanceDB and Reciprocal Rank Fusion over exemplar crops with under $6\text{ ms}$ latency overhead.
-    \item If the ambiguity is severe ($|\hat{C}(X)| > k_{\max}$), the primary service dispatches an asynchronous internal gRPC call to the \texttt{taxon-vision-vlm} service and persists the sample to \texttt{triage\_queue.lance} on the in-cluster SeaweedFS object store for expert review.
+    \item If the ambiguity is severe ($|\hat{C}(X)| > k_{\max}$) or a singleton set fails the minimum confidence threshold ($|\hat{C}(X)| = 1 \land \hat{\pi}_{\max}(X) < \tau_{\text{conf}}$), the primary service dispatches an asynchronous internal gRPC call to the \texttt{taxon-vision-vlm} service and persists the sample to \texttt{triage\_queue.lance} on the in-cluster SeaweedFS object store for expert review.
     \item If the prediction set is empty ($|\hat{C}(X)| = 0$), the system executes complete epistemic abstention, initiates an unconstrained nearest-neighbour search across global exemplars, and dispatches an immediate priority triage alert.
 \end{enumerate}
 
@@ -58,11 +58,12 @@ In order to prevent cluster degradation caused by deadlocks or memory corruption
 \subsection{Horizontal Pod Autoscaling on Custom Telemetry}
 Standard K8s autoscaling typically relies on CPU or system memory thresholds, which unfortunately provide misleading operational signals for neural network workloads. A GPU-bound container can experience severe execution queuing whilst reporting surprisingly low CPU utilisation.
 
-The cluster implements Horizontal Pod Autoscaling (HPA) driven by custom Prometheus metrics via the K8s Custom Metrics API. The autoscaler continuously monitors two primary indicators:
+The cluster architecture supports Horizontal Pod Autoscaling (HPA) driven by custom Prometheus metrics via the K8s Custom Metrics API. The autoscaler continuously monitors two primary indicators:
 \begin{enumerate}
     \item \textbf{GPU VRAM Saturation and Compute Utilisation:} Sourced directly from NVIDIA Data Center GPU Manager (DCGM) metrics.
-    \item \textbf{Conformal Ambiguity Influx:} Sourced directly from the application's telemetry. If an environmental event (for example, sudden regional weather shifts causing blurred imagery) causes the proportion of multi-candidate conformal sets ($|C| > 1$) to spike, the HPA preemptively scales the \texttt{taxon-vision-vlm} pod pool to comfortably absorb the anticipated surge in heavy multimodal retrieval passes before service latency inevitably degrades.
+    \item \textbf{Conformal Ambiguity Influx:} Sourced directly from the application's telemetry. If an environmental event (for example, sudden regional weather shifts causing blurred imagery) causes the proportion of multi-candidate conformal sets ($|C| > 1$) to spike, the HPA preemptively scales the \texttt{taxon-vision-vlm} pod pool to absorb the anticipated surge in multimodal retrieval passes.
 \end{enumerate}
+On multi-node cloud clusters, HPA dynamically scales worker nodes. On the single-node bare-metal host with a 4-slice NVIDIA time-slicing profile, concurrency is bounded within static virtual GPU slice limits (1 training slice for Jenkins, 2 slices for \texttt{taxon-vision-api}, and 1 slice for \texttt{taxon-vision-vlm}), buffering traffic spikes via asynchronous queuing and CPU worker offloading.
 
 \section{Telemetry, Metric Exporters, Concept Drift Monitoring}
 \label{sec:observability_telemetry}
@@ -110,11 +111,11 @@ Detects global vector magnitude, illumination, camera sensor variation, and ener
 \end{table}
 
 \subsubsection{Tier 1: Real-Time Telemetry via Linear-Time 1D Wasserstein Distance}
-Implemented as a standalone statistical calculation module (\texttt{src/taxon\_vision/monitoring/drift.py}), pending live integration into the \texttt{/predict} serving endpoint and Prometheus telemetry exporter. By projecting high-dimensional visual representations onto their $L_2$ Euclidean vector norms, the calculation complexity collapses to $\mathcal{O}(N \cdot D)$:
+Implemented as a standalone statistical calculation module (\texttt{src/taxon\_vision/monitoring/drift.py}), pending live integration into the \texttt{/predict} serving endpoint and Prometheus telemetry exporter. By projecting penultimate pre-normalised representations $\tilde{z} = f_{\text{VFM}}(x)$ onto their $L_2$ Euclidean vector norms (as post-normalised embeddings $z = \tilde{z}/\|\tilde{z}\|_2$ identically satisfy $\|z\|_2 = 1$), the calculation complexity collapses to $\mathcal{O}(N \cdot D)$. The difference in empirical mean norms serves as a computationally lightweight first-moment lower bound on the 1D Wasserstein-1 metric:
 \[
-W_1(\mathcal{Z}_{\text{base}}, \mathcal{Z}_{\text{prod}}) \approx \left| \frac{1}{M} \sum_{i=1}^M \|z_i\|_2 - \frac{1}{N} \sum_{j=1}^N \|z_j'\|_2 \right|
+W_1(\tilde{\mathcal{Z}}_{\text{base}}, \tilde{\mathcal{Z}}_{\text{prod}}) \ge \left| \frac{1}{M} \sum_{i=1}^M \|\tilde{z}_i\|_2 - \frac{1}{N} \sum_{j=1}^N \|\tilde{z}_j'\|_2 \right|
 \]
-This formulation enables the FastAPI application to evaluate sliding production inference windows in sub-milliseconds without adding memory pressure or blocking the asynchronous HTTP event loop. When the scalar distance breaches the operational threshold ($W_1 > \tau_{\text{drift}}$), an automated webhook alert is dispatched to trigger pipeline retraining.
+This formulation enables the FastAPI application to evaluate sliding production inference windows in sub-milliseconds without adding memory pressure or blocking the asynchronous HTTP event loop, whilst sorted quantile order statistics compute exact 1D $W_1$ in $\mathcal{O}(N \log N)$ during offline CI validation. When the scalar distance breaches the operational threshold ($W_1 > \tau_{\text{drift}}$), an automated webhook alert is dispatched to trigger pipeline retraining.
 
 \subsubsection{Tier 2: Continuous Integration and Model Promotion via Full-Manifold MMD}
 Specified as a Phase~3 offline CI/CD quality gate to execute within the Jenkins pipeline and model evaluation stages on the GPU compute node (architectural design pending implementation in \texttt{monitoring/drift.py}). During model candidate validation, pairwise Gaussian RBF kernel matrices are evaluated across the full $D$-dimensional latent space ($\mathcal{Z}_{\text{base}}$ vs.\ $\mathcal{Z}_{\text{prod}}$):
@@ -204,5 +205,5 @@ Iterative hyperparameter tuning introduces volatile state risks when trials exec
 \begin{enumerate}
     \item \textbf{Optuna SQLite WAL Persistence:} The hyperparameter runner (\nolinkurl{src/taxon_vision/models/training/runner.py}) binds to an ACID-compliant SQLite backend configured in Write-Ahead Logging (\texttt{WAL}) mode at \nolinkurl{/workspace/optuna/optuna_studies.db}, mounted from the host NVMe drive (\nolinkurl{/var/lib/taxon-vision/optuna}). This permits concurrent read operations by the dashboard without locking database writes during parallel trial execution.
     \item \textbf{Cluster Optuna Dashboard:} Deployed in Kubernetes via \nolinkurl{deploy/k8s/mlops-storage-and-optuna.yaml} using the official image (\texttt{ghcr.io/optuna/optuna-dashboard:latest}), the interactive dashboard is exposed to the local network via NodePort \texttt{30081}. It renders live optimization history plots, parameter importances, and multi-objective Pareto frontiers across classification heads and backbone extractors.
-    \item \textbf{Post-Rollout Smoke Testing:} Following every zero-downtime rolling restart, the automated verification script (\nolinkurl{scripts/verify_deployment.sh}) probes the live cluster: (a) verifying rollout status of \texttt{deployment/taxon-vision-api}, (b) testing \texttt{/health} and \texttt{/health/ready} probes, (c) dispatching a multipart synthetic image prediction to \texttt{/api/v1/predict}, and (d) asserting that Prometheus metrics counter \texttt{taxon\_predictions\_total} increments deterministically.
+    \item \textbf{Post-Rollout Smoke Testing:} Following every zero-downtime rolling restart, the automated verification script (\nolinkurl{scripts/ci/verify_deployment.sh}) probes the live cluster: (a) verifying rollout status of \texttt{deployment/taxon-vision-api}, (b) testing \texttt{/health} and \texttt{/health/ready} probes, (c) dispatching a multipart synthetic image prediction to \texttt{/api/v1/predict}, and (d) asserting that Prometheus metrics counter \texttt{taxon\_predictions\_total} increments deterministically.
 \end{enumerate}

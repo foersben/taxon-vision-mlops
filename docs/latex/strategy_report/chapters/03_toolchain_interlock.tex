@@ -42,7 +42,7 @@ The acquisition algorithm iteratively samples candidate configurations that maxi
 
 In order to conserve hardware cycles, Optuna applies the Asynchronous Successive Halving Algorithm (ASHA) with a minimum resource allocation of two epochs and a reduction factor of $\eta = 2$. A trial is first evaluated after two epochs; at each subsequent rung, only the superior half of the candidate configurations ($1/\eta$) is permitted to proceed, whilst inferior trajectories are terminated immediately.
 
-To guarantee continuity across iterative training cycles and prevent redundant evaluations, Optuna studies are backed by persistent SQLite storage (\nolinkurl{sqlite:///data/optuna_studies.db}) with study identifiers scoped deterministically by vision backbone (for example, \texttt{tuning\_dinov3} or \texttt{tuning\_bioclip2}) under \texttt{load\_if\_exists=True}. This persistence layer enables subsequent tuning invocations to warm-start from prior historical parameter trials, progressively refining the non-parametric Parzen density estimates without discarding previous evaluations.
+To guarantee continuity across iterative training cycles and prevent redundant evaluations, Optuna studies are backed by persistent SQLite storage (\nolinkurl{sqlite:///data/optuna/optuna_studies.db}) with study identifiers scoped deterministically by vision backbone (for example, \texttt{tuning\_dinov3} or \texttt{tuning\_bioclip2}) under \texttt{load\_if\_exists=True}. This persistence layer enables subsequent tuning invocations to warm-start from prior historical parameter trials, progressively refining the non-parametric Parzen density estimates without discarding previous evaluations.
 
 \subsection{Search Space and Optimiser}
 \label{sec:search_space}
