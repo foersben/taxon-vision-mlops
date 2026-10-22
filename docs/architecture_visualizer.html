@@ -1244,9 +1244,6 @@
             <select id="select-y-metric" class="metric-select">
               <option value="accuracy_score">Taxonomic Accuracy (%)</option>
               <option value="throughput_fps">Throughput (FPS)</option>
-              <option value="cost_per_million_usd">
-                Modeled Cloud Cost ($ / 1M requests)
-              </option>
             </select>
           </div>
         </div>
@@ -1273,12 +1270,13 @@
                   class="fa-solid fa-bolt"
                   style="color: var(--accent-amber)"
                 ></i>
-                Throughput (FPS) vs. Modeled Cloud Cost ($/1M)*
+                Throughput (FPS) vs. Peak VRAM (MB)
               </div>
+              <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); border: 1px solid rgba(245, 158, 11, 0.3)">Hardware Efficiency</span>
             </div>
             <div id="plotly-cost-throughput" class="chart-canvas"></div>
             <div style="font-size: 0.72rem; color: #94a3b8; padding: 4px 12px 10px; line-height: 1.3;">
-              * Modeled cloud GPU hosting expenditure based on AWS instance rates and throughput; local bare-metal execution incurs $0.00/request.
+              Comparison of raw inference throughput (FPS) against accelerator Video RAM memory allocation requirements.
             </div>
           </div>
         </div>
@@ -1481,7 +1479,6 @@
           p95_latency_ms: 12.0,
           throughput_fps: 85.0,
           vram_peak_mb: 1200.0,
-          cost_per_million_usd: 3.5,
           recommended: false,
           color: "#00e5ff",
           target_profile: "Server GPU / Domain Taxonomic Prior",
@@ -1497,7 +1494,6 @@
           p95_latency_ms: 9.5,
           throughput_fps: 105.0,
           vram_peak_mb: 950.0,
-          cost_per_million_usd: 2.6,
           recommended: true,
           color: "#a855f7",
           target_profile: "Server GPU / Dense Morphology",
@@ -1514,7 +1510,6 @@
           p95_latency_ms: 9.2,
           throughput_fps: 110.0,
           vram_peak_mb: 900.0,
-          cost_per_million_usd: 2.5,
           recommended: false,
           color: "#38bdf8",
           target_profile: "General Self-Supervised Baseline",
@@ -1531,7 +1526,6 @@
           p95_latency_ms: 4.2,
           throughput_fps: 280.0,
           vram_peak_mb: 180.0,
-          cost_per_million_usd: 0.6,
           recommended: true,
           color: "#10b981",
           target_profile: "Extreme Low-Power Edge / Offline Mobile",
@@ -1548,7 +1542,6 @@
           p95_latency_ms: 6.8,
           throughput_fps: 160.0,
           vram_peak_mb: 300.0,
-          cost_per_million_usd: 1.1,
           recommended: false,
           color: "#f59e0b",
           target_profile: "Balanced Edge Convolutional Baseline",
@@ -2754,7 +2747,6 @@
           parameters_m: "Model Parameters (Millions)",
           accuracy_score: "Taxonomic Accuracy Baseline (%)",
           throughput_fps: "Inference Throughput (FPS)",
-          cost_per_million_usd: "Modeled Cloud Cost ($ / 1M Requests)*",
         };
 
         const sorted = [...PARETO_RAW].sort((a, b) => a[xMetric] - b[xMetric]);
@@ -2780,7 +2772,7 @@
             d.architecture,
             d.p95_latency_ms,
             d.throughput_fps,
-            d.cost_per_million_usd,
+            d.parameters_m,
             d.vram_peak_mb,
           ]),
           mode: "markers+text",
@@ -2827,8 +2819,8 @@
           { responsive: true, displayModeBar: false },
         );
 
-        const costTrace = {
-          x: PARETO_RAW.map((d) => d.cost_per_million_usd),
+        const vramTrace = {
+          x: PARETO_RAW.map((d) => d.vram_peak_mb),
           y: PARETO_RAW.map((d) => d.throughput_fps),
           text: PARETO_RAW.map((d) => d.displayName),
           mode: "markers+text",
@@ -2839,17 +2831,19 @@
             color: PARETO_RAW.map((d) => d.color),
             line: { color: "#fff", width: 1.5 },
           },
+          hovertemplate:
+            "<b>%{text}</b><br>Peak VRAM: %{x} MB<br>Throughput: %{y} FPS<extra></extra>",
           type: "scatter",
         };
 
         Plotly.react(
           "plotly-cost-throughput",
-          [costTrace],
+          [vramTrace],
           {
             ...baseLayout,
             xaxis: {
               title: {
-                text: "Modeled Cloud Cost ($ / 1M Requests)*",
+                text: "Peak VRAM Footprint (MB)",
                 font: { size: 11, color: "#cbd5e1" },
               },
               gridcolor: "rgba(255,255,255,0.06)",
@@ -2891,8 +2885,8 @@
               <span class="model-metric-val">${m.vram_peak_mb} MB</span>
             </div>
             <div class="model-metric-item">
-              <span class="model-metric-label">Modeled Cost / 1M*</span>
-              <span class="model-metric-val" style="color:var(--accent-amber);">$${m.cost_per_million_usd}</span>
+              <span class="model-metric-label">Parameters</span>
+              <span class="model-metric-val" style="color:var(--accent-amber);">${m.parameters_m} M</span>
             </div>
           </div>
           <div class="model-baseline-note">
@@ -3044,7 +3038,6 @@
                     if (item.p50_latency_ms !== undefined) match.p50_latency_ms = item.p50_latency_ms;
                     if (item.p95_latency_ms !== undefined) match.p95_latency_ms = item.p95_latency_ms;
                     if (item.throughput_fps !== undefined) match.throughput_fps = item.throughput_fps;
-                    if (item.cost_per_million_usd !== undefined) match.cost_per_million_usd = item.cost_per_million_usd;
                     if (item.vram_peak_mb !== undefined) match.vram_peak_mb = item.vram_peak_mb;
                     if (item.parameters_m !== undefined) match.parameters_m = item.parameters_m;
                     if (item.accuracy_score !== undefined) match.accuracy_score = item.accuracy_score;

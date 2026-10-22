@@ -18,9 +18,9 @@ sources:
 
 # Backbone Benchmarking & Pareto Trade-Offs
 
-Deploying fine-grained biological classifiers into high-throughput production requires balancing predictive accuracy against hardware latency budgets and cloud serving costs. In biodiversity computer vision, the highest-performing vision transformer can require ten times the parameter footprint and memory bandwidth for a marginal gain in top-1 accuracy.
+Deploying fine-grained biological classifiers into high-throughput production requires balancing predictive accuracy against hardware latency budgets and memory constraints. In biodiversity computer vision, the highest-performing vision transformer can require ten times the parameter footprint and memory bandwidth for a marginal gain in top-1 accuracy.
 
-To formalize these multi-objective trade-offs, TaxonVision-MLOps evaluates candidate vision backbones across a empirical **Pareto frontier** measuring Top-1 Accuracy, Macro PR-AUC, p95 Inference Latency, Throughput (FPS), Memory Footprint (VRAM), and Unit Serving Cost.
+To formalize these multi-objective trade-offs, TaxonVision-MLOps evaluates candidate vision backbones across an empirical **Pareto frontier** measuring Top-1 Accuracy, Macro PR-AUC, p95 Inference Latency, Throughput (FPS), Parameter Footprint, and Peak Video RAM (VRAM).
 
 ---
 
@@ -33,7 +33,6 @@ Use the interactive workbench below to explore the empirical Pareto frontier. Ho
 >
 > * **Active Production Model (Empirically Verified):** The champion model actively trained, quantized, and evaluated on-cluster in the 7-stage DVC pipeline is `dinov3_vits14`. Evaluated on the holdout test partition (`data/embeddings/test_embeddings.pt`, $N=169$ observations across 10 taxa), it achieves **89.35% Holdout Test Accuracy** (`reports/pareto_evaluation.json`), 82.84% Validation Accuracy (`reports/train_metrics.json`), and 96.45% empirical conformal coverage.
 > * **Candidate Backbone Comparisons (Symbolic Literature Projections):** The metrics presented for `bioclip-2`, `dinov2_vits14`, `mobilenetv4_conv_small`, and `efficientnet_b0` (and GPU TensorRT latency profiles) represent **symbolic architectural projections** derived from published literature baselines (Stevens et al. 2024, Oquab et al. 2023, Qin et al. 2024, Tan & Le 2019) and hardware latency budgets. They serve as comparative design exploration baselines rather than multi-model cluster benchmarks.
-> * **Modeled Cloud Serving Costs vs. Bare-Metal Operations:** The metric "Serving Cost ($ / 1M Requests)" is a **theoretical cloud deployment model** (projected from standard AWS on-demand GPU instance pricing and batch inference throughput) used to evaluate commercial trade-offs. The active TaxonVision platform operates on bare-metal hardware and incurs **zero per-inference API or cloud billing costs**.
 
 <div id="taxon-pareto-explorer"></div>
 
@@ -55,9 +54,9 @@ TaxonVision evaluates five foundation feature extractors spanning dense self-sup
 
 Universal academic benchmarks (e.g., ImageNet-1K or Tree-of-Life zero-shot evaluations) provide general capacity metrics, but they do not accurately reflect performance on specialized biological distributions under operational constraints:
 
-* **MobileNetV4 Small (Symbolic Edge Profile):** The official baseline is 73.8% Top-1 on ImageNet-1K. In specialized biodiversity pipelines, its inverted bottleneck architecture provides an estimated **320 FPS** throughput and sub-4ms p95 latency on commodity CPUs (modeled at ~$0.50 per 1M inferences under cloud GPU pricing), making it the candidate of choice for edge camera traps with limited power budgets.
-* **BioCLIP-2 (Symbolic Domain Profile):** Trained on over 10 million organism photographs structured by the Tree of Life taxonomy, BioCLIP-2 captures deep biological priors. Under accelerated Tensor Core GPU execution, literature evaluations project up to 92.4% accuracy with 12.0 ms p95 latency. However, its 86M parameter footprint requires 1,200 MB of VRAM, increasing projected cloud serving costs to $3.50 per 1M requests (in contrast to zero per-request cost on local bare metal).
-* **DINOv3 ViT-S/14 (Empirical Production Champion):** Evaluated via dense morphological probing on frozen embeddings, DINOv3 achieves the Pareto frontier optimum: **89.35% Empirical Test Accuracy** on the 10-class holdout (`reports/pareto_evaluation.json`), with an estimated 13.5 ms p95 GPU latency budget, 105 FPS throughput, and a compact 384-dimensional feature vector. At a modeled cloud equivalent of $2.60 per 1M requests (and $0.00 per-request operational cost on bare metal), it serves as the platform's champion production model.
+* **MobileNetV4 Small (Symbolic Edge Profile):** The official baseline is 73.8% Top-1 on ImageNet-1K. In specialized biodiversity pipelines, its inverted bottleneck architecture provides an estimated **320 FPS** throughput and sub-4ms p95 latency on commodity CPUs, making it the candidate of choice for edge camera traps with limited power budgets.
+* **BioCLIP-2 (Symbolic Domain Profile):** Trained on over 10 million organism photographs structured by the Tree of Life taxonomy, BioCLIP-2 captures deep biological priors. Under accelerated Tensor Core GPU execution, literature evaluations project up to 92.4% accuracy with 12.0 ms p95 latency and a 1,200 MB VRAM footprint across its 86M parameters.
+* **DINOv3 ViT-S/14 (Empirical Production Champion):** Evaluated via dense morphological probing on frozen embeddings, DINOv3 achieves the Pareto frontier optimum: **89.35% Empirical Test Accuracy** on the 10-class holdout (`reports/pareto_evaluation.json`), with an estimated 13.5 ms p95 GPU latency budget, 105 FPS throughput, and a compact 384-dimensional feature vector. With optimal resource utilization and zero inference allocation overhead, it serves as the platform's champion production model.
 
 ---
 

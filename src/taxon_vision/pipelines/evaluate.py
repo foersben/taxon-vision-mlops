@@ -42,7 +42,6 @@ class ParetoResult:
         p95_latency_ms: 95th-percentile inference latency in milliseconds.
         throughput_fps: Estimated inference throughput in frames per second.
         vram_peak_mb: Estimated peak memory footprint in megabytes.
-        cost_per_million_usd: Modeled theoretical cloud deployment cost per 1M requests (0.0 on bare metal).
         provenance: Data origin (e.g. Empirical On-Cluster vs Symbolic Literature Projection).
     """
 
@@ -56,7 +55,6 @@ class ParetoResult:
     p95_latency_ms: float
     throughput_fps: float
     vram_peak_mb: float
-    cost_per_million_usd: float
     provenance: str = "Symbolic Literature Projection"
 
 
@@ -74,7 +72,6 @@ def get_canonical_pareto_profiles() -> list[ParetoResult]:
             p95_latency_ms=12.0,
             throughput_fps=85.0,
             vram_peak_mb=1200.0,
-            cost_per_million_usd=3.50,
             provenance="Symbolic Literature Projection",
         ),
         ParetoResult(
@@ -88,7 +85,6 @@ def get_canonical_pareto_profiles() -> list[ParetoResult]:
             p95_latency_ms=13.5,
             throughput_fps=105.0,
             vram_peak_mb=850.0,
-            cost_per_million_usd=2.60,
             provenance="Empirical On-Cluster (reports/pareto_evaluation.json)",
         ),
         ParetoResult(
@@ -102,7 +98,6 @@ def get_canonical_pareto_profiles() -> list[ParetoResult]:
             p95_latency_ms=14.0,
             throughput_fps=100.0,
             vram_peak_mb=850.0,
-            cost_per_million_usd=2.70,
         ),
         ParetoResult(
             extractor="mobilenetv4_conv_small",
@@ -115,7 +110,6 @@ def get_canonical_pareto_profiles() -> list[ParetoResult]:
             p95_latency_ms=3.5,
             throughput_fps=320.0,
             vram_peak_mb=150.0,
-            cost_per_million_usd=0.50,
         ),
         ParetoResult(
             extractor="efficientnet_b0",
@@ -128,7 +122,6 @@ def get_canonical_pareto_profiles() -> list[ParetoResult]:
             p95_latency_ms=6.8,
             throughput_fps=160.0,
             vram_peak_mb=300.0,
-            cost_per_million_usd=1.10,
         ),
     ]
 
@@ -356,7 +349,6 @@ def evaluate_cli(argv: list[str] | None = None) -> int:
             "throughput_fps": fps,
             "latency_sla_ms": args.latency_sla_ms,
             "latency_sla_satisfied": sla_met,
-            "cost_per_million_usd": 2.60,
             **test_metrics,
         }
         with args.metrics_out.open("w", encoding="utf-8") as f:
