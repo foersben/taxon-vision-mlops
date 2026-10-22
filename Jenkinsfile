@@ -290,12 +290,6 @@ spec:
               done
             fi
 
-            # One-time migration: the serving workload was renamed taxon-vision-api -> taxon-vision-serving.
-            # The legacy Service still owns NodePort 30080, which makes `kubectl apply` of the renamed
-            # Service fail ("provided port is already allocated"). Free the port first (idempotent no-op once migrated).
-            # The legacy Deployment keeps serving until the new one is verified healthy (removed below).
-            kubectl delete service taxon-vision-api -n taxon-vision --ignore-not-found
-
             # Apply API deployment and service manifests
             kubectl apply -f deploy/k8s/api-deployment.yaml
 
@@ -305,9 +299,6 @@ spec:
             # Verify deployment health
             kubectl rollout status deployment/taxon-vision-serving -n taxon-vision --timeout=120s
             bash scripts/ci/verify_deployment.sh taxon-vision
-
-            # Retire the legacy Deployment now that its replacement is healthy (idempotent no-op once migrated)
-            kubectl delete deployment taxon-vision-api -n taxon-vision --ignore-not-found
             echo ">>> Deployment successfully verified."
           '''
         }
