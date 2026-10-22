@@ -144,12 +144,15 @@ function initParetoExplorer() {
                             <th data-sort="p95_latency_ms">p95 Latency</th>
                             <th data-sort="throughput_fps">Throughput</th>
                             <th data-sort="parameters_m">Params</th>
-                            <th data-sort="cost_per_million_usd">Cost / 1M Reqs</th>
+                            <th data-sort="cost_per_million_usd">Modeled Cloud Cost / 1M*</th>
                             <th>SLA Gate</th>
                         </tr>
                     </thead>
                     <tbody id="pareto-table-body"></tbody>
                 </table>
+                <div style="font-size:0.75rem;color:var(--md-default-fg-color--light, #888);margin-top:6px;line-height:1.4;">
+                    * <em>Modeled Cloud Cost ($/1M)</em> is a theoretical operational estimate based on standard cloud GPU instance hourly rates divided by batch throughput for architectural trade-off analysis. Local bare-metal deployment on k3s incurs $0.00 per-request cost.
+                </div>
             </div>
 
             <div class="pareto-detail-card" id="pareto-detail-card"></div>
@@ -340,8 +343,8 @@ function initParetoExplorer() {
                     <span class="val">${m.throughput_fps.toFixed(0)} FPS</span>
                 </div>
                 <div class="card-stat">
-                    <span class="title">Serving Cost</span>
-                    <span class="val">$${m.cost_per_million_usd.toFixed(2)} / 1M</span>
+                    <span class="title">Modeled Cloud Cost</span>
+                    <span class="val">$${m.cost_per_million_usd.toFixed(2)} / 1M*</span>
                 </div>
                 <div class="card-stat">
                     <span class="title">Parameters</span>

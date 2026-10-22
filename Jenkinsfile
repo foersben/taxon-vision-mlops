@@ -21,6 +21,8 @@ spec:
     volumeMounts:
     - name: rattler-cache
       mountPath: /root/.cache/rattler/cache
+    - name: host-manifests
+      mountPath: /var/lib/taxon-vision/manifests
     - name: host-checkpoints
       mountPath: /var/lib/taxon-vision/checkpoints
     resources:
@@ -34,6 +36,10 @@ spec:
   - name: rattler-cache
     hostPath:
       path: /var/lib/taxon-vision/rattler-cache
+      type: DirectoryOrCreate
+  - name: host-manifests
+    hostPath:
+      path: /var/lib/taxon-vision/manifests
       type: DirectoryOrCreate
   - name: host-checkpoints
     hostPath:
@@ -288,10 +294,10 @@ spec:
             kubectl apply -f deploy/k8s/api-deployment.yaml
 
             # Trigger rolling restart to serve fresh weights
-            kubectl rollout restart deployment/taxon-vision-api -n taxon-vision
+            kubectl rollout restart deployment/taxon-vision-serving -n taxon-vision
 
             # Verify deployment health
-            kubectl rollout status deployment/taxon-vision-api -n taxon-vision --timeout=120s
+            kubectl rollout status deployment/taxon-vision-serving -n taxon-vision --timeout=120s
             bash scripts/ci/verify_deployment.sh taxon-vision
             echo ">>> Deployment successfully verified."
           '''

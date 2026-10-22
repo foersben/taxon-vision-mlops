@@ -29,7 +29,22 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ParetoResult:
-    """Result of a Pareto evaluation profile."""
+    """Result of a Pareto evaluation profile.
+
+    Attributes:
+        extractor: Candidate foundation model backbone identifier.
+        architecture: Architectural family designation.
+        canonical_baseline: Published reference benchmark performance.
+        parameters_m: Total model parameter count in millions.
+        feature_dim: Dimensionality of extracted embedding representation.
+        target_profile: Operational deployment envelope.
+        p50_latency_ms: Median inference latency in milliseconds.
+        p95_latency_ms: 95th-percentile inference latency in milliseconds.
+        throughput_fps: Estimated inference throughput in frames per second.
+        vram_peak_mb: Estimated peak memory footprint in megabytes.
+        cost_per_million_usd: Modeled theoretical cloud deployment cost per 1M requests (0.0 on bare metal).
+        provenance: Data origin (e.g. Empirical On-Cluster vs Symbolic Literature Projection).
+    """
 
     extractor: str
     architecture: str
