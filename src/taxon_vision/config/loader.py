@@ -107,11 +107,11 @@ def _apply_direct_env_overrides(config_data: dict[str, Any]) -> dict[str, Any]:
     """Apply targeted unnested environment variable overrides for test isolation and Optuna storage.
 
     Why:
-        Enables seamless runtime configuration of test modes and database URIs without nested delimiters.
+        Enables seamless runtime configuration of test modes, MLflow tracking, and database URIs without nested delimiters.
 
     How:
-        Checks for TAXON_ALLOW_UNTRAINED_FALLBACK, TAXON_FLAGGED_STORAGE_DIR, and TAXON_OPTUNA_STORAGE_URI,
-        injecting them into the merged dictionary.
+        Checks for TAXON_ALLOW_UNTRAINED_FALLBACK, TAXON_FLAGGED_STORAGE_DIR, TAXON_OPTUNA_STORAGE_URI,
+        TAXON_MLFLOW_TRACKING_URI, and MLFLOW_TRACKING_URI, injecting them into the merged dictionary.
 
     Args:
         config_data (dict[str, Any]): Merged configuration dictionary.
@@ -138,6 +138,14 @@ def _apply_direct_env_overrides(config_data: dict[str, Any]) -> dict[str, Any]:
 
     if optuna_overrides:
         config_data = _deep_merge(config_data, {"optuna": optuna_overrides})
+
+    mlflow_overrides: dict[str, Any] = {}
+    env_mlflow_uri = os.getenv("TAXON_MLFLOW_TRACKING_URI") or os.getenv("MLFLOW_TRACKING_URI")
+    if env_mlflow_uri is not None:
+        mlflow_overrides["tracking_uri"] = env_mlflow_uri
+
+    if mlflow_overrides:
+        config_data = _deep_merge(config_data, {"mlflow": mlflow_overrides})
 
     return config_data
 

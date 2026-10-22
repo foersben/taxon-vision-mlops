@@ -116,8 +116,8 @@ streaming:
 optuna:
   optuna_storage_uri: "sqlite:///data/optuna/optuna_studies.db"
   optuna_study_prefix: "taxon_vision"
-  n_trials: 20
-  epochs: 20
+  n_trials: 30
+  epochs: 30
   min_resource: 3
   reduction_factor: 2
 
