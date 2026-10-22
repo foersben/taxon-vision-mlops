@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from taxon_vision.domain.license import AttributionRecord, OpenLicense
+from taxon_vision.domain.license import ALLOWED_LICENSES, AttributionRecord, OpenLicense
 
 
 class LicenseFilter:
@@ -16,18 +16,20 @@ class LicenseFilter:
         Citizen science imagery (such as iNaturalist or GBIF media) is uploaded under diverse copyright licenses. Ingesting proprietary "All Rights Reserved" assets or unverified static domain scrapes into training datasets exposes production vision pipelines to copyright infringement and breaks open science reproducibility. TaxonVision strictly permits only open Creative Commons licenses (CC0, CC-BY, CC-BY-NC) and requires complete retention of contributor attribution records.
 
     How:
-        Normalizes license string identifiers, validates against the `OpenLicense` enum, checks domain provenance to prevent direct unverified hotlinking of raw `static.inaturalist.org` assets, and extracts structured `AttributionRecord` containers containing photographer credits, license URLs, and observation UUIDs.
+        Normalizes license string identifiers, validates against the `ALLOWED_LICENSES` whitelist and `OpenLicense` enum, checks domain provenance to prevent direct unverified hotlinking of raw `static.inaturalist.org` assets, and extracts structured `AttributionRecord` containers containing photographer credits, license URLs, and observation UUIDs.
     """
+
+    ALLOWED_LICENSES: set[str] = ALLOWED_LICENSES
 
     @staticmethod
     def is_license_permitted(license_str: str) -> bool:
         """Validate whether a license identifier corresponds to an admitted open license.
 
         Why:
-            Ensures that only CC0, CC-BY, and CC-BY-NC licensed media enter downstream feature extraction and training pipelines. Inadmissible licenses (e.g. CC-BY-ND, All Rights Reserved) are filtered out at ingestion before hitting storage tiers.
+            Ensures that only CC0, CC-BY, and CC-BY-NC licensed media enter downstream feature extraction and training pipelines. Inadmissible licenses (e.g. CC-BY-ND, CC-BY-SA, All Rights Reserved) are filtered out at ingestion before hitting storage tiers.
 
         How:
-            Strips surrounding whitespace, converts to uppercase, replaces underscores with standard hyphens, and attempts validation against the `OpenLicense` enumeration. Returns True if valid, False if a ValueError is raised.
+            Strips surrounding whitespace, converts to lowercase, replaces underscores with standard hyphens, and checks membership in ALLOWED_LICENSES.
 
         Args:
             license_str: String representation of license code (e.g. 'CC0', 'CC-BY', 'CC-BY-NC').
@@ -35,12 +37,8 @@ class LicenseFilter:
         Returns:
             True if the license is permitted for dataset inclusion; False otherwise.
         """
-        norm = license_str.strip().upper().replace("_", "-")
-        try:
-            OpenLicense(norm)
-            return True
-        except ValueError:
-            return False
+        norm = license_str.strip().lower().replace("_", "-")
+        return norm in ALLOWED_LICENSES
 
     @staticmethod
     def is_static_domain_prohibited(image_url: str, is_open_dataset_verified: bool = False) -> bool:

@@ -18,24 +18,64 @@ pixi install --frozen -e dev
 pixi run --frozen -e dev dvc config --local remote.local-seaweedfs.access_key_id taxonadmin
 pixi run --frozen -e dev dvc config --local remote.local-seaweedfs.secret_access_key taxonadmin
 
-# Prime cached embeddings and manifests from host volume tier if available
-mkdir -p data/embeddings data/manifests
-if [ ! -f "data/embeddings/train_embeddings.pt" ]; then
-  if [ -f "/var/lib/taxon-vision/embeddings/train_embeddings.pt" ]; then
-    echo ">>> Found cached features on host tier; priming data/embeddings/*.pt..."
-    cp -f /var/lib/taxon-vision/embeddings/*.pt data/embeddings/ 2>/dev/null || true
-  elif kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
-    echo ">>> Attempting feature cache retrieval from in-cluster SeaweedFS (local-seaweedfs)..."
-    pixi run --frozen -e dev dvc pull -r local-seaweedfs \
-      data/manifests/raw_manifest.parquet \
-      data/manifests/dataset_manifest.parquet \
-      data/embeddings/train_embeddings.pt \
-      data/embeddings/val_embeddings.pt \
-      data/embeddings/cal_embeddings.pt \
-      data/embeddings/test_embeddings.pt \
-      models/checkpoints/head.pt \
-      models/checkpoints/model_int8.onnx || echo "Cache pull from local-seaweedfs skipped; will generate via DVC pipeline."
+# 1. Prime cached features, manifests, and checkpoints from host volume tier if available
+mkdir -p data/embeddings data/manifests models/checkpoints
+
+if [ -f "/var/lib/taxon-vision/embeddings/train_embeddings.pt" ]; then
+  echo ">>> Found cached features on host tier; priming data/embeddings/*.pt..."
+  cp -f /var/lib/taxon-vision/embeddings/*.pt data/embeddings/ 2>/dev/null || true
+fi
+
+if [ -f "/var/lib/taxon-vision/manifests/raw_manifest.parquet" ]; then
+  echo ">>> Found cached manifests on host tier; priming data/manifests/*.parquet..."
+  cp -f /var/lib/taxon-vision/manifests/*.parquet data/manifests/ 2>/dev/null || true
+fi
+
+if [ -f "/var/lib/taxon-vision/checkpoints/head.pt" ]; then
+  echo ">>> Found cached checkpoints on host tier; priming models/checkpoints/*..."
+  cp -f /var/lib/taxon-vision/checkpoints/* models/checkpoints/ 2>/dev/null || true
+fi
+
+# 2. Check for missing Epistemic Diamond artifacts and hydrate from DVC remotes
+# Priority: Tier 1 (local-seaweedfs edge cache) -> Tier 2 (DagsHub origin cloud archive)
+MISSING_ARTIFACTS=()
+for artifact in \
+  "data/manifests/raw_manifest.parquet" \
+  "data/manifests/dataset_manifest.parquet" \
+  "data/embeddings/train_embeddings.pt" \
+  "data/embeddings/val_embeddings.pt" \
+  "data/embeddings/cal_embeddings.pt" \
+  "data/embeddings/test_embeddings.pt" \
+  "models/checkpoints/head.pt" \
+  "models/checkpoints/model_int8.onnx"; do
+  if [ ! -f "$artifact" ]; then
+    MISSING_ARTIFACTS+=("$artifact")
   fi
+done
+
+if [ ${#MISSING_ARTIFACTS[@]} -gt 0 ]; then
+  echo ">>> Missing artifacts in workspace: ${MISSING_ARTIFACTS[*]}"
+  PULLED=false
+  if kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
+    echo ">>> Attempting hydration from in-cluster SeaweedFS (local-seaweedfs)..."
+    if pixi run --frozen -e dev dvc pull -r local-seaweedfs "${MISSING_ARTIFACTS[@]}"; then
+      PULLED=true
+      echo ">>> Successfully hydrated missing artifacts from local-seaweedfs."
+    fi
+  fi
+
+  if [ "$PULLED" != "true" ]; then
+    echo ">>> Attempting hydration from DagsHub cloud archive (origin)..."
+    pixi run --frozen -e dev dvc pull -r origin "${MISSING_ARTIFACTS[@]}" || \
+    pixi run --frozen -e dev dvc pull "${MISSING_ARTIFACTS[@]}" || \
+    echo ">>> Warning: Could not pull all missing artifacts from DVC remotes."
+  fi
+fi
+
+# 3. Fail-safe: If raw_manifest.parquet is still missing, force INGEST_DATA=true to avoid frozen stage failure
+if [ ! -f "data/manifests/raw_manifest.parquet" ]; then
+  echo ">>> raw_manifest.parquet is missing from all caches and remotes; forcing INGEST_DATA=true to unfreeze and regenerate."
+  export INGEST_DATA=true
 fi
 
 # Execute unified 7-stage DVC pipeline
@@ -84,6 +124,11 @@ pixi run --frozen -e dev dvc repro
 # Persist generated features to host volume cache
 if [ -d "/var/lib/taxon-vision/embeddings" ] && [ -f "data/embeddings/train_embeddings.pt" ]; then
   cp -f data/embeddings/*.pt /var/lib/taxon-vision/embeddings/ 2>/dev/null || true
+fi
+
+# Persist generated manifests to host volume cache
+if [ -d "/var/lib/taxon-vision/manifests" ] && [ -f "data/manifests/raw_manifest.parquet" ]; then
+  cp -f data/manifests/*.parquet /var/lib/taxon-vision/manifests/ 2>/dev/null || true
 fi
 
 # Persist generated checkpoints to host volume cache

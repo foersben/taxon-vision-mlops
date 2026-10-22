@@ -8,18 +8,24 @@ import contextlib
 import logging
 import os
 import sqlite3
+import time
 import warnings
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import mlflow
 import optuna
+import yaml
+from mlflow.entities import Metric
+from mlflow.tracking import MlflowClient
 from optuna.exceptions import ExperimentalWarning
 from torch import nn, optim
 
 from taxon_vision.config import get_settings
 from taxon_vision.models.loss import ClassBalancedLoss
 from taxon_vision.models.training.embeddings import train_head_on_cached_embeddings
+from taxon_vision.models.training.tracking import _get_dvc_dataset_hash
 from taxon_vision.models.training.types import EmbeddingSplit, HeadTrainingConfig, TuningConfig
 
 warnings.filterwarnings("ignore", category=ExperimentalWarning)
@@ -81,10 +87,10 @@ class HyperparameterObjective:
             Dictionary containing sampled hyperparameters.
         """
         return {
-            "lr": trial.suggest_float("lr", 1e-4, 1e-1, log=True),
+            "learning_rate": trial.suggest_float("learning_rate", 1e-4, 1e-1, log=True),
             "weight_decay": trial.suggest_float("weight_decay", 1e-6, 1e-2, log=True),
             "dropout": trial.suggest_float("dropout", 0.0, 0.5),
-            "beta": trial.suggest_float("beta", 0.99, 0.9999),
+            "cb_beta": trial.suggest_float("cb_beta", 0.99, 0.9999),
             "batch_size": trial.suggest_categorical("batch_size", [32, 64, 128]),
             "noise_std": trial.suggest_float("noise_std", 0.0, 0.05),
         }
@@ -98,12 +104,16 @@ class HyperparameterObjective:
         Returns:
             Tuple containing the classification head, loss criterion, and optimizer.
         """
+        lr = float(params.get("learning_rate", params.get("lr", 1e-3)))
+        beta = float(params.get("cb_beta", params.get("beta", 0.9999)))
+        dropout_p = float(params.get("dropout", 0.2))
+        weight_decay = float(params.get("weight_decay", 1e-4))
         head = nn.Sequential(
-            nn.Dropout(p=params["dropout"]),
+            nn.Dropout(p=dropout_p),
             nn.Linear(self.feature_dim, self.num_classes),
         )
-        criterion = ClassBalancedLoss(samples_per_class=self.samples_per_class, beta=params["beta"])
-        optimizer = optim.AdamW(head.parameters(), lr=params["lr"], weight_decay=params["weight_decay"])
+        criterion = ClassBalancedLoss(samples_per_class=self.samples_per_class, beta=beta)
+        optimizer = optim.AdamW(head.parameters(), lr=lr, weight_decay=weight_decay)
         return head, criterion, optimizer
 
     def _start_mlflow_trial(self, trial: optuna.Trial, params: dict[str, Any]) -> Any:
@@ -116,7 +126,7 @@ class HyperparameterObjective:
         if not self.mlflow_available:
             return None
         try:
-            run = mlflow.start_run(run_name=f"trial_{trial.number}", nested=True)
+            run = mlflow.start_run(run_name=f"trial_{trial.number:03d}", nested=True)
             mlflow.log_params(params)
             mlflow.set_tag("optuna.trial_number", trial.number)
             mlflow.set_tag("pipeline.stage", "HyperparameterSearch")
@@ -126,7 +136,7 @@ class HyperparameterObjective:
             return None
 
     def _log_trial_metrics(self, run: Any, history: dict[str, list[float]]) -> None:
-        """Log training metrics for the completed trial to MLflow.
+        """Log training metrics for the completed trial to MLflow using batched API.
 
         Args:
             run: MLflow run object.
@@ -135,23 +145,37 @@ class HyperparameterObjective:
         if run is None:
             return
         try:
+            run_id = getattr(getattr(run, "info", None), "run_id", None)
+            now_ms = int(time.time() * 1000)
+            metrics: list[Metric] = []
             for ep, (t_loss, v_loss, v_acc, v_f1, v_pr) in enumerate(
                 zip(
-                    history["train_loss"],
-                    history["val_loss"],
-                    history["val_accuracy"],
-                    history["val_f1"],
-                    history["val_pr_auc"],
+                    history.get("train_loss", []),
+                    history.get("val_loss", []),
+                    history.get("val_accuracy", []),
+                    history.get("val_f1", []),
+                    history.get("val_pr_auc", []),
                     strict=False,
                 )
             ):
-                mlflow.log_metric("train_loss", t_loss, step=ep)
-                mlflow.log_metric("val_loss", v_loss, step=ep)
-                mlflow.log_metric("val_accuracy", v_acc, step=ep)
-                mlflow.log_metric("val_f1", v_f1, step=ep)
-                mlflow.log_metric("val_pr_auc", v_pr, step=ep)
+                metrics.extend(
+                    [
+                        Metric("train_loss", float(t_loss), now_ms, ep),
+                        Metric("val_loss", float(v_loss), now_ms, ep),
+                        Metric("val_accuracy", float(v_acc), now_ms, ep),
+                        Metric("val_f1", float(v_f1), now_ms, ep),
+                        Metric("val_pr_auc", float(v_pr), now_ms, ep),
+                    ]
+                )
+            if metrics:
+                if run_id:
+                    client = MlflowClient()
+                    client.log_batch(run_id=run_id, metrics=metrics)
+                else:
+                    for m in metrics:
+                        mlflow.log_metric(m.key, m.value, step=m.step)
         except Exception as err:
-            logger.debug("Failed to log MLflow metrics: %s", err)
+            logger.debug("Failed to log trial metrics batch: %s", err)
 
     def __call__(self, trial: optuna.Trial) -> float:
         """Execute a single hyperparameter evaluation trial.
@@ -226,6 +250,9 @@ def _setup_mlflow(cfg: TuningConfig) -> bool:
     Returns:
         True if MLflow is available, False otherwise.
     """
+    if mlflow.active_run() is not None:
+        return True
+
     mlflow_cfg = get_settings().mlflow
     resolved_uri = (
         cfg.tracking_uri if cfg.tracking_uri is not None else os.getenv("MLFLOW_TRACKING_URI", mlflow_cfg.tracking_uri)
@@ -316,18 +343,25 @@ def _log_best_run(
     try:
         from taxon_vision.models.training.tracking import _get_dvc_dataset_hash
 
-        with mlflow.start_run(run_name="optuna_best_model"):
+        active_run = mlflow.active_run()
+        if active_run:
             mlflow.log_params(best_params)
             mlflow.log_metric("best_val_pr_auc", best_value)
             mlflow.set_tag("optuna.optimization_algorithm", "TPE+ASHA")
-            mlflow.set_tag("pipeline.stage", "Phase1_Step3_Tuning")
-
-            dvc_hash = _get_dvc_dataset_hash()
-            if dvc_hash:
-                mlflow.log_param("dvc_dataset_hash", dvc_hash)
-
-            _apply_git_lineage_tags()
             _log_optuna_diagnostic_plots(study)
+        else:
+            with mlflow.start_run(run_name="optuna_best_model"):
+                mlflow.log_params(best_params)
+                mlflow.log_metric("best_val_pr_auc", best_value)
+                mlflow.set_tag("optuna.optimization_algorithm", "TPE+ASHA")
+                mlflow.set_tag("pipeline.stage", "Phase1_Step3_Tuning")
+
+                dvc_hash = _get_dvc_dataset_hash()
+                if dvc_hash:
+                    mlflow.log_param("dvc_dataset_hash", dvc_hash)
+
+                _apply_git_lineage_tags()
+                _log_optuna_diagnostic_plots(study)
     except Exception as err:
         logger.debug("Failed to log best run to MLflow: %s", err)
 
@@ -374,10 +408,101 @@ def _resolve_optuna_storage(storage_uri: str | None) -> str | None:
     return storage_uri
 
 
+def _normalize_trial_params(params: dict[str, Any]) -> dict[str, Any]:
+    """Normalize hyperparameter keys to canonical learning_rate and cb_beta.
+
+    Args:
+        params: Raw parameter mapping from Optuna trial.
+
+    Returns:
+        Dictionary with standardized parameter names and float/int types.
+    """
+    lr_val = float(params.get("learning_rate", params.get("lr", 1e-3)))
+    beta_val = float(params.get("cb_beta", params.get("beta", 0.9999)))
+    return {
+        "learning_rate": lr_val,
+        "weight_decay": float(params.get("weight_decay", 1e-4)),
+        "dropout": float(params.get("dropout", 0.2)),
+        "cb_beta": beta_val,
+        "noise_std": float(params.get("noise_std", 0.01)),
+        "batch_size": int(params.get("batch_size", 32)),
+    }
+
+
+def _export_trials_history(study: optuna.Study, reports_dir: Path) -> None:
+    """Export Optuna trials dataframe to Parquet report.
+
+    Args:
+        study: Completed Optuna study instance.
+        reports_dir: Target directory for persisted reports.
+    """
+    try:
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        trials_df = study.trials_dataframe()
+        parquet_path = reports_dir / "tuning_trials.parquet"
+        trials_df.to_parquet(parquet_path, index=False)
+        logger.info("Exported Optuna trials history to %s", parquet_path)
+    except Exception as err:
+        logger.warning("Could not export trials dataframe to parquet: %s", err)
+
+
+def _persist_best_params(
+    study: optuna.Study,
+    extractor: str,
+    checkpoint_dir: Path,
+) -> Path | None:
+    """Persist best trial hyperparameters to YAML keyed by extractor.
+
+    Args:
+        study: Completed Optuna study instance.
+        extractor: Vision backbone extractor identifier.
+        checkpoint_dir: Target directory for checkpoint persistence.
+
+    Returns:
+        Path to best_params.yaml on success, or None on failure.
+    """
+    if len(study.trials) == 0:
+        return None
+    try:
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        best_params_yaml = checkpoint_dir / "best_params.yaml"
+
+        existing_data: dict[str, Any] = {}
+        if best_params_yaml.is_file():
+            try:
+                with best_params_yaml.open("r", encoding="utf-8") as f:
+                    loaded = yaml.safe_load(f)
+                    if isinstance(loaded, dict):
+                        existing_data = loaded
+            except Exception as read_err:
+                logger.warning("Could not parse existing best_params.yaml: %s", read_err)
+
+        normalized_best = _normalize_trial_params(study.best_params)
+        best_val = float(study.best_value) if study.best_trials else 0.0
+
+        existing_data[extractor] = {
+            "best_params": normalized_best,
+            "best_val_pr_auc": round(best_val, 6),
+            "n_trials": len(study.trials),
+            "updated_at_utc": datetime.now(UTC).isoformat(),
+            "dvc_dataset_hash": _get_dvc_dataset_hash(),
+        }
+
+        with best_params_yaml.open("w", encoding="utf-8") as f:
+            yaml.safe_dump(existing_data, f, sort_keys=False)
+        logger.info("Saved best hyperparameters for '%s' to %s", extractor, best_params_yaml)
+        return best_params_yaml
+    except Exception as err:
+        logger.warning("Failed to persist best params for '%s': %s", extractor, err)
+        return None
+
+
 def tune_hyperparameters(
     data: EmbeddingSplit,
     num_classes: int,
     config: TuningConfig | None = None,
+    checkpoint_dir: Path | str = "models/checkpoints",
+    reports_dir: Path | str = "reports",
 ) -> tuple[dict[str, Any], optuna.Study]:
     r"""Automate Bayesian hyperparameter tuning using Optuna with ASHA pruning and MLflow tracking.
 
@@ -391,15 +516,18 @@ def tune_hyperparameters(
     How:
         1. Sets up MLflow tracking URI and experiment if configured.
         2. Configures `TPESampler` with deterministic PRNG seed and `SuccessiveHalvingPruner`
-           with `min_resource=2` and `reduction_factor=2`.
+           with `min_resource` and `reduction_factor`.
         3. Instantiates `HyperparameterObjective` and executes `study.optimize` across `n_trials`.
         4. Logs the optimal parameter configuration and peak Macro PR-AUC to MLflow as a consolidated run.
-        5. Returns the best parameters dictionary and the full Optuna study object.
+        5. Persists optimal parameters to models/checkpoints/best_params.yaml and trials history to reports/tuning_trials.parquet.
+        6. Returns the best parameters dictionary and the full Optuna study object.
 
     Args:
         data: Pre-computed feature representations and labels.
         num_classes: Total number of target species or taxa categories.
         config: Tuning configuration controlling trials, epochs, batch size, seed, and MLflow.
+        checkpoint_dir: Destination directory for best_params.yaml persistence.
+        reports_dir: Destination directory for tuning_trials.parquet export.
 
     Returns:
         A tuple `(best_params, study)` of the best configuration and the Optuna study.
@@ -418,7 +546,10 @@ def tune_hyperparameters(
             logger.info("Deleted prior Optuna study '%s' to reset Bayesian history.", study_name)
 
     sampler = optuna.samplers.TPESampler(seed=cfg.seed)
-    pruner = optuna.pruners.SuccessiveHalvingPruner(min_resource=2, reduction_factor=2)
+    pruner = optuna.pruners.SuccessiveHalvingPruner(
+        min_resource=cfg.min_resource,
+        reduction_factor=cfg.reduction_factor,
+    )
     study = optuna.create_study(
         study_name=study_name,
         storage=storage_uri,
@@ -438,7 +569,15 @@ def tune_hyperparameters(
     study.optimize(objective, n_trials=cfg.n_trials)
 
     best_params = study.best_params
+    if "learning_rate" in best_params and "lr" not in best_params:
+        best_params["lr"] = best_params["learning_rate"]
+    if "cb_beta" in best_params and "beta" not in best_params:
+        best_params["beta"] = best_params["cb_beta"]
+
     logger.info("Hyperparameter search complete. Best parameters: %s, Best value: %.4f", best_params, study.best_value)
+
+    _persist_best_params(study, cfg.extractor_name, Path(checkpoint_dir))
+    _export_trials_history(study, Path(reports_dir))
 
     _log_best_run(best_params, study.best_value, mlflow_available, study=study)
     return best_params, study

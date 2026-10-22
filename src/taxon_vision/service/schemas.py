@@ -4,7 +4,25 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
+
 from pydantic import BaseModel
+
+
+class ConformalRoutingTier(StrEnum):
+    """Four-tier epistemic safety and conformal routing contract.
+
+    Attributes:
+        DECISIVE: |C| = 1 and pi_max >= tau_conf (immediate automated resolution).
+        MODERATE_AMBIGUITY: 1 < |C| <= 3 (triggers LanceDB metadata-filtered HNSW + RRF retrieval).
+        SEVERE_AMBIGUITY: |C| > 3 or (|C| = 1 and pi_max < tau_conf) (routes to expert sorting queue).
+        ABSTENTION: |C| = 0 (empty prediction set, rejected out of hand).
+    """
+
+    DECISIVE = "DECISIVE"
+    MODERATE_AMBIGUITY = "MODERATE_AMBIGUITY"
+    SEVERE_AMBIGUITY = "SEVERE_AMBIGUITY"
+    ABSTENTION = "ABSTENTION"
 
 
 class TaxonPrediction(BaseModel):
@@ -33,12 +51,13 @@ class PredictionResponse(BaseModel):
         Production ecological inference must not return uncalibrated point estimates in isolation. Clients require both the primary identification, ranked alternatives, distribution-free conformal guarantee sets, and actionable triage recommendations (human review required, OOD flags) to safely automate field workflows.
 
     How:
-        Bundles the top-1 `TaxonPrediction`, secondary candidates admitted into the conformal set, conformal set scientific names list, ambiguity boolean flags, epistemic referral triggers, and end-to-end execution latency in milliseconds.
+        Bundles the top-1 `TaxonPrediction`, secondary candidates admitted into the conformal set, conformal set scientific names list, 4-tier conformal routing contract state, ambiguity boolean flags, epistemic referral triggers, and end-to-end execution latency in milliseconds.
     """
 
     top_prediction: TaxonPrediction
     top_candidates: list[TaxonPrediction]
     conformal_prediction_set: list[str]
+    routing_tier: ConformalRoutingTier = ConformalRoutingTier.DECISIVE
     is_conformal_ambiguous: bool
     is_ood_flagged: bool
     requires_human_review: bool

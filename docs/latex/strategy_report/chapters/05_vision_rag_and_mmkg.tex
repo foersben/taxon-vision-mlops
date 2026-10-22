@@ -12,7 +12,7 @@ A naive approach to visual retrieval attempts to pass every available field phot
 The platform actively circumvents this computational barrier by curating a deterministic Reference Exemplar Catalogue. Instead of tracking all historical user submissions, our ingestion pipeline filters raw DarwinCore observation records according to four strict quality predicates:
 \begin{enumerate}
     \item \textbf{Validation Tier:} Observations must hold official \texttt{research\_grade} status, confirming agreement across three or more independent community experts.
-    \item \textbf{Licence Compliance:} Records must possess open-access metadata headers matching Creative Commons Zero (\texttt{CC0}), Creative Commons Attribution (\texttt{CC-BY}), or Attribution-NonCommercial (\texttt{CC-BY-NC}). Commercial or share-alike variants (\texttt{CC-BY-ND}, \texttt{CC-BY-SA}) are explicitly dropped at the ingestion boundary.
+    \item \textbf{Licence Compliance:} Records must possess open-access metadata headers matching Creative Commons Zero (\texttt{CC0}), Creative Commons Attribution (\texttt{CC-BY}), or Attribution-NonCommercial (\texttt{CC-BY-NC}). Commercial, no-derivative (\texttt{CC-BY-ND}), or copyleft/share-alike variants (\texttt{CC-BY-SA}) are explicitly dropped at the ingestion boundary to eliminate viral licensing constraints on derived model weights.
     \item \textbf{Signal Quality:} Raw candidate photographs must exceed a minimum resolution of $1024 \times 1024$ pixels in original source repositories for exemplar inclusion, while the streaming ingestion pipeline pulls $500\text{px}$ medium locators for fast Arrow serialization. Furthermore, upstream zero-shot object detection must isolate the primary organism with a detection confidence score greater than $0.85$.
     \item \textbf{Diversity Sampling:} The catalogue selects up to 50 exemplar observations per taxon. In order to capture seasonal and geographical morphological variations, observations are partitioned into discrete spatial clusters using Uber H3 hexagonal spatial cells at Resolution 4.
 \end{enumerate}
@@ -49,18 +49,18 @@ In order to resolve this, the architecture adopts \textbf{Single-Stage Metadata-
 
 Let $\mathbf{x}_{\text{query}} = (\text{lat}_{\text{query}}, \text{lon}_{\text{query}})$ denote the GPS coordinates of the query, and $\tau_{\text{month}} \in \{1, \dots, 12\}$ denote the observation month. For each candidate node $j$ encountered during the HNSW beam search, the traversal engine evaluates the deterministic predicate $\mathcal{P}(j)$:
 \[
-\mathcal{P}(j) = \left[ \mathcal{D}_{\text{geodesic}}(\mathbf{x}_{\text{query}}, \mathbf{x}_{j}) \le R_{\max} \right] \land \left[ |\tau_{\text{month}} - \tau_{j}| \pmod{12} \le \Delta_{\text{season}} \right],
+\mathcal{P}(j) = \left[ \mathcal{D}_{\text{geodesic}}(\mathbf{x}_{\text{query}}, \mathbf{x}_{j}) \le R_{\max} \right] \land \left[ \min\left( |\tau_{\text{month}} - \tau_{j}|, \, 12 - |\tau_{\text{month}} - \tau_{j}| \right) \le \Delta_{\text{season}} \right],
 \]
-where $\mathcal{D}_{\text{geodesic}}$ is the great-circle geographic distance computed via the Haversine equation, $\mathbf{x}_{j}$ represents the coordinates of exemplar node $j$, $R_{\max} = 500\text{ km}$ is the maximum admissible geographic search radius, $\tau_{j}$ is the historical observation month of exemplar $j$, and $\Delta_{\text{season}} = 1$ enforces a 3-month seasonal window centred on the observation epoch. If node $j$ violates $\mathcal{P}(j)$, its outgoing edges are pruned immediately, preventing the search from descending into biogeographically invalid graph clusters and guaranteeing 100\% valid retrieval recall in under $5\text{ ms}$.
+where $\mathcal{D}_{\text{geodesic}}$ is the great-circle geographic distance computed via the Haversine equation, $\mathbf{x}_{j}$ represents the coordinates of exemplar node $j$, $R_{\max} = 500\text{ km}$ is the maximum admissible geographic search radius, $\tau_{j}$ is the historical observation month of exemplar $j$, and $\Delta_{\text{season}} = 1$ enforces a 3-month seasonal window centred on the observation epoch across cyclic year boundaries. If node $j$ violates $\mathcal{P}(j)$, its outgoing edges are pruned immediately, preventing the search from descending into biogeographically invalid graph clusters and guaranteeing 100\% valid retrieval recall in under $5\text{ ms}$.
 
 \section{Conformal-Driven Lazy Execution}
 \label{sec:lazy_execution}
 
 Executing zero-shot entity linking, vector graph traversal, and generative multimodal reasoning for every incoming request imposes prohibitive latency and computational costs. In order to maintain an SLA of under $25\text{ ms}$ for high-volume inference, the Vision RAG pipeline utilises conformal-driven lazy execution governed by the 4-tier conformal routing contract:
 \begin{enumerate}
-    \item \textbf{Decisive Classification ($|\hat{C}(X)| = 1$):} The model exhibits high confidence and low epistemic ambiguity. The endpoint dispatches the single predicted taxon immediately, fulfilling the strict sub-$25\text{ ms}$ Service Level Agreement (SLA) without activating retrieval overhead.
+    \item \textbf{Decisive Classification ($|\hat{C}(X)| = 1$ with $\hat{\pi}_{\max}(X) \ge \tau_{\text{conf}}$):} The model exhibits high confidence and low epistemic ambiguity ($\hat{\pi}_{\max}(X) \ge \tau_{\text{conf}} = 0.60$). The endpoint dispatches the single predicted taxon immediately, fulfilling the strict sub-$25\text{ ms}$ Service Level Agreement (SLA) without activating retrieval overhead.
     \item \textbf{Moderate Ambiguity ($1 < |\hat{C}(X)| \le k_{\max}$, with $k_{\max} = 3$):} The conformal prediction set contains between two and three plausible sibling taxa. The serving engine executes a single-stage filtered HNSW traversal over LanceDB, constrained by the candidate class identifiers and spatio-temporal metadata, and performs Reciprocal Rank Fusion (RRF) over visual exemplar crops with less than $6\text{ ms}$ overhead to deliver a multi-candidate comparative differential to the operator.
-    \item \textbf{Severe Ambiguity ($|\hat{C}(X)| > k_{\max}$):} The prediction set exceeds the bound of actionable human differential review. The query is scheduled for asynchronous multimodal resolution via gRPC to the quantised visual language model (\texttt{taxon-vision-vlm}, based on Qwen2-VL-2B) and appended to the Active Learning triage queue (\texttt{triage\_queue.lance}) on SeaweedFS for expert annotation.
+    \item \textbf{Severe Ambiguity or Low Top-1 Confidence ($|\hat{C}(X)| > k_{\max}$ or ($|\hat{C}(X)| = 1 \land \hat{\pi}_{\max}(X) < \tau_{\text{conf}}$)):} The prediction set exceeds the bound of actionable human differential review, or a singleton set fails the minimum confidence threshold ($\hat{\pi}_{\max} < 0.60$). The query is scheduled for asynchronous multimodal resolution via gRPC to the quantised visual language model (\texttt{taxon-vision-vlm}, based on Qwen2-VL-2B) and appended to the Active Learning triage queue (\texttt{triage\_queue.lance}) on SeaweedFS for expert annotation.
     \item \textbf{Epistemic Novelty / Complete Abstention ($|\hat{C}(X)| = 0$):} The observed sample violates the conformal coverage boundary, indicating an out-of-distribution observation, unmodelled developmental instar, or extreme sensor degradation. The system executes complete epistemic abstention, bypasses automated classification entirely, executes an unconstrained nearest-neighbour retrieval over the global exemplar space, and dispatches an immediate priority triage alert to human taxonomists.
 \end{enumerate}
 
@@ -78,7 +78,7 @@ This rank fusion guarantees that candidates appearing at the top of the context 
 \section{Multimodal Context Synthesis \& VLM Diagnostics}
 \label{sec:vlm_synthesis}
 
-The top-3 candidates resulting from Reciprocal Rank Fusion are assembled into a structured prompt schema along with the query observation. This payload is dispatched to a localised Vision-Language Model (such as a quantised Qwen2-VL-2B instance running on host P-cores or the RTX 5070 Ti).
+When severe ambiguity ($|\hat{C}(X)| > k_{\max}$) or low top-1 separation confidence triggers Tier-3 escalation, or when an operator explicitly requests an automated differential diagnosis, the candidate exemplars resulting from Reciprocal Rank Fusion are assembled into a structured prompt schema along with the query observation. This payload is dispatched to a localised Vision-Language Model (such as a quantised Qwen2-VL-2B instance running on host P-cores or the RTX 5070 Ti).
 
 In order to ensure machine readability and eliminate ungrounded generation or conversational drift, the VLM is constrained by grammar-based sampling to emit a strictly typed JSON payload:
 \begin{minted}{json}
@@ -125,14 +125,14 @@ Crucially, these figures represent allocated architectural SLA ceilings rather t
 \textbf{Pipeline Segment} & \textbf{Execution Engine} & \textbf{SLA (ms)} & \textbf{Memory (MB)} \\
 \midrule
 Zero-Shot Cropping & YOLO-World (ORT INT8) & $\le 12.0$ & $\le 400$ VRAM \\
-VFM Feature Extraction & Vision Backbone (ORT FP16) & $\le 9.0$ & $\le 1{,}200$ VRAM \\
+VFM Feature Extraction & Vision Backbone (ORT INT8) & $\le 9.0$ & $\le 800$ VRAM \\
 Conformal Gate & PyTorch / C-Array & $\le 1.0$ & $< 50$ RAM \\
 Filtered HNSW & LanceDB (Arrow + HNSW) & $\le 4.0$ & $\le 250$ RAM \\
 Multi-Modal RRF & In-Memory DuckDB / Polars & $\le 1.5$ & $< 20$ RAM \\
 VLM Synthesis (Lazy) & Quantised 2B VLM & $\le 2{,}500.0$ & $\le 2{,}500$ VRAM \\
 \midrule
-\textbf{Fast Hot-Path} & \textbf{Crop + ORT Backbone} & $\mathbf{\le 22.0}$ & $\mathbf{\le 1{,}600}$ \textbf{VRAM} \\
-\textbf{Lazy RAG Path} & \textbf{Retrieval + VLM} & $\mathbf{\le 2{,}600.0}$ & $\mathbf{\le 4{,}100}$ \textbf{VRAM} \\
+\textbf{Fast Hot-Path} & \textbf{Crop + ORT Backbone} & $\mathbf{\le 21.0}$ & $\mathbf{\le 1{,}200}$ \textbf{VRAM} \\
+\textbf{Lazy RAG Path} & \textbf{Retrieval + VLM} & $\mathbf{\le 2{,}600.0}$ & $\mathbf{\le 3{,}700}$ \textbf{VRAM} \\
 \bottomrule
 \end{tabularx}
 \end{table}

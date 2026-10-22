@@ -19,15 +19,11 @@ from taxon_vision.data.license_filter import LicenseFilter
 
 logger = logging.getLogger(__name__)
 
-# Open licenses permitted by iNaturalist open data charter
-ALLOWED_LICENSES = {
-    "CC0",
-    "CC-BY",
-    "CC-BY-NC",
-    "CC-BY-SA",
-    "CC-BY-ND",
-    "CC-BY-NC-SA",
-    "CC-BY-NC-ND",
+# Open licenses permitted by governance mandate
+ALLOWED_LICENSES: set[str] = {
+    "cc0",
+    "cc-by",
+    "cc-by-nc",
 }
 
 
@@ -42,12 +38,14 @@ def verify_observation_compliance(obs: dict[str, Any]) -> list[str]:
     """
     errors: list[str] = []
     obs_id = obs.get("observation_id") or obs.get("observation_uuid") or "unknown"
-    license_code = str(obs.get("license_code", "")).upper()
+    license_code = str(obs.get("license_code", "")).strip().lower().replace("_", "-")
     image_url = str(obs.get("image_url", ""))
     attribution = str(obs.get("attribution") or obs.get("photographer_name") or "")
 
     if not license_code or license_code not in ALLOWED_LICENSES:
-        errors.append(f"Observation {obs_id}: Invalid license '{license_code}'. Must be in {ALLOWED_LICENSES}.")
+        errors.append(
+            f"Observation {obs_id}: Invalid license '{obs.get('license_code', '')}'. Must be in {ALLOWED_LICENSES}."
+        )
 
     if "static.inaturalist.org" in image_url and not obs.get("is_open_dataset_verified", False):
         errors.append(f"Observation {obs_id}: Static domain URL detected without open dataset license verification.")

@@ -20,6 +20,7 @@ from taxon_vision.config import get_settings
 from taxon_vision.inference.onnx_engine import ONNXInferenceEngine
 from taxon_vision.models.factory import create_feature_extractor, get_feature_dimension
 from taxon_vision.models.head import TaxonClassifier, load_head_checkpoint
+from taxon_vision.service.schemas import ConformalRoutingTier
 from taxon_vision.uncertainty.conformal import ConformalPredictionEngine
 from taxon_vision.uncertainty.ood_detector import EnergyOODDetector
 
@@ -162,14 +163,6 @@ def get_onnx_engine() -> ONNXInferenceEngine | None:
     return engine
 
 
-def reset_model_caches() -> None:
-    """Invalidate cached model artefacts so the next request reloads them from disk."""
-    get_classifier.cache_clear()
-    get_onnx_engine.cache_clear()
-    get_conformal_engine.cache_clear()
-    get_ood_detector.cache_clear()
-
-
 def check_readiness() -> tuple[bool, dict[str, str]]:
     """Probe every dependency required to serve predictions.
 
@@ -238,20 +231,51 @@ def get_conformal_engine() -> ConformalPredictionEngine:
 
 
 @lru_cache(maxsize=1)
+def _load_calibrated_ood_threshold() -> float | None:
+    """Read the dynamically calibrated OOD energy threshold from config/conformal_config.yaml.
+
+    Why:
+        Preserves alignment between offline calibration (`calibrate.py`) and live serving.
+        Stage 6 writes `ood_energy_threshold` (and legacy alias `tau_ood`) to `config/conformal_config.yaml`.
+        Loading this dynamically prevents the split-brain issue where serving reverts to static defaults.
+
+    Returns:
+        Calibrated float threshold if present and valid; otherwise None.
+    """
+    calib_path = _resolve_artifact("config/conformal_config.yaml")
+    if not calib_path.is_file():
+        return None
+    try:
+        with open(calib_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        if isinstance(data, dict):
+            calib = data.get("calibration", {})
+            val = calib.get("ood_energy_threshold", calib.get("tau_ood"))
+            if val is not None:
+                return float(val)
+    except Exception as exc:
+        logger.warning("Could not read calibrated OOD threshold from %s: %s", calib_path, exc)
+    return None
+
+
+@lru_cache(maxsize=1)
 def get_ood_detector() -> EnergyOODDetector:
     """Instantiate and cache the energy-based out-of-distribution detector.
 
     Why:
         Detects uninformative, non-biological, or out-of-catalog observations using
         Helmholtz free energy scoring. Caching a singleton detector avoids re-reading
-        configuration parameters on each request.
+        configuration parameters on each request. Uses dynamically calibrated OOD threshold
+        from config/conformal_config.yaml when available.
 
     Returns:
         The cached EnergyOODDetector singleton.
     """
     settings = get_settings()
+    calibrated_threshold = _load_calibrated_ood_threshold()
+    resolved_threshold = calibrated_threshold if calibrated_threshold is not None else settings.ood.energy_threshold
     return EnergyOODDetector(
-        energy_threshold=settings.ood.energy_threshold,
+        energy_threshold=resolved_threshold,
         temperature=settings.model.temperature,
         entropy_threshold=settings.ood.entropy_threshold,
     )
@@ -279,6 +303,16 @@ def get_image_transform() -> T.Compose:
             T.Normalize(mean=cfg.mean, std=cfg.std),
         ]
     )
+
+
+def reset_model_caches() -> None:
+    """Invalidate cached model artefacts so the next request reloads them from disk."""
+    get_classifier.cache_clear()
+    get_onnx_engine.cache_clear()
+    get_conformal_engine.cache_clear()
+    _load_calibrated_ood_threshold.cache_clear()
+    get_ood_detector.cache_clear()
+    get_image_transform.cache_clear()
 
 
 def _get_image_tensor(image_bytes: bytes) -> torch.Tensor:
@@ -374,6 +408,39 @@ def compute_logits(tensor: torch.Tensor) -> npt.NDArray[np.float32]:
     return logits
 
 
+def determine_routing_tier(
+    cardinality: int,
+    top_confidence: float,
+    min_confidence_threshold: float,
+) -> ConformalRoutingTier:
+    """Determine the four-tier conformal routing state according to the formal contract.
+
+    Why:
+        Preserves the 4-tier epistemic safety taxonomy:
+        - DECISIVE: |C| = 1 and pi_max >= tau_conf (sub-25ms automated fast-path resolution).
+        - MODERATE_AMBIGUITY: 1 < |C| <= 3 (triggers LanceDB metadata-filtered HNSW + RRF retrieval).
+        - SEVERE_AMBIGUITY: |C| > 3 or (|C| = 1 and pi_max < tau_conf) (routes to expert sorting queue).
+        - ABSTENTION: |C| = 0 (empty prediction set, rejected out of hand).
+
+    Args:
+        cardinality: Cardinality of prediction set |C|.
+        top_confidence: Maximum Softmax Probability / top-1 confidence score.
+        min_confidence_threshold: Minimum confidence cutoff tau_conf.
+
+    Returns:
+        ConformalRoutingTier enum state.
+    """
+    if cardinality == 0:
+        return ConformalRoutingTier.ABSTENTION
+    if cardinality == 1:
+        if top_confidence >= min_confidence_threshold:
+            return ConformalRoutingTier.DECISIVE
+        return ConformalRoutingTier.SEVERE_AMBIGUITY
+    if cardinality <= 3:
+        return ConformalRoutingTier.MODERATE_AMBIGUITY
+    return ConformalRoutingTier.SEVERE_AMBIGUITY
+
+
 def run_prediction(image_bytes: bytes) -> dict[str, Any]:
     """Execute the full vision inference pipeline with conformal uncertainty quantification.
 
@@ -386,7 +453,7 @@ def run_prediction(image_bytes: bytes) -> dict[str, Any]:
         3. Computes softmax probabilities over target classes.
         4. Identifies top-1 argmax prediction and confidence score.
         5. Computes energy-based OOD score and assesses out-of-distribution status.
-        6. Evaluates non-conformity scores via ConformalPredictionEngine to construct valid prediction sets and identify ambiguous or unclassifiable cases.
+        6. Evaluates non-conformity scores via ConformalPredictionEngine to construct valid prediction sets and evaluate 4-tier routing state.
         7. Maps class indices back to authoritative taxa catalog metadata.
 
     Complexity:
@@ -396,7 +463,7 @@ def run_prediction(image_bytes: bytes) -> dict[str, Any]:
         image_bytes: Raw binary bytes of the input organism image.
 
     Returns:
-        Dictionary containing scientific name, common name, top-1 confidence, conformal set candidate names, human referral flag, OOD status, OOD energy score, probabilities, feature embedding, and execution latency.
+        Dictionary containing scientific name, common name, top-1 confidence, conformal set candidate names, 4-tier routing tier, human referral flag, OOD status, OOD energy score, probabilities, feature embedding, and execution latency.
     """
     start_time = time.perf_counter()
 
@@ -421,12 +488,18 @@ def run_prediction(image_bytes: bytes) -> dict[str, Any]:
     is_entropy_ood = ood_detector.is_high_entropy(probabilities)
     is_ood = is_energy_ood or is_entropy_ood
 
-    # Uncertainty quantification
+    # Uncertainty quantification and 4-tier conformal routing
     conformal_engine = get_conformal_engine()
-    pred_set_indices, is_uncertain = conformal_engine.predict_set(probabilities)
+    pred_set_indices, _ = conformal_engine.predict_set(probabilities)
 
-    # Empty conformal set or OOD indicates uncertainty requiring human triage
-    requires_human_review = is_uncertain or is_ood or (len(pred_set_indices) == 0)
+    routing_tier = determine_routing_tier(
+        cardinality=len(pred_set_indices),
+        top_confidence=top1_prob,
+        min_confidence_threshold=conformal_engine.min_confidence_threshold,
+    )
+
+    # Empty conformal set, OOD, or non-decisive ambiguity indicates human review / staging requirement
+    requires_human_review = is_ood or (routing_tier != ConformalRoutingTier.DECISIVE)
 
     # Map to taxa names
     predicted_taxon = taxa_catalog[top1_idx]
@@ -441,6 +514,7 @@ def run_prediction(image_bytes: bytes) -> dict[str, Any]:
         "common_name": predicted_taxon["common_name"],
         "confidence": top1_prob,
         "conformal_set": conformal_set_names,
+        "routing_tier": routing_tier.value,
         "is_ood": is_ood,
         "ood_energy_score": ood_energy_score,
         "requires_human_review": requires_human_review,

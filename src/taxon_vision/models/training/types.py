@@ -216,13 +216,13 @@ class HeadTrainingConfig:
             during training for manifold regularization. 0.0 disables noise.
     """
 
-    epochs: int = 10
-    batch_size: int = 64
+    epochs: int = 30
+    batch_size: int = 32
     pruner_callback: Callable[[int, float], bool] | None = None
-    early_stopping_patience: int | None = 4
+    early_stopping_patience: int | None = 5
     reduce_lr_patience: int | None = 2
     restore_best_weights: bool = True
-    noise_std: float = 0.0
+    noise_std: float = 0.01
 
 
 @dataclass(frozen=True)
@@ -236,15 +236,23 @@ class TuningConfig:
         seed: Deterministic random seed for Optuna TPE sampler.
         tracking_uri: Target MLflow tracking URI (e.g. local directory or remote DagsHub).
         experiment_name: MLflow experiment name under which runs will be organized.
+        extractor_name: Vision backbone extractor identifier.
+        storage_url: Optional database storage URI for study persistence.
+        study_name: Optional study identifier string.
+        reset_study: Whether to purge prior trial records before starting.
+        min_resource: Minimum resource allocation for successive halving pruning.
+        reduction_factor: Reduction factor for successive halving pruning.
     """
 
-    n_trials: int = 15
-    epochs_per_trial: int = 10
-    batch_size: int = 64
+    n_trials: int = 20
+    epochs_per_trial: int = 20
+    batch_size: int = 32
     seed: int = 42
     tracking_uri: str | None = None
-    experiment_name: str = "taxon-vision-hyperparameter-tuning"
+    experiment_name: str = "taxon-vision-head-tuning"
     extractor_name: str = "dinov3"
     storage_url: str | None = None
     study_name: str | None = None
     reset_study: bool = False
+    min_resource: int = 3
+    reduction_factor: int = 2

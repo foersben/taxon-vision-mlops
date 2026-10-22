@@ -188,16 +188,31 @@ def calibrate_cli(argv: list[str] | None = None) -> int:
         probs = engine.predict_from_embeddings(embeddings)
         scores = 1.0 - probs[np.arange(sample_size), labels]
 
-    q_hat = SplitConformalPredictor.compute_quantile(scores, args.alpha)
-    empirical_coverage = float(np.mean(scores <= q_hat))
-
     percentile = args.ood_tpr * 100.0 if args.ood_tpr <= 1.0 else args.ood_tpr
-    tau_ood = EnergyOODDetector.calibrate_threshold_from_logits(logits, percentile=percentile)
+    tau_ood = EnergyOODDetector.calibrate_threshold_from_logits(
+        logits, percentile=percentile, temperature=settings.model.temperature
+    )
+    ood_detector = EnergyOODDetector(energy_threshold=tau_ood, temperature=settings.model.temperature)
+
+    # Filter out-of-distribution calibration samples to guarantee statistical exchangeability
+    in_dist_mask = np.array([not ood_detector.is_ood(logit) for logit in logits])
+    n_in_dist = int(np.sum(in_dist_mask))
+    if n_in_dist > 0:
+        filtered_scores = scores[in_dist_mask]
+        cal_sample_size = n_in_dist
+    else:
+        logger.warning("All calibration samples flagged as OOD; falling back to unfiltered calibration.")
+        filtered_scores = scores
+        cal_sample_size = len(scores)
+
+    q_hat = SplitConformalPredictor.compute_quantile(filtered_scores, args.alpha)
+    empirical_coverage = float(np.mean(filtered_scores <= q_hat))
 
     print(f"Calibrated Split Conformal Quantile for alpha={args.alpha} (Nominal Coverage {1 - args.alpha:.0%}):")
     print(f"  q_hat = {q_hat:.4f}")
     print(f"  Empirical Calibration Coverage = {empirical_coverage:.2%}")
     print(f"  Calibrated OOD Energy Threshold ({percentile:.1f}th pctl) = {tau_ood:.4f}")
+    print(f"  In-Distribution Calibration Samples = {cal_sample_size}/{sample_size}")
 
     _save_calibration_artifacts(
         out_path=args.out,
@@ -205,8 +220,20 @@ def calibrate_cli(argv: list[str] | None = None) -> int:
         alpha=args.alpha,
         q_hat=q_hat,
         tau_ood=tau_ood,
-        sample_size=sample_size,
+        sample_size=cal_sample_size,
         empirical_coverage=empirical_coverage,
+    )
+
+    from taxon_vision.models.training.tracking import log_stage_metrics_to_parent_run
+
+    log_stage_metrics_to_parent_run(
+        metrics={
+            "q_hat": q_hat,
+            "empirical_calibration_coverage": empirical_coverage,
+            "tau_ood": tau_ood if tau_ood is not None else 0.0,
+            "num_calibration_samples": sample_size,
+        },
+        prefix="conformal.",
     )
     return 0
 

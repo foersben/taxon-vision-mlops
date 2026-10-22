@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -183,10 +184,34 @@ def _log_mlflow_metrics(history: dict[str, list[float]], duration: float) -> Non
                 "val_f1": history.get("val_f1", [0.0])[i],
                 "val_pr_auc": history.get("val_pr_auc", [0.0])[i],
             }
+            if "learning_rate" in history and i < len(history["learning_rate"]):
+                metrics["learning_rate"] = history["learning_rate"][i]
             mlflow.log_metrics(metrics, step=i + 1)
         mlflow.log_metric("duration_seconds", duration)
     except Exception as err:
         logger.debug("Failed to log MLflow metrics: %s", err)
+
+
+def _log_dataset_lineage(train_emb: np.ndarray, train_lbl: np.ndarray) -> None:
+    """Log dataset input lineage metadata into the active MLflow run.
+
+    Args:
+        train_emb: Training embeddings feature array.
+        train_lbl: Training integer targets array.
+    """
+    if not mlflow.active_run():
+        return
+    try:
+        from mlflow import data as mlflow_data
+
+        dataset = mlflow_data.from_numpy(  # type: ignore[attr-defined]
+            features=train_emb,
+            targets=train_lbl,
+            name="train_embeddings",
+        )
+        mlflow.log_input(dataset, context="training")
+    except Exception as err:
+        logger.debug("Failed to log dataset lineage to MLflow: %s", err)
 
 
 def _plot_confusion_matrix(
@@ -364,6 +389,17 @@ def log_training_visualizations(
         fig_pr = _plot_precision_recall_curves(val_labels, probs, class_names)
         mlflow.log_figure(fig_pr, "visualizations/precision_recall_curves.png")
         plt.close(fig_pr)
+
+        from sklearn.metrics import average_precision_score
+
+        per_class_aps = [
+            float(average_precision_score((val_labels == k).astype(int), probs[:, k]))
+            for k in range(num_classes)
+            if np.sum(val_labels == k) > 0
+        ]
+        if per_class_aps:
+            mlflow.log_metric("worst_class_ap", float(np.min(per_class_aps)))
+            mlflow.log_metric("median_class_ap", float(np.median(per_class_aps)))
 
         # 3. Energy Distribution
         fig_energy = _plot_energy_distribution(val_logits, calibrated_energy_threshold)
@@ -622,11 +658,11 @@ def _log_model_artifact(
     signature: Any,
     input_example: Any,
 ) -> Any:
-    """Log PyTorch model to MLflow registry with signature and serialization fallback.
+    """Log PyTorch model to MLflow artifact store without registering to registry.
 
     Args:
         model: PyTorch model module.
-        model_name: Target registered model name.
+        model_name: Target model name.
         signature: Inferred model signature.
         input_example: Real or zero-padded input example array.
 
@@ -638,8 +674,32 @@ def _log_model_artifact(
         model_name=model_name,
         signature=signature,
         input_example=input_example,
-        registered_model_name=model_name,
+        registered_model_name=None,
     )
+
+
+def _get_incumbent_score(client: Any, model_name: str) -> float | None:
+    """Retrieve the highest promotion score among Production and Challenger aliases.
+
+    Args:
+        client: MlflowClient instance.
+        model_name: Registered model name.
+
+    Returns:
+        Highest incumbent score observed, or None if no aliased versions exist.
+    """
+    scores: list[float] = []
+    for alias in ("Production", "Challenger"):
+        try:
+            mv = client.get_model_version_by_alias(model_name, alias)
+            if mv and mv.run_id:
+                run = client.get_run(mv.run_id)
+                score = run.data.metrics.get("val_promotion_score")
+                if score is not None:
+                    scores.append(float(score))
+        except Exception:
+            pass
+    return max(scores) if scores else None
 
 
 def _apply_model_version_metadata(
@@ -723,10 +783,14 @@ def _promote_model_if_better(
     """Evaluate performance and conditionally promote the model via MLflow Model Registry.
 
     Why:
-        Automated continuous deployment requires programmatic model promotion gates. Comparing Macro PR-AUC ensures newly trained models generalize effectively across both dominant and rare taxa before receiving traffic in production.
+        Automated continuous deployment requires programmatic model promotion gates.
+        Pre-gating prevents registering unpromoted models, preserving a clean registry.
 
     How:
-        Logs the validation PR-AUC promotion score and registers the PyTorch module in MLflow Model Registry. Compares the PR-AUC against the active 'Production' model alias. If superior, tags the model as 'Challenger' for Canary testing; otherwise tags it as 'Archived'. If no baseline exists, initializes the candidate as 'Production'.
+        Logs the validation PR-AUC promotion score and model artifact. Checks incumbent
+        scores across Production and Challenger aliases. If candidate does not strictly
+        beat the incumbent, skips registration and tags the run as skipped_below_incumbent.
+        If it beats the incumbent (or is the initial model), registers it and tags appropriately.
 
     Args:
         model: The trained PyTorch classification head.
@@ -735,7 +799,7 @@ def _promote_model_if_better(
         extractor: Optional backbone feature extractor identifier.
 
     Returns:
-        The applied promotion alias string ('Challenger', 'Archived', 'Production'), or None.
+        The applied promotion alias string ('Challenger', 'Production', 'skipped_below_incumbent'), or None.
     """
     from mlflow.tracking import MlflowClient
 
@@ -748,6 +812,64 @@ def _promote_model_if_better(
         return None
 
     client = MlflowClient()
-    version = str(model_info.registered_model_version)
+    incumbent_score = _get_incumbent_score(client, model_name)
+
+    if incumbent_score is not None and pr_auc <= incumbent_score:
+        logger.info(
+            "Candidate PR-AUC (%.4f) did not strictly beat incumbent (%.4f). Skipping registry registration.",
+            pr_auc,
+            incumbent_score,
+        )
+        try:
+            mlflow.set_tag("registry.status", "skipped_below_incumbent")
+        except Exception:
+            pass
+        return "skipped_below_incumbent"
+
+    try:
+        reg_model = mlflow.register_model(model_uri=model_info.model_uri, name=model_name)
+        version = str(reg_model.version)
+    except Exception as reg_err:
+        logger.warning("Failed to register model in MLflow Model Registry: %s", reg_err)
+        return None
+
     _apply_model_version_metadata(client, model_name, version, extractor, pr_auc)
-    return _determine_promotion_alias(client, model_name, version, pr_auc)
+    promotion_status = _determine_promotion_alias(client, model_name, version, pr_auc)
+    try:
+        mlflow.set_tag("registry.status", f"promoted_{promotion_status.lower()}")
+    except Exception:
+        pass
+    return promotion_status
+
+
+def log_stage_metrics_to_parent_run(
+    metrics: dict[str, Any],
+    train_metrics_path: Path | str = "reports/train_metrics.json",
+    prefix: str = "",
+) -> None:
+    """Log downstream pipeline stage metrics into the parent training MLflow run.
+
+    Args:
+        metrics: Dictionary of metric values to record.
+        train_metrics_path: Path to reports/train_metrics.json holding the parent run ID.
+        prefix: Optional prefix to namespace metric keys (e.g. "calibrate." or "eval.").
+    """
+    path = Path(train_metrics_path)
+    if not path.is_file():
+        return
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        run_id = data.get("mlflow_run_id")
+        if not run_id:
+            return
+        settings = get_settings()
+        if settings.mlflow.tracking_uri:
+            mlflow.set_tracking_uri(settings.mlflow.tracking_uri)
+        client = mlflow.tracking.MlflowClient()
+        for key, val in metrics.items():
+            if isinstance(val, (int, float)) and not isinstance(val, bool):
+                metric_name = f"{prefix}{key}" if prefix else key
+                client.log_metric(run_id=run_id, key=metric_name, value=float(val))
+    except Exception as err:
+        logger.debug("Failed to log stage metrics to MLflow parent run %s: %s", path, err)

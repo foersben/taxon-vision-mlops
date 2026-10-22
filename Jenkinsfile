@@ -21,6 +21,8 @@ spec:
     volumeMounts:
     - name: rattler-cache
       mountPath: /root/.cache/rattler/cache
+    - name: host-manifests
+      mountPath: /var/lib/taxon-vision/manifests
     - name: host-checkpoints
       mountPath: /var/lib/taxon-vision/checkpoints
     resources:
@@ -34,6 +36,10 @@ spec:
   - name: rattler-cache
     hostPath:
       path: /var/lib/taxon-vision/rattler-cache
+      type: DirectoryOrCreate
+  - name: host-manifests
+    hostPath:
+      path: /var/lib/taxon-vision/manifests
       type: DirectoryOrCreate
   - name: host-checkpoints
     hostPath:
@@ -64,10 +70,10 @@ spec:
 
   environment {
     DAGSHUB_TOKEN = credentials('dagshub-token')
-    AWS_ACCESS_KEY_ID = "${DAGSHUB_TOKEN}"
-    AWS_SECRET_ACCESS_KEY = "${DAGSHUB_TOKEN}"
+    AWS_ACCESS_KEY_ID = credentials('dagshub-token')
+    AWS_SECRET_ACCESS_KEY = credentials('dagshub-token')
     MLFLOW_TRACKING_USERNAME = 'foersben'
-    MLFLOW_TRACKING_PASSWORD = "${DAGSHUB_TOKEN}"
+    MLFLOW_TRACKING_PASSWORD = credentials('dagshub-token')
     PYTHONUNBUFFERED = '1'
     OMP_NUM_THREADS = '4'
     MKL_NUM_THREADS = '4'
@@ -182,7 +188,8 @@ spec:
         timeout(time: 150, unit: 'MINUTES')
       }
       environment {
-        INGEST_DATA = "${params.INGEST_DATA || currentBuild.getBuildCauses().any { it.toString().contains('TimerTrigger') }}"
+        // INGEST_DATA = "${params.INGEST_DATA || currentBuild.getBuildCauses().any { it.toString().contains('TimerTrigger') }}"
+        INGEST_DATA = "${params.INGEST_DATA}"
         TUNE_HYPERPARAMETERS = "${params.TUNE_HYPERPARAMETERS}"
         EXTRACTOR = "${params.EXTRACTOR}"
       }
@@ -216,7 +223,11 @@ spec:
         checkout scm
         container('ml-runner') {
           sh '''
-            # If config/taxa_catalog.yaml was modified in recent commits, force INGEST_DATA=true
+            # Enable ingestion on scheduled monthly runs or taxa catalog modifications
+            if echo "$BUILD_CAUSE" | grep -q "TIMER" || [ "$INGEST_DATA" = "true" ]; then
+              export INGEST_DATA=true
+            fi
+
             if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -q "config/taxa_catalog.yaml"; then
               echo ">>> config/taxa_catalog.yaml was modified; forcing INGEST_DATA=true"
               export INGEST_DATA=true
@@ -279,15 +290,24 @@ spec:
               done
             fi
 
+            # One-time migration: the serving workload was renamed taxon-vision-api -> taxon-vision-serving.
+            # The legacy Service still owns NodePort 30080, which makes `kubectl apply` of the renamed
+            # Service fail ("provided port is already allocated"). Free the port first (idempotent no-op once migrated).
+            # The legacy Deployment keeps serving until the new one is verified healthy (removed below).
+            kubectl delete service taxon-vision-api -n taxon-vision --ignore-not-found
+
             # Apply API deployment and service manifests
             kubectl apply -f deploy/k8s/api-deployment.yaml
 
             # Trigger rolling restart to serve fresh weights
-            kubectl rollout restart deployment/taxon-vision-api -n taxon-vision
+            kubectl rollout restart deployment/taxon-vision-serving -n taxon-vision
 
             # Verify deployment health
-            kubectl rollout status deployment/taxon-vision-api -n taxon-vision --timeout=120s
+            kubectl rollout status deployment/taxon-vision-serving -n taxon-vision --timeout=120s
             bash scripts/ci/verify_deployment.sh taxon-vision
+
+            # Retire the legacy Deployment now that its replacement is healthy (idempotent no-op once migrated)
+            kubectl delete deployment taxon-vision-api -n taxon-vision --ignore-not-found
             echo ">>> Deployment successfully verified."
           '''
         }

@@ -29,7 +29,21 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ParetoResult:
-    """Result of a Pareto evaluation profile."""
+    """Result of a Pareto evaluation profile.
+
+    Attributes:
+        extractor: Candidate foundation model backbone identifier.
+        architecture: Architectural family designation.
+        canonical_baseline: Published reference benchmark performance.
+        parameters_m: Total model parameter count in millions.
+        feature_dim: Dimensionality of extracted embedding representation.
+        target_profile: Operational deployment envelope.
+        p50_latency_ms: Median inference latency in milliseconds.
+        p95_latency_ms: 95th-percentile inference latency in milliseconds.
+        throughput_fps: Estimated inference throughput in frames per second.
+        vram_peak_mb: Estimated peak memory footprint in megabytes.
+        provenance: Data origin (e.g. Empirical On-Cluster vs Symbolic Literature Projection).
+    """
 
     extractor: str
     architecture: str
@@ -41,7 +55,6 @@ class ParetoResult:
     p95_latency_ms: float
     throughput_fps: float
     vram_peak_mb: float
-    cost_per_million_usd: float
     provenance: str = "Symbolic Literature Projection"
 
 
@@ -59,7 +72,6 @@ def get_canonical_pareto_profiles() -> list[ParetoResult]:
             p95_latency_ms=12.0,
             throughput_fps=85.0,
             vram_peak_mb=1200.0,
-            cost_per_million_usd=3.50,
             provenance="Symbolic Literature Projection",
         ),
         ParetoResult(
@@ -73,7 +85,6 @@ def get_canonical_pareto_profiles() -> list[ParetoResult]:
             p95_latency_ms=13.5,
             throughput_fps=105.0,
             vram_peak_mb=850.0,
-            cost_per_million_usd=2.60,
             provenance="Empirical On-Cluster (reports/pareto_evaluation.json)",
         ),
         ParetoResult(
@@ -87,7 +98,6 @@ def get_canonical_pareto_profiles() -> list[ParetoResult]:
             p95_latency_ms=14.0,
             throughput_fps=100.0,
             vram_peak_mb=850.0,
-            cost_per_million_usd=2.70,
         ),
         ParetoResult(
             extractor="mobilenetv4_conv_small",
@@ -100,7 +110,6 @@ def get_canonical_pareto_profiles() -> list[ParetoResult]:
             p95_latency_ms=3.5,
             throughput_fps=320.0,
             vram_peak_mb=150.0,
-            cost_per_million_usd=0.50,
         ),
         ParetoResult(
             extractor="efficientnet_b0",
@@ -113,7 +122,6 @@ def get_canonical_pareto_profiles() -> list[ParetoResult]:
             p95_latency_ms=6.8,
             throughput_fps=160.0,
             vram_peak_mb=300.0,
-            cost_per_million_usd=1.10,
         ),
     ]
 
@@ -341,12 +349,30 @@ def evaluate_cli(argv: list[str] | None = None) -> int:
             "throughput_fps": fps,
             "latency_sla_ms": args.latency_sla_ms,
             "latency_sla_satisfied": sla_met,
-            "cost_per_million_usd": 2.60,
             **test_metrics,
         }
         with args.metrics_out.open("w", encoding="utf-8") as f:
             json.dump(export_payload, f, indent=2)
         print(f"Evaluation metrics exported to {args.metrics_out}")
+
+    from taxon_vision.models.training.tracking import log_stage_metrics_to_parent_run
+
+    eval_telemetry: dict[str, Any] = {
+        "p50_latency_ms": p50,
+        "p95_latency_ms": p95,
+        "throughput_fps": fps,
+        "latency_sla_satisfied": 1.0 if sla_met else 0.0,
+    }
+    if test_metrics:
+        eval_telemetry.update(
+            {
+                "test_accuracy": test_metrics.get("test_accuracy", 0.0),
+                "test_empirical_coverage": test_metrics.get("test_empirical_coverage", 0.0),
+                "mean_set_size": test_metrics.get("mean_set_size", 0.0),
+                "referral_rate": test_metrics.get("referral_rate", 0.0),
+            }
+        )
+    log_stage_metrics_to_parent_run(eval_telemetry, prefix="eval.")
     return 0
 
 

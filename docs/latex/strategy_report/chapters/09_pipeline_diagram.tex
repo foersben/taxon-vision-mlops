@@ -131,9 +131,10 @@
     \textbf{\footnotesize\color{mgreenborder} FastAPI Serving Gateway \& Conformal Routing}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
     \textbf{Split Conformal Prediction (SCP) Gating ($\alpha=0.05$, $95\%$ Coverage):}\\
-    \textbullet\ \textbf{Fast Path (Decisive):} $|\hat{C}|=1 \implies$ Decisive INT8 ONNX (${<}25$\,ms SLA)\\
-    \textbullet\ \textbf{Vision RAG (Ambiguous):} Ambiguity $|\hat{C}| > k_{\max}$ or $|\hat{C}|=0 \implies$ VLM triage\\
-    \textbullet\ \textbf{Rank Fusion (RRF):} $w_{\mathrm{vis}} \cdot \mathrm{Sim}_{\cos}(z) + w_{\mathrm{geo}} \cdot \mathrm{Prior}_{\mathrm{geo}}(\mathrm{coord},\,\mathrm{month})$\\[0.8mm]
+    \textbullet\ \textbf{Tier 1 (Decisive):} $|\hat{C}|=1 \land \hat{\pi}_{\max} \ge \tau_{\text{conf}} \implies$ Decisive INT8 ONNX (${<}25$\,ms SLA)\\
+    \textbullet\ \textbf{Tier 2 (Moderate):} $1 < |\hat{C}| \le k_{\max} \implies$ LanceDB HNSW + RRF rank fusion (${<}6$\,ms)\\
+    \textbullet\ \textbf{Tier 3 (Ambiguous):} $|\hat{C}| > k_{\max} \lor (|\hat{C}|=1 \land \hat{\pi}_{\max} < \tau_{\text{conf}}) \implies$ Async VLM triage\\
+    \textbullet\ \textbf{Tier 4 (Abstention):} $|\hat{C}|=0 \implies$ Global nearest-neighbour search + urgent audit\\[0.8mm]
     \textbf{Observability \& Epistemic Monitoring:}\\
     \textbullet\ Prometheus metrics: Latency histograms, conformal set size tracking, OOD rate\\
     \textbullet\ \textbf{Two-Tier Drift:} Live $W_1$ scalar norm monitoring \& Offline full-manifold MMD
@@ -197,14 +198,14 @@
 
 %%  (3) Ingestion -> Multimodal Chunking (Horizontal between row 2 boxes)
 \draw[arrow] (ingest.east) -- (dataprep.west);
-\node[lbl, anchor=south, yshift=2pt] at (0, 7.8) {Arrow Stream};
+\node[lbl, anchor=south, yshift=2pt] at (0, 7.8) {dataset\_manifest.parquet};
 
-%%  (4) Ingest -> Pipeline 1 Training (Vertical, left axis X = -4.7)
-\draw[arrow] (ingest.south) -- (pipe1.north)
-    node[lbl, midway] {DVC Training Split};
+%%  (4) Feature Extraction -> Pipeline 1 Epistemic Diamond (Stratified .pt Splits)
+\draw[arrow] ([xshift=-1.2cm]dataprep.south) -- ++(0,-0.6) -| (pipe1.north)
+    node[lbl, pos=0.25] {Stratified Splits (.pt)};
 
 %%  (5) Data Prep -> Pipeline 2 MMKG (Vertical, right axis X = +4.7)
-\draw[arrow] (dataprep.south) -- (pipe2.north)
+\draw[arrow] ([xshift=1.2cm]dataprep.south) -- ([xshift=1.2cm]pipe2.north)
     node[lbl, midway] {Continuous Embeddings ($z$)};
 
 %%  (6) Pipeline 1 -> Serving Gateway (Vertical, left axis X = -4.7)

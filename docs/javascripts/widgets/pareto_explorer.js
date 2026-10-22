@@ -22,7 +22,6 @@ function initParetoExplorer() {
             p95_latency_ms: 13.5,
             throughput_fps: 105.0,
             vram_peak_mb: 850.0,
-            cost_per_million_usd: 2.60,
             top1_acc: 89.4,
             macro_pr_auc: 0.952,
             sla_passed: true,
@@ -41,7 +40,6 @@ function initParetoExplorer() {
             p95_latency_ms: 12.0,
             throughput_fps: 85.0,
             vram_peak_mb: 1200.0,
-            cost_per_million_usd: 3.50,
             top1_acc: 92.4,
             macro_pr_auc: 0.941,
             sla_passed: true,
@@ -60,7 +58,6 @@ function initParetoExplorer() {
             p95_latency_ms: 14.0,
             throughput_fps: 100.0,
             vram_peak_mb: 850.0,
-            cost_per_million_usd: 2.70,
             top1_acc: 89.4,
             macro_pr_auc: 0.908,
             sla_passed: true,
@@ -79,7 +76,6 @@ function initParetoExplorer() {
             p95_latency_ms: 3.5,
             throughput_fps: 320.0,
             vram_peak_mb: 150.0,
-            cost_per_million_usd: 0.50,
             top1_acc: 78.5,
             macro_pr_auc: 0.798,
             sla_passed: true,
@@ -98,7 +94,6 @@ function initParetoExplorer() {
             p95_latency_ms: 6.8,
             throughput_fps: 160.0,
             vram_peak_mb: 300.0,
-            cost_per_million_usd: 1.10,
             top1_acc: 81.2,
             macro_pr_auc: 0.825,
             sla_passed: true,
@@ -144,7 +139,7 @@ function initParetoExplorer() {
                             <th data-sort="p95_latency_ms">p95 Latency</th>
                             <th data-sort="throughput_fps">Throughput</th>
                             <th data-sort="parameters_m">Params</th>
-                            <th data-sort="cost_per_million_usd">Cost / 1M Reqs</th>
+                            <th data-sort="vram_peak_mb">Peak VRAM</th>
                             <th>SLA Gate</th>
                         </tr>
                     </thead>
@@ -295,7 +290,7 @@ function initParetoExplorer() {
                     <td><span class="latency-pill">${d.p95_latency_ms.toFixed(1)} ms</span></td>
                     <td>${d.throughput_fps.toFixed(0)} FPS</td>
                     <td>${d.parameters_m.toFixed(1)}M</td>
-                    <td>$${d.cost_per_million_usd.toFixed(2)}</td>
+                    <td>${d.vram_peak_mb.toFixed(0)} MB</td>
                     <td><span class="sla-pass-badge">${d.badge}</span></td>
                 </tr>
             `;
@@ -340,8 +335,8 @@ function initParetoExplorer() {
                     <span class="val">${m.throughput_fps.toFixed(0)} FPS</span>
                 </div>
                 <div class="card-stat">
-                    <span class="title">Serving Cost</span>
-                    <span class="val">$${m.cost_per_million_usd.toFixed(2)} / 1M</span>
+                    <span class="title">Embedding Dim</span>
+                    <span class="val">${m.feature_dim}D</span>
                 </div>
                 <div class="card-stat">
                     <span class="title">Parameters</span>
@@ -389,7 +384,7 @@ function initParetoExplorer() {
                     if (match) {
                         if (item.p95_latency_ms) match.p95_latency_ms = item.p95_latency_ms;
                         if (item.throughput_fps) match.throughput_fps = item.throughput_fps;
-                        if (item.cost_per_million_usd) match.cost_per_million_usd = item.cost_per_million_usd;
+                        if (item.vram_peak_mb) match.vram_peak_mb = item.vram_peak_mb;
                     }
                 });
                 renderChart();

@@ -4,7 +4,6 @@
   "throughput_fps": 20.7,
   "latency_sla_ms": 25.0,
   "latency_sla_satisfied": false,
-  "cost_per_million_usd": 2.6,
   "test_sample_count": 169,
   "test_accuracy": 0.8935,
   "nominal_coverage": 0.95,

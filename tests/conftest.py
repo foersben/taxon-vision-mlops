@@ -28,9 +28,15 @@ def test_environment_isolation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     """
     flagged_dir = tmp_path / "flagged_observations"
     flagged_dir.mkdir(parents=True, exist_ok=True)
+    mlflow_db = tmp_path / "mlflow_test.db"
+    sqlite_uri = f"sqlite:///{mlflow_db}"
+
     monkeypatch.setenv("TAXON_ALLOW_UNTRAINED_FALLBACK", "true")
     monkeypatch.setenv("TAXON_FLAGGED_STORAGE_DIR", str(flagged_dir))
     monkeypatch.setenv("TAXON_OPTUNA_STORAGE_URI", "memory")
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", sqlite_uri)
+    monkeypatch.setenv("TAXON_MLFLOW_TRACKING_URI", sqlite_uri)
+    monkeypatch.setenv("TAXON_VISION_TESTING", "1")
 
     from taxon_vision.config import get_settings
     from taxon_vision.service.inference import reset_model_caches
@@ -38,7 +44,22 @@ def test_environment_isolation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     get_settings.cache_clear()
     reset_model_caches()
 
+    try:
+        import mlflow
+
+        mlflow.set_tracking_uri(sqlite_uri)
+    except Exception:
+        pass
+
     yield
+
+    try:
+        import mlflow
+
+        if mlflow.active_run():
+            mlflow.end_run()
+    except Exception:
+        pass
 
     get_settings.cache_clear()
     reset_model_caches()

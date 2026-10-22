@@ -18,9 +18,9 @@ sources:
 
 # Backbone Benchmarking & Pareto Trade-Offs
 
-Deploying fine-grained biological classifiers into high-throughput production requires balancing predictive accuracy against hardware latency budgets and cloud serving costs. In biodiversity computer vision, the highest-performing vision transformer can require ten times the parameter footprint and memory bandwidth for a marginal gain in top-1 accuracy.
+Deploying fine-grained biological classifiers into high-throughput production requires balancing predictive accuracy against hardware latency budgets and memory constraints. In biodiversity computer vision, the highest-performing vision transformer can require ten times the parameter footprint and memory bandwidth for a marginal gain in top-1 accuracy.
 
-To formalize these multi-objective trade-offs, TaxonVision-MLOps evaluates candidate vision backbones across a empirical **Pareto frontier** measuring Top-1 Accuracy, Macro PR-AUC, p95 Inference Latency, Throughput (FPS), Memory Footprint (VRAM), and Unit Serving Cost.
+To formalize these multi-objective trade-offs, TaxonVision-MLOps evaluates candidate vision backbones across an empirical **Pareto frontier** measuring Top-1 Accuracy, Macro PR-AUC, p95 Inference Latency, Throughput (FPS), Parameter Footprint, and Peak Video RAM (VRAM).
 
 ---
 
@@ -54,9 +54,9 @@ TaxonVision evaluates five foundation feature extractors spanning dense self-sup
 
 Universal academic benchmarks (e.g., ImageNet-1K or Tree-of-Life zero-shot evaluations) provide general capacity metrics, but they do not accurately reflect performance on specialized biological distributions under operational constraints:
 
-* **MobileNetV4 Small (Symbolic Edge Profile):** The official baseline is 73.8% Top-1 on ImageNet-1K. In specialized biodiversity pipelines, its inverted bottleneck architecture provides an estimated **320 FPS** throughput and sub-4ms p95 latency on commodity CPUs ($0.50 per million inferences), making it the candidate of choice for edge camera traps with limited power budgets.
-* **BioCLIP-2 (Symbolic Domain Profile):** Trained on over 10 million organism photographs structured by the Tree of Life taxonomy, BioCLIP-2 captures deep biological priors. Under accelerated Tensor Core GPU execution, literature evaluations project up to 92.4% accuracy with 12.0 ms p95 latency. However, its 86M parameter footprint requires 1,200 MB of VRAM, increasing serving costs to $3.50 per million requests.
-* **DINOv3 ViT-S/14 (Empirical Production Champion):** Evaluated via dense morphological probing on frozen embeddings, DINOv3 achieves the Pareto frontier optimum: **89.35% Empirical Test Accuracy** on the 10-class holdout (`reports/pareto_evaluation.json`), with an estimated 13.5 ms p95 GPU latency budget, 105 FPS throughput, and a compact 384-dimensional feature vector. At $2.60 per million requests, it serves as the platform's champion production model.
+* **MobileNetV4 Small (Symbolic Edge Profile):** The official baseline is 73.8% Top-1 on ImageNet-1K. In specialized biodiversity pipelines, its inverted bottleneck architecture provides an estimated **320 FPS** throughput and sub-4ms p95 latency on commodity CPUs, making it the candidate of choice for edge camera traps with limited power budgets.
+* **BioCLIP-2 (Symbolic Domain Profile):** Trained on over 10 million organism photographs structured by the Tree of Life taxonomy, BioCLIP-2 captures deep biological priors. Under accelerated Tensor Core GPU execution, literature evaluations project up to 92.4% accuracy with 12.0 ms p95 latency and a 1,200 MB VRAM footprint across its 86M parameters.
+* **DINOv3 ViT-S/14 (Empirical Production Champion):** Evaluated via dense morphological probing on frozen embeddings, DINOv3 achieves the Pareto frontier optimum: **89.35% Empirical Test Accuracy** on the 10-class holdout (`reports/pareto_evaluation.json`), with an estimated 13.5 ms p95 GPU latency budget, 105 FPS throughput, and a compact 384-dimensional feature vector. With optimal resource utilization and zero inference allocation overhead, it serves as the platform's champion production model.
 
 ---
 

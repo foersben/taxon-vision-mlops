@@ -39,21 +39,21 @@ Experiment tracking \& Model Registry & \textbf{implemented} & MLflow on DagsHub
 \addlinespace
 Head training \& convergence callbacks & \textbf{implemented} & Class-Balanced Loss ($\beta$), best-weight restoration, early stopping (patience 4), and LR plateau decay (patience 2) in \texttt{loops.py}. \\
 \addlinespace
-Bayesian HPO (Optuna TPE + ASHA) & \textbf{implemented} & 6D search space in \texttt{tuning.py} with persistent SQLite WAL storage (\texttt{optuna\_studies.db}) and nested MLflow child trial logging. \\
+Bayesian HPO (Optuna TPE + ASHA) & \textbf{implemented} & 6D search space in \texttt{tuning.py} with persistent SQLite WAL storage (\nolinkurl{optuna_studies.db} in \nolinkurl{data/optuna/}) and nested MLflow child trial logging. \\
 \addlinespace
-Dual-output ONNX \& INT8 PTQ & \textbf{implemented} & \texttt{onnx\_exporter.py} emits \texttt{logits} ($[N,K]$) and \texttt{embeddings} ($[N,D]$); static QDQ and logit-preserving dynamic INT8 in \texttt{quantizer.py}. \\
+Dual-output ONNX \& INT8 PTQ & \textbf{implemented} & \texttt{onnx\_exporter.py} emits \texttt{logits} ($[N,K]$) and \texttt{embeddings} ($[N,D]$); static QDQ (with representative calibration images) and dynamic fallback in \texttt{quantizer.py}. \\
 \addlinespace
 Epistemic safety gating (OOD + Conformal) & \textbf{implemented} & Dual-gate OOD ($\tau_{\text{OOD}}=-2.40$, $\tau_{\text{entropy}}=1.60$ nats) in \texttt{ood\_detector.py} and Split Conformal sets ($1-\alpha \ge 0.95$, $\tau_{\text{conf}}=0.60$) in \texttt{conformal.py}. \\
 \addlinespace
-Inference service \& HTMX dashboard & \textbf{implemented} & FastAPI service (\texttt{/predict}, \texttt{/explain}, \texttt{/health/ready}), forward-hooked linear CAM saliency, and local persistence of flagged samples (\texttt{storage.py}). \\
+Inference service \& HTMX dashboard & \textbf{implemented} & FastAPI service (\texttt{/predict}, \texttt{/explain}, \texttt{/health/ready}), forward-hooked linear CAM saliency in \texttt{inference/cam.py}, and local persistence of flagged samples (\texttt{storage.py}). \\
 \addlinespace
 Hybrid CI/CD \& K3s GPU execution & \textbf{implemented} & GitHub Actions quality/release/GHCR workflows (\texttt{ci.yml}, \texttt{release.yaml}) and bare-metal Jenkins ephemeral K3s GPU pods (PyTorch 2.7 \texttt{cu128}, 4-slot time-slicing). \\
 \addlinespace
-Test harness \& code quality gates & \textbf{implemented} & 114 \texttt{pytest} tests (89\% coverage), zero-warning Ruff, MyPy, OKF schema validation, license compliance audit, and cognitive complexity $<15$ (\texttt{complexipy}). \\
+Test harness \& code quality gates & \textbf{implemented} & 148 \texttt{pytest} tests, zero-warning Ruff, MyPy, OKF schema validation, license compliance audit, and cognitive complexity $<15$ (\texttt{complexipy}). \\
 \midrule
 Prometheus \& Grafana observability & \textbf{partial} & FastAPI exposes \texttt{/metrics} with 3 core collectors in \texttt{telemetry.py} and \texttt{config/prometheus.yaml} exists; however, conformal set-size/OOD counters, K3s Prometheus/Grafana deployments, and provisioned Grafana dashboards are not yet set up. \\
 \addlinespace
-1D Wasserstein-1 feature drift & \textbf{partial} & Scalar $L_2$-norm Wasserstein-1 calculation is implemented and unit-tested in \texttt{monitoring/drift.py}, but is not yet hooked into the live \texttt{/predict} inference path or exported as a Prometheus gauge. \\
+1D Wasserstein-1 feature drift & \textbf{partial} & Scalar $L_2$-norm Wasserstein-1 calculation on pre-normalised activations is implemented and unit-tested in \texttt{monitoring/drift.py}, but is not yet hooked into the live \texttt{/predict} inference path or exported as a Prometheus gauge. \\
 \addlinespace
 BADGE active learning \& triage queue & \textbf{partial} & \texttt{compute\_badge\_embeddings} (\texttt{query.py}) and Parquet-backed \texttt{TriageQueueManager} (\texttt{triage\_queue.py}) are unit-tested, but are not yet wired into \texttt{/predict} (which currently writes raw JSON/JPEG files via \texttt{storage.py}) or scheduled retraining. \\
 \addlinespace

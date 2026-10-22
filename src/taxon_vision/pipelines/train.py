@@ -81,8 +81,8 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--n-trials",
         type=int,
-        default=15,
-        help="Number of Optuna evaluation trials (when --tune is enabled)",
+        default=settings.optuna.n_trials,
+        help=f"Number of Optuna evaluation trials (when --tune is enabled) (default: {settings.optuna.n_trials})",
     )
     parser.add_argument(
         "--cache-path",
@@ -153,6 +153,8 @@ def _save_metrics_json(metrics_out: str | None, result: dict[str, Any]) -> None:
         "final_val_accuracy": result.get("final_val_accuracy"),
         "duration_seconds": result.get("duration_seconds"),
         "promotion_status": result.get("promotion_status"),
+        "hyperparameter_source": result.get("hyperparameter_source"),
+        "mlflow_run_id": result.get("mlflow_run_id"),
     }
     with metrics_file.open("w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)

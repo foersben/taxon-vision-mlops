@@ -46,6 +46,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
+ALLOWED_LICENSES: set[str] = {"cc0", "cc-by", "cc-by-nc"}
+
 
 class OpenLicense(StrEnum):
     """Approved open licenses for iNaturalist citizen science media.
@@ -54,19 +56,11 @@ class OpenLicense(StrEnum):
         CC0: Public domain dedication.
         CC_BY: Attribution required.
         CC_BY_NC: Attribution-NonCommercial required.
-        CC_BY_SA: Attribution-ShareAlike required.
-        CC_BY_ND: Attribution-NoDerivatives required.
-        CC_BY_NC_SA: Attribution-NonCommercial-ShareAlike required.
-        CC_BY_NC_ND: Attribution-NonCommercial-NoDerivatives required.
     """
 
     CC0 = "CC0"
     CC_BY = "CC-BY"
     CC_BY_NC = "CC-BY-NC"
-    CC_BY_SA = "CC-BY-SA"
-    CC_BY_ND = "CC-BY-ND"
-    CC_BY_NC_SA = "CC-BY-NC-SA"
-    CC_BY_NC_ND = "CC-BY-NC-ND"
 
 
 class AttributionRecord(BaseModel):

@@ -21,10 +21,12 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import torch
+import yaml
 from torch import nn, optim
 
 from taxon_vision.config import get_settings
@@ -33,6 +35,7 @@ from taxon_vision.models.loss import ClassBalancedLoss
 from taxon_vision.models.training.checkpoint import _save_checkpoint
 from taxon_vision.models.training.embeddings import train_head_on_cached_embeddings
 from taxon_vision.models.training.tracking import (
+    _log_dataset_lineage,
     _log_mlflow_metrics,
     _promote_model_if_better,
     log_training_visualizations,
@@ -345,6 +348,133 @@ def configure_cuda_memory_budget(fraction: float | None = None) -> float | None:
     return target_fraction
 
 
+@dataclass(frozen=True)
+class TrainingHyperparameters:
+    """Resolved hyperparameter tuple and provenance tracking."""
+
+    learning_rate: float
+    weight_decay: float
+    dropout: float
+    cb_beta: float
+    batch_size: int
+    noise_std: float
+    hyperparameter_source: str
+
+
+def _load_persisted_best_params(
+    extractor: str,
+    path: Path | str = "models/checkpoints/best_params.yaml",
+) -> dict[str, Any] | None:
+    """Load persisted best hyperparameters for an extractor from YAML checkpoint.
+
+    Args:
+        extractor: Vision backbone extractor identifier.
+        path: Filesystem path to best_params.yaml.
+
+    Returns:
+        Dictionary of best parameters if found, or None.
+    """
+    param_path = Path(path)
+    if not param_path.is_file():
+        return None
+    try:
+        with param_path.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        if isinstance(data, dict) and extractor in data:
+            entry = data[extractor]
+            if isinstance(entry, dict) and "best_params" in entry and isinstance(entry["best_params"], dict):
+                return dict(entry["best_params"])
+            if isinstance(entry, dict):
+                return dict(entry)
+    except Exception as err:
+        logger.warning("Failed to load persisted hyperparameters from %s: %s", param_path, err)
+    return None
+
+
+def _resolve_tier_hyperparameters(
+    extractor: str,
+    tune: bool,
+    n_trials: int,
+    epochs: int,
+    batch_size: int,
+    learning_rate: float,
+    seed: int,
+    data: EmbeddingSplit,
+    num_classes: int,
+    study_name: str | None,
+    reset_study: bool,
+    settings: Any,
+) -> TrainingHyperparameters:
+    """Resolve training hyperparameters via 3-tier hierarchy: live study, persisted yaml, or default.
+
+    Why:
+        Decouples parameter discovery (Bayesian search) from routine training while enabling
+        deterministic reuse of peak-performing hyperparameters across CI/CD and deployment runs.
+
+    Args:
+        extractor: Name of the feature extractor.
+        tune: Whether to run live Optuna Bayesian search.
+        n_trials: Number of trials if tuning.
+        epochs: Number of training epochs.
+        batch_size: User-specified or default mini-batch size.
+        learning_rate: User-specified or default learning rate.
+        seed: Random seed for deterministic reproducibility.
+        data: Split containing train and validation embeddings.
+        num_classes: Total number of classification categories.
+        study_name: Optional custom study identifier.
+        reset_study: Whether to purge prior trial records before starting.
+        settings: Application settings container.
+
+    Returns:
+        Validated TrainingHyperparameters container.
+    """
+    if tune:
+        logger.info("Tier 1: Executing Optuna hyperparameter optimization across %d trials...", n_trials)
+        tuning_cfg = TuningConfig(
+            n_trials=n_trials,
+            epochs_per_trial=epochs,
+            batch_size=batch_size,
+            seed=seed,
+            extractor_name=extractor,
+            study_name=study_name,
+            reset_study=reset_study,
+        )
+        best_params, _ = tune_hyperparameters(data=data, num_classes=num_classes, config=tuning_cfg)
+        return TrainingHyperparameters(
+            learning_rate=float(best_params.get("learning_rate", best_params.get("lr", learning_rate))),
+            weight_decay=float(best_params.get("weight_decay", settings.training.weight_decay)),
+            dropout=float(best_params.get("dropout", settings.training.dropout)),
+            cb_beta=float(best_params.get("cb_beta", best_params.get("beta", settings.training.cb_beta))),
+            batch_size=int(best_params.get("batch_size", batch_size)),
+            noise_std=float(best_params.get("noise_std", settings.training.noise_std)),
+            hyperparameter_source="optuna_live_study",
+        )
+
+    persisted = _load_persisted_best_params(extractor)
+    if persisted:
+        logger.info("Tier 2: Loaded persisted best hyperparameters for '%s' from best_params.yaml", extractor)
+        return TrainingHyperparameters(
+            learning_rate=float(persisted.get("learning_rate", persisted.get("lr", learning_rate))),
+            weight_decay=float(persisted.get("weight_decay", settings.training.weight_decay)),
+            dropout=float(persisted.get("dropout", settings.training.dropout)),
+            cb_beta=float(persisted.get("cb_beta", persisted.get("beta", settings.training.cb_beta))),
+            batch_size=int(persisted.get("batch_size", batch_size)),
+            noise_std=float(persisted.get("noise_std", settings.training.noise_std)),
+            hyperparameter_source="persisted_best_params",
+        )
+
+    logger.info("Tier 3: Using baseline default hyperparameters from configuration")
+    return TrainingHyperparameters(
+        learning_rate=learning_rate,
+        weight_decay=settings.training.weight_decay,
+        dropout=settings.training.dropout,
+        cb_beta=settings.training.cb_beta,
+        batch_size=batch_size,
+        noise_std=settings.training.noise_std,
+        hyperparameter_source="params_yaml_default",
+    )
+
+
 def _build_training_components(
     dim: int,
     num_classes: int,
@@ -357,15 +487,11 @@ def _build_training_components(
     seed: int,
     data: EmbeddingSplit,
     extractor: str,
-    applied_vram_fraction: float | None,
+    applied_vram_fraction: float | None = None,
     study_name: str | None = None,
     reset_study: bool = False,
-) -> tuple[nn.Module, nn.Module, optim.Optimizer, HeadTrainingConfig, dict[str, Any]]:
-    """Construct model head, loss, optimizer, and training parameters.
-
-    Why:
-        Decouples parameter resolution, Bayesian tuning with Optuna, and neural network
-        instantiation from execution lifecycle orchestration in run_training_pipeline.
+) -> tuple[nn.Module, ClassBalancedLoss, optim.Optimizer, HeadTrainingConfig, dict[str, Any]]:
+    """Build and wire classification head, loss criterion, optimizer, config, and params.
 
     Args:
         dim: Dimensionality of feature vectors.
@@ -386,52 +512,47 @@ def _build_training_components(
     Returns:
         Tuple containing head module, loss criterion, optimizer, training config, and params dict.
     """
-    if tune:
-        logger.info("Executing Optuna hyperparameter optimization across %d trials...", n_trials)
-        tuning_cfg = TuningConfig(
-            n_trials=n_trials,
-            epochs_per_trial=epochs,
-            batch_size=batch_size,
-            seed=seed,
-            extractor_name=extractor,
-            study_name=study_name,
-            reset_study=reset_study,
-        )
-        best_params, _ = tune_hyperparameters(data=data, num_classes=num_classes, config=tuning_cfg)
-        dropout_p = float(best_params.get("dropout", 0.2))
-        beta = float(best_params.get("beta", 0.99))
-        lr = float(best_params.get("lr", learning_rate))
-        weight_decay = float(best_params.get("weight_decay", 1e-4))
-        resolved_batch_size = int(best_params.get("batch_size", batch_size))
-        noise_std = float(best_params.get("noise_std", 0.0))
-        head = nn.Sequential(nn.Dropout(p=dropout_p), nn.Linear(dim, num_classes))
-        criterion = ClassBalancedLoss(samples_per_class=samples, beta=beta)
-        optimizer = optim.AdamW(head.parameters(), lr=lr, weight_decay=weight_decay)
-    else:
-        dropout_p = 0.2
-        beta = 0.99
-        lr = learning_rate
-        weight_decay = 0.0
-        resolved_batch_size = batch_size
-        noise_std = 0.0
-        head = nn.Sequential(nn.Dropout(p=0.2), nn.Linear(dim, num_classes))
-        criterion = ClassBalancedLoss(samples_per_class=samples, beta=0.99)
-        optimizer = optim.AdamW(head.parameters(), lr=lr)
+    settings = get_settings()
+    hparams = _resolve_tier_hyperparameters(
+        extractor=extractor,
+        tune=tune,
+        n_trials=n_trials,
+        epochs=epochs,
+        batch_size=batch_size,
+        learning_rate=learning_rate,
+        seed=seed,
+        data=data,
+        num_classes=num_classes,
+        study_name=study_name,
+        reset_study=reset_study,
+        settings=settings,
+    )
 
-    config = HeadTrainingConfig(epochs=epochs, batch_size=resolved_batch_size, noise_std=noise_std)
+    head = nn.Sequential(nn.Dropout(p=hparams.dropout), nn.Linear(dim, num_classes))
+    criterion = ClassBalancedLoss(samples_per_class=samples, beta=hparams.cb_beta)
+    optimizer = optim.AdamW(head.parameters(), lr=hparams.learning_rate, weight_decay=hparams.weight_decay)
+
+    config = HeadTrainingConfig(
+        epochs=epochs,
+        batch_size=hparams.batch_size,
+        early_stopping_patience=settings.training.early_stopping_patience,
+        reduce_lr_patience=settings.training.reduce_lr_patience,
+        noise_std=hparams.noise_std,
+    )
     params = {
         "extractor": extractor,
         "epochs": epochs,
-        "batch_size": resolved_batch_size,
-        "learning_rate": lr,
-        "weight_decay": weight_decay,
-        "dropout": dropout_p,
-        "beta": beta,
-        "noise_std": noise_std,
+        "batch_size": hparams.batch_size,
+        "learning_rate": hparams.learning_rate,
+        "weight_decay": hparams.weight_decay,
+        "dropout": hparams.dropout,
+        "cb_beta": hparams.cb_beta,
+        "noise_std": hparams.noise_std,
         "num_classes": num_classes,
         "feature_dim": dim,
         "loss": "ClassBalancedLoss",
         "optuna_tuned": tune,
+        "hyperparameter_source": hparams.hyperparameter_source,
         "cuda_memory_fraction": applied_vram_fraction if applied_vram_fraction is not None else "cpu",
     }
     return head, criterion, optimizer, config, params
@@ -620,27 +741,54 @@ def run_training_pipeline(
     )
     samples = data.samples_per_class or [1] * num_classes
 
-    head, criterion, optimizer, config, params = _build_training_components(
-        dim=dim,
-        num_classes=num_classes,
-        samples=samples,
-        tune=tune,
-        n_trials=n_trials,
-        epochs=resolved_epochs,
-        batch_size=resolved_batch_size,
-        learning_rate=resolved_lr,
-        seed=settings.training.random_seed,
-        data=data,
-        extractor=resolved_extractor,
-        applied_vram_fraction=applied_vram_fraction,
-        study_name=study_name,
-        reset_study=reset_study,
-    )
-
-    run_name = f"train_{extractor}_{int(time.time())}"
+    run_name = f"train_{resolved_extractor}_{int(time.time())}"
     promotion_status: str | None = None
+    mlflow_run_id: str | None = None
 
-    with mlflow_run_scope(run_name=run_name, params=params, log_file=log_file) as active_run:
+    initial_params = {
+        "extractor": resolved_extractor,
+        "epochs": resolved_epochs,
+        "batch_size": resolved_batch_size,
+        "learning_rate": resolved_lr,
+        "num_classes": num_classes,
+        "tune": tune,
+        "cuda_memory_fraction": applied_vram_fraction if applied_vram_fraction is not None else "cpu",
+    }
+
+    with mlflow_run_scope(run_name=run_name, params=initial_params, log_file=log_file) as active_run:
+        if active_run:
+            mlflow_run_id = active_run.info.run_id
+            _log_dataset_lineage(
+                train_emb=data.train_embeddings.cpu().numpy(),
+                train_lbl=data.train_labels.cpu().numpy(),
+            )
+
+        head, criterion, optimizer, config, params = _build_training_components(
+            dim=dim,
+            num_classes=num_classes,
+            samples=samples,
+            tune=tune,
+            n_trials=n_trials,
+            epochs=resolved_epochs,
+            batch_size=resolved_batch_size,
+            learning_rate=resolved_lr,
+            seed=settings.training.random_seed,
+            data=data,
+            extractor=resolved_extractor,
+            applied_vram_fraction=applied_vram_fraction,
+            study_name=study_name,
+            reset_study=reset_study,
+        )
+
+        if active_run:
+            try:
+                import mlflow
+
+                mlflow.log_params(params)
+                mlflow.set_tag("hyperparameter_source", params["hyperparameter_source"])
+            except Exception as tag_err:
+                logger.debug("Failed to set hyperparameter_source tag: %s", tag_err)
+
         history = train_head_on_cached_embeddings(
             head=head,
             data=data,
@@ -704,6 +852,8 @@ def run_training_pipeline(
         "checkpoint_path": str(target_path),
         "duration_seconds": round(duration, 3),
         "promotion_status": promotion_status,
+        "hyperparameter_source": params["hyperparameter_source"],
+        "mlflow_run_id": mlflow_run_id,
         "history": history,
     }
 
