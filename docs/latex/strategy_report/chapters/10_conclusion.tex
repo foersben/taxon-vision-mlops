@@ -4,11 +4,11 @@
 
 The TaxonVision-MLOps architecture demonstrates that transitioning from experimental, notebook-bound biological modelling to a globally scalable, Level 4 MLOps platform is not merely a matter of provisioning more cloud compute. It requires a fundamental paradigm shift towards deterministic engineering, epistemic safety, and decoupled operational lifecycles.
 
-By completely abandoning monolithic web servers and fragile Python environments in favour of a strictly containerised, dual-pipeline Kubernetes topology, the system mathematically isolates the slow, weight-centric training cycles of the classification engine from the highly volatile, data-centric taxonomic mutations of the Multimodal Knowledge Graph (MMKG). The integration of zero-copy Apache Arrow streaming and DVC cryptographic Parquet manifests successfully circumvents the catastrophic 50-terabyte storage trap, allowing the platform to ingest massive citizen-science streams on highly constrained, cost-effective bare-metal infrastructure.
+By completely abandoning monolithic web servers and fragile Python environments in favour of a strictly containerised, dual-pipeline Kubernetes topology, the system mathematically isolates the slow, weight-centric training cycles of the classification engine from the highly volatile, data-centric taxonomic mutations of the Multimodal Knowledge Graph (MMKG). The integration of zero-copy Apache Arrow streaming and DVC cryptographic Parquet manifests successfully circumvents the unmanageable 50-terabyte storage trap, allowing the platform to ingest massive citizen-science streams on highly constrained, cost-effective bare-metal infrastructure.
 
-Crucially, the platform refuses to trade scientific reliability for inference speed. The implementation of Energy-Based Out-of-Distribution rejection and Split Conformal Prediction guarantees that no identification reaches production without a formal, distribution-free mathematical error bound. By wrapping these invariants in a strict CI/CD verification gate, and routing statistically ambiguous queries through a Reciprocal Rank Fused Vision RAG pipeline, the architecture elegantly closes the active learning loop.
+Crucially, the platform refuses to trade scientific reliability for inference speed. The implementation of Energy-Based Out-of-Distribution rejection and Split Conformal Prediction guarantees that no identification reaches production without a formal, distribution-free mathematical error bound. By enforcing these invariants within a deterministic CI/CD verification gate and routing statistically ambiguous queries through a Reciprocal Rank Fused Vision RAG pipeline, the architecture closes the active learning loop.
 
-TaxonVision-MLOps is not just a deployment strategy; it is a continuously evolving, epistemically secure intelligence engine capable of sustaining the next generation of global biodiversity monitoring.
+TaxonVision-MLOps establishes an epistemically secure intelligence platform capable of sustaining operational biological monitoring at global scale.
 
 \section{Phased Delivery Roadmap and Implementation Status}
 \label{sec:impl_status}
@@ -37,21 +37,21 @@ Dataset versioning \& S3 streaming & \textbf{implemented} & DVC on DagsHub S3 re
 \addlinespace
 Experiment tracking \& Model Registry & \textbf{implemented} & MLflow on DagsHub; \texttt{taxon\_vision\_classifier} with \texttt{Production}/\texttt{Challenger}/\texttt{Archived} aliases, real tensor signatures, and diagnostic plots. \\
 \addlinespace
-Head training \& convergence callbacks & \textbf{implemented} & Class-Balanced Loss ($\beta$), best-weight restoration, early stopping (patience 4), and LR plateau decay (patience 2) in \texttt{loops.py}. \\
+Head training \& convergence callbacks & \textbf{implemented} & Class-Balanced Loss ($\beta$), best-weight restoration, early stopping (patience 5), and LR plateau decay (patience 2) in \texttt{loops.py}. \\
 \addlinespace
 Bayesian HPO (Optuna TPE + ASHA) & \textbf{implemented} & 6D search space in \texttt{tuning.py} with persistent SQLite WAL storage (\nolinkurl{optuna_studies.db} in \nolinkurl{data/optuna/}) and nested MLflow child trial logging. \\
 \addlinespace
 Dual-output ONNX \& INT8 PTQ & \textbf{implemented} & \texttt{onnx\_exporter.py} emits \texttt{logits} ($[N,K]$) and \texttt{embeddings} ($[N,D]$); static QDQ (with representative calibration images) and dynamic fallback in \texttt{quantizer.py}. \\
 \addlinespace
-Epistemic safety gating (OOD + Conformal) & \textbf{implemented} & Dual-gate OOD ($\tau_{\text{OOD}}=-2.40$, $\tau_{\text{entropy}}=1.60$ nats) in \texttt{ood\_detector.py} and Split Conformal sets ($1-\alpha \ge 0.95$, $\tau_{\text{conf}}=0.60$) in \texttt{conformal.py}. \\
+Epistemic safety gating (OOD + Conformal) & \textbf{implemented} & Dual-gate OOD (dynamically calibrated $\tau_{\text{OOD}}$ resolved via \nolinkurl{config/conformal_config.yaml}, $\tau_{\text{entropy}}=1.60$ nats) in \texttt{ood\_detector.py} and Split Conformal sets ($1-\alpha \ge 0.95$, $\tau_{\text{conf}}=0.60$) in \texttt{conformal.py}. \\
 \addlinespace
 Inference service \& HTMX dashboard & \textbf{implemented} & FastAPI service (\texttt{/predict}, \texttt{/explain}, \texttt{/health/ready}), forward-hooked linear CAM saliency in \texttt{inference/cam.py}, and local persistence of flagged samples (\texttt{storage.py}). \\
 \addlinespace
 Hybrid CI/CD \& K3s GPU execution & \textbf{implemented} & GitHub Actions quality/release/GHCR workflows (\texttt{ci.yml}, \texttt{release.yaml}) and bare-metal Jenkins ephemeral K3s GPU pods (PyTorch 2.7 \texttt{cu128}, 4-slot time-slicing). \\
 \addlinespace
-Test harness \& code quality gates & \textbf{implemented} & 148 \texttt{pytest} tests, zero-warning Ruff, MyPy, OKF schema validation, license compliance audit, and cognitive complexity $<15$ (\texttt{complexipy}). \\
+Test harness \& code quality gates & \textbf{implemented} & 158 \texttt{pytest} tests, zero-warning Ruff, MyPy, OKF schema validation, licence compliance audit, and cognitive complexity $<15$ (\texttt{complexipy}). \\
 \midrule
-Prometheus \& Grafana observability & \textbf{partial} & FastAPI exposes \texttt{/metrics} with 3 core collectors in \texttt{telemetry.py} and \texttt{config/prometheus.yaml} exists; however, conformal set-size/OOD counters, K3s Prometheus/Grafana deployments, and provisioned Grafana dashboards are not yet set up. \\
+Prometheus \& Grafana observability & \textbf{partial} & FastAPI exposes \texttt{/metrics} with 3 core collectors in \texttt{telemetry.py} and \texttt{config/prometheus.yaml} exists; in-cluster Prometheus server with native TSDB and BTRFS NOCOW specified in Section~\ref{sec:prometheus_tsdb_realisation}. \\
 \addlinespace
 1D Wasserstein-1 feature drift & \textbf{partial} & Scalar $L_2$-norm Wasserstein-1 calculation on pre-normalised activations is implemented and unit-tested in \texttt{monitoring/drift.py}, but is not yet hooked into the live \texttt{/predict} inference path or exported as a Prometheus gauge. \\
 \addlinespace
@@ -61,11 +61,11 @@ Conformal calibration \& Pareto evaluation & \textbf{implemented} & Single-trunk
 \addlinespace
 In-cluster S3 cache \& Optuna dashboard & \textbf{implemented} & Kubernetes manifests deploy SeaweedFS (Apache 2.0, port 8333) and Optuna dashboard (NodePort 30081) backed by NVMe SQLite WAL persistence; \texttt{deploy/compose/docker-compose.local.yaml} mirrors the stack locally. \\
 \midrule
-Full-manifold MMD drift gate & \textbf{planned} & Specified in Section 7.3.2 as the Tier-2 offline RKHS kernel drift gate ($\text{MMD}^2$), but not yet implemented in \texttt{monitoring/drift.py} or \texttt{Jenkinsfile}. \\
+Full-manifold MMD drift gate & \textbf{planned} & Specified in Section~\ref{sec:evidently_drift_gate} as the Tier-2 offline RKHS kernel drift gate ($\text{MMD}^2$) within the Evidently AI quality gate, pending implementation in \texttt{monitoring/drift.py} or \texttt{Jenkinsfile}. \\
 \addlinespace
-Evidently AI reports \& Alertmanager & \textbf{planned} & Neither Evidently HTML/JSON drift reporting nor Prometheus Alertmanager webhook triggers to Jenkins are installed or configured (Phase 3 target). \\
+Evidently AI reports \& Alertmanager & \textbf{planned} & Specified in Section~\ref{sec:evidently_drift_gate} and Section~\ref{sec:alertmanager_routing}; Evidently HTML/JSON drift reporting and Alertmanager webhook triggers to Jenkins scheduled for Phase 3. \\
 \addlinespace
-LanceDB filtered HNSW \& RRF & \textbf{planned} & Single-stage spatio-temporal HNSW index, Uber H3 masking, and Reciprocal Rank Fusion (Chapter 5) are architectural targets; embeddings currently serialize to PyTorch \texttt{.pt} / Parquet. \\
+LanceDB filtered HNSW \& RRF & \textbf{planned} & Single-stage spatio-temporal HNSW index, Uber H3 masking, and Reciprocal Rank Fusion (Chapter 5) are architectural targets; embeddings currently serialise to PyTorch \texttt{.pt} / Parquet. \\
 \addlinespace
 Zero-shot cropping \& VLM triage & \textbf{planned} & Upstream YOLO-World organism isolation, \texttt{taxon-vision-vlm} (Qwen2-VL-2B) gRPC microservice, and DuckDB taxonomic split/lump mutations (Chapter 5). \\
 \addlinespace

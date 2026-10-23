@@ -41,9 +41,9 @@ During real-time serving, the system evaluates both safety boundaries simultaneo
 \end{cases}
 \label{eq:dual_ood_gate}
 \end{equation}
-where the entropy threshold is calibrated to $\tau_{\text{entropy}} = 1.60\text{ nats}$ (persisted in \nolinkurl{config/default_config.yaml}). This dual-gate formulation guarantees that an input is admitted to spatial-temporal masking if and only if it exhibits both sufficient overall feature activation mass ($E \le \tau_{\text{OOD}}$) and decisive categorical concentration ($H \le \tau_{\text{entropy}}$).
+where the entropy threshold is set to $\tau_{\text{entropy}} = 1.60\text{ nats}$ (in \nolinkurl{config/default_config.yaml}) and the energy boundary $\tau_{\text{OOD}}$ is resolved dynamically from calibration artefacts (\nolinkurl{config/conformal_config.yaml}, with \nolinkurl{config/default_config.yaml} providing an offline baseline fallback; see Section~\ref{sec:dynamic_ood_calibration}). This dual-gate formulation guarantees that an input is admitted to spatial-temporal masking if and only if it exhibits both sufficient overall feature activation mass ($E \le \tau_{\text{OOD}}$) and decisive categorical concentration ($H \le \tau_{\text{entropy}}$).
 
-\subsection{Analytical Bounds, Threshold Calibration, and Recalibration Dynamics}
+\subsection{Analytical Upper and Lower Energy Bounds}
 \label{subsec:energy_calibration_math}
 
 Unlike normalised probabilities, which are strictly confined to the unit interval $[0, 1]$, Helmholtz free energy operates on an unconstrained scale whose domain depends directly on the taxonomic cardinality $K$, the temperature $T$, and the $L_2$ weight-decay regularisation $\lambda$ of the classification head. Adopting arbitrary static thresholds from external literature -- such as $\tau_{\text{OOD}} = -12.5$, derived from unregularised $1{,}000$-class ImageNet benchmarks -- violates the mathematical domain of compact linear heads and induces complete rejection of valid observations. Establishing a rigorous decision boundary therefore requires deriving the analytical upper and lower energy asymptotes of the classifier.
@@ -64,17 +64,33 @@ E(x; f) = -f_{\max}(x) + T \cdot \log \hat{\pi}_{\max}(x)
 \end{equation}
 Because $\hat{\pi}_{\max}(x) \in [1/K, 1]$, the logarithmic correction term is strictly bounded within $\log \hat{\pi}_{\max}(x) \in [-\log K, 0]$. For a high-confidence in-distribution specimen where $\hat{\pi}_{\max}(x) \to 1$, the second term vanishes ($\log \hat{\pi}_{\max}(x) \to 0$), and the free energy converges asymptotically to the negative dominant logit, $E(x; f) \approx -f_{\max}(x)$. Under an $L_2$-regularised linear classification head with bounded weight norm $\|W\|_\infty$ operating on unit-hypersphere embeddings, the maximum achievable logit is bounded by the Cauchy-Schwarz inequality, $f_{\max}(x) \le \|w_{\max}\|_2 \|z\|_2 + b_{\max}$. Empirically, across well-converged DINOv3 and BioCLIP-2 heads, prototypical specimens generate dominant logits in the interval $f_{\max}(x) \in [3.5, 4.8]$ with $\hat{\pi}_{\max}(x) \ge 0.85$, confining legitimate in-distribution observations to the energy band $E(x; f) \in [-4.80, -3.50]$. By contrast, an uncalibrated threshold of $\tau = -12.5$ would demand $f_{\max}(x) \ge 12.5$ ($\exp(f_{\max}) \approx 2.68 \times 10^5$), a regime mathematically unreachable under weight-decay regularisation.
 
-\paragraph{Practical Threshold Calibration and Continuous Recalibration.}
-Rather than relying on manual heuristics, $\tau_{\text{OOD}}$ is determined empirically as an automated step at the conclusion of classification head training. Given the holdout in-distribution validation split $\mathcal{D}_{\text{val}} = \{(x_i, y_i)\}_{i=1}^{m}$, the calibration module (\texttt{EnergyOODDetector.calibrate\_threshold\_from\_logits}) computes the empirical energy distribution $\mathcal{E}_{\text{val}} = \{E(x_i; f)\}_{i=1}^{m}$ and sets $\tau_{\text{OOD}}$ to the $(1 - \beta)$-quantile corresponding to a prescribed True Positive Rate (TPR) of $1 - \beta = 0.95$:
+\subsection{Dynamic Energy Threshold Calibration and Configuration Invariants}
+\label{sec:dynamic_ood_calibration}
+
+Rather than relying on static analytical heuristics or hard-coded assumptions within general application settings, the decision boundary $\tau_{\text{OOD}}$ is evaluated dynamically as an empirical calibration step during Stage~6 of the pipeline (\nolinkurl{src/taxon_vision/pipelines/calibrate.py}). Given the holdout calibration split $\mathcal{D}_{\text{cal}} = \{(x_i, y_i)\}_{i=1}^n$ (which remains strictly unexposed to linear head weight optimisation and Bayesian hyperparameter sweeps), the module passes the precomputed feature vectors through the compiled, INT8-quantised model graph (\nolinkurl{model_int8.onnx}) to extract unnormalised logit vectors. 
+
+The empirical Helmholtz free-energy distribution $\mathcal{E}_{\text{cal}} = \{E(x_i; f)\}_{i=1}^n$ is computed in accordance with Equation~\ref{eq:helmholtz_energy}. For a configured in-distribution True Positive Rate (TPR) of $1 - \beta = 0.95$, the calibrated threshold $\tau_{\text{OOD}}$ is calculated as:
 \begin{equation}
-\tau_{\text{OOD}} = \text{Quantile}\left(\mathcal{E}_{\text{val}}; \, 1 - \beta\right) \quad \text{subject to} \quad \tau_{\text{OOD}} < -T \cdot \log(K)
-\label{eq:ood_calibration}
+    \tau_{\text{OOD}} = \text{Quantile}\left(\mathcal{E}_{\text{cal}}; \, 1 - \beta\right), \quad \text{subject to } \tau_{\text{OOD}} < -T \cdot \ln(K).
+    \label{eq:calibrated_tau_ood}
 \end{equation}
-For the $K = 10$ baseline configuration, this protocol yields $\tau_{\text{OOD}} = -2.40$ (persisted in \nolinkurl{config/default_config.yaml}), providing a conservative safety margin below the $-2.3026$ noise floor whilst retaining $95\%$ of valid holdout specimens. During pipeline execution, the exact calibrated threshold boundary is logged directly into MLflow and annotated onto the validation energy histogram artifact (\nolinkurl{visualizations/energy_distribution.png}).
+
+To eliminate configuration split-brain anomalies between offline pipeline execution and production inference serving, Stage~6 serialises the computed parameters directly into \nolinkurl{config/conformal_config.yaml}:
+\begin{minted}{yaml}
+conformal:
+  alpha: 0.05
+  quantile_threshold: 0.8182
+  nominal_coverage: 0.95
+ood:
+  calibrated_energy_threshold: -2.4018
+  entropy_threshold: 1.6000
+\end{minted}
+
+At service initialisation, the runtime resolver (\texttt{\_load\_calibrated\_ood\_threshold()} in \nolinkurl{src/taxon_vision/service/inference.py}) inspects \nolinkurl{config/conformal_config.yaml}. If this file is present and validated against the internal Pydantic schema, the calibrated value overrides the static deployment baseline. The threshold specified in \nolinkurl{config/default_config.yaml} is retained strictly as an offline fallback to ensure execution continuity during cold-start unit testing and initial container compilation prior to calibration data availability. During pipeline execution, the exact calibrated threshold boundary is logged directly into MLflow and annotated onto the validation energy histogram artefact (\nolinkurl{visualizations/energy_distribution.png}).
 
 Because the energy scale is intrinsically coupled to the logit geometry of the active model, $\tau_{\text{OOD}}$ is not a static constant and must undergo automated recalibration whenever one of three structural transitions occurs:
 \begin{enumerate}
-    \item \textbf{Taxonomic Cardinality Expansion ($K \to K'$):} The baseline noise ceiling shifts logarithmically according to $\Delta E_{\text{noise}} = -T \cdot \log(K' / K)$. Scaling the catalogue from $K = 10$ to $K' = 2{,}000$ taxa shifts the uniform noise floor from $-2.30$ to $-\log(2000) \approx -7.60$, requiring an immediate recomputation of Equation~\ref{eq:ood_calibration}.
+    \item \textbf{Taxonomic Cardinality Expansion ($K \to K'$):} The baseline noise ceiling shifts logarithmically according to $\Delta E_{\text{noise}} = -T \cdot \ln(K' / K)$. Scaling the catalogue from $K = 10$ to $K' = 2{,}000$ taxa shifts the uniform noise floor from $-2.30$ to $-\ln(2000) \approx -7.60$, requiring an immediate recomputation of Equation~\ref{eq:calibrated_tau_ood}.
     \item \textbf{Head Retraining and Hyperparameter Updates:} Modifications to the Optuna-tuned weight-decay penalty $\lambda$, dropout rate $p$, or Class-Balanced Loss factor $\beta_{\text{CB}}$ alter the $L_2$ norm of the linear head weights $\|W\|_2$, rescaling $f_{\max}(x)$ and shifting the empirical energy distribution $\mathcal{E}_{\text{val}}$.
     \item \textbf{Covariate Shift and Drift-Triggered Recalibration:} When the real-time Prometheus drift monitor detects a statistically significant shift in penultimate pre-normalised feature activation norms ($W_1(\tilde{\mathcal{Z}}_{\text{base}}, \tilde{\mathcal{Z}}_{\text{prod}}) > \tau_{\text{drift}}$, evaluated prior to $L_2$ unit projection) or an anomalous spike in the OOD rejection rate, the CI/CD pipeline triggers a recalibration pass over the updated DVC validation manifest prior to promoting the next \texttt{Challenger} model.
 \end{enumerate}

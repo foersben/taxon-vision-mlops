@@ -27,7 +27,7 @@ def persist_flagged_observation(
     """Atomically persist metadata and embeddings for observations flagged during inference.
 
     Why:
-        Observations identified as Out-of-Distribution (OOD) or exhibiting high conformal ambiguity require human expert review and provide the highest information gain for active learning retrain loops. Staging both the tabular decision metadata and the dense visual feature embedding allows subsequent ingestion services (e.g. MinIO, LanceDB, or triage queues) to consume high-priority edge cases without recomputing vision foundation forward passes.
+        Observations identified as Out-of-Distribution (OOD) or exhibiting high conformal ambiguity require human expert review and provide the highest information gain for active learning retrain loops. Staging both the tabular decision metadata and the dense visual feature embedding allows subsequent ingestion services (e.g. SeaweedFS, LanceDB, or triage queues) to consume high-priority edge cases without recomputing vision foundation forward passes.
 
     How:
         1. Resolves destination storage directory from arguments or application configuration.
