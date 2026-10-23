@@ -34,7 +34,7 @@
       <span class="alert-icon">🛑</span>
       <div class="alert-body">
         <strong>Out-Of-Distribution (OOD) Observation Detected</strong>
-        <p>Helmholtz free energy exceeded threshold. Epistemic confidence compromised.</p>
+        <p>Energy E = {{ "%.2f"|format(ood_energy_score) }} (limit {{ "%.2f"|format(ood_energy_threshold) }}) or entropy H = {{ "%.2f"|format(shannon_entropy) }} nats (limit {{ "%.2f"|format(ood_entropy_threshold) }}) breached its gate. Epistemic confidence compromised.</p>
       </div>
     </div>
   {% endif %}
@@ -49,31 +49,89 @@
     </div>
   {% endif %}
 
-  {% if heatmap_status == "unavailable" %}
-    <div class="alert info">
-      <span class="alert-icon">ℹ️</span>
-      <div class="alert-body">
-        Visual attribution (saliency heatmap) is unavailable for this backbone architecture.
+  <details class="details-drawer" open>
+    <summary class="drawer-summary">
+      <span class="drawer-title">📊 Top-{{ top_candidates|length }} Candidates (Softmax Distribution)</span>
+    </summary>
+    <div class="drawer-content">
+      {% for cand in top_candidates %}
+        <div class="prob-row{% if cand.in_conformal_set %} in-conformal{% endif %}">
+          <div class="prob-info">
+            <span class="cand-scientific">{{ cand.scientific_name }}</span>
+            <span class="cand-common">{{ cand.common_name }}</span>
+          </div>
+          <div class="prob-bar-track">
+            <div class="prob-bar-fill" style="width: {{ cand.confidence_pct }}%;"></div>
+          </div>
+          <div class="prob-val-wrapper">
+            <span class="prob-val">{{ cand.confidence_pct }}%</span>
+            {% if cand.in_conformal_set %}<span class="pill-conformal" title="Member of the conformal prediction set">C(x)</span>{% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </details>
+
+  <details class="details-drawer">
+    <summary class="drawer-summary">
+      <span class="drawer-title">🔬 Epistemic Safety Telemetry</span>
+    </summary>
+    <div class="drawer-content">
+      <div class="telemetry-grid">
+        <div class="telemetry-tile">
+          <span class="telemetry-label">Helmholtz free energy E</span>
+          <span class="telemetry-value">{{ "%.3f"|format(ood_energy_score) }}</span>
+          <span class="telemetry-sub">gate: E &le; {{ "%.3f"|format(ood_energy_threshold) }}</span>
+        </div>
+        <div class="telemetry-tile">
+          <span class="telemetry-label">Shannon entropy H</span>
+          <span class="telemetry-value">{{ "%.3f"|format(shannon_entropy) }} nats</span>
+          <span class="telemetry-sub">gate: H &le; {{ "%.3f"|format(ood_entropy_threshold) }}</span>
+        </div>
+        <div class="telemetry-tile">
+          <span class="telemetry-label">Conformal routing tier</span>
+          <span class="telemetry-value">{{ routing_tier }}</span>
+          <span class="telemetry-sub">|C(x)| = {{ conformal_set|length }}</span>
+        </div>
       </div>
     </div>
-  {% else %}
-    <div class="cam-section">
+  </details>
+
+  <details class="details-drawer" open>
+    <summary class="drawer-summary">
+      <span class="drawer-title">👁️ Diagnostic Morphological Key (CAM)</span>
+    </summary>
+    <div class="drawer-content cam-section">
       <div class="cam-toolbar">
-        <button hx-post="/api/v1/explain?target_class_index={{ top_pred.taxon_id }}"
-                hx-include="#upload-form"
+        <button hx-post="/api/v1/explain?image_hash={{ image_hash }}&amp;target_class_index={{ top_taxon_id }}"
                 hx-target="#cam-container"
                 hx-swap="innerHTML"
                 hx-indicator="#cam-loading"
                 class="btn secondary btn-cam"
                 id="btn-inspect-cam">
-          <span class="btn-icon">👁️</span> Inspect Diagnostic Morphological Key (CAM)
+          <span class="btn-icon">👁️</span> Inspect CAM for top prediction
         </button>
       </div>
+      {% set differential = top_candidates|selectattr("in_conformal_set")|rejectattr("taxon_id", "equalto", top_taxon_id)|list %}
+      {% if differential %}
+        <div class="cam-differential">
+          <span class="cam-differential-label">Compare differential candidates:</span>
+          {% for cand in differential %}
+            <button hx-post="/api/v1/explain?image_hash={{ image_hash }}&amp;target_class_index={{ cand.taxon_id }}"
+                    hx-target="#cam-container"
+                    hx-swap="innerHTML"
+                    hx-indicator="#cam-loading"
+                    class="btn-subtle-cam">
+              {{ cand.scientific_name }}
+            </button>
+          {% endfor %}
+        </div>
+      {% endif %}
       <div id="cam-loading" class="htmx-indicator cam-loading-spinner">
         <span class="spinner-circle"></span>
         <span>Extracting spatial activations &amp; projecting linear head weights...</span>
       </div>
       <div id="cam-container" class="cam-preview"></div>
     </div>
-  {% endif %}
+  </details>
 </div>

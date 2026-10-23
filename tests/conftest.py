@@ -40,8 +40,10 @@ def test_environment_isolation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 
     from taxon_vision.config import get_settings
     from taxon_vision.service.inference import reset_model_caches
+    from taxon_vision.service.storage import get_image_cache
 
     get_settings.cache_clear()
+    get_image_cache.cache_clear()
     reset_model_caches()
 
     try:
@@ -62,6 +64,7 @@ def test_environment_isolation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
         pass
 
     get_settings.cache_clear()
+    get_image_cache.cache_clear()
     reset_model_caches()
 
 

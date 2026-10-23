@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: MIT
 """Server-rendered Jinja2/HTMX web interface."""
 
-import io
 from pathlib import Path
 from typing import Annotated
 
@@ -10,11 +9,16 @@ import anyio
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from PIL import Image
 
 from taxon_vision.config import get_settings
-from taxon_vision.inference.cam import SaliencyExtractionError, generate_heatmap
-from taxon_vision.service.inference import InvalidImageError, ModelNotReadyError, run_prediction
+from taxon_vision.service.inference import (
+    InvalidImageError,
+    ModelNotReadyError,
+    load_taxa_catalog,
+    run_prediction,
+)
+from taxon_vision.service.presentation import build_top_candidates
+from taxon_vision.service.storage import get_image_cache
 
 router = APIRouter()
 templates_dir = Path(__file__).parent.parent / "templates"
@@ -54,9 +58,13 @@ async def predict_htmx(request: Request, file: Annotated[UploadFile, File(...)])
         1. Asynchronously reads image bytes from the uploaded multipart file stream.
         2. Validates payload non-emptiness and size constraints.
         3. Offloads synchronous inference execution to an AnyIO threadpool worker via `run_sync`.
-        4. Attempts visual saliency generation, cleanly flagging unavailable attributions if hooks fail.
-        5. Formats resulting taxonomic classifications, confidence levels, conformal sets, and measured latencies into the template rendering context.
+        4. Caches the raw bytes in the ephemeral in-memory image cache and exposes the SHA-256 `image_hash`
+           to the template, so the CAM button can reference the image without re-uploading it.
+        5. Builds the ranked top-K candidate list and epistemic telemetry (energy, entropy, thresholds).
         6. Renders and returns the HTML partial `partials/prediction_card.html` for targeted DOM insertion.
+
+        CAM attribution is deliberately *not* computed here: it is requested on demand via
+        `/api/v1/explain?image_hash=...`, which keeps the upload round-trip free of a second forward pass.
 
     Complexity:
         O(1) async thread dispatch plus O(K) template formatting.
@@ -93,31 +101,31 @@ async def predict_htmx(request: Request, file: Annotated[UploadFile, File(...)])
     except ModelNotReadyError as err:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(err)) from err
 
-    heatmap_status = "unavailable"
-    try:
-        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        _ = generate_heatmap(image)
-        heatmap_status = "generated"
-    except SaliencyExtractionError:
-        heatmap_status = "unavailable"
-    except Exception:
-        heatmap_status = "unavailable"
+    image_hash = get_image_cache().store(image_bytes)
+    catalog = load_taxa_catalog()
+    top_candidates = build_top_candidates(
+        probabilities=result["probabilities"],
+        catalog=catalog,
+        conformal_set=result["conformal_set"],
+        top_k=settings.service.ui_top_k_candidates,
+    )
 
     context = {
         "filename": file.filename,
+        "image_hash": image_hash,
         "scientific_name": result["scientific_name"],
         "common_name": result["common_name"],
         "confidence": result["confidence"],
         "conformal_set": result["conformal_set"],
+        "routing_tier": result["routing_tier"],
         "is_ood": result["is_ood"],
         "requires_human_review": result["requires_human_review"],
         "latency_ms": result["latency_ms"],
-        "top_taxon_id": result.get("taxon_id", 0),
-        "top_pred": {
-            "taxon_id": result.get("taxon_id", 0),
-            "scientific_name": result["scientific_name"],
-            "common_name": result["common_name"],
-        },
-        "heatmap_status": heatmap_status,
+        "top_taxon_id": result["taxon_id"],
+        "top_candidates": top_candidates,
+        "ood_energy_score": result["ood_energy_score"],
+        "ood_energy_threshold": result["ood_energy_threshold"],
+        "shannon_entropy": result["shannon_entropy"],
+        "ood_entropy_threshold": result["ood_entropy_threshold"],
     }
     return templates.TemplateResponse(request=request, name="partials/prediction_card.html", context=context)
