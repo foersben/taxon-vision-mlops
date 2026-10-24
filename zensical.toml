@@ -40,7 +40,7 @@ extra_javascript = [
     "https://unpkg.com/katex@0/dist/katex.min.js",
     "https://unpkg.com/katex@0/dist/contrib/auto-render.min.js",
     "javascripts/mermaid.js",
-    "javascripts/widgets/fullscreen.js",
+    "javascripts/widgets/applet_viewport.js",
     "javascripts/widgets/conformal_simulator.js",
     "javascripts/widgets/codebase_explorer.js",
     "javascripts/widgets/dvc_explorer.js",
