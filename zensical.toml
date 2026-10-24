@@ -178,6 +178,7 @@ toc = { permalink = true, toc_depth = 4 }
         { "Prometheus & Drift Telemetry" = "operations/prometheus_and_observability.md" },
         { "Agentic Governance & OKF v0.2" = "operations/agentic_governance_and_okf.md" },
         { "Implementation Status & Roadmap" = "operations/implementation_status.md" },
+        { "Automation & Scripts Reference" = "operations/automation_and_scripts.md" },
     ] },
 ]
 
