@@ -111,15 +111,56 @@ When a field observation is submitted to the API, it is passed through the fast-
     \item \textbf{Epistemic Novelty / Complete Abstention ($|\hat{C}(X)| = 0$):} The observed sample violates the conformal coverage boundary, indicating an out-of-distribution observation, unmodelled developmental instar, or extreme sensor degradation. The system executes complete epistemic abstention, bypasses automated classification entirely, executes an unconstrained nearest-neighbour retrieval over the global exemplar space, and dispatches an immediate priority triage alert to human taxonomists.
 \end{enumerate}
 
-\section{Low-Latency Interpretability via Forward-Hooked CAM}
+\section{Low-Latency Interpretability: Forward-Hooked CAM and Decoupled Serving}
 \label{sec:cam_shortcut}
 
-Providing diagnostic transparency to human reviewers requires visual interpretability tools such as Class Activation Mapping (CAM). Whilst extensions such as Grad-CAM are widespread, they require a computationally expensive backward pass during inference. Executing gradient backpropagation on a production server violates the sub-$25\text{ ms}$ latency Service Level Agreement (SLA) and prevents the model from being deployed in highly optimised, forward-only runtimes like INT8 ONNX.
+Providing diagnostic transparency to human reviewers and field taxonomists requires visual interpretability tools such as Class Activation Mapping (CAM). Whilst gradient-based extensions such as Grad-CAM are standard in offline research, they require a computationally expensive backward pass during inference. Executing gradient backpropagation on a production server introduces an unacceptable $60\text{--}100\text{ ms}$ processing overhead, violates the sub-$25\text{ ms}$ latency Service Level Agreement (SLA), and prevents deployment in highly optimised, forward-only runtimes such as INT8 ONNX Runtime.
 
-To achieve visual interpretability without violating strict operational latency constraints, the architecture bypasses the backward pass entirely by leveraging the mathematical structure of the linear classification head.
+To achieve visual interpretability without violating strict operational latency constraints, the architecture executes forward-only Class Activation Mapping, tightly integrated into a decoupled, progressive-disclosure serving workflow.
 
-During the initial ONNX forward pass, execution hooks capture the spatial feature maps $A^k \in \mathbb{R}^{H \times W}$ emitted by the final convolutional or attention layer prior to global average pooling. Because the final classification head is a linear projection parameterised by weights $W \in \mathbb{R}^{K \times d}$, the importance weight $w_k^c$ of feature channel $k$ for a target class $c$ is identically the learned weight matrix element $W_{c, k}$. The class activation map $L^c_{\text{CAM}}$ is synthesised through the linear combination
+\subsection{Mathematical Formulation and Linear Head Contraction}
+\label{subsec:cam_formulation}
+
+The linear classification head $f(z) = W z + b$ parameterises the mapping from an embedding vector $z \in \mathbb{R}^d$ to $K$ unnormalised logits, where $W \in \mathbb{R}^{K \times d}$ denotes the weight matrix. During the initial forward pass, forward execution hooks capture unpooled spatial activation features $A \in \mathbb{R}^{d \times H_{\text{grid}} \times W_{\text{grid}}}$ emitted by the final backbone stage prior to global average pooling. Because the final classification head is linear, the importance weight $w_k^c$ of feature channel $k$ for a target class $c$ is identically the learned weight matrix element $W_{c, k}$.
+
+The class activation map $L^c_{\text{CAM}} \in \mathbb{R}^{H_{\text{grid}} \times W_{\text{grid}}}$ is synthesised through the linear combination
 \[
-L^c_{\text{CAM}} = \text{ReLU}\left( \sum_{k=1}^d w_k^c A^k \right),
+L^c_{\text{CAM}} = \text{ReLU}\left( \sum_{k=1}^d W_{c, k} A^k \right),
 \]
-where $\text{ReLU}$ discards negative spatial influences to isolate regions that positively support class $c$, and the resulting two-dimensional activation matrix is bilinearly upsampled to the original input resolution. By relying exclusively on forward activations and static linear projection weights, this formulation synthesises high-fidelity spatial saliency heatmaps in under $2\text{ ms}$, preserving the forward-only, quantisation-friendly execution paradigm.
+where $\text{ReLU}$ discards negative spatial influences to isolate regions that positively support class hypothesis $c$. The resulting two-dimensional activation matrix is min-max normalised and bilinearly upsampled to the native input resolution $(H_{\text{img}}, W_{\text{img}})$. By relying exclusively on forward activations and static linear projection weights, this formulation synthesises high-fidelity spatial saliency heatmaps in under $2\text{ ms}$ on CPU, entirely preserving the forward-only, quantisation-friendly execution paradigm.
+
+\subsection{Vision Transformer Spatial Projection Invariants}
+\label{subsec:cam_vit_projection}
+
+Modern vision foundation models (such as DINOv2 \texttt{vit\_base\_patch14\_reg4\_dinov2} or BioCLIP-2) emit flattened token sequences rather than two-dimensional convolutional grids. Specifically, the unpooled feature tensor exhibits the shape $(B, 1 + N_{\text{reg}} + N, d)$, comprising a leading classification token (\texttt{[CLS]}), $N_{\text{reg}}$ optional register tokens introduced to absorb high-norm artefacts, and $N$ spatial patch tokens.
+
+To prevent spatial misalignment or index corruption, the projection subroutine (\nolinkurl{_project_vit_features} in \nolinkurl{src/taxon_vision/inference/cam.py}) enforces strict architectural invariants:
+\begin{enumerate}
+    \item \textbf{Prefix Token Stripping:} The leading $1 + N_{\text{reg}}$ non-spatial tokens are sliced off and discarded.
+    \item \textbf{Square Lattice Assertion:} The remaining token count $N$ must satisfy a perfect square topology, $H_{\text{grid}} = W_{\text{grid}} = \lfloor\sqrt{N}\rfloor$ (e.g., $N = 196$ tokens emitted by a $224 \times 224$ input with patch size $14 \times 14$ yield an exact $14 \times 14$ spatial lattice). Any dimensional mismatch raises a typed \texttt{SaliencyExtractionError}.
+    \item \textbf{Tensor Reshaping and Einstein Summation:} The projected token tensor is reshaped to $(B, d, H_{\text{grid}}, W_{\text{grid}})$, after which channel contraction against class weight vector $W_{c, :}$ is evaluated via Einstein summation (\texttt{torch.einsum('bdhw,d->bhw', features, weights)}).
+\end{enumerate}
+If feature extraction or spatial projection fails due to unsupported backbone pooling or corrupt input dimensions, the system safely catches the error and degrades gracefully without failing the surrounding HTTP transaction.
+
+\subsection{Content-Addressed Ephemeral Image Caching}
+\label{subsec:cam_ephemeral_cache}
+
+Computing CAM saliency synchronously on every prediction request would unnecessarily consume CPU cycles and bloat response payloads for automated clients that only require categorical predictions. Conversely, forcing the client to re-upload raw multi-megabyte image payloads whenever an operator requests visual explanation incurs substantial network latency and memory overhead.
+
+To resolve this trade-off, the serving layer implements an in-memory, thread-safe ephemeral image cache (\nolinkurl{EphemeralImageCache} in \nolinkurl{src/taxon_vision/service/storage.py}):
+\begin{enumerate}
+    \item \textbf{Content Addressing via SHA-256:} Uploaded raw image bytes are hashed using SHA-256 to generate an immutable content digest (\texttt{image\_hash}).
+    \item \textbf{Thread-Safe LRU and TTL Eviction:} The cache stores image payloads in memory protected by reentrant locks, bounded by a maximum capacity (\texttt{image\_cache\_max\_items = 100}) and monotonic time-to-live eviction (\texttt{image\_cache\_ttl\_seconds = 900.0}, or 15 minutes), configured via \nolinkurl{config/default_config.yaml}.
+    \item \textbf{Zero Fast-Path Disk I/O:} Temporary images are never written to disk during the standard prediction path, avoiding unbuffered file I/O latency on high-throughput serving nodes.
+\end{enumerate}
+
+\subsection{Progressive-Disclosure Operator UI and Differential CAM}
+\label{subsec:cam_progressive_disclosure}
+
+The FastAPI serving runtime and HTMX dashboard operationalise this decoupled architecture through progressive disclosure:
+\begin{enumerate}
+    \item \textbf{Fast-Path Inference ($<15\text{ ms}$):} The synchronous prediction endpoints (\texttt{POST /htmx/predict} and \texttt{POST /api/v1/predict}) execute the dual-output ONNX model, evaluate conformal prediction sets $\hat{C}(X)$, and compute epistemic telemetry (Shannon entropy and Helmholtz free energy compared against thresholds $\tau_{\text{OOD}}$ and $\tau_{\text{entropy}}$). The dashboard immediately renders the prediction card containing candidate probability bars and epistemic telemetry badges without waiting for saliency synthesis.
+    \item \textbf{On-Demand Lazy Heatmap Synthesis (\texttt{/api/v1/explain}):} The CAM interface is embedded in a collapsible HTML5 \texttt{<details>} drawer. The client browser triggers an asynchronous HTMX request (\nolinkurl{hx-get="/api/v1/explain?image_hash=...&target_class_index=..."}) with the trigger condition \texttt{hx-trigger="toggle once"}, synthesising the heatmap overlay only when the operator actively opens the drawer.
+    \item \textbf{Differential Multi-Candidate Inspection:} When an observation yields a non-singleton conformal prediction set (e.g., $|\hat{C}(X)| \in \{2, 3\}$), the drawer provides interactive candidate toggles. Operators can click individual competing taxa to dynamically inspect class-specific activation maps for contrasting hypotheses on the identical cached image. This allows taxonomists to verify whether the model attended to genuine diagnostic morphology (e.g., wing venation patterns or floral stamen structures) or spurious background correlation.
+    \item \textbf{Fault-Tolerant Rendering:} If an expired hash or unsupported architecture triggers an exception during explanation, the endpoint returns an inline warning fragment (\nolinkurl{partials/cam_error.html}) at HTTP 200 for HTMX clients (and typed HTTP 422 for machine API consumers), ensuring that the operator dashboard remains fully functional and responsive.
+\end{enumerate}

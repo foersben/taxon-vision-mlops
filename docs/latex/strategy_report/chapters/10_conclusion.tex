@@ -45,11 +45,11 @@ Dual-output ONNX \& INT8 PTQ & \textbf{implemented} & \texttt{onnx\_exporter.py}
 \addlinespace
 Epistemic safety gating (OOD + Conformal) & \textbf{implemented} & Dual-gate OOD (dynamically calibrated $\tau_{\text{OOD}}$ resolved via \nolinkurl{config/conformal_config.yaml}, $\tau_{\text{entropy}}=1.60$ nats) in \texttt{ood\_detector.py} and Split Conformal sets ($1-\alpha \ge 0.95$, $\tau_{\text{conf}}=0.60$) in \texttt{conformal.py}. \\
 \addlinespace
-Inference service \& HTMX dashboard & \textbf{implemented} & FastAPI service (\texttt{/predict}, \texttt{/explain}, \texttt{/health/ready}), forward-hooked linear CAM saliency in \texttt{inference/cam.py}, and local persistence of flagged samples (\texttt{storage.py}). \\
+Inference service \& HTMX dashboard & \textbf{implemented} & FastAPI service (\texttt{/predict}, \texttt{/explain}, \texttt{/health/ready}), ephemeral SHA-256 in-memory image caching (\texttt{storage.py}), ViT patch-grid projection and forward-hooked linear CAM saliency with differential candidate toggles (\texttt{inference/cam.py}), and local persistence of flagged samples. \\
 \addlinespace
 Hybrid CI/CD \& K3s GPU execution & \textbf{implemented} & GitHub Actions quality/release/GHCR workflows (\texttt{ci.yml}, \texttt{release.yaml}) and bare-metal Jenkins ephemeral K3s GPU pods (PyTorch 2.7 \texttt{cu128}, 4-slot time-slicing). \\
 \addlinespace
-Test harness \& code quality gates & \textbf{implemented} & 158 \texttt{pytest} tests, zero-warning Ruff, MyPy, OKF schema validation, licence compliance audit, and cognitive complexity $<15$ (\texttt{complexipy}). \\
+Test harness \& code quality gates & \textbf{implemented} & 186 \texttt{pytest} tests, zero-warning Ruff, MyPy, OKF schema validation, licence compliance audit, and cognitive complexity $<15$ (\texttt{complexipy}). \\
 \midrule
 Prometheus \& Grafana observability & \textbf{partial} & FastAPI exposes \texttt{/metrics} with 3 core collectors in \texttt{telemetry.py} and \texttt{config/prometheus.yaml} exists; in-cluster Prometheus server with native TSDB and BTRFS NOCOW specified in Section~\ref{sec:prometheus_tsdb_realisation}. \\
 \addlinespace

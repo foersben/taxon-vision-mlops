@@ -84,7 +84,7 @@ async def predict_htmx(request: Request, file: Annotated[UploadFile, File(...)])
 
     if len(image_bytes) == 0:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Invalid or corrupted image upload.",
         )
 
@@ -97,7 +97,7 @@ async def predict_htmx(request: Request, file: Annotated[UploadFile, File(...)])
     try:
         result = await anyio.to_thread.run_sync(run_prediction, image_bytes)
     except InvalidImageError as err:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(err)) from err
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(err)) from err
     except ModelNotReadyError as err:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(err)) from err
 

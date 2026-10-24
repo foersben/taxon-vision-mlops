@@ -127,7 +127,7 @@ def _resolve_image_payload(upload_bytes: bytes | None, image_hash: str | None) -
     cached = get_image_cache().get(image_hash)
     if cached is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Observation image expired or unknown. Please upload the observation again.",
         )
     return cached
@@ -172,7 +172,7 @@ def _run_heatmap_generation(
         heatmap = generate_heatmap(image, target_class=target_class)
     except SaliencyExtractionError as err:
         logger.warning("CAM generation failed: %s", err)
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(err)) from err
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(err)) from err
     overlay = overlay_cam_on_image(image, heatmap)
     return "generated", list(heatmap.shape), encode_image_base64_png(overlay)
 
