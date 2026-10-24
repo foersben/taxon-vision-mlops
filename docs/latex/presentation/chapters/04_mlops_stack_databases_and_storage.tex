@@ -47,7 +47,7 @@
             \toprule
             \textbf{Technology} & \textbf{Storage Tier} & \textbf{Location / URI} & \textbf{Selection Rationale vs Alternatives} \\
             \midrule
-            \textbf{SeaweedFS S3} & In-Cluster Edge Cache & \texttt{http://} \newline \texttt{seaweedfs-s3:8333} & Ultra-low latency S3 API with O(1) disk lookup; $4\times$ less memory overhead than MinIO or Ceph on bare metal. \\
+            \textbf{SeaweedFS S3} & In-Cluster NVMe Cache & \texttt{http://} \newline \texttt{seaweedfs-s3:8333} & Ultra-low latency S3 API with O(1) disk lookup; $4\times$ less memory overhead than MinIO or Ceph on bare metal. \\
             \midrule
             \textbf{DagsHub DVC Remote S3} & Cloud Immutable Remote & \texttt{s3://dvc/} \newline \textsf{via DagsHub} & Free collaborative DVC remote storage bound directly to Git commit lineage without managing cloud buckets. \\
             \midrule
@@ -341,7 +341,7 @@
         \begin{itemize}\small
             \item \textbf{Polyglot Storage Strategy:} Specializing storage tiers---Parquet for metadata, pre-computed tensors for embeddings, SQLite for optimization, and S3 for artifacts---maximizes end-to-end throughput.
             \item \textbf{Zero-Leakage Partitioning:} The Epistemic Diamond splits data into 4 strictly isolated tensors, providing the foundation for distribution-free conformal safety.
-            \item \textbf{Three-Tier Object Hierarchy:} Combines cloud public registries, local NVMe edge caches, and immutable DVC remotes to eliminate bandwidth bottlenecks and egress costs.
+            \item \textbf{Three-Tier Object Hierarchy:} Combines cloud public registries, in-cluster NVMe caches, and immutable DVC remotes to eliminate bandwidth bottlenecks and egress costs.
             \item \textbf{Deterministic Hermeticism:} Pure Pixi environments backed by Rattler caching and strict static gates ensure 100\% reproducible production deployments.
         \end{itemize}
     \end{block}

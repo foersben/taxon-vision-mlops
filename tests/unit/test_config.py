@@ -59,8 +59,8 @@ def test_default_settings_loading(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.streaming.min_extraction_success_ratio == 0.95
     assert settings.optuna.optuna_storage_uri == "sqlite:///data/optuna/optuna_studies.db"
     assert settings.optuna.optuna_study_prefix == "taxon_vision"
-    assert settings.optuna.n_trials == 20
-    assert settings.optuna.epochs == 20
+    assert settings.optuna.n_trials == 30
+    assert settings.optuna.epochs == 30
     assert settings.optuna.min_resource == 3
     assert settings.optuna.reduction_factor == 2
 
@@ -100,4 +100,21 @@ def test_optuna_storage_uri_env_override(monkeypatch: pytest.MonkeyPatch) -> Non
     get_settings.cache_clear()
     settings = get_settings()
     assert settings.optuna.optuna_storage_uri == test_uri
+    get_settings.cache_clear()
+
+
+def test_mlflow_tracking_uri_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify MLFLOW_TRACKING_URI and TAXON_MLFLOW_TRACKING_URI override default MLflow tracking URI."""
+    test_uri = "sqlite:///tmp/mlflow_override.db"
+    monkeypatch.delenv("TAXON_MLFLOW_TRACKING_URI", raising=False)
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", test_uri)
+    get_settings.cache_clear()
+    settings = get_settings()
+    assert settings.mlflow.tracking_uri == test_uri
+
+    taxon_uri = "sqlite:///tmp/taxon_mlflow_override.db"
+    monkeypatch.setenv("TAXON_MLFLOW_TRACKING_URI", taxon_uri)
+    get_settings.cache_clear()
+    settings = get_settings()
+    assert settings.mlflow.tracking_uri == taxon_uri
     get_settings.cache_clear()

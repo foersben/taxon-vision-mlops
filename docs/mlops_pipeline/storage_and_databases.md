@@ -19,7 +19,7 @@ flowchart TD
     subgraph S3Interlock["Three-Tier S3 Storage Interlock"]
         direction LR
         S3Upstream["Tier 3: Upstream Open Data<br/>s3://inaturalist-open-data<br/>(Static JPEGs: 100M+ Photos)"]
-        S3Edge["Tier 1: In-Cluster Edge Cache<br/>http://seaweedfs-s3:8333<br/>(NVMe Flash: Embedding Tensors)"]
+        S3Edge["Tier 1: In-Cluster NVMe Cache<br/>http://seaweedfs-s3:8333<br/>(NVMe Flash: Embedding Tensors)"]
         S3Cloud["Tier 2: Cloud Sync Remote<br/>s3://dvc (DagsHub)<br/>(Immutable Models & State)"]
     end
 
@@ -58,7 +58,7 @@ The system avoids monolithic databases by deploying specialized engines for each
 | **PyTorch `.pt` Split Tensors** | Local NVMe & SeaweedFS S3 | Extracted foundation embeddings (`*_embeddings.pt`) | Sequential batch slicing, memory-mapped tensor reads (`torch.load`) | Cached locally; invalidated when backbone model or dataset manifest changes. |
 | **DuckDB In-Process OLAP** | Ephemeral Process Memory | Taxon catalog joins, license filtering, metadata queries | Direct SQL queries over Arrow tables without daemon overhead | Ephemeral; lives within Python pipeline process runtime. |
 | **SQLite on k3s PVC** | Bare-Metal Kubernetes HostPath PVC | Optuna hyperparameter optimization trial histories | ACID relational transactions via SQLAlchemy (`optuna.db`) | Persistent across Jenkins agent pod restarts; retained for post-hoc analysis. |
-| **SeaweedFS In-Cluster S3** | Local Cluster Daemon (`:8333`) | Heavy intermediate tensors (`*.pt`) | High-throughput S3 API over loopback networking | Edge cache; mirrors intermediate stage artifacts with $< 2\text{ ms}$ read latency. |
+| **SeaweedFS In-Cluster S3** | Local Cluster Daemon (`:8333`) | Heavy intermediate tensors (`*.pt`) | High-throughput S3 API over cluster loopback | Local cache; mirrors intermediate stage artifacts on the same host with $< 2\text{ ms}$ read latency. |
 | **DagsHub S3 DVC Remote** | Cloud Object Store (`s3://dvc`) | Canonical checkpoints (`head.pt`, `model_int8.onnx`), DVC locks | Remote S3 API authenticated via GPG/SSH credentials | Content-addressed cloud archive; updated upon successful CI release tags. |
 | **AWS Open Data Registry S3** | Public Cloud Storage (`s3://inaturalist-open-data`) | Raw citizen-science photographs | Unauthenticated direct HTTP/S3 streaming | Upstream public repository; images streamed on demand and discarded from RAM. |
 | **MLflow Model Registry** | Tracking Server & S3 Artifact Store | Run parameters, loss curves, explicit `ModelSignature` | MLflow REST API and S3 artifact downloads | Retained indefinitely across training experiments; tags champion models. |
@@ -76,9 +76,9 @@ Large-scale computer vision workflows frequently suffer from severe network bott
 * Rather than mirroring terabytes of static imagery locally, the ingestion pipeline stores only image URLs and observation identifiers in `data/manifests/raw_manifest.parquet` ($< 500\text{ KB}$).
 * Images stream directly into ephemeral memory buffers during Stage 3 (`extract_features`) and are discarded immediately after forward-pass embedding generation.
 
-### Tier 1: In-Cluster Edge Cache (`http://seaweedfs-s3:8333` / `local-seaweedfs`)
+### Tier 1: In-Cluster NVMe Cache (`http://seaweedfs-s3:8333` / `local-seaweedfs`)
 
-* High-performance, distributed SeaweedFS object store running directly on bare-metal Kubernetes nodes with NVMe backing in `namespace: taxon-vision`.
+* High-performance SeaweedFS object store running directly inside the local Kubernetes cluster backed by host NVMe in `namespace: taxon-vision` on the same bare-metal server.
 * Functions as an accelerated NVMe read mirror for immediate local loopback access ($< 2\text{ ms}$) during cluster GPU feature extraction and Optuna HPO training sweeps.
 * Intermediate feature tensors (`train_embeddings.pt`, `val_embeddings.pt`, `cal_embeddings.pt`, `test_embeddings.pt`) and manifests are synchronized here to eliminate cloud egress charges and external latency during multi-trial runs.
 

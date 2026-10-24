@@ -11,7 +11,7 @@ The computational core relies on an Intel Core i7-14700K processor (20-core / 28
 
 Neural network acceleration is driven by a ZOTAC GAMING GeForce RTX 5070 Ti SOLID CORE graphics card possessing 16~GB of GDDR7 VRAM across a 256-bit interface, supported by 128~GB of Crucial DDR5-5600 system memory (installed in dual-channel configuration across slots A2 and B2). This provides the necessary computational throughput and absolute physical stability required to reliably prevent clock-speed variance during critical CI/CD latency validation tests and continuous multi-day benchmarking suites.
 
-Storage I/O is managed across a 2~TB Seagate FireCuda 530 Gen4 NVMe SSD (Phison PS5018-E18 controller, 2,550 TBW endurance rating, seated in slot M2\_1). In order to maximise read bandwidth across the PCIe bus when streaming millions of small image chunks, the underlying BTRFS filesystem utilises transparent \texttt{zstd:3} compression. However, we must consider that BTRFS is a Copy-on-Write (CoW) filesystem. This fundamentally conflicts with continuous database writes and Data Version Control (DVC) chunk caching, leading to severe disk fragmentation. In order to resolve this, a dedicated storage subvolume is initialised with the NOCOW attribute (\texttt{chattr +C}), ensuring contiguous physical block allocations for all local data caches.
+Storage I/O is managed across a 2~TB Seagate FireCuda 530 Gen4 NVMe SSD (Phison PS5018-E18 controller, 2,550 TBW endurance rating, seated in slot M2\_1). In order to maximise read bandwidth across the PCIe bus when streaming millions of small image chunks, the underlying BTRFS filesystem utilises transparent \texttt{zstd:3} compression. Because BTRFS operates as a Copy-on-Write (CoW) filesystem, continuous database writes and Data Version Control (DVC) chunk caching induce severe physical block fragmentation. To mitigate this, a dedicated storage subvolume is initialised with the NOCOW attribute (\texttt{chattr +C}), ensuring contiguous physical block allocations for all local data caches.
 
 \section{Verified Software Baseline of the Host}
 \label{sec:host_baseline}
@@ -33,7 +33,7 @@ which leaves $M_{\text{VRAM}} - M_{\text{train}} = 4.8\text{ GB}$ for the INT8 O
 The host exposes no inbound port to the public internet. Both the CI/CD controller and the operator-facing service are reached through outbound-initiated Cloudflare Tunnels, so that no router port forwarding and no dynamic DNS record is required. A Web Application Firewall rule at the Cloudflare edge restricts the controller hostname (\texttt{jenkins.benjamin-foerster.eu}) to authenticated GitHub webhook deliveries, whilst the operator dashboard and REST API are served live at \texttt{https://taxon.benjamin-foerster.eu} routing directly to Kubernetes NodePort 30080 behind an identity-aware Zero Trust access policy. Remote maintenance after a reboot is possible despite the encrypted root volume, because a minimal SSH daemon (Dropbear) in the initial ramdisk accepts the unlock passphrase before the root file system is mounted.
 
 \section{Cryptographic Storage Economics}
-A primary architectural constraint for open-source and low-budget MLOps is data storage costs. The platform standardises on DagsHub as the central management plane, which enforces a 20 GB free-tier storage limit on its DVC remote. We find that this limit is entirely viable, provided that the pipeline enforces a strict physical separation between bulk raw observation streams and versioned metadata artefacts.
+A primary architectural constraint for open-source and low-budget MLOps is data storage costs. The platform standardises on DagsHub as the central management plane, which enforces a 20 GB free-tier storage limit on its DVC remote. This limit is fully viable, provided that the pipeline enforces a strict physical separation between bulk raw observation streams and versioned metadata artefacts.
 
 \subsection{Circumventing the Multi-Terabyte Storage Trap}
 The raw citizen-science image corpora hosted on AWS Open Data registries collectively span tens of terabytes (an operational scale colloquially termed the ``50 TB trap''). Mirroring this bulk volume locally or to a Git-tracked remote would be financially and computationally unviable. The system explicitly avoids this through zero-duplication streaming: ingestion pipelines stream raw TAR archives directly from AWS Open Data into memory via zero-copy Apache Arrow buffers.
@@ -41,7 +41,7 @@ The raw citizen-science image corpora hosted on AWS Open Data registries collect
 Rather than storing the raw images, DVC tracks cryptographically validated Parquet index manifests. These lightweight tabular files contain observation IDs, DarwinCore taxonomic metadata, source URLs, and SHA-256 validation hashes. As an illustrative sizing calculation, an Apache Parquet manifest indexing 10 million distinct biological observations requires under 300 MB of storage due to columnar dictionary encoding.
 
 \subsection{Bounded Exemplar Storage Mathematics}
-For localized visual retrieval, the Vision RAG architecture curates a bounded Reference Exemplar Catalogue, constrained by policy to at most 50 validated environmental crops per species.
+For localised visual retrieval, the Vision RAG architecture curates a bounded Reference Exemplar Catalogue, constrained by policy to at most 50 validated environmental crops per species.
 
 To demonstrate the storage envelope, we model an illustrative production scenario spanning 2,000 baseline taxa (yielding 100,000 curated images). Assuming an empirical compression target of approximately 45 KB per WebP crop (with a conservative 60 KB variance ceiling), the exemplar storage footprint evaluates as:
 \[
@@ -62,12 +62,12 @@ This 8.3 GB peak allocation (or 9.8 GB under peak 60 KB compression ceiling) ope
 Whilst DagsHub acts as the external Git and DVC synchronisation mirror, high-throughput training and iterative inference loops cannot endure public internet round-trip latencies for ephemeral or high-volume intermediate data. Historically, early prototypes relied upon localised MinIO instances; however, architectural evolution and licensing constraints necessitated an absolute migration to \textbf{SeaweedFS} (\texttt{chrislusf/seaweedfs:latest}), licensed under the permissive \textbf{Apache~2.0} standard.
 
 \subsubsection{Licensing Imperatives and Community Sustainability}
-The containerised distribution of upstream MinIO transitioned to the Affero General Public License (AGPLv3), creating severe operational friction for downstream academic and commercial deployments. Following upstream Docker Hub repository purges, community continuity forks (such as Pigsty Silo) offer temporary respite. However, SeaweedFS eliminates all copyleft exposure through an unencumbered Apache~2.0 license, ensuring complete sovereign control over data plane operations without legal ambiguity.
+The containerised distribution of upstream MinIO transitioned to the Affero General Public License (AGPLv3), creating severe operational friction for downstream academic and commercial deployments. Following upstream Docker Hub repository purges, community continuity forks (such as Pigsty Silo) offer temporary respite. However, SeaweedFS eliminates all copyleft exposure through an unencumbered Apache~2.0 licence, ensuring complete sovereign control over data plane operations without legal ambiguity.
 
 \subsubsection{The Small-File Bottleneck and Haystack/Needle Mechanics}
 In deep vision pipelines, storage workloads exhibit extreme bimodal variance: Pipeline~1 produces heavy, multi-megabyte dense tensor matrices (stratified embedding splits under \texttt{data/embeddings/}, 50--500~MB), whilst Pipeline~2 requires rapid nearest-neighbour retrieval over $N = 100{,}000$ compressed visual exemplar crops ($s \approx 45\text{ KiB}$).
 
-On conventional POSIX filesystems (such as standard ext4, XFS, or Copy-on-Write BTRFS), each individual file requires an independent inode allocation. Under continuous multi-worker streaming, reading $N$ small objects introduces the catastrophic phenomenon known as \textit{disk-seek death}:
+On conventional POSIX filesystems (such as standard ext4, XFS, or Copy-on-Write BTRFS), each individual file requires an independent inode allocation. Under continuous multi-worker streaming, reading $N$ small objects introduces the high-latency phenomenon known as \textit{disk-seek death}:
 \[
 T_{\text{read}} = \sum_{i=1}^{N} \left( t_{\text{inode\_lookup}}(i) + t_{\text{seek}}(i) + \frac{s_i}{B_{\text{NVMe}}} \right),
 \]
@@ -99,6 +99,6 @@ To prevent physical block fragmentation across the NVMe bus, the underlying pers
 
 DVC synchronisation is partitioned strictly across two distinct remotes:
 \begin{itemize}
-    \item \textbf{The In-Cluster High-Throughput Remote (\texttt{local-seaweedfs}):} Targeting \texttt{s3://taxon-dvc-cache} at \texttt{http://seaweedfs.taxon-vision.svc.cluster.local:8333}. Dedicated to multi-gigabyte embedding caches (\texttt{train\_embeddings.pt}, \texttt{val\_embeddings.pt}, \texttt{cal\_embeddings.pt}, \texttt{test\_embeddings.pt}), enabling zero-egress, wire-speed caching for Bayesian hyperparameter optimization sweeps.
-    \item \textbf{The Public Lineage Remote (\texttt{origin}):} Targeting \texttt{s3://dvc} at DagsHub. Dedicated to release model checkpoints (\texttt{head.pt}) and INT8 quantized runtimes (\texttt{model\_int8.onnx}).
+    \item \textbf{The In-Cluster High-Throughput Remote (\texttt{local-seaweedfs}):} Targeting \texttt{s3://taxon-dvc-cache} at \texttt{http://seaweedfs.taxon-vision.svc.cluster.local:8333}. Dedicated to multi-gigabyte embedding caches (\texttt{train\_embeddings.pt}, \texttt{val\_embeddings.pt}, \texttt{cal\_embeddings.pt}, \texttt{test\_embeddings.pt}), enabling zero-egress, wire-speed caching for Bayesian hyperparameter optimisation sweeps.
+    \item \textbf{The Public Lineage Remote (\texttt{origin}):} Targeting \texttt{s3://dvc} at DagsHub. Dedicated to release model checkpoints (\texttt{head.pt}) and INT8 quantised runtimes (\texttt{model\_int8.onnx}).
 \end{itemize}

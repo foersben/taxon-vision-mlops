@@ -1168,7 +1168,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           style: {
             'border-width': 4,
             'border-color': '#ffffff',
-            'box-shadow': '0 0 20px #00e5ff'
+            'shadow-blur': 20,
+            'shadow-color': '#00e5ff',
+            'shadow-opacity': 0.8,
+            'shadow-offset-x': 0,
+            'shadow-offset-y': 0
           }
         },
         {

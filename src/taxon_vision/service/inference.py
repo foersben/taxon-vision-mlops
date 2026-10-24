@@ -463,7 +463,7 @@ def run_prediction(image_bytes: bytes) -> dict[str, Any]:
         image_bytes: Raw binary bytes of the input organism image.
 
     Returns:
-        Dictionary containing scientific name, common name, top-1 confidence, conformal set candidate names, 4-tier routing tier, human referral flag, OOD status, OOD energy score, probabilities, feature embedding, and execution latency.
+        Dictionary containing scientific name, common name, top-1 confidence, conformal set candidate names, 4-tier routing tier, human referral flag, OOD status, OOD energy score, Shannon entropy, the active energy/entropy gate thresholds, probabilities, feature embedding, and execution latency.
     """
     start_time = time.perf_counter()
 
@@ -486,6 +486,7 @@ def run_prediction(image_bytes: bytes) -> dict[str, Any]:
     ood_energy_score = float(ood_detector.compute_energy_score(logits_np))
     is_energy_ood = ood_detector.is_ood(logits_np)
     is_entropy_ood = ood_detector.is_high_entropy(probabilities)
+    shannon_entropy = float(ood_detector.compute_entropy(probabilities))
     is_ood = is_energy_ood or is_entropy_ood
 
     # Uncertainty quantification and 4-tier conformal routing
@@ -517,6 +518,9 @@ def run_prediction(image_bytes: bytes) -> dict[str, Any]:
         "routing_tier": routing_tier.value,
         "is_ood": is_ood,
         "ood_energy_score": ood_energy_score,
+        "ood_energy_threshold": float(ood_detector.energy_threshold),
+        "shannon_entropy": shannon_entropy,
+        "ood_entropy_threshold": float(ood_detector.entropy_threshold),
         "requires_human_review": requires_human_review,
         "probabilities": [float(p) for p in probabilities],
         "embedding": embedding_np,

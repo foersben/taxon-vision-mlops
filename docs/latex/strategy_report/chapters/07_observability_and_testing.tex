@@ -11,12 +11,12 @@ In order to maintain production integrity, our deployment architecture rigorousl
 
 Standard Python environments managed via virtual environment tools are notoriously fragile in production. Differences in dynamically linked system libraries, CUDA driver mismatches on host kernels, and unversioned C-extension compilation dependencies frequently cause models to behave non-deterministically across infrastructure boundaries.
 
-In order to guarantee bit-exact execution determinism, the platform carefully packages the inference engine into an immutable container image using a multi-stage Docker build pipeline. This process cleanly isolates the build environment from the final execution runtime, thereby drastically shrinking the attack surface and image size.
+In order to guarantee bit-exact execution determinism, the platform packages the inference engine into an immutable container image using a multi-stage Docker build pipeline. This process isolates the build environment from the final execution runtime, substantially reducing the attack surface and final image volume.
 
 \subsection{Multi-Stage Image Compilation}
 The build pipeline is logically partitioned into two distinct stages:
 \begin{enumerate}
-    \item \textbf{The Builder Stage:} Utilises a full Linux distribution equipped with C++ compilation toolchains, NVIDIA CUDA development toolkits, and the Pixi package manager. In this stage, Pixi elegantly resolves the exact dependency graph specified in \texttt{pyproject.toml} and locked in \texttt{pixi.lock}, compiling native C-extensions and pre-building optimised ONNX Runtime binaries.
+    \item \textbf{The Builder Stage:} Utilises a full Linux distribution equipped with C++ compilation toolchains, NVIDIA CUDA development toolkits, and the Pixi package manager. In this stage, Pixi resolves the exact dependency graph specified in \texttt{pyproject.toml} and locked in \texttt{pixi.lock}, compiling native C-extensions and pre-building optimised ONNX Runtime binaries.
     \item \textbf{The Runtime Stage:} A minimal, distroless Debian-slim base image is initialised, containing strictly the shared Linux kernel interfaces and runtime CUDA execution libraries. The compiled virtual environment, static assets, and FastAPI service code are subsequently copied from the builder stage without carrying over compilers, debugging symbols, or package caches.
 \end{enumerate}
 
@@ -25,13 +25,13 @@ At runtime, execution security and resource determinism are enforced directly th
 \begin{itemize}
     \item \textbf{Namespaces:} The containerised process is systematically isolated across six discrete namespaces: Process ID (PID) isolation prevents inspection of host workloads, Network (NET) virtualisation seals internal socket bindings, Mount (MNT) controls filesystem scoping, and Inter-Process Communication (IPC) strictly prevents unauthorised shared memory access.
     \item \textbf{Control Groups (cgroups v2):} Hardware utilisation boundaries are enforced at the kernel boundary. The container runtime configures hard memory ceilings to entirely eliminate out-of-memory cascading failures and carefully pins CPU thread execution to prevent thread migration away from dedicated host performance cores.
-    \item \textbf{Rootless Execution:} The container runs strictly under an unprivileged user namespace (\texttt{USER appuser}), mounting the root filesystem as read-only and intelligently routing temporary scratch buffers to an ephemeral, in-memory \texttt{tmpfs} volume.
+    \item \textbf{Rootless Execution:} The container runs strictly under an unprivileged user namespace (\texttt{USER appuser}), mounting the root filesystem as read-only and routing temporary scratch buffers to an ephemeral, in-memory \texttt{tmpfs} volume.
 \end{itemize}
 
 \section{K8s Cluster Orchestration and Workload Routing}
 \label{sec:k8s_orchestration}
 
-Deploying a hybrid vision architecture -- where routine queries resolve in sub-25ms hot paths whilst ambiguous queries trigger heavy generative multimodal retrieval -- requires cluster orchestration capable of handling highly asymmetric latency profiles. While the physical bare-metal workstation detailed in Chapter 2 serves as the primary edge deployment executing a single-node Kubernetes cluster (via k3s), the system is described by declarative Kubernetes manifests that can be packaged as Helm charts in order to scale across managed multi-node cloud clusters when production traffic surges. These manifests are strictly configured to separate lightweight inference paths from resource-intensive Vision RAG pipelines.
+Deploying a hybrid vision architecture -- where routine queries resolve in sub-25ms hot paths whilst ambiguous queries trigger heavy generative multimodal retrieval -- requires cluster orchestration capable of handling highly asymmetric latency profiles. Whilst the physical bare-metal server detailed in Chapter~2 serves as the primary deployment host executing a single-node Kubernetes cluster (via k3s), the system is described by declarative Kubernetes manifests that can be packaged as Helm charts in order to scale across managed multi-node cloud clusters when production traffic surges. These manifests are strictly configured to separate lightweight inference paths from resource-intensive Vision RAG pipelines.
 
 \subsection{Asymmetric Pod Architecture and Ingress Routing}
 Rather than packaging the fast-path ONNX classifier and the multi-gigabyte Vision-Language Model into a single monolithic pod, the cluster architecture deliberately splits the workload into two specialised microservices:
@@ -63,7 +63,7 @@ The cluster architecture supports Horizontal Pod Autoscaling (HPA) driven by cus
     \item \textbf{GPU VRAM Saturation and Compute Utilisation:} Sourced directly from NVIDIA Data Center GPU Manager (DCGM) metrics.
     \item \textbf{Conformal Ambiguity Influx:} Sourced directly from the application's telemetry. If an environmental event (for example, sudden regional weather shifts causing blurred imagery) causes the proportion of multi-candidate conformal sets ($|C| > 1$) to spike, the HPA preemptively scales the \texttt{taxon-vision-vlm} pod pool to absorb the anticipated surge in multimodal retrieval passes.
 \end{enumerate}
-On multi-node cloud clusters, HPA dynamically scales worker nodes. On the single-node bare-metal host with a 4-slice NVIDIA time-slicing profile, concurrency is bounded within static virtual GPU slice limits (1 training slice for Jenkins, 2 slices for \texttt{taxon-vision-api}, and 1 slice for \texttt{taxon-vision-vlm}), buffering traffic spikes via asynchronous queuing and CPU worker offloading.
+On multi-node cloud clusters, HPA dynamically scales worker nodes. On the single-node bare-metal host with a 4-slice NVIDIA time-slicing profile, concurrency is bounded within static virtual GPU slice limits (1 training slice for Jenkins, 2 slices for \texttt{taxon-vision-serving}, and 1 slice for \texttt{taxon-vision-vlm}), buffering traffic spikes via asynchronous queuing and CPU worker offloading.
 
 \section{Telemetry, Metric Exporters, Concept Drift Monitoring}
 \label{sec:observability_telemetry}
@@ -79,8 +79,32 @@ The FastAPI application exposes a secure \texttt{/metrics} endpoint scraped at r
     \item \textbf{Phase~3 Telemetry Counters (Design Target):} Scheduled for Phase~3 deployment, dedicated collectors track the sliding-window conformal set cardinality distribution (\texttt{taxon\_\allowbreak conformal\_\allowbreak set\_\allowbreak size}) and Helmholtz energy OOD rejection rates (\texttt{taxon\_\allowbreak ood\_\allowbreak rejections\_\allowbreak total}).
 \end{itemize}
 
+\subsection{Prometheus Cluster Realisation and TSDB Storage Mechanics}
+\label{sec:prometheus_tsdb_realisation}
+
+To eliminate external software-as-a-service dependencies and prevent public network telemetry egress, the time-series monitoring infrastructure is realised as an autonomous, in-cluster Prometheus daemon (\nolinkurl{quay.io/prometheus/prometheus:v2.54.1}) deployed within the \texttt{taxon-vision} namespace of the local k3s cluster.
+
+\paragraph{Service Discovery and Scraping Topology.}
+The server operates on an explicit 15-second scraping interval, utilising the Kubernetes API discovery provider (\texttt{role: endpoints}). Pods provisioned under \texttt{deployment/taxon-vision-serving} declare declarative scraping metadata via annotations (\texttt{prometheus.io/scrape: "true"}, \texttt{prometheus.io/port: "8000"}). The endpoint scraper ingests telemetry exposed by the internal Prometheus client module (\nolinkurl{src/taxon_vision/monitoring/telemetry.py}), collecting latency distributions, prediction throughput, and active referral states without intermediary proxy layers.
+
+\paragraph{Native TSDB Storage Pipeline and Write Durability.}
+The ingestion engine bypasses external relational databases, committing streaming metrics directly to Prometheus's native Time Series Database (TSDB). The runtime write pipeline is structured into three discrete storage stages:
+\begin{enumerate}
+    \item \textbf{In-Memory Head Chunk:} Incoming telemetry samples are appended to an active memory-mapped head block, providing low-latency retrieval for real-time alerting queries.
+    \item \textbf{Write-Ahead Logging (WAL):} Concurrently with memory ingestion, raw sample blocks are sequentially appended to an on-disk WAL in 128~KiB segments. In the event of an ungraceful node restart or container eviction, the WAL is replayed on boot to reconstruct uncompressed head chunks, guaranteeing zero telemetry loss.
+    \item \textbf{Block Compaction and Long-Term Partitioning:} Every two hours, the active head block is cut into an immutable block directory comprising data chunks, an inverted index (\texttt{index}), and partition metadata (\nolinkurl{meta.json}). A background compactor periodically merges adjacent blocks to minimise inode consumption and improve query efficiency.
+\end{enumerate}
+
+\paragraph{Underlying Filesystem Invariants (BTRFS NOCOW).}
+The TSDB persistent volume is bound to host storage at \nolinkurl{/var/lib/taxon-vision/prometheus-data} across the Seagate FireCuda 530 NVMe drive. Because BTRFS utilises a Copy-on-Write (CoW) allocation policy by default, continuous appending to WAL segments and frequent two-hour block compactions inevitably induce severe physical block fragmentation and latency degradation over longitudinal runs. To enforce deterministic write throughput, the persistent directory is provisioned on a dedicated BTRFS subvolume with the \texttt{NOCOW} attribute applied prior to initialisation:
+\begin{minted}{bash}
+mkdir -p /var/lib/taxon-vision/prometheus-data
+chattr +C /var/lib/taxon-vision/prometheus-data
+\end{minted}
+Local retention is capped at 30 days via \texttt{--storage.tsdb.retention.time=30d}, establishing a predictable storage footprint of less than 4.0~GB for the baseline cluster deployment.
+
 \subsection{Two-Tier Hybrid Feature Drift Architecture}
-For visual feature drift detection in the TaxonVision architecture, neither a single scalar projection nor a heavy multidimensional test alone suffices. Instead, the platform implements a \textbf{two-tier hybrid strategy} that balances real-time serving performance with offline statistical rigor, leveraging the distinct computational and statistical trade-offs of Maximum Mean Discrepancy (MMD) and the 1D Wasserstein-1 distance.
+For visual feature drift detection in the TaxonVision architecture, neither a single scalar projection nor a heavy multidimensional test alone suffices. Instead, the platform implements a \textbf{two-tier hybrid strategy} that balances real-time serving performance with offline statistical rigour, leveraging the distinct computational and statistical trade-offs of Maximum Mean Discrepancy (MMD) and the 1D Wasserstein-1 distance.
 
 \begin{table}[htbp]
 \centering
@@ -91,7 +115,7 @@ For visual feature drift detection in the TaxonVision architecture, neither a si
 \midrule
 \textbf{Mathematical Formulation} & 
 Evaluated in a Reproducing Kernel Hilbert Space (RKHS) using a Gaussian RBF kernel $k(z, z') = \exp\left(-\frac{\|z - z'\|^2}{2\sigma^2}\right)$ across the full $D$-dimensional feature embedding manifold ($\mathbb{R}^{384}$ / $\mathbb{R}^{512}$ / $\mathbb{R}^{768}$). & 
-Evaluates the 1D Earth Mover's Distance by projecting $D$-dimensional vectors onto scalar $L_2$ Euclidean norms $\|z\|_2 = \sqrt{\sum_{j=1}^D z_j^2}$, computing $W_1(P_{\text{ref}}, P_{\text{curr}}) \approx \left| \mathbb{E}[\|z_{\text{ref}}\|_2] - \mathbb{E}[\|z_{\text{curr}}\|_2] \right|$. \\
+Evaluates the 1D Earth Mover's Distance by projecting $D$-dimensional pre-normalised representations onto scalar $L_2$ Euclidean norms $\|\tilde{z}\|_2 = \sqrt{\sum_{j=1}^D \tilde{z}_j^2}$, computing the linear-time lower bound $W_1(P_{\text{ref}}, P_{\text{curr}}) \ge \left| \mathbb{E}[\|\tilde{z}_{\text{ref}}\|_2] - \mathbb{E}[\|\tilde{z}_{\text{curr}}\|_2] \right|$. \\
 \addlinespace
 \textbf{Computational Complexity} & 
 \textbf{Quadratic/Polynomial $\mathcal{O}((M+N)^2 \cdot D)$} due to pairwise kernel evaluations across $M$ baseline and $N$ production vectors. & 
@@ -99,7 +123,7 @@ Evaluates the 1D Earth Mover's Distance by projecting $D$-dimensional vectors on
 \addlinespace
 \textbf{Sensitivity Profile} & 
 Captures subtle higher-order non-parametric distribution shifts, covariance mutations, and manifold rotations across all embedding dimensions. & 
-Detects global vector magnitude, illumination, camera sensor variation, and energy shifts, but compresses directional rotations that leave average norm lengths unchanged. \\
+Detects global vector magnitude, illumination, camera sensor variation, and energy shifts, but compresses directional rotations that leave average norm lengths unchanged. Crucially requires pre-normalised activations ($\tilde{z}$); unit-normalised vectors collapse identically to $\|z\|_2 \equiv 1.0$, rendering the probe blind to drift ($|1.0 - 1.0| = 0$). \\
 \addlinespace
 \textbf{Operational Fit} & 
 \textbf{Offline / CI/CD Quality Gates}: Computational cost makes it ideal for scheduled retraining audits and candidate model promotion gates. & 
@@ -110,28 +134,82 @@ Detects global vector magnitude, illumination, camera sensor variation, and ener
 \label{tab:drift_metric_comparison}
 \end{table}
 
-\subsubsection{Tier 1: Real-Time Telemetry via Linear-Time 1D Wasserstein Distance}
-Implemented as a standalone statistical calculation module (\texttt{src/taxon\_vision/monitoring/drift.py}), pending live integration into the \texttt{/predict} serving endpoint and Prometheus telemetry exporter. By projecting penultimate pre-normalised representations $\tilde{z} = f_{\text{VFM}}(x)$ onto their $L_2$ Euclidean vector norms (as post-normalised embeddings $z = \tilde{z}/\|\tilde{z}\|_2$ identically satisfy $\|z\|_2 = 1$), the calculation complexity collapses to $\mathcal{O}(N \cdot D)$. The difference in empirical mean norms serves as a computationally lightweight first-moment lower bound on the 1D Wasserstein-1 metric:
-\[
-W_1(\tilde{\mathcal{Z}}_{\text{base}}, \tilde{\mathcal{Z}}_{\text{prod}}) \ge \left| \frac{1}{M} \sum_{i=1}^M \|\tilde{z}_i\|_2 - \frac{1}{N} \sum_{j=1}^N \|\tilde{z}_j'\|_2 \right|
-\]
-This formulation enables the FastAPI application to evaluate sliding production inference windows in sub-milliseconds without adding memory pressure or blocking the asynchronous HTTP event loop, whilst sorted quantile order statistics compute exact 1D $W_1$ in $\mathcal{O}(N \log N)$ during offline CI validation. When the scalar distance breaches the operational threshold ($W_1 > \tau_{\text{drift}}$), an automated webhook alert is dispatched to trigger pipeline retraining.
+\subsubsection{Pre-Normalised Representation Invariants and the Unit-Norm Collapse}
+\label{sec:unit_norm_collapse}
 
-\subsubsection{Tier 2: Continuous Integration and Model Promotion via Full-Manifold MMD}
-Specified as a Phase~3 offline CI/CD quality gate to execute within the Jenkins pipeline and model evaluation stages on the GPU compute node (architectural design pending implementation in \texttt{monitoring/drift.py}). During model candidate validation, pairwise Gaussian RBF kernel matrices are evaluated across the full $D$-dimensional latent space ($\mathcal{Z}_{\text{base}}$ vs.\ $\mathcal{Z}_{\text{prod}}$):
-\[
-\text{MMD}^2(P, Q) = \frac{1}{M^2}\sum_{i=1}^M\sum_{j=1}^M k(z_i, z_j) - \frac{2}{MN}\sum_{i=1}^M\sum_{j=1}^N k(z_i, z_j') + \frac{1}{N^2}\sum_{i=1}^N\sum_{j=1}^N k(z_i', z_j')
-\]
-This offline gate ensures that complex visual domain shifts -- such as subtle seasonal plumage mutations or geographical covariate shifts that scalar projections might compress -- are rigorously audited before a candidate model receives the \texttt{Production} registry alias in MLflow.
+A critical mathematical constraint arises when monitoring representation drift across deep vision foundation models. In visual retrieval and metric learning workflows, penultimate embedding vectors $z \in \mathbb{R}^D$ are customarily projected onto the unit hypersphere via $L_2$ normalisation:
+\begin{equation}
+    z = \frac{\tilde{z}}{\|\tilde{z}\|_2}, \quad \text{such that } \|z\|_2 \equiv 1.0, \quad \forall x \in \mathcal{X},
+\end{equation}
+where $\tilde{z} = f_{\text{VFM}}(x)$ denotes the raw, unconstrained output emitted by the penultimate layer of the vision backbone.
 
-\subsection{Automated Alerting and Continuous Retraining Triggers}
-Prometheus Alertmanager evaluates streaming metrics directly against hard operational invariants. Two primary conditions trigger automated intervention:
+If the streaming drift detector naively computes the scalar Wasserstein-1 distance across these normalised representations, the metric experiences total mathematical collapse:
+\begin{equation}
+    W_1(Z_{\text{base}}, Z_{\text{prod}}) \ge \left| \frac{1}{M}\sum_{i=1}^M \|z_i\|_2 - \frac{1}{N}\sum_{j=1}^N \|z'_j\|_2 \right| = |1.0 - 1.0| = 0.0.
+\end{equation}
+Under unit normalisation, the scalar norm projection becomes an invariant constant, rendering the monitoring probe entirely blind to arbitrary covariate shift, severe sensor degradation, and out-of-distribution feature decay.
+
+To preserve sensitivity to input distribution shift without introducing the computational overhead of high-dimensional matrix evaluations, the architecture enforces a strict tensor invariant: the fast-path ONNX graph and intermediate pipeline stages emit raw, pre-normalised activations $\tilde{z} \in \mathbb{R}^D$. The scalar monitoring probe computes the $L_2$ norm directly over these unconstrained vectors. By the Kantorovich-Rubinstein duality theorem, evaluating the difference in empirical first moments across pre-normalised vector lengths provides a non-trivial linear-time lower bound on the true multi-dimensional Wasserstein-1 metric:
+\begin{equation}
+    W_1(\tilde{\mathcal{Z}}_{\text{base}}, \tilde{\mathcal{Z}}_{\text{prod}}) \ge \left| \frac{1}{M}\sum_{i=1}^M \|\tilde{z}_i\|_2 - \frac{1}{N}\sum_{j=1}^N \|\tilde{z}'_j\|_2 \right|.
+    \label{eq:w1_lower_bound}
+\end{equation}
+Unit normalisation is deferred exclusively to downstream cosine distance computations and nearest-neighbour graph indexing within LanceDB.
+
+\subsubsection{Evidently AI Offline Validation and Model Promotion Gating}
+\label{sec:evidently_drift_gate}
+
+Whilst the linear-time Wasserstein-1 scalar projection ($W_1$) protects live serving throughput, complex visual domain shifts -- such as subtle phenological variations, background vegetation changes, or localised sensor noise -- may alter the geometry of the latent representation manifold without substantially shifting the empirical mean norm. To evaluate these higher-order distribution shifts without blocking production serving requests, the architecture incorporates an offline statistical quality gate powered by Evidently AI.
+
+The drift auditing engine executes as an automated CI/CD stage within the Jenkins execution plane on the bare-metal GPU node. The audit is triggered during model candidate evaluation or following the accumulation of scheduled production inference batches. The workflow operates as follows:
+
 \begin{enumerate}
-    \item \textbf{Conformal Inflation Alert:} Triggered if the mean prediction set cardinality $\mathbb{E}[|\hat{C}|]$ expands substantially beyond calibration baselines (e.g., using an illustrative alert threshold of $>20\%$ expansion over a rolling 1-hour window).
-    \item \textbf{Embedding Drift Alert:} Triggered if the scalar representation drift distance exceeds an empirical threshold, $W_1(\mathcal{Z}_{\text{base}}, \mathcal{Z}_{\text{prod}}) > \tau_{\text{drift}}$.
+    \item \textbf{Data Ingestion and Baseline Alignment:} The evaluator hydrates the pristine reference calibration embeddings ($\mathcal{D}_{\text{cal}}$, tracked via DVC) alongside an accumulated production inference split ($\mathcal{D}_{\text{prod}}$, stored as unconstrained pre-normalised activations in SeaweedFS).
+    \item \textbf{Statistical Test Execution:} The suite evaluates non-parametric two-sample Kolmogorov-Smirnov (KS) tests across individual embedding dimensions at a significance threshold of $\alpha_{\text{drift}} = 0.05$. In parallel, it evaluates the two-sample Maximum Mean Discrepancy ($\text{MMD}^2$) over the full $D$-dimensional latent representation space using a Gaussian RBF kernel:
+    \begin{equation}
+        \text{MMD}^2(P, Q) = \frac{1}{M^2}\sum_{i=1}^M\sum_{j=1}^M k(z_i, z_j) - \frac{2}{MN}\sum_{i=1}^M\sum_{j=1}^N k(z_i, z'_j) + \frac{1}{N^2}\sum_{i=1}^N\sum_{j=1}^N k(z'_i, z'_j).
+    \end{equation}
+    \item \textbf{Dual Artefact Emission:} The execution run generates two distinct artefacts:
+    \begin{itemize}
+        \item \nolinkurl{reports/drift_report.html}: An interactive, visual dashboard rendering drift distributions, categorical probability shifts, and per-feature empirical cumulative distribution functions (eCDFs), archived directly to DagsHub as a permanent build artefact.
+        \item \nolinkurl{reports/drift_metrics.json}: A structured, machine-readable summary recording global drift share (the proportion of drifted feature dimensions) and the scalar MMD distance.
+    \end{itemize}
+    \item \textbf{Promotion Assertion Gate:} The CI pipeline evaluates \nolinkurl{drift_metrics.json} against an explicit promotion invariant: if the proportion of drifted embedding dimensions exceeds 15\%, or if $\text{MMD}^2 > \tau_{\text{MMD}}$, the candidate model is prohibited from receiving the \texttt{Production} alias in the MLflow Model Registry, regardless of its validation Macro PR-AUC score. This prevents the deployment of models whose apparent accuracy gains are artefacts of overfitting to transient domain shifts.
 \end{enumerate}
 
-When an alert fires, Alertmanager is specified to dispatch an authenticated webhook payload to the Jenkins controller, which starts a parameterised build (this trigger is a design target and is not yet wired; see Section~\ref{sec:impl_status}). The build follows the main-branch training flow of Section~\ref{sec:main_training}: Jenkins schedules an ephemeral agent pod on the bare-metal host, which pulls the newest validated DVC dataset snapshot, retrains the classification head with Class-Balanced Loss, rigidly re-calibrates the conformal quantile $\hat{q}_\alpha$, executes regression invariant tests, and registers the result as a \texttt{Challenger} candidate in the MLflow registry. Promotion to \texttt{Production} remains subject to engineering sign-off supported by comparative telemetry plots.
+\subsection{Dual-Path Alertmanager Routing and Automated Feedback Loops}
+\label{sec:alertmanager_routing}
+
+Prometheus Alertmanager evaluates time-series rules across live cluster metrics, enforcing a bifurcated routing topology that separates automated infrastructure remediation from human expert escalation:
+
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}[node distance=1.8cm, auto, >=stealth,
+        block/.style={rectangle, draw=black, fill=slate!10, rounded corners, text width=3.8cm, text centered, minimum height=1.0cm, font=\small},
+        alert/.style={rectangle, draw=rose!80, fill=rose!10, rounded corners, text width=3.8cm, text centered, minimum height=1.0cm, font=\small},
+        action/.style={rectangle, draw=teal!80, fill=teal!10, rounded corners, text width=3.8cm, text centered, minimum height=1.0cm, font=\small},
+        line/.style={draw, ->, thick}]
+        
+        \node [block] (prom) {Prometheus Server\\(\texttt{/metrics} Scraper)};
+        \node [alert, right=1.5cm of prom] (am) {Alertmanager Engine\\(Rule Evaluation)};
+        \node [action, above right=0.8cm and 1.5cm of am] (jenkins) {Automated Retraining\\(Jenkins Webhook)};
+        \node [action, below right=0.8cm and 1.5cm of am] (human) {Operator Notification\\(Discord / Zero Trust)};
+        
+        \path [line] (prom) -- (am);
+        \path [line] (am) |- node[near end, above, font=\footnotesize] {Condition A: $W_1 > \tau_{\text{drift}}$} (jenkins);
+        \path [line] (am) |- node[near end, below, font=\footnotesize] {Condition B: $|\hat{C}| = 0$} (human);
+    \end{tikzpicture}
+    \caption{Dual-path Alertmanager dispatch separating continuous retraining from expert intervention.}
+    \label{fig:alertmanager_dual_routing}
+\end{figure}
+
+\begin{enumerate}
+    \item \textbf{Path A: Automated Retraining Trigger (Machine Loop):}
+    Triggered when empirical feature drift breaches the streaming tolerance ($W_1(\tilde{\mathcal{Z}}_{\text{base}}, \tilde{\mathcal{Z}}_{\text{prod}}) > \tau_{\text{drift}}$) or when the mean conformal prediction set cardinality expands by more than 20\% over a rolling 1-hour window ($\mathbb{E}[|\hat{C}(X)|] > 1.20 \cdot \mathbb{E}_{\text{cal}}[|\hat{C}|]$). Alertmanager constructs an authenticated webhook payload dispatched to the Jenkins controller endpoint (\nolinkurl{https://jenkins.benjamin-foerster.eu/job/taxon-vision-retrain/build}). This initialises an ephemeral GPU worker pod to pull the latest DVC dataset manifest, retrain the classification head, recompute non-conformity quantiles $\hat{q}_\alpha$, and submit a new \texttt{Challenger} model candidate.
+    
+    \item \textbf{Path B: Epistemic Abstention Alert (Human Loop):}
+    Triggered when the rate of empty conformal prediction sets ($|\hat{C}(X)| = 0$) or severe out-of-distribution energy rejections ($E(x) > \tau_{\text{OOD}}$) exceeds 5\% of total request volume. Because an empty prediction set indicates an organism that cannot be assigned to any catalogued class at the 95\% confidence level, automated retraining cannot resolve the underlying novelty. Alertmanager formats a diagnostic alert detailing client coordinates, image hashes, and top logit distributions, routing it via Discord webhook and administrative email to the operational taxonomist team.
+\end{enumerate}
 
 \section{Multi-Tier Verification and Testing Strategy}
 \label{sec:testing_strategy}
@@ -141,12 +219,12 @@ A continuous integration pipeline for machine learning must validate considerabl
 \subsection{Tier 1: Upstream API Mocking}
 During automated CI builds, executing real network requests against the live iNaturalist API violates rate-limiting policies and inevitably introduces non-deterministic network latency.
 
-The test harness uses the \texttt{responses} library to gracefully intercept outgoing HTTP calls at the transport layer. The test runner injects mock JSON responses simulating diverse API states: valid DarwinCore metadata payloads, rate-limited responses (HTTP 429), server timeout conditions (HTTP 504), and malformed taxonomic trees. This rigorously guarantees that ingestion, licence filtering, and coordinate parsing logic are safely validated in under 5 seconds without any network dependencies.
+The test harness uses the \texttt{responses} library to intercept outgoing HTTP calls at the transport layer. The test runner injects mock JSON responses simulating diverse API states: valid DarwinCore metadata payloads, rate-limited responses (HTTP 429), server timeout conditions (HTTP 504), and malformed taxonomic trees. This rigorously guarantees that ingestion, licence filtering, and coordinate parsing logic are safely validated in under 5 seconds without any network dependencies.
 
 \subsection{Tier 2: Object Storage and Pipeline Mocking}
-In order to test Data Version Control (DVC) pipelines and S3 streaming operations without incurring AWS billing or requiring live DagsHub credentials, the integration suite happily employs the \texttt{moto} testing library.
+In order to test Data Version Control (DVC) pipelines and S3 streaming operations without incurring AWS billing or requiring live DagsHub credentials, the integration suite employs the \texttt{moto} testing library.
 
-The test setup intelligently instantiates an in-memory, ephemeral AWS S3 service directly within the local pytest process. The DVC client is pointed towards this virtual endpoint, readily allowing the test runner to strictly verify cryptographic hash tracking, multi-part binary streaming, and dataset version switching entirely in local memory.
+The test setup instantiates an in-memory, ephemeral AWS S3 service directly within the local pytest process. The DVC client is pointed towards this virtual endpoint, allowing the test runner to strictly verify cryptographic hash tracking, multi-part binary streaming, and dataset version switching entirely in local memory.
 
 \subsection{Tier 3: Mathematical Invariant Testing}
 Standard software testing relies heavily on binary assertions (for example, verifying an output equals a known constant). Machine learning models, however, are inherently probabilistic. The pipeline introduces robust mathematical invariant tests that evaluate statistical coverage guarantees well before model serialisation.
@@ -169,7 +247,7 @@ TPR = \frac{TP}{TP + FN}, \quad FPR = \frac{FP}{FP + TN}
 \]
 where $TP$, $FP$, $TN$, and $FN$ denote the counts of true positives, false positives, true negatives, and false negatives, respectively.
 
-Because the negative class (normal, common organisms or background pixels) vastly outnumbers the anomalous class, the denominator of the False Positive Rate ($FP + TN$) is aggressively dominated by $TN$. Consequently, an algorithm can easily generate thousands of false positive alarms ($FP$), yet the calculated $FPR$ remains near zero due to the massive $TN$ divisor. A model exhibiting an apparently stellar AUROC score of $0.98$ can simultaneously suffer a catastrophic precision collapse in production, inundating human experts with hundreds of useless false alerts.
+Because the negative class (normal, common organisms or background pixels) vastly outnumbers the anomalous class, the denominator of the False Positive Rate ($FP + TN$) is aggressively dominated by $TN$. Consequently, an algorithm can easily generate thousands of false positive alarms ($FP$), yet the calculated $FPR$ remains near zero due to the massive $TN$ divisor. A model exhibiting a high AUROC score of $0.98$ can simultaneously suffer an acute precision collapse in production, burdening domain experts with false alerts.
 
 \subsubsection{Mandating PR-AUC and AUPIMO}
 In order to permanently prevent misleading verification gates, the testing suite explicitly rejects AUROC in favour of Precision-Recall Area Under the Curve (PR-AUC) and Area Under the Per-Image Overlap (AUPIMO).
@@ -180,7 +258,7 @@ For classification and global Out-of-Distribution anomaly detection, the pipelin
 \]
 where $\text{Precision} = \frac{TP}{TP + FP}$ and $\text{Recall} (R) = \frac{TP}{TP + FN}$. Because PR-AUC mathematically excludes True Negatives ($TN$) from its formulation entirely, it directly reflects the true proportion of genuine biological anomalies amongst all flagged alerts, thus providing an honest measure of real-world efficacy.
 
-For zero-shot visual cropping, bounding-box isolation, and spatial anomaly segmentation, the test harness enforces the Area Under the Per-Image Overlap (AUPIMO) metric. Unlike global pixel-level metrics that carelessly allow large contiguous background areas to distort evaluation scores, AUPIMO computes the intersection-over-union metric independently across each individual image's bounding box over varying threshold levels:
+For zero-shot visual cropping, bounding-box isolation, and spatial anomaly segmentation, the test harness enforces the Area Under the Per-Image Overlap (AUPIMO) metric. Unlike global pixel-level metrics that allow large contiguous background areas to distort evaluation scores, AUPIMO computes the intersection-over-union metric independently across each individual image's bounding box over varying threshold levels:
 \[
 \text{AUPIMO} = \frac{1}{N_{\text{images}}} \sum_{k=1}^{N_{\text{images}}} \int_{0}^{\tau_{\max}} \Omega_k(\tau) \, d\tau,
 \]
@@ -193,9 +271,9 @@ By evaluating overlap per image rather than across the pooled pixel space, AUPIM
 
 Beyond functional and statistical correctness, production maintainability mandates strict architectural hygiene across the codebase. The TaxonVision-MLOps verification framework couples comprehensive automated testing with formal complexity and type-safety boundaries:
 \begin{enumerate}
-    \item \textbf{Comprehensive Automated Test Harness:} The regression test suite comprises 114 automated tests executed via \texttt{pytest}, covering domain models, S3 streaming pipelines, ONNX quantization, Conformal Prediction, and API endpoints. The test harness maintains an empirical statement coverage of $89\%$ across the entire \nolinkurl{src/taxon_vision} package (with critical data, inference, and uncertainty modules exceeding $95\%$).
-    \item \textbf{Cognitive Complexity Invariants ($\le 15$):} To prevent monolithic control flow anti-patterns, the CI quality gate executes automated cognitive complexity analysis via \nolinkurl{complexipy}. Every function across the source tree is constrained to a cognitive complexity ceiling of $\le 15$. High-branching routines -- such as model registry promotion, post-training quantization dispatch, and dual OOD gating -- are systematically decomposed into modular, single-responsibility subroutines.
-    \item \textbf{Pre-Commit Compliance Gates:} Prior to git commit signing (\texttt{git commit -S}), the platform executes a multi-stage pre-commit barrier enforcing: (a) zero-warning Ruff linting and formatting, (b) strict MyPy type checking across 61 source files, (c) automated iNaturalist open-license and attribution auditing (\nolinkurl{taxon_vision.pipelines.audit_license}), and (d) Google Open Knowledge Format (OKF v0.2) frontmatter schema validation across all documentation bundles (\nolinkurl{scripts/governance/validate_okf.py}).
+    \item \textbf{Comprehensive Automated Test Harness:} The regression test suite comprises \textbf{186 automated pytest tests} maintaining an empirical statement coverage of $89\%$ across the entire \nolinkurl{src/taxon_vision} package (with critical data, inference, and uncertainty modules exceeding $95\%$).
+    \item \textbf{Cognitive Complexity Invariants ($\le 15$):} To prevent monolithic control flow anti-patterns, the CI quality gate executes automated cognitive complexity analysis via \nolinkurl{complexipy}. Every function across the source tree is constrained to a cognitive complexity ceiling of $\le 15$. High-branching routines -- such as model registry promotion, post-training quantisation dispatch, and dual OOD gating -- are systematically decomposed into modular, single-responsibility subroutines.
+    \item \textbf{Pre-Commit Compliance Gates:} Prior to git commit signing (\texttt{git commit -S}), the platform executes a multi-stage pre-commit barrier enforcing: (a) zero-warning Ruff linting and formatting, (b) strict MyPy type checking across 61 source files, (c) automated iNaturalist open-licence and attribution auditing (\nolinkurl{taxon_vision.pipelines.audit_license}), and (d) Google Open Knowledge Format (OKF v0.2) frontmatter schema validation across all documentation bundles (\nolinkurl{scripts/governance/validate_okf.py}).
 \end{enumerate}
 
 \subsection{Tier 6: Persistent Bayesian Telemetry and Deployment Smoke Testing}
@@ -204,6 +282,6 @@ Beyond functional and statistical correctness, production maintainability mandat
 Iterative hyperparameter tuning introduces volatile state risks when trials execute inside ephemeral container agents. To eliminate unpersisted trial histories, the architecture establishes a dedicated Bayesian telemetry plane:
 \begin{enumerate}
     \item \textbf{Optuna SQLite WAL Persistence:} The hyperparameter runner (\nolinkurl{src/taxon_vision/models/training/runner.py}) binds to an ACID-compliant SQLite backend configured in Write-Ahead Logging (\texttt{WAL}) mode at \nolinkurl{/workspace/optuna/optuna_studies.db}, mounted from the host NVMe drive (\nolinkurl{/var/lib/taxon-vision/optuna}). This permits concurrent read operations by the dashboard without locking database writes during parallel trial execution.
-    \item \textbf{Cluster Optuna Dashboard:} Deployed in Kubernetes via \nolinkurl{deploy/k8s/mlops-storage-and-optuna.yaml} using the official image (\texttt{ghcr.io/optuna/optuna-dashboard:latest}), the interactive dashboard is exposed to the local network via NodePort \texttt{30081}. It renders live optimization history plots, parameter importances, and multi-objective Pareto frontiers across classification heads and backbone extractors.
-    \item \textbf{Post-Rollout Smoke Testing:} Following every zero-downtime rolling restart, the automated verification script (\nolinkurl{scripts/ci/verify_deployment.sh}) probes the live cluster: (a) verifying rollout status of \texttt{deployment/taxon-vision-api}, (b) testing \texttt{/health} and \texttt{/health/ready} probes, (c) dispatching a multipart synthetic image prediction to \texttt{/api/v1/predict}, and (d) asserting that Prometheus metrics counter \texttt{taxon\_predictions\_total} increments deterministically.
+    \item \textbf{Cluster Optuna Dashboard:} Deployed in Kubernetes via \nolinkurl{deploy/k8s/mlops-storage-and-optuna.yaml} using the official image (\texttt{ghcr.io/optuna/optuna-dashboard:latest}), the interactive dashboard is exposed to the local network via NodePort \texttt{30081}. It renders live optimisation history plots, parameter importances, and multi-objective Pareto frontiers across classification heads and backbone extractors.
+    \item \textbf{Post-Rollout Smoke Testing:} Following every zero-downtime rolling restart, the automated verification script (\nolinkurl{scripts/ci/verify_deployment.sh}) probes the live cluster: (a) verifying rollout status of \texttt{deployment/taxon-vision-serving}, (b) testing \texttt{/health} and \texttt{/health/ready} probes, (c) dispatching a multipart synthetic image prediction to \texttt{/api/v1/predict}, and (d) asserting that Prometheus metrics counter \texttt{taxon\_predictions\_total} increments deterministically.
 \end{enumerate}
