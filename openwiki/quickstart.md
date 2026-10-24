@@ -362,7 +362,7 @@ Use this task-routing map to navigate directly to the appropriate documentation 
 | **Conformal Prediction & Safety Triage** | [Uncertainty Quantification & Safety](concepts/uncertainty-and-safety.md) | `src/taxon_vision/uncertainty/`<br/>`scripts/calibrate_conformal.py` | `just calibrate`<br/>`just test-conformal` |
 | **FastAPI Service & HTMX Dashboard** | [API Service & Web Interface](operations/service-and-api.md) | `src/taxon_vision/service/`<br/>`src/taxon_vision/inference/` | `just run`<br/>`just predict` |
 | **Kubernetes, Telemetry, & Runbooks** | [Deployment, Scheduling & Observability](operations/deployment-and-observability.md) | `deploy/k8s/`<br/>`src/taxon_vision/monitoring/` | `just verify-deployment` |
-| **Quality Gates, Pytest, & Invariants** | [Testing Strategy & Quality Invariants](testing/test-strategy-and-invariants.md) | `tests/`<br/>`scripts/local_ci.sh`<br/>`scripts/validate_okf.py` | `just test`<br/>`just lint`<br/>`just ci` |
+| **Quality Gates, Pytest, & Invariants** | [Testing Strategy & Quality Invariants](testing/test-strategy-and-invariants.md) | `tests/`<br/>`scripts/local_ci.sh`<br/>`scripts/governance/validate_okf.py` | `just test`<br/>`just lint`<br/>`just ci` |
 
 ### Detailed Task Routing
 

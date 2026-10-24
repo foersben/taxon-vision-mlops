@@ -84,7 +84,3 @@ This data acquisition utility queries the iNaturalist REST API to download verif
 #### `scripts/unlock_taxon.sh`
 
 This decryption helper automates remote host disk decryption following bare-metal server reboots. It dispatches the LUKS root disk unlock passphrase to the initramfs Dropbear SSH daemon via `unlock-server taxon`, enabling zero-touch unattended maintenance while preserving full-disk encryption security.
-
-#### Root CLI Forwarders (`scripts/validate_okf.py` & `scripts/visualize_okf.py`)
-
-These top-level scripts act as backward-compatible CLI entrypoint wrappers. Utilizing Python's `runpy.run_path()`, they dynamically resolve and delegate execution to the canonical implementations in `scripts/governance/`, allowing developers and CI workflows to invoke the validators from the repository root without breaking path expectations.

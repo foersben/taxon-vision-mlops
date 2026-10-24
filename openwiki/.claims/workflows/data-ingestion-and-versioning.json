@@ -10,7 +10,8 @@
           "resource": "repo://src/taxon_vision/data/inat_client.py#L13-L99",
           "version": "repo-lines-v1:sha256:0ce4172e06e78ae86cea73a7c5787971ed141219f96380dbaf31e604adef1d17:eyJzZWxlY3RlZExpbmVDb3VudCI6ODcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZiZTVmZGU4MTliZDEyZTNkZGE5MzE2YzJhMWM0OGUzODVkYTQxYmJjMzQwOTMzMjU1YWZhM2RkOTY2Y2ViZTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjViZTI3OWNhOTNjZDYzYzU3ZTEwMjMyNzEyYjEwZTgxNjdlNjVhMWQ3NWJjYjZlMmJlZDcxNmNiNzM2MDM0NjYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVhNzcwNmFlNzM4MjhhNmZkOTkzOWMyOWRjM2FhMDczYzk0YTdkYmJkODkyMTdkNDJjMWQ1NWM0MGYyZmQxYjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         }
-      ]
+      ],
+      "ast_target": "ClassDef:INatAPIClient"
     },
     {
       "id": "claim_a8329fead319425bbcecc0791b1ebf6c",
@@ -24,7 +25,8 @@
           "resource": "repo://src/taxon_vision/domain/license.py#L50-L87",
           "version": "repo-lines-v1:sha256:cb037fc65f016dd4662d4a12ef02738b7109fb91dc1225f1d1d78a4a1071fcd3:eyJzZWxlY3RlZExpbmVDb3VudCI6MzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3NjU3Yjk2MjhmNzViYzBkYjAyYjg0OTA3OTliZGU2ZTZlNjM5NTkzOTJlMjVjYjNjYjU4N2Q4YzQzZGUxOTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY2NjdmZDE4ZjFmOGMyYzUxMzE3YThhNzM0NGI1ZjkzZGZmMDk3ZDhjMWI1OGQ5NTNkZjhkZjAyODViZTM5YTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVlYWJlZjFkNTE5ZGM0YzlmNDMwNjFiMGJjNDkzNDE2MWNkMzNhOWJmNmYyZWJiODg5YzgxYThhNjc4ZWU0NjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         }
-      ]
+      ],
+      "ast_target": "ClassDef:LicenseFilter"
     },
     {
       "id": "claim_22f83a8e1ab146c0942c3076c8f0a434",
@@ -48,7 +50,8 @@
           "resource": "repo://src/taxon_vision/data/s3_streamer.py#L92-L216",
           "version": "repo-lines-v1:sha256:2fc06dcc7a38907eaffa4cc90bc6731267d1bb238ec2010a2ee843c1ead1e887:eyJzZWxlY3RlZExpbmVDb3VudCI6MTI1LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI2NmU0MjY0ZDYzNWI3YWJlNTBmMmI3NzEzYzU4NjIxNTM5ODU4YWU3NjljNjhiMGE4ZDhjYTIzMTNiN2E1MjE4IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIwMWJhNDcxOWM4MGI2ZmU5MTFiMDkxYTdjMDUxMjRiNjRlZWVjZTk2NGUwOWMwNThlZjhmOTgwNWRhY2E1NDZiIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJiZTcxMGQzNmU0OTdhNWMwZjQ4MWJmNThiOThkNDI0MzFiZDQ2ZGEyZjljMmZhMmZiNmYyOWU2ZDVmZjlkNTZiIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJjMWNhNWU5NjhmNGY3MWUzMDVmNGI3MTc4OTBhYzMxNmE2YjdkZTJmMWY1MmEyNzJlNmNlZmU4ODM4ZGIyZmQyIn0"
         }
-      ]
+      ],
+      "ast_target": "FunctionDef:_prepare_stream_records"
     },
     {
       "id": "claim_c7d82d7ed73b4f79b549cdef8c91e407",

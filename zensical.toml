@@ -33,12 +33,15 @@ watch = [
     ".agents/",
 ]
 
-extra_css = ["stylesheets/extra.css"]
+extra_css = [
+    "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css",
+    "stylesheets/extra.css",
+]
 
 extra_javascript = [
     "javascripts/katex.js",
-    "https://unpkg.com/katex@0/dist/katex.min.js",
-    "https://unpkg.com/katex@0/dist/contrib/auto-render.min.js",
+    "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js",
+    "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js",
     "javascripts/mermaid.js",
     "javascripts/widgets/applet_viewport.js",
     "javascripts/widgets/conformal_simulator.js",

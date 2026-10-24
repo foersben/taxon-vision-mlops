@@ -24,7 +24,8 @@
           "resource": "repo://src/taxon_vision/service/routes/predict.py#L93-L150",
           "version": "repo-lines-v1:sha256:0eea74efe5f90d9ec23d0b4fefd723aea53656567bca94beeaa963c67faf140d:eyJzZWxlY3RlZExpbmVDb3VudCI6NTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFhODEzOTc1ZDk3YWQzOGQ5YzkxZTQ4NGMzODU2Y2IwZjQ4MzM5OGE3MDVmM2E3NGE5ODk5MTE0YmRmY2QxZDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkwNWMxZTZhYmVkNmM0ZjFhYzNiMzdhOTRlZDBlMWExNThiZWIyMWI0ZTVlNzIwY2EyMmMwODZmM2Y0MDQ1MmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhjYzRhN2QxY2M3OTZhYmEzZTQ2NzIzMzI3ZjUxN2U5ZjgxMTk4MmQyNTBmMDcwMjk4NmU0YjU3NjRhZDk1ODkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjIxOTA5ZDMxYjQyODI2MGQ1OWViMThjMzFmNjhkNDAwZWU4NjMwOTg0NWJiNTYxMTkwNWU2NmE5ZDhiM2U2MzQifQ"
         }
-      ]
+      ],
+      "ast_target": "FunctionDef:get_ood_detector"
     },
     {
       "id": "claim_553e84febb88434799457525edbb5ba9",
@@ -52,7 +53,8 @@
           "resource": "repo://src/taxon_vision/service/storage.py#L21-L92",
           "version": "repo-lines-v1:sha256:820a3f09ade8622209e5becb835c1efc7d6208453ef4ea921c99fa41791e8267:eyJzZWxlY3RlZExpbmVDb3VudCI6NzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVlMTlkMmMyYzg2Njk3YjZkZTVmMmY1NDE5NTZjZmVhN2Q1YmRjMGM5YzA1Y2Q4Y2JhMGNkMDFlNDk5YzRiZGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU4MzkzZjQ0NjFiNWQ4ZDk4YWFkYjRhY2U4YWNiOTlkMDc1OGM4ZjMwOTAyMDI3ZmNmZWZhMGJiMjEzZjRkNDQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYyMDA5N2U0YWE1MDA2OGJhMTU3ZjlhMjczOWZhZDg2OTk1ZTFlMGNkY2NkYWRjNTg5N2MyMDM0Yzc0ZDNlZmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         }
-      ]
+      ],
+      "ast_target": "AsyncFunctionDef:predict_species"
     },
     {
       "id": "claim_09243eaa46a1461aa134dc689ecde3ba",
@@ -66,7 +68,8 @@
           "resource": "repo://src/taxon_vision/service/routes/explain.py#L83-L133",
           "version": "repo-lines-v1:sha256:b800c9caaafcf193c4d68093dfedcb8059f9613b734a625d32d48b21d0c13cff:eyJzZWxlY3RlZExpbmVDb3VudCI6NTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFiM2Y4YTgzMGFhZjI0MTVlNTg0MGZlOGY0MjE5ZDNlNjQ1ZTNkMDA3MTQ3YmEyZDM2NDZjMDBjMWRlODQ2YmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwYzFmMTg4ZjE0MmVkN2E4MjQ2ODBiMjA3MTcyYzU1MTliYzYxNGE0OGZkYTdjZjE2N2VkYjhkZGY3OTk1NmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQzODdjMDkyOGQ3Y2ZjOWZjMzJjZjcyMDdkYjQyZmRhNTY4OTA5ZGJjNTk5Y2QwODhjZGQ1OTNiMDJmZmI5NDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         }
-      ]
+      ],
+      "ast_target": "ClassDef:ExplainResponse"
     },
     {
       "id": "claim_ca980b8e2a0c484a8ca81a5047b0a4d3",
@@ -94,7 +97,8 @@
           "resource": "repo://src/taxon_vision/service/routes/health.py#L16-L67",
           "version": "repo-lines-v1:sha256:4129143be446b048de1227680de21b1169ef768a312ac59293e15d53cc5a21f7:eyJzZWxlY3RlZExpbmVDb3VudCI6NTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY4YzA3NThmZmY3MTI3OWIzODBjMzIwOTE5ZGNkM2VhYzkzMzA4ZjY5MzgyZTY0NWQ3Zjg4ODliOTkzMzk5YTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA0OGY4ZTBmZjEyYWE3ZTAyNmIyYWJlZjllMzJmZmU2MmZlNTE4OThkMDlhNjRlODZmNzk5NDNiOTZhY2QyMmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM5OWEwNWU2M2UzMDI4ZDMyYTAxYmViNzQxZTliOWJhZTI4OTFlMzljOTc0NTg4MWNkYzQzMGE4N2IxODMxODEifQ"
         }
-      ]
+      ],
+      "ast_target": "FunctionDef:check_readiness"
     },
     {
       "id": "claim_9291b95b1a8644028bb2784916fd8c32",
@@ -122,7 +126,8 @@
           "resource": "repo://src/taxon_vision/service/inference.py#L367-L438",
           "version": "repo-lines-v1:sha256:fd8891dc37f050746324aa63bc7dc88f7275f3b578dd9e0b5ebd42d6172910a1:eyJzZWxlY3RlZExpbmVDb3VudCI6NzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk3MTZmNTAwMjQxZThkNjVlMzJhMDFjNmRmNGQ3OTQwMjUwYjQ2MGNlY2NlYmI5YmIxNzAzNjZkMzIwMzlkNWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI0N2E1YzIyMGU4NWY3NjNlZmE2NzJkZGI4NzJhZjg0Nzg0NGZhNzZjZDRiNjdjMjQ5NDUzMDM5NDExMzY5NGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         }
-      ]
+      ],
+      "ast_target": "FunctionDef:compute_model_outputs"
     }
   ],
   "verification": {

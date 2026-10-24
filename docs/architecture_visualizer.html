@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>
-      TaxonVision-MLOps • Interactive Architecture & Epistemic Intelligence
+      TaxonVision-MLOps — Interactive Architecture & Epistemic Intelligence
       Visualizer
     </title>
 
@@ -1124,13 +1124,19 @@
          VIEW 1: FULL-BLEED ARCHITECTURE TOPOLOGY GRAPH
          ====================================================================== -->
       <div id="graph-view" class="view-container active">
+        <div id="swimlane-headers">
+          <span class="swimlane-badge" style="color: var(--layer-fastapi); border-color: rgba(0, 229, 255, 0.4);">Col 1: Ingress &amp; FastAPI</span>
+          <span class="swimlane-badge" style="color: var(--layer-uncertainty); border-color: rgba(168, 85, 247, 0.4);">Col 2: Conformal &amp; OOD Gate</span>
+          <span class="swimlane-badge" style="color: var(--layer-telemetry); border-color: rgba(16, 185, 129, 0.4);">Col 3: Prometheus &amp; Drift</span>
+          <span class="swimlane-badge" style="color: var(--layer-pipeline); border-color: rgba(245, 158, 11, 0.4);">Col 4: DVC &amp; Training</span>
+        </div>
         <div id="cy"></div>
 
         <!-- Floating Zoom Controls -->
         <div class="floating-canvas-bar">
           <button class="canvas-btn" id="btn-zoom-in" title="Zoom In">+</button>
           <button class="canvas-btn" id="btn-zoom-out" title="Zoom Out">
-            −
+            <i class="fa-solid fa-minus"></i>
           </button>
           <button
             class="canvas-btn"
@@ -1159,28 +1165,28 @@
               class="legend-color-box"
               style="background: var(--layer-fastapi)"
             ></div>
-            <span>Col 1 • FastAPI &amp; HTMX Ingress</span>
+            <span>Col 1 — FastAPI &amp; HTMX Ingress</span>
           </div>
           <div class="legend-item">
             <div
               class="legend-color-box"
               style="background: var(--layer-uncertainty)"
             ></div>
-            <span>Col 2 • Conformal &amp; OOD Gate</span>
+            <span>Col 2 — Conformal &amp; OOD Gate</span>
           </div>
           <div class="legend-item">
             <div
               class="legend-color-box"
               style="background: var(--layer-telemetry)"
             ></div>
-            <span>Col 3 • Prometheus &amp; Drift</span>
+            <span>Col 3 — Prometheus &amp; Drift</span>
           </div>
           <div class="legend-item">
             <div
               class="legend-color-box"
               style="background: var(--layer-pipeline)"
             ></div>
-            <span>Col 4 • DVC, MLflow &amp; Retraining</span>
+            <span>Col 4 — DVC, MLflow &amp; Retraining</span>
           </div>
         </div>
       </div>
@@ -1381,7 +1387,7 @@
             </div>
 
             <div id="wb-verdict-banner" class="sim-verdict pass">
-              AUTO-ASSIGNED • |C(x)| = 1 &le; k_max (3) • In-Distribution
+              AUTO-ASSIGNED — |C(x)| = 1 &le; k_max (3) — In-Distribution
               Specimen
             </div>
 
@@ -2156,6 +2162,8 @@
               source: "conformal_bounds",
               target: "human_triage",
               label: "|C|=0 or |C|>3",
+              dashed: true,
+              status: "unwired",
             },
           },
           {
@@ -2164,6 +2172,8 @@
               source: "ood_detector",
               target: "human_triage",
               label: "OOD flag",
+              dashed: true,
+              status: "unwired",
             },
           },
 
@@ -2190,6 +2200,8 @@
               source: "service_inference",
               target: "drift_detector",
               label: "Embeddings",
+              dashed: true,
+              status: "unwired",
             },
           },
           {
@@ -2198,6 +2210,8 @@
               source: "human_triage",
               target: "metric_referral",
               label: "Queue depth",
+              dashed: true,
+              status: "unwired",
             },
           },
           {
@@ -2246,6 +2260,8 @@
               source: "drift_detector",
               target: "grafana_dashboard",
               label: "Shift alert",
+              dashed: true,
+              status: "unwired",
             },
           },
 
@@ -2256,6 +2272,8 @@
               source: "human_triage",
               target: "active_learning",
               label: "Unlabeled pool",
+              dashed: true,
+              status: "unwired",
             },
           },
           {
@@ -2264,6 +2282,8 @@
               source: "active_learning",
               target: "dvc_ingestion",
               label: "Curated labels",
+              dashed: true,
+              status: "unwired",
             },
           },
           {
@@ -2523,6 +2543,14 @@
               },
             },
             { selector: "node.dimmed", style: { opacity: 0.16 } },
+            {
+              selector: "edge[?dashed]",
+              style: {
+                "line-style": "dashed",
+                "line-dash-pattern": [6, 4],
+                opacity: 0.6,
+              },
+            },
             { selector: "edge.dimmed", style: { opacity: 0.07 } },
             {
               selector: "edge.highlighted-edge",
@@ -2590,7 +2618,7 @@
           pipeline: "DVC, MLflow & Active Learning",
         };
         const layerColor = LAYER_COLORS[data.layer] || "#00e5ff";
-        const cleanTitle = (data.label || "").replace("\n", " • ");
+        const cleanTitle = (data.label || "").replace("\n", " — ");
 
         const connectedEdges = GRAPH_ELEMENTS.edges.filter(
           (e) => e.data.source === data.id || e.data.target === data.id,
@@ -2673,12 +2701,12 @@
           ${incoming
             .map(
               (e) => `
-            <div class="rel-item" onclick="focusGraphNode('${e.data.source}')">
+            <div class="rel-item" onclick="focusGraphNode('${e.data.source}')" ${e.data.status === "unwired" ? 'title="Planned Phase 2.5 wiring (Component verified via isolated unit tests)"' : ""}>
               <div class="rel-label">
                 <i class="fa-solid fa-arrow-right-to-bracket" style="color:var(--accent-cyan);"></i>
                 <strong>${e.data.source}</strong>
               </div>
-              <span class="rel-direction">in: ${e.data.label}</span>
+              <span class="rel-direction">in: ${e.data.label}${e.data.status === "unwired" ? " (Phase 2.5, unwired)" : ""}</span>
             </div>
           `,
             )
@@ -2686,12 +2714,12 @@
           ${outgoing
             .map(
               (e) => `
-            <div class="rel-item" onclick="focusGraphNode('${e.data.target}')">
+            <div class="rel-item" onclick="focusGraphNode('${e.data.target}')" ${e.data.status === "unwired" ? 'title="Planned Phase 2.5 wiring (Component verified via isolated unit tests)"' : ""}>
               <div class="rel-label">
                 <i class="fa-solid fa-arrow-right-from-bracket" style="color:var(--accent-purple);"></i>
                 <strong>${e.data.target}</strong>
               </div>
-              <span class="rel-direction">out: ${e.data.label}</span>
+              <span class="rel-direction">out: ${e.data.label}${e.data.status === "unwired" ? " (Phase 2.5, unwired)" : ""}</span>
             </div>
           `,
             )
@@ -2750,9 +2778,18 @@
         };
 
         const sorted = [...PARETO_RAW].sort((a, b) => a[xMetric] - b[xMetric]);
+        const paretoFrontier = sorted.filter((candidate, idx, arr) => {
+          return !arr.some(
+            (other) =>
+              other[xMetric] <= candidate[xMetric] &&
+              other[yMetric] >= candidate[yMetric] &&
+              (other[xMetric] < candidate[xMetric] ||
+                other[yMetric] > candidate[yMetric]),
+          );
+        });
         const lineTrace = {
-          x: sorted.map((d) => d[xMetric]),
-          y: sorted.map((d) => d[yMetric]),
+          x: paretoFrontier.map((d) => d[xMetric]),
+          y: paretoFrontier.map((d) => d[yMetric]),
           mode: "lines",
           line: {
             color: "rgba(0, 229, 255, 0.4)",
@@ -2949,19 +2986,19 @@
 
         if (isOod) {
           banner.className = "sim-verdict ood";
-          banner.innerText = `OOD DIVERGENT SPECIMEN • Energy E(x) = ${energy.toFixed(2)} > -4.50 • Routed to Human Triage`;
-          telemetryOut.innerHTML = `<code>is_ood = True | requires_human_review = True (Staged to .npy + manifest.jsonl via service/storage.py)<br>taxon_predictions_total{status="ood_divergent"} += 1<br>taxon_human_referrals_active.inc()</code>`;
+          banner.innerText = `OOD DIVERGENT SPECIMEN — Energy E(x) = ${energy.toFixed(2)} > -4.50 — Routed to Human Triage`;
+          telemetryOut.innerHTML = `<code>is_ood = True | requires_human_review = True (Staged to .npy + manifest.jsonl via service/storage.py)<br>taxon_predictions_total{status="ood_divergent"} += 1<br>taxon_human_referrals_active.set(queue_depth)</code>`;
         } else if (cardinality === 0) {
           banner.className = "sim-verdict refer";
-          banner.innerText = `EMPTY PREDICTION SET (|C(x)| = 0) • All 1 - p_i > q_hat • Routed to Human Triage`;
-          telemetryOut.innerHTML = `<code>is_ood = False | requires_human_review = True (Empty Set; Staged to .npy + manifest.jsonl via service/storage.py)<br>taxon_predictions_total{status="needs_review"} += 1<br>taxon_human_referrals_active.inc()</code>`;
+          banner.innerText = `EMPTY PREDICTION SET (|C(x)| = 0) — All 1 - p_i > q_hat — Routed to Human Triage`;
+          telemetryOut.innerHTML = `<code>is_ood = False | requires_human_review = True (Empty Set; Staged to .npy + manifest.jsonl via service/storage.py)<br>taxon_predictions_total{status="needs_review"} += 1<br>taxon_human_referrals_active.set(queue_depth)</code>`;
         } else if (cardinality > 3) {
           banner.className = "sim-verdict refer";
-          banner.innerText = `AMBIGUOUS PREDICTION SET (|C(x)| = ${cardinality} > k_max = 3) • Routed to Human Triage`;
-          telemetryOut.innerHTML = `<code>is_ood = False | requires_human_review = True (Cardinality > 3; Staged to .npy + manifest.jsonl via service/storage.py)<br>taxon_predictions_total{status="needs_review"} += 1<br>taxon_human_referrals_active.inc()</code>`;
+          banner.innerText = `AMBIGUOUS PREDICTION SET (|C(x)| = ${cardinality} > k_max = 3) — Routed to Human Triage`;
+          telemetryOut.innerHTML = `<code>is_ood = False | requires_human_review = True (Cardinality > 3; Staged to .npy + manifest.jsonl via service/storage.py)<br>taxon_predictions_total{status="needs_review"} += 1<br>taxon_human_referrals_active.set(queue_depth)</code>`;
         } else {
           banner.className = "sim-verdict pass";
-          banner.innerText = `AUTO-ASSIGNED • |C(x)| = ${cardinality} <= k_max (3) • Guaranteed 95% Marginal Coverage`;
+          banner.innerText = `AUTO-ASSIGNED — |C(x)| = ${cardinality} <= k_max (3) — Guaranteed 95% Marginal Coverage`;
           telemetryOut.innerHTML = `<code>is_ood = False | requires_human_review = False<br>taxon_predictions_total{status="auto_assigned"} += 1<br>top_prediction = "${probs[0].sci}"</code>`;
         }
 

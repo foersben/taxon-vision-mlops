@@ -82,7 +82,8 @@
           "resource": "repo://src/taxon_vision/pipelines/train.py#L1-L29",
           "version": "repo-lines-v1:sha256:2fec05fc8f5b50f7b808e6c2752337c47101c9bf2d751b037c5df086e3a635bb:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlkYmVmZjA0NTU4OGE1ZjMzZDhkZjBiODYwYTg1OWIwZTE4MDFiZWY1NjczNjMxMjAwZTU3NmQ2ZTQyZTQ5ZjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk2MzcyNmIwNWQzODllYjA5NzM5NTBhMDk0OWMzZTA4YjA5YWNmZjRiNjg4NzExYzA1YzIyMjMyMDg0YjJjNGUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         }
-      ]
+      ],
+      "ast_target": "FunctionDef:_train_cached_epoch"
     },
     {
       "id": "claim_be436f8856ca4ec796fab8f2a06da20f",

@@ -45,7 +45,7 @@ The interactive canvas below models the complete TaxonVision-MLOps ecosystem. Yo
             TaxonVision-MLOps Architecture &amp; Epistemic Intelligence Visualizer
         </div>
         <div class="visualizer-actions">
-            <button class="btn-fullscreen" data-target="vis-arch-wrapper" type="button">⛶ Fullscreen</button>
+            <button class="btn-fullscreen" data-target="vis-arch-wrapper" type="button"><i class="fa-solid fa-expand"></i> Fullscreen</button>
         </div>
     </div>
     <iframe class="visualizer-iframe" src="architecture_visualizer.html" title="TaxonVision Architecture Visualizer" allow="fullscreen"></iframe>
@@ -70,7 +70,7 @@ The visualizer below renders the machine-attested knowledge graph maintained by 
             Open Knowledge Graph &amp; Agentic Governance Explorer
         </div>
         <div class="visualizer-actions">
-            <button class="btn-fullscreen" data-target="vis-okf-wrapper" type="button">⛶ Fullscreen</button>
+            <button class="btn-fullscreen" data-target="vis-okf-wrapper" type="button"><i class="fa-solid fa-expand"></i> Fullscreen</button>
         </div>
     </div>
     <iframe class="visualizer-iframe" src="viz.html" title="OKF Knowledge Graph Explorer" allow="fullscreen"></iframe>

@@ -50,7 +50,8 @@
           "resource": "repo://tests/unit/test_conformal_bounds.py#L12-L31",
           "version": "repo-lines-v1:sha256:38946e619cf9a3321ba64ef9bb6a58ab4ff8e77e73fa8fa374c0804e063fb028:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk2ZjZjMTRmNzk1ODI4OTIyYjMyNmEyN2ZmNDNlOWM2YTAxMjg5NDIyMWFhODc5ZTU1OTFiN2ZjMGM4OGIzZWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3NTNjMGE0NDFiNzQ5ZjA1ZTA0NzNmYTQ1ZDZmZmRkNjZiNGU1MjM5YTYzMmVhNjAzODczNDU0YTU1NWE0ZmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdmZTZiMzc3MjdkYjhjZDcyN2ZjOTRlMDgxOTRjOGI1ZGZiODQ3ZmI3ZTY1ZDEzZGYxNzNmYjVmOWM4ODBkY2EiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         }
-      ]
+      ],
+      "ast_target": "FunctionDef:ConformalPredictionEngine.__init__"
     },
     {
       "id": "claim_cc2761d35fc34724a4123b2a64a2f15f",
@@ -68,7 +69,8 @@
           "resource": "repo://scripts/governance/validate_okf.py#L307-L322",
           "version": "repo-lines-v1:sha256:0f3ea7e496feeaad33104fc5b02854911644cd9b3d48caae75740650dee58ee5:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhmMWZlOGRkN2VmYzdkYTY5MDEzMjI0YWYzY2I4NmQ4YTNkNzdmNDk1NTkzZTg3MTJhNTgwMjBhZDE0YWIxOGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2YWY3YzJhYzIyNzk2MGZjZDVjM2NjODgwZDViMDhjZmIzOTcxMTJkYTgxMGJmNzVjM2Y0ZWJhYTNhMzdlNWQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJhNmNjZDliYjliZjMxOTJkNjNiYzM0NDQyYWY1NTI0NmNhY2UwMjEzZmRlOTZhNTQ4NDIzNmU2ZTBlOTBiM2MiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVmM2IxZjZkNGViMmM5MmQzODY0MzZjZjJhMTExMWM0ZGJhMzlhMTI2OGE1YzJjZTNjNTBmNDBmNmRmZGJlOGYifQ"
         }
-      ]
+      ],
+      "ast_target": "FunctionDef:_validate_timestamp_string"
     },
     {
       "id": "claim_ed43e39431434207b778b752092675eb",
@@ -86,7 +88,8 @@
           "resource": "repo://scripts/governance/validate_okf.py#L466-L528",
           "version": "repo-lines-v1:sha256:2da358a194ae03694eed2d5b2f081adfb3cbd587b75d94eb145bcbd2e7d07b98:eyJzZWxlY3RlZExpbmVDb3VudCI6NjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgwZjliNDUxZjg4ZWZmMTE2ZjM2OTIzNWIxNzMwNDNkYWE4NjMzN2NmOWY5NDA5MGJiMGRkODNmNGI0Y2Q1MGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJhNmNjZDliYjliZjMxOTJkNjNiYzM0NDQyYWY1NTI0NmNhY2UwMjEzZmRlOTZhNTQ4NDIzNmU2ZTBlOTBiM2MiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQyOWM3ODAyNmRhZDhiOTE0ZWQyMjFlOWZhYTQ0ZmI1MTVhMGVjYzdlYTRhZDI4YWJiOWQ5ZmUxNTY5OGUzODEifQ"
         }
-      ]
+      ],
+      "ast_target": "ClassDef:OKFAuditStats"
     },
     {
       "id": "claim_2fdb4fe0a8934f549b2a156eab6a5e03",
@@ -164,7 +167,8 @@
           "resource": "repo://tests/integration/test_views_and_routes.py#L18-L68",
           "version": "repo-lines-v1:sha256:256ffa88d4d53d61c682dc1063c35ffc27b4c55b1b81d44bfe76716717ede57a:eyJzZWxlY3RlZExpbmVDb3VudCI6NTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ2ZmZiYzczZTk5NGUxMGNjMmFiZjk5OWZlNGQzYTYyMWUwYWU3ZGI4MTJhYWYyYjNkNmYyZDkyMDVmMGNhMWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA0Y2Q3NmIyYWZiYTZlYThhNzEyNmY1MDBjZDllNWQ5YjgyYWNjYzhlM2JkYjIzMzUwYTUyOTE5ZThhMjZjZjkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjljN2Q2MWZlODhkNjQzNWIwOTZhYjhhZWI2MWJmMTE3ZTE2NWVhYTBkYjE1NTQzZTMxZWI0NmVlMzAzMTE5YWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         }
-      ]
+      ],
+      "ast_target": "FunctionDef:test_health_endpoint"
     },
     {
       "id": "claim_73a14c9af5d14b37b2724ac154f2805f",

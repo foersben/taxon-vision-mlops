@@ -10,7 +10,8 @@
           "resource": "repo://src/taxon_vision/domain/taxonomy.py#L10-L44",
           "version": "repo-lines-v1:sha256:842ded6de3424aea0fd08a252b9fce15e82a2507e944dc2b428a7a624b01541d:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZkNmMwOTU2ODExMWUxYmFkNTQzMmE5NWUzYTcyODc3OTkzM2QxYmRjMjg1MTJhYzc5NGQ2MzkzZGQ0YzdmOWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVlYWJlZjFkNTE5ZGM0YzlmNDMwNjFiMGJjNDkzNDE2MWNkMzNhOWJmNmYyZWJiODg5YzgxYThhNjc4ZWU0NjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFlZTAzOTIxM2JlZGMzNmFkMGZlMjk1NGVjMzAyMDNlMmNmMmYyMzdkOGQxZDEyMmViMTdiYmY5OGViN2JiY2UifQ"
         }
-      ]
+      ],
+      "ast_target": "ClassDef:TaxonNode"
     },
     {
       "id": "claim_096355444d744f1f80c85b1155197af5",
@@ -20,7 +21,8 @@
           "resource": "repo://src/taxon_vision/domain/taxonomy.py#L46-L88",
           "version": "repo-lines-v1:sha256:4b7ceddc9b778def0accdbcf10773c42e74999d6d4ee88cc71f8079ee9f117fb:eyJzZWxlY3RlZExpbmVDb3VudCI6NDMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgyM2ViMWZiYzAwNTkyMTI2ZTY5NzU0YzllMzM3MmZmNGQ4MTE0OTQ4MzdkNzI0ZjA1ZjAwMDZkMThlOTQyNzAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVlN2M5NTdiY2I0NGZiNjczYzk4YjAwNTBhNzVkMzgwODJkYjgxZDkxOGRlMzEzYTNmMDdjMTIzNTMwNmQ3ZWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY1N2JiZTU0M2QxNTM5YmNiZGU5MWU2NmU5NzFmMzQzMGY0NzQxYmJjMWU1MTRkMzEyMWNmMTA4ODBhMWQ3NTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         }
-      ]
+      ],
+      "ast_target": "ClassDef:TaxonomyCatalog"
     },
     {
       "id": "claim_5ca17b07cee84552b3997dada20ecbff",
@@ -30,7 +32,8 @@
           "resource": "repo://src/taxon_vision/domain/observation.py#L15-L73",
           "version": "repo-lines-v1:sha256:4f342d2472ff105607c1cfc93a1cadd458e7f5092eecfd7df655d1c3e16fbee2:eyJzZWxlY3RlZExpbmVDb3VudCI6NTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ0ZjQ3MmQ1ODliYTQ3NmJhNDEzNGNmNGY2ODIzODVlZGExNTY4YWZiMGY2YTcwOTQzZmZiN2UzYjBlZGExNTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4ODE0MzA1MmJiZDExOWM5NGUwMzc4ZjJmZWQ3OTUwODFkMTRlODYwNWQwMjAwZjE5MDgyYWZhMmRhNmExNGUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhlODg4Y2YwNmMxYmI1Yjc3OTdjMmY5OGI1MjE1YjIwMDgyMzFlYWVlZTMwNmM0NTNjMDM3ZmFlZGZjYzU5MjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         }
-      ]
+      ],
+      "ast_target": "ClassDef:ObservationRecord"
     },
     {
       "id": "claim_f0b8097e7a0440a29b0e131d8249316e",
@@ -64,7 +67,8 @@
           "resource": "repo://src/taxon_vision/pipelines/extract_features.py#L27-L60",
           "version": "repo-lines-v1:sha256:0376760631ceda4b1dfab241f040674fbd5f4adc98d24dd98fb707ffa855dd7a:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhlMGUwNTUyZTcyMTExMWYzNjViMDA5ZjQ2YmE2MmQ2ZGMwMTZiY2MzOTkzZDUzMWIwODQ4ZDBjZWUwMWQwMDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYyMDA5N2U0YWE1MDA2OGJhMTU3ZjlhMjczOWZhZDg2OTk1ZTFlMGNkY2NkYWRjNTg5N2MyMDM0Yzc0ZDNlZmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFlNjBiOGM3MzM4MDkxMzNjYzNiZjdlZGVjZjE0MDg1MmY1NDU5YzU4MzY3ZDI4Yjk2MGEzY2I2OWY0NTY0ZjQifQ"
         }
-      ]
+      ],
+      "ast_target": "FunctionDef:_resolve_raw_catalog"
     },
     {
       "id": "claim_b451a89751ea4dfe9aa4e27cb03b7ed9",
@@ -78,7 +82,8 @@
           "resource": "repo://src/taxon_vision/domain/license.py#L50-L70",
           "version": "repo-lines-v1:sha256:8479c218c2885613bc65a5a857432b254a81c6bb512f2e6def18121bfa73608d:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3NjU3Yjk2MjhmNzViYzBkYjAyYjg0OTA3OTliZGU2ZTZlNjM5NTkzOTJlMjVjYjNjYjU4N2Q4YzQzZGUxOTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVlYWJlZjFkNTE5ZGM0YzlmNDMwNjFiMGJjNDkzNDE2MWNkMzNhOWJmNmYyZWJiODg5YzgxYThhNjc4ZWU0NjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY4ODM1OGJkODFhNDg4ODg4YWY0ZWQ1MGE0NzA5YTllMzJhNDI2NDYxZjNmZWZhODM0YjJhYTQwZWM1Zjc0YzgifQ"
         }
-      ]
+      ],
+      "ast_target": "ClassDef:LicenseFilter"
     },
     {
       "id": "claim_f1fee13f1e2344858800e3732b864d76",
@@ -92,7 +97,8 @@
           "resource": "repo://src/taxon_vision/domain/license.py#L72-L87",
           "version": "repo-lines-v1:sha256:41cae733bc5e44a41355a359323f2daa6651a61336630e532ecd59aecd6176c3:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZWY0NzNlZjdhM2EyM2EwZTZkOTIzZjNiY2U4MzhiZGQ4MDNhMjJlODM3Yzc1NmNiYmQwMzEwYTk0ZDk0YmMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY2NjdmZDE4ZjFmOGMyYzUxMzE3YThhNzM0NGI1ZjkzZGZmMDk3ZDhjMWI1OGQ5NTNkZjhkZjAyODViZTM5YTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFhYzMwNTg4MmE4OTZmNDY0ZDgyMDIzNWY4ZDlmYzMzYjFmOWI0MWJhZTkyZmRlZWYwMWNlN2YwNGU3NzY2MzkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         }
-      ]
+      ],
+      "ast_target": "ClassDef:LicenseFilter"
     },
     {
       "id": "claim_92d50e3504cd481f82f2897cbb39e079",
@@ -102,7 +108,8 @@
           "resource": "repo://src/taxon_vision/data/license_filter.py#L46-L65",
           "version": "repo-lines-v1:sha256:e3ad08135b76492404456e455339a65a28f7f5947dc55386e9fdb0389f3e9a61:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxNDI2MzNmNzY5NzljMTNlNjM5MjE5YzlhMDhlYTQ1MDhmM2RiODU3NTQ1YmNmZGIwYjJkNWJlZTE4NzBjNDQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRjMTNmN2MwOTMxMTNiODM4OGExOTg4ZDAxMTEyYTllNDI0NmM3NGQ5MDEwYjViZmRkYmYyZjBkZWRiZTViNjEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkwZWM2NGQ0M2ZiMWU2N2ZiNjIxYWEwMTI3OTgwNzJmMzA3NmQ4NDUwMzNjOWQ5ZGYzZWYwOWYwNDgwNzcwMmUifQ"
         }
-      ]
+      ],
+      "ast_target": "ClassDef:LicenseFilter"
     },
     {
       "id": "claim_c531fb921e5640dbb15a2256f1a0dd59",
@@ -112,7 +119,8 @@
           "resource": "repo://src/taxon_vision/data/inat_client.py#L13-L65",
           "version": "repo-lines-v1:sha256:1c20991926413d780435191afb5a56863628ae95b5531f540aa5cdca6bdc5321:eyJzZWxlY3RlZExpbmVDb3VudCI6NTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZiZTVmZGU4MTliZDEyZTNkZGE5MzE2YzJhMWM0OGUzODVkYTQxYmJjMzQwOTMzMjU1YWZhM2RkOTY2Y2ViZTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUwZGUyNTg3MTk2MTQ5MjYwNzFjOGZiMTlmZDg2NjE1MDU1NWYxYjAxMzU0ZjhjZDE2MDNhMTA5YTdkZGFlNDAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVhNzcwNmFlNzM4MjhhNmZkOTkzOWMyOWRjM2FhMDczYzk0YTdkYmJkODkyMTdkNDJjMWQ1NWM0MGYyZmQxYjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAxMWRlOTU2ZjA0NzExZDVmZjEzNDcwZjZhZjAzMGEyMDliMGJmN2FhYmY0YjFhZjMzMWY4YWQxZGIyMzc3YWMifQ"
         }
-      ]
+      ],
+      "ast_target": "ClassDef:INatAPIClient"
     }
   ],
   "verification": {

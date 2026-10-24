@@ -1,8 +1,8 @@
 ---
 type: Architecture
 title: Software & Config Architecture
-status: verified
-version: "0.2.0"
+status: stable
+version: 1.0
 stale_after: "2027-12-31T00:00:00Z"
 trust_tier: 1
 description: Monorepo architectural boundaries, directory topology, layered subsystems, and navigation index.

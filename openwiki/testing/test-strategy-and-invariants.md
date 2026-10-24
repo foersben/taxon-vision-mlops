@@ -224,7 +224,7 @@ This invariant is also enforced as the first quality check in developer workflow
 
 ## Google Open Knowledge Format (OKF v0.2) Validation Engine
 
-Architectural knowledge and operational documentation in TaxonVision are managed as machine-verifiable assets conforming to **Google's Open Knowledge Format (OKF v0.2)**. The hardened validation engine implemented in `scripts/validate_okf.py` audits Markdown documentation files to ensure schema compliance, link topology integrity, and trust tier accountability.
+Architectural knowledge and operational documentation in TaxonVision are managed as machine-verifiable assets conforming to **Google's Open Knowledge Format (OKF v0.2)**. The hardened validation engine implemented in `scripts/governance/validate_okf.py` audits Markdown documentation files to ensure schema compliance, link topology integrity, and trust tier accountability.
 
 <!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Heuristic: an unescaped angle bracket inside a label breaks rendering; rephrase the label. -->
 ```text
@@ -435,7 +435,7 @@ The script supports `TAXON_SKIP_SYNC=1` to bypass `pixi install -e dev` during r
 | `just lint` | `pixi run ... ruff check ... && ruff format ... && mypy ...` | Execute Ruff lint/format and MyPy strict typing |
 | `just check` | `pixi run ... pre-commit run --all-files` | Execute all pre-commit hooks across the repository |
 | `just complexity` | `pixi run ... complexipy src/ --failed` | Check cyclomatic and cognitive complexity metrics |
-| `just validate-okf` | `pixi run ... python scripts/validate_okf.py` | Validate OKF v0.2 frontmatter schema and link topology |
+| `just validate-okf` | `pixi run ... python scripts/governance/validate_okf.py` | Validate OKF v0.2 frontmatter schema and link topology |
 | `just test` | `pixi run ... pytest` | Run complete test suite with coverage reporting |
 | `just test-unit` | `pixi run ... pytest tests/unit/` | Run isolated unit tests only |
 | `just test-integration` | `pixi run ... pytest tests/integration/` | Run REST API and HTMX integration tests |

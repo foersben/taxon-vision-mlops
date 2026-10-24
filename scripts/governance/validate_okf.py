@@ -20,6 +20,8 @@ Validates:
 from __future__ import annotations
 
 import argparse
+import ast
+import json
 import re
 import sys
 from datetime import UTC, datetime
@@ -36,6 +38,75 @@ MARKDOWN_LINK_PATTERN = re.compile(r"\]\(([^:\s#)]+\.md)(?:#[^)]+)?\)")
 LOG_DATE_HEADING_PATTERN = re.compile(r"^##\s+(\d{4}-\d{2}-\d{2})\b")
 
 ALLOWED_STATUSES = {"draft", "stable", "deprecated", "verified"}
+
+
+def resolve_ast_node_lines(file_path: Path, ast_target: str) -> tuple[int, int] | None:
+    """Resolve an ast_target such as FunctionDef:load_config to current source line bounds.
+
+    Supported kinds are FunctionDef, AsyncFunctionDef and ClassDef. Nested members use
+    dotted names (ClassDef:Outer.Inner or FunctionDef:Class.method).
+
+    Args:
+        file_path: Python source file to parse.
+        ast_target: Target in <NodeKind>:<dotted.name> form.
+
+    Returns:
+        Inclusive (start_line, end_line) tuple, or None when the node cannot be found.
+    """
+    kind, sep, dotted = ast_target.partition(":")
+    if not sep or not dotted:
+        return None
+    try:
+        tree = ast.parse(file_path.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError):
+        return None
+    scope: ast.AST = tree
+    node: ast.AST | None = None
+    parts = dotted.split(".")
+    for idx, name in enumerate(parts):
+        wanted_kind = kind if idx == len(parts) - 1 else "ClassDef"
+        node = next(
+            (
+                child
+                for child in getattr(scope, "body", [])
+                if type(child).__name__ == wanted_kind and getattr(child, "name", None) == name
+            ),
+            None,
+        )
+        if node is None:
+            return None
+        scope = node
+    if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+        return None
+    return node.lineno, node.end_lineno or node.lineno
+
+
+def validate_claim_ast_targets(root_path: Path) -> list[str]:
+    """Verify every ast_target in openwiki/.claims/**/*.json resolves in its primary Python file."""
+    errors: list[str] = []
+    claims_dir = root_path / "openwiki" / ".claims"
+    if not claims_dir.exists():
+        return errors
+    for json_file in sorted(claims_dir.rglob("*.json")):
+        try:
+            data = json.loads(json_file.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            errors.append(f"{json_file.relative_to(root_path)}: invalid JSON ({exc})")
+            continue
+        for claim in data.get("claims", []):
+            target = claim.get("ast_target")
+            if not target:
+                continue
+            evidence = claim.get("evidence") or [{}]
+            resource = str(evidence[0].get("resource", "")).replace("repo://", "").split("#", 1)[0]
+            src = root_path / resource
+            if not resource.endswith(".py") or not src.is_file():
+                errors.append(f"{json_file.name}: claim {claim.get('id')} ast_target needs a Python primary file")
+            elif resolve_ast_node_lines(src, target) is None:
+                errors.append(
+                    f"{json_file.name}: claim {claim.get('id')} ast_target {target!r} not found in {resource}"
+                )
+    return errors
 
 
 class OKFAuditStats:
@@ -769,6 +840,10 @@ def main() -> None:
         print(f"🛠️  Auto-fixed {fixed_count} files with normalized ISO 8601 UTC timestamps.")
 
     total_errors, stats = scan_bundle(target_files, root_path, base_paths)
+    claim_errors = validate_claim_ast_targets(root_path)
+    for err in claim_errors:
+        print(f"❌ claims: {err}")
+    total_errors += len(claim_errors)
 
     print("\n" + "=" * 65)
     print("📊 OKF v0.2 Knowledge Bundle Audit Summary")

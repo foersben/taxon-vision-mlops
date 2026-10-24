@@ -13,6 +13,7 @@ semantic incoming/outgoing link navigation, and verified code claim inspection.
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
 import sys
@@ -21,47 +22,73 @@ from typing import Any
 
 import yaml
 
+# Claim files whose claims are shown on a doc node regardless of evidence files.
 DOC_CLAIMS_MAPPING: dict[str, list[str]] = {
-    "architecture/domain-and-taxa.json": [
-        "docs/foundations/taxonomy_and_darwincore.md",
-        "docs/foundations/inaturalist_data_ecosystem.md",
+    "quickstart.json": ["docs/index.md"],
+}
+
+# Claim JSON files that are never copied onto docs/ nodes (they stay on their openwiki page only).
+OPENWIKI_ONLY_CLAIM_FILES: frozenset[str] = frozenset({"testing/test-strategy-and-invariants.json"})
+
+# Doc node -> repo path prefixes (trailing "/") or exact files its claims may cite as primary evidence.
+DOC_FILE_COVERAGE: dict[str, list[str]] = {
+    "docs/foundations/taxonomy_and_darwincore.md": [
+        "src/taxon_vision/domain/taxonomy.py",
+        "src/taxon_vision/domain/observation.py",
+        "config/taxa_catalog.yaml",
     ],
-    "architecture/system-overview.json": [
-        "docs/foundations/system_reference.md",
-        "docs/architecture/repository_and_config_encyclopedia.md",
-        "docs/mlops_pipeline/dual_pipeline_architecture.md",
+    "docs/foundations/inaturalist_data_ecosystem.md": [
+        "src/taxon_vision/data/inat_client.py",
+        "src/taxon_vision/data/license_filter.py",
+        "src/taxon_vision/domain/license.py",
     ],
-    "concepts/uncertainty-and-safety.json": [
-        "docs/uncertainty_and_safety/conformal_prediction_theory.md",
-        "docs/uncertainty_and_safety/ood_and_empty_frame_detection.md",
+    "docs/foundations/system_reference.md": ["config/taxa_catalog.yaml", "src/taxon_vision/domain/"],
+    "docs/architecture/repository_and_config_encyclopedia.md": [
+        "config/default_config.yaml",
+        "src/taxon_vision/config/",
     ],
-    "operations/deployment-and-observability.json": [
-        "docs/operations/prometheus_and_observability.md",
-        "docs/operations/deployment_runbook.md",
-        "docs/operations/current_infrastructure.md",
+    "docs/mlops_pipeline/dual_pipeline_architecture.md": [
+        "dvc.yaml",
+        "src/taxon_vision/pipelines/train.py",
+        "src/taxon_vision/pipelines/extract_features.py",
     ],
-    "operations/service-and-api.json": [
-        "docs/operations/api_reference.md",
+    "docs/uncertainty_and_safety/conformal_prediction_theory.md": [
+        "src/taxon_vision/uncertainty/conformal.py",
+        "src/taxon_vision/pipelines/calibrate.py",
     ],
-    "quickstart.json": [
-        "docs/index.md",
+    "docs/uncertainty_and_safety/ood_and_empty_frame_detection.md": ["src/taxon_vision/uncertainty/ood_detector.py"],
+    "docs/operations/prometheus_and_observability.md": [
+        "config/prometheus.yaml",
+        "src/taxon_vision/monitoring/",
+        "src/taxon_vision/service/routes/health.py",
     ],
-    "testing/test-strategy-and-invariants.json": [
-        "docs/operations/jenkins_ci_infrastructure.md",
+    "docs/operations/deployment_runbook.md": [
+        "deploy/k8s/api-deployment.yaml",
+        "deploy/k8s/nvidia-time-slicing-config.yaml",
+        "scripts/ci/verify_deployment.sh",
     ],
-    "workflows/data-ingestion-and-versioning.json": [
-        "docs/mlops_pipeline/ingestion_and_versioning.md",
-        "docs/mlops_pipeline/dvc_dag_explorer.md",
-        "docs/mlops_pipeline/storage_and_databases.md",
+    "docs/operations/current_infrastructure.md": ["deploy/k8s/nvidia-time-slicing-config.yaml"],
+    "docs/operations/jenkins_ci_infrastructure.md": [
+        "deploy/k8s/jenkins-agent-rbac.yaml",
+        "deploy/k8s/jenkins-gpu-pod.yaml",
+        "scripts/ci/jenkins_gpu_train.sh",
     ],
-    "workflows/inference-and-optimization.json": [
-        "docs/model_engineering/onnx_optimization_and_latency.md",
+    "docs/operations/api_reference.md": ["src/taxon_vision/service/"],
+    "docs/mlops_pipeline/ingestion_and_versioning.md": [
+        "src/taxon_vision/data/inat_client.py",
+        "src/taxon_vision/data/license_filter.py",
+        "src/taxon_vision/pipelines/ingest.py",
     ],
-    "workflows/model-training-and-tracking.json": [
-        "docs/model_engineering/training_pipeline.md",
-        "docs/model_engineering/model_architecture.md",
-        "docs/model_engineering/backbone_benchmarking_pareto.md",
+    "docs/mlops_pipeline/dvc_dag_explorer.md": ["dvc.lock", ".dvc/"],
+    "docs/mlops_pipeline/storage_and_databases.md": ["src/taxon_vision/data/s3_streamer.py"],
+    "docs/model_engineering/onnx_optimization_and_latency.md": ["src/taxon_vision/inference/"],
+    "docs/model_engineering/training_pipeline.md": ["src/taxon_vision/models/training/"],
+    "docs/model_engineering/model_architecture.md": [
+        "src/taxon_vision/models/factory.py",
+        "src/taxon_vision/models/head.py",
+        "src/taxon_vision/models/loss.py",
     ],
+    "docs/model_engineering/backbone_benchmarking_pareto.md": ["src/taxon_vision/pipelines/evaluate.py"],
 }
 
 MD_LINK_RE = re.compile(r"\]\(([^:\s#)]+)(?:#[^)]+)?\)")
@@ -104,6 +131,27 @@ def _extract_h1_title(content: str) -> str | None:
             if title and title.lower() not in GENERIC_HEADINGS:
                 return title
     return None
+
+
+def _extract_first_paragraph(content: str) -> str:
+    """Return the first prose paragraph following the first #  heading (frontmatter-free documents)."""
+    lines = content.splitlines()
+    start = next((i for i, ln in enumerate(lines) if ln.startswith("# ")), None)
+    if start is None:
+        return ""
+    buf: list[str] = []
+    for ln in lines[start + 1 :]:
+        stripped = ln.strip()
+        if not stripped:
+            if buf:
+                break
+            continue
+        if stripped.startswith(("#", "```", "|", "<", "---")) and not buf:
+            continue
+        if stripped.startswith(("#", "```", "|")):
+            break
+        buf.append(stripped)
+    return " ".join(buf)
 
 
 def _format_stem_title(stem: str) -> str:
@@ -192,22 +240,63 @@ def _parse_claim_evidence(resource: str) -> tuple[str, str]:
     return clean, ""
 
 
-def _parse_claim_entry(c: dict[str, Any]) -> dict[str, Any]:
-    """Convert raw claim dict into structured claim object."""
+def _resolve_ast_node_lines(file_path: Path, ast_target: str) -> tuple[int, int] | None:
+    """Resolve <NodeKind>:<dotted.name> (FunctionDef / AsyncFunctionDef / ClassDef) to line bounds."""
+    kind, sep, dotted = ast_target.partition(":")
+    if not sep or not dotted:
+        return None
+    try:
+        tree = ast.parse(file_path.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError):
+        return None
+    scope: ast.AST = tree
+    node: ast.AST | None = None
+    parts = dotted.split(".")
+    for idx, name in enumerate(parts):
+        wanted_kind = kind if idx == len(parts) - 1 else "ClassDef"
+        node = next(
+            (
+                child
+                for child in getattr(scope, "body", [])
+                if type(child).__name__ == wanted_kind and getattr(child, "name", None) == name
+            ),
+            None,
+        )
+        if node is None:
+            return None
+        scope = node
+    if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+        return None
+    return node.lineno, node.end_lineno or node.lineno
+
+
+def _parse_claim_entry(c: dict[str, Any], root_path: Path) -> dict[str, Any]:
+    """Convert raw claim dict into structured claim object, resolving ast_target to live lines."""
     stmt = c.get("statement", "").strip()
     ev_list = c.get("evidence", [])
     primary_file, primary_lines = "", ""
     if ev_list:
         primary_file, primary_lines = _parse_claim_evidence(ev_list[0].get("resource", ""))
+    ast_target = str(c.get("ast_target", ""))
+    if ast_target and primary_file.endswith(".py"):
+        bounds = _resolve_ast_node_lines(root_path / primary_file, ast_target)
+        if bounds:
+            primary_lines = f"L{bounds[0]}-L{bounds[1]}"
     return {
         "claim": stmt,
         "file": primary_file,
         "lines": primary_lines,
+        "ast_target": ast_target,
     }
 
 
+def _matches_coverage(file: str, prefixes: list[str]) -> bool:
+    """Return True when file equals a coverage entry or sits under a directory prefix."""
+    return any(file == pre or (pre.endswith("/") and file.startswith(pre)) for pre in prefixes)
+
+
 def _load_claims_data(root_path: Path) -> dict[str, list[dict[str, Any]]]:
-    """Parse openwiki/.claims/**/*.json and map claims to openwiki and docs nodes."""
+    """Parse openwiki/.claims/**/*.json and map claims to openwiki and docs nodes by file coverage."""
     claims_dir = root_path / "openwiki" / ".claims"
     node_claims: dict[str, list[dict[str, Any]]] = {}
     if not claims_dir.exists():
@@ -224,13 +313,18 @@ def _load_claims_data(root_path: Path) -> dict[str, list[dict[str, Any]]]:
 
         rel_key = json_file.relative_to(claims_dir).as_posix()
         openwiki_target = f"openwiki/{rel_key[:-5]}.md"
-        parsed_items = [_parse_claim_entry(c) for c in claims_list]
+        parsed_items = [_parse_claim_entry(c, root_path) for c in claims_list]
 
         node_claims.setdefault(openwiki_target, []).extend(parsed_items)
         for doc_target in DOC_CLAIMS_MAPPING.get(rel_key, []):
             node_claims.setdefault(doc_target, []).extend(parsed_items)
+        if rel_key in OPENWIKI_ONLY_CLAIM_FILES:
+            continue
+        for doc_target, prefixes in DOC_FILE_COVERAGE.items():
+            matched = [item for item in parsed_items if _matches_coverage(item["file"], prefixes)]
+            node_claims.setdefault(doc_target, []).extend(matched)
 
-    return node_claims
+    return {k: v for k, v in node_claims.items() if v}
 
 
 def _resolve_relative_candidate(cand: Path, root_path: Path, node_ids: set[str]) -> str | None:
@@ -435,7 +529,7 @@ def _extract_doc_metadata(
     status = str(fm_dict.get("status", "stable"))
     version = str(fm_dict.get("version", "1.0"))
     stale_after = str(fm_dict.get("stale_after", ""))
-    description = str(fm_dict.get("description", ""))
+    description = str(fm_dict.get("description", "")) or _extract_first_paragraph(content)
     claims = claims_map.get(rel_id, [])
     portal_url = _compute_portal_url(rel_id)
 
@@ -544,7 +638,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
     :root {
@@ -1097,7 +1190,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     // Populate Counts
-    const totalClaims = graphData.nodes.reduce((acc, n) => acc + (n.data.claims ? n.data.claims.length : 0), 0);
+    const uniqueClaimKeys = new Set();
+    graphData.nodes.forEach(n => (n.data.claims || []).forEach(c => uniqueClaimKeys.add(`${c.file}#${c.ast_target || ''}#${c.claim}`)));
+    const totalClaims = uniqueClaimKeys.size;
     document.getElementById('node-count').innerText = graphData.nodes.length;
     document.getElementById('edge-count').innerText = graphData.edges.length;
     document.getElementById('claims-count').innerText = totalClaims;

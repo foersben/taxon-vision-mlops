@@ -229,9 +229,3 @@ Dispatches the LUKS root disk unlock passphrase to the initramfs Dropbear SSH da
 ```bash
 ./scripts/unlock_taxon.sh
 ```
-
----
-
-### Top-Level CLI Forwarders (`scripts/validate_okf.py` & `scripts/visualize_okf.py`)
-
-Convenience shims located directly under `scripts/`. They utilize Python's `runpy.run_path()` to dynamically resolve and invoke the canonical implementations in `scripts/governance/`, maintaining backward compatibility for legacy CI jobs and operator habit.
