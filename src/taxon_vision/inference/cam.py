@@ -16,6 +16,7 @@ from __future__ import annotations
 import base64
 import io
 import logging
+import math
 from typing import Protocol, runtime_checkable
 
 import numpy as np
@@ -124,31 +125,48 @@ def _project_cnn_features(feats: torch.Tensor, backbone: nn.Module, w_c: torch.T
 
 
 def _project_vit_features(feats: torch.Tensor, backbone: nn.Module, w_c: torch.Tensor) -> torch.Tensor | None:
-    """Project 3D ViT patch tokens with target class weights.
+    r"""Project ViT patch tokens onto the target-class head weights (forward-only CAM).
 
     Why:
-        Isolates Vision Transformer unflattening and patch token contraction logic.
+        A Vision Transformer emits a token sequence ``(B, N, D)`` with ``N = P + N_patches``, where ``P``
+        prefix tokens (the class token and optional register tokens) carry no spatial position. Spatial
+        attribution requires discarding them and restoring the 2D patch grid, e.g. 196 tokens -> 14 x 14.
+
+    How:
+        1. Strips the first ``backbone.num_prefix_tokens`` tokens (1 if the backbone does not declare it).
+        2. Requires the remaining patch count to be a perfect square ``g * g``; otherwise attribution is
+           geometrically undefined and None is returned.
+        3. Requires the token width ``D`` to equal the head's input width; a mismatch means the head was
+           not trained on this backbone and any projection would be meaningless, so None is returned
+           instead of fabricating a channel-mean map.
+        4. Reshapes to ``(B, g, g, D)`` and contracts with ``w_c`` to obtain
+           ``ReLU(sum_d w_{c,d} * A(x, y, d))``.
+
+    Complexity:
+        O(B * N * D) for the contraction; no gradients or autograd graph nodes are created.
 
     Args:
-        feats: 3D patch token tensor (B, N, D).
-        backbone: Visual backbone instance.
+        feats: 3D token tensor of shape (B, N, D) from ``backbone.forward_features``.
+        backbone: Visual backbone instance (inspected for ``num_prefix_tokens`` via `ViTBackbone`).
         w_c: Target class weight vector of shape (D,).
 
     Returns:
-        Projected spatial CAM tensor of shape (B, H, W) or None if not square.
+        Non-negative spatial CAM tensor of shape (B, g, g), or None if the token layout is unsupported.
     """
     num_prefix = backbone.num_prefix_tokens if isinstance(backbone, ViTBackbone) else 1
     patches = feats[:, num_prefix:, :]
     num_patches = patches.shape[1]
-    grid_size = int(np.sqrt(num_patches))
+    grid_size = math.isqrt(num_patches)
     if grid_size * grid_size != num_patches:
+        logger.warning("ViT patch count %d does not form a square grid.", num_patches)
         return None
-    d = w_c.shape[0]
-    if patches.shape[-1] == d:
-        spatial_patches = patches.view(-1, grid_size, grid_size, d)
-        cam = torch.einsum("d, bxy d -> bxy", w_c, spatial_patches)
-        return F.relu(cam)
-    return patches.mean(dim=-1).view(-1, grid_size, grid_size)
+    token_dim = w_c.shape[0]
+    if patches.shape[-1] != token_dim:
+        logger.error("ViT token width %d does not match head weight width %d.", patches.shape[-1], token_dim)
+        return None
+    spatial_patches = patches.reshape(-1, grid_size, grid_size, token_dim)
+    cam = torch.einsum("d, bxyd -> bxy", w_c, spatial_patches)
+    return F.relu(cam)
 
 
 def _compute_spatial_cam(
@@ -323,6 +341,24 @@ def overlay_cam_on_image(
     return Image.blend(image.convert("RGB"), heatmap_img, alpha=alpha)
 
 
+def encode_image_base64_png(image: Image.Image) -> str:
+    """Serialise a PIL image as a base64-encoded PNG string.
+
+    Why:
+        Callers that already hold a computed heatmap (for example to report its shape) must be able to
+        render the overlay without invoking the model a second time.
+
+    Args:
+        image: Image to encode.
+
+    Returns:
+        UTF-8 base64 text of the PNG byte stream, suitable for a ``data:image/png;base64,`` URI.
+    """
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
 def generate_cam_overlay(
     image: Image.Image,
     classifier: nn.Module | None = None,
@@ -337,7 +373,7 @@ def generate_cam_overlay(
 
     How:
         Invokes `generate_heatmap`, overlays on the input image via `overlay_cam_on_image`,
-        and serializes to an in-memory PNG buffer encoded as a UTF-8 base64 string.
+        and serializes via `encode_image_base64_png`.
 
     Complexity:
         O(1) forward model pass plus O(H * W) interpolation and image blending.
@@ -353,6 +389,4 @@ def generate_cam_overlay(
     """
     heatmap = generate_heatmap(image, classifier=classifier, target_class=target_class)
     overlay = overlay_cam_on_image(image, heatmap, alpha=alpha)
-    buf = io.BytesIO()
-    overlay.save(buf, format="PNG")
-    return base64.b64encode(buf.getvalue()).decode("utf-8")
+    return encode_image_base64_png(overlay)

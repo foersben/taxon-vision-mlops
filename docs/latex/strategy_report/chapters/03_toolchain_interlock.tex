@@ -6,9 +6,9 @@ In order to construct a production-grade machine learning platform without incur
 \section{Content-Addressable Storage and Cryptographic Versioning}
 \label{sec:dvc}
 
-Standard version control systems, such as Git, are engineered to track line-by-line code modifications within directed acyclic graphs of text files. Applying this paradigm to binary biological datasets is architecturally catastrophic. Committing a 50-gigabyte archive of high-resolution images forces the repository database to duplicate entire assets upon the slightest modification. This inevitably leads to memory exhaustion and repository collapse.
+Standard version control systems, such as Git, are engineered to track line-by-line code modifications within directed acyclic graphs of text files. Applying this paradigm to binary biological datasets is fundamentally unsuitable. Committing a 50-gigabyte archive of high-resolution images forces the repository database to duplicate entire assets upon the slightest modification. This inevitably leads to memory exhaustion and repository collapse.
 
-The system safely circumvents this limitation by utilising Data Version Control (DVC), which implements content-addressable storage. Rather than tracking the physical image matrices, DVC computes a unique SHA-256 cryptographic hash based strictly on the pixel content of the target directory. The heavy binary payloads are routed directly to a remote storage bucket, while a lightweight pointer file (for example, \texttt{dataset.dvc}) containing only the resultant hash and file metadata is generated.
+The system safely circumvents this limitation by utilising Data Version Control (DVC), which implements content-addressable storage. Rather than tracking the physical image matrices, DVC computes a unique SHA-256 cryptographic hash based strictly on the pixel content of the target directory. The heavy binary payloads are routed directly to a remote storage bucket, whilst a lightweight pointer file (for example, \texttt{dataset.dvc}) containing only the resultant hash and file metadata is generated.
 
 This pointer file is subsequently committed to Git. When a deployment runner or data scientist executes a checkout command for a specific historical commit, the DVC client reads the hash from the pointer file, resolves the asset location in the remote cache, and constructs near-instantaneous filesystem reflinks (or hardlinks) into the local workspace. This dual-layered approach reliably decouples the heavy binary storage from the codebase, whilst guaranteeing mathematically verifiable, bit-for-bit data reproducibility.
 
@@ -40,7 +40,7 @@ where $\theta$ denotes the evaluated hyperparameter vector, $\ell(\theta)$ is th
 
 The acquisition algorithm iteratively samples candidate configurations that maximise the density ratio $\ell(\theta) / g(\theta)$. This guides the GPU to evaluate parameter domains mathematically correlated with elevated classification precision on long-tail taxa, whilst maintaining sufficient dispersion to escape local extrema.
 
-In order to conserve hardware cycles, Optuna applies the Asynchronous Successive Halving Algorithm (ASHA) with a minimum resource allocation of two epochs and a reduction factor of $\eta = 2$. A trial is first evaluated after two epochs; at each subsequent rung, only the superior half of the candidate configurations ($1/\eta$) is permitted to proceed, whilst inferior trajectories are terminated immediately.
+In order to conserve hardware cycles, Optuna applies the Asynchronous Successive Halving Algorithm (ASHA) with a minimum resource allocation of three epochs and a reduction factor of $\eta = 2$. A trial is first evaluated after three epochs; at each subsequent rung, only the superior half of the candidate configurations ($1/\eta$) is permitted to proceed, whilst inferior trajectories are terminated immediately.
 
 To guarantee continuity across iterative training cycles and prevent redundant evaluations, Optuna studies are backed by persistent SQLite storage (\nolinkurl{sqlite:///data/optuna/optuna_studies.db}) with study identifiers scoped deterministically by vision backbone (for example, \texttt{tuning\_dinov3} or \texttt{tuning\_bioclip2}) under \texttt{load\_if\_exists=True}. This persistence layer enables subsequent tuning invocations to warm-start from prior historical parameter trials, progressively refining the non-parametric Parzen density estimates without discarding previous evaluations.
 
@@ -69,15 +69,15 @@ Feature jitter $\sigma$ & uniform & $[0.0, 0.05]$; zero-mean Gaussian perturbati
 
 \subsection{MLflow Interlock Architecture}
 
-While Optuna efficiently orchestrates the search mathematics, it inherently lacks the infrastructure to permanently archive model provenance across a distributed engineering team. MLflow bridges this gap, operating as the continuous flight data recorder for our training pipeline.
+Whilst Optuna orchestrates the search mathematics, it inherently lacks the infrastructure to permanently archive model provenance across a distributed engineering team. MLflow bridges this gap, operating as the continuous flight data recorder for our training pipeline.
 
 The integration is implemented directly within the objective function. The tuning session registers as an MLflow experiment on the tracking server, and each trial is executed within a nested child run. To avoid socket starvation and excessive network I/O during rapid hyperparameter sweeps, all epoch metrics -- training loss, validation loss, Top-1 accuracy, Macro F1-score, and validation Macro PR-AUC -- are aggregated in memory and submitted at trial completion or ASHA pruning using \texttt{MlflowClient().log\_batch()}. The lifecycle of the primary run is governed by a deterministic context manager, guaranteeing that unexpected execution exceptions transition the run to a \texttt{FAILED} state rather than hanging perpetually.
 
 Model promotion evaluates candidate Macro PR-AUC against the incumbent holding the \texttt{Production} alias in the MLflow Model Registry. Qualified candidates receive the alias \texttt{Challenger} pending automated deployment verification. During registry registration, an explicit \texttt{ModelSignature} is inferred directly from genuine validation batch tensors (\texttt{val\_embeddings}) via \texttt{infer\_signature()}, completely eliminating synthetic tensor mocks and guaranteeing type-safe schema enforcement. The model version entry is enriched with immutable audit metadata, including the vision backbone tag, empirical validation Macro PR-AUC score, and human-readable architecture descriptions.
 
-Crucially, every training execution renders and logs publication-grade evaluation artifacts directly into the MLflow run:
+Crucially, every training execution renders and logs publication-grade evaluation artefacts directly into the MLflow run:
 \begin{enumerate}
-    \item \nolinkurl{visualizations/confusion_matrix.png}: A class-normalized confusion matrix validating individual taxonomic boundaries.
+    \item \nolinkurl{visualizations/confusion_matrix.png}: A class-normalised confusion matrix validating individual taxonomic boundaries.
     \item \nolinkurl{visualizations/precision_recall_curves.png}: Per-class Precision-Recall trajectories annotated with individual Average Precision (AP) scores across all catalogued taxa.
     \item \nolinkurl{visualizations/energy_distribution.png}: The empirical validation Helmholtz free-energy distribution annotated with the calibrated epistemic decision boundary $\tau_{\text{OOD}}$.
 \end{enumerate}
@@ -89,10 +89,10 @@ When hyperparameter tuning is triggered, diagnostic Optuna plots (\nolinkurl{opt
 Because the backbone is frozen and its embeddings are cached, a training epoch of the classification head reduces to a small number of matrix products. The principal risk is therefore not under-fitting but over-fitting to the rare classes of the long tail. Three mechanisms control this risk. All of them monitor the validation Macro PR-AUC, which is also the promotion metric of the registry:
 \begin{enumerate}
     \item \textbf{Best-weight restoration:} The head weights of the epoch with the highest validation Macro PR-AUC are cached and restored once training has ended, so that the returned head is the best head and not merely the last one.
-    \item \textbf{Early stopping:} Training terminates when the metric has not improved for four consecutive epochs.
+    \item \textbf{Early stopping:} Training terminates when the metric has not improved for five consecutive epochs.
     \item \textbf{Learning-rate reduction on plateau:} The learning rate is halved when the metric has not improved for two epochs. Since this patience is shorter than that of early stopping, the optimiser receives at least one epoch at a reduced rate before training terminates.
 \end{enumerate}
 
-As design defaults, the epoch budget is limited to 15 epochs and the mini-batch size is 64 for training on cached embeddings. Where embeddings are extracted from images by a Vision Transformer on the GPU, a smaller batch of 32 images keeps the activation memory comfortably inside the budget of Section~\ref{sec:gpu_partitioning}. The feature extraction pipeline (\texttt{taxon\_vision.pipelines.extract\_features}) extracts these representations directly from AWS S3, caching them to disk for subsequent head convergence (see Section~\ref{sec:impl_status}).
+As design defaults, the baseline epoch budget is set to 30 epochs and the mini-batch size is 32 for training on cached embeddings (\texttt{epochs: 30}, \texttt{batch\_size: 32} in \nolinkurl{params.yaml}). Where embeddings are extracted from images by a Vision Transformer on the GPU, a batch size of 32 images keeps the activation memory comfortably inside the budget of Section~\ref{sec:gpu_partitioning}. The feature extraction pipeline (\texttt{taxon\_vision.pipelines.extract\_features}) extracts these representations directly from AWS S3, caching them to disk for subsequent head convergence (see Section~\ref{sec:impl_status}).
 
 Data augmentation applied during embedding extraction must respect biological invariants. Horizontal reflection yields physically plausible specimens, because most organisms are bilaterally or radially symmetric about a vertical axis. Vertical reflection is prohibited: gravity and phototropism impose a canonical orientation, so that an inverted specimen would never occur in field imagery and would merely bias the learned spatial priors.

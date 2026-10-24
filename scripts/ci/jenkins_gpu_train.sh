@@ -37,7 +37,7 @@ if [ -f "/var/lib/taxon-vision/checkpoints/head.pt" ]; then
 fi
 
 # 2. Check for missing Epistemic Diamond artifacts and hydrate from DVC remotes
-# Priority: Tier 1 (local-seaweedfs edge cache) -> Tier 2 (DagsHub origin cloud archive)
+# Priority: Tier 1 (in-cluster local-seaweedfs S3) -> Tier 2 (remote DagsHub origin)
 MISSING_ARTIFACTS=()
 for artifact in \
   "data/manifests/raw_manifest.parquet" \
@@ -142,7 +142,7 @@ if [ -d "/var/lib/taxon-vision/checkpoints" ] && [ -f "models/checkpoints/head.p
   done
 fi
 
-# 1. Sync to in-cluster SeaweedFS (Tier 1 Edge Cache)
+# 1. Sync to in-cluster SeaweedFS S3 (local-seaweedfs)
 if kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
   echo ">>> Synchronizing Epistemic Diamond artifacts to SeaweedFS (local-seaweedfs)..."
   pixi run --frozen -e dev dvc push -r local-seaweedfs || echo "SeaweedFS push skipped."

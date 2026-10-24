@@ -180,13 +180,16 @@ def train_cli(argv: list[str] | None = None) -> int:
             args.api_url, args.extractor, args.epochs, args.batch_size, args.lr
         )
 
+    settings = get_settings()
+    should_tune = args.tune or settings.training.tune
+
     logger.info("Starting TaxonVision Training Pipeline [%s]", args.extractor)
     logger.info(
         "  Epochs: %d | Batch Size: %d | Learning Rate: %s | Tune: %s",
         args.epochs,
         args.batch_size,
         args.lr,
-        args.tune,
+        should_tune,
     )
 
     result = training_runner.run_training_pipeline(
@@ -197,7 +200,7 @@ def train_cli(argv: list[str] | None = None) -> int:
         checkpoint_path=args.checkpoint_path,
         log_file=args.log_file,
         cuda_memory_fraction=args.cuda_memory_fraction,
-        tune=args.tune,
+        tune=should_tune,
         n_trials=args.n_trials,
         cache_path=args.cache_path,
         train_embeddings=args.train_embeddings,

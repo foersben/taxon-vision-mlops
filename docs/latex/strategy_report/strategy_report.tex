@@ -24,6 +24,9 @@
 \definecolor{mgrayborder}{HTML}{616161}
 \definecolor{mpurple}{HTML}{F3E5F5}
 \definecolor{mpurpleborder}{HTML}{7B1FA2}
+\definecolor{slate}{HTML}{475569}
+\definecolor{rose}{HTML}{E11D48}
+\definecolor{teal}{HTML}{0D9488}
 \usepackage{graphicx}
 \usepackage{listings}
 \usepackage{caption}
@@ -63,7 +66,7 @@
 \LARGE \textit{End-to-End Architectural and Operational Strategy Report}\\[0.5cm]
 \Large Systems Engineering}
 \author{\Large Benjamin Förster}
-\date{\today}
+\date{20 October 2026}
 
 \begin{document}
 
@@ -74,7 +77,7 @@
 
 \chapter*{Abstract}
 \addcontentsline{toc}{chapter}{Abstract}
-TaxonVision-MLOps establishes an automated, production-grade Machine Learning Operations platform for fine-grained biological species identification. Transitioning away from ad-hoc, notebook-bound model development, this architecture utilises a unified open-source toolchain (DagsHub, DVC, MLflow, Optuna) mapped to a hybrid CI/CD topology: GitHub Actions executes the lightweight quality gates, whilst a self-hosted Jenkins controller schedules all GPU-bound work as ephemeral Kubernetes pods on a single bare-metal host. Model training, hyperparameter search and ONNX compilation are performed exclusively on this remote execution plane; the developer workstation serves solely for authoring and orchestration. In order to comply strictly with ethical and regulatory standards, the system firmly enforces epistemic safety via Split Conformal Prediction and Energy-Based Out-of-Distribution (OOD) detection, thereby ensuring mathematical coverage guarantees in production. This document carefully outlines the end-to-end pipeline, testing strategies, and core architectural trade-offs driving the system's overall design, and it records the verified implementation status against the phased delivery roadmap.
+TaxonVision-MLOps establishes an automated, production-grade Machine Learning Operations platform for fine-grained biological species identification. Transitioning away from ad-hoc, notebook-bound model development, this architecture utilises a unified open-source toolchain (DagsHub, DVC, MLflow, Optuna) mapped to a hybrid CI/CD topology: GitHub Actions executes lightweight quality gates, whilst a self-hosted Jenkins controller schedules GPU-bound workloads as ephemeral Kubernetes pods on a dedicated bare-metal host. Model training, hyperparameter optimisation, and ONNX compilation are performed exclusively on this remote execution plane; the developer workstation serves solely for authoring and orchestration. To satisfy regulatory and domain-specific safety requirements, the platform enforces epistemic bounds via Split Conformal Prediction and Energy-Based Out-of-Distribution (OOD) detection, guaranteeing marginal coverage in production. This document details the end-to-end pipeline architecture, verification methodologies, and trade-offs governing system design, accompanied by an audit of the implementation status against the phased delivery roadmap.
 
 \tableofcontents
 

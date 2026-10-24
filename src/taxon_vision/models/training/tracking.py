@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
@@ -118,8 +119,9 @@ def mlflow_run_scope(
     active_run = None
     try:
         settings = get_settings()
-        if settings.mlflow.tracking_uri:
-            mlflow.set_tracking_uri(settings.mlflow.tracking_uri)
+        tracking_uri = os.getenv("MLFLOW_TRACKING_URI") or settings.mlflow.tracking_uri
+        if tracking_uri:
+            mlflow.set_tracking_uri(tracking_uri)
         if settings.mlflow.experiment_name:
             mlflow.set_experiment(settings.mlflow.experiment_name)
 
@@ -132,7 +134,6 @@ def mlflow_run_scope(
             mlflow.log_param("dvc_dataset_hash", dataset_hash)
 
         try:
-            import os
             import subprocess
 
             git_sha = os.environ.get("GIT_COMMIT")
@@ -864,9 +865,10 @@ def log_stage_metrics_to_parent_run(
         if not run_id:
             return
         settings = get_settings()
-        if settings.mlflow.tracking_uri:
-            mlflow.set_tracking_uri(settings.mlflow.tracking_uri)
-        client = mlflow.tracking.MlflowClient()
+        tracking_uri = os.getenv("MLFLOW_TRACKING_URI") or settings.mlflow.tracking_uri
+        if tracking_uri:
+            mlflow.set_tracking_uri(tracking_uri)
+        client = mlflow.tracking.MlflowClient(tracking_uri=tracking_uri)
         for key, val in metrics.items():
             if isinstance(val, (int, float)) and not isinstance(val, bool):
                 metric_name = f"{prefix}{key}" if prefix else key

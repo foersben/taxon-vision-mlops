@@ -48,7 +48,7 @@ The interactive canvas below models the complete TaxonVision-MLOps ecosystem. Yo
             <button class="btn-fullscreen" data-target="vis-arch-wrapper" type="button">⛶ Fullscreen</button>
         </div>
     </div>
-    <iframe class="visualizer-iframe" src="architecture_visualizer.html" title="TaxonVision Architecture Visualizer" allowfullscreen="true" allow="fullscreen"></iframe>
+    <iframe class="visualizer-iframe" src="architecture_visualizer.html" title="TaxonVision Architecture Visualizer" allow="fullscreen"></iframe>
 </div>
 
 ### Visualizer Features & Navigation
@@ -73,7 +73,7 @@ The visualizer below renders the machine-attested knowledge graph maintained by 
             <button class="btn-fullscreen" data-target="vis-okf-wrapper" type="button">⛶ Fullscreen</button>
         </div>
     </div>
-    <iframe class="visualizer-iframe" src="viz.html" title="OKF Knowledge Graph Explorer" allowfullscreen="true" allow="fullscreen"></iframe>
+    <iframe class="visualizer-iframe" src="viz.html" title="OKF Knowledge Graph Explorer" allow="fullscreen"></iframe>
 </div>
 
 ### Knowledge Graph Interaction Guide

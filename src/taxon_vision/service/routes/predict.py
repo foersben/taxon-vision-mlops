@@ -180,7 +180,7 @@ async def predict_species(
         logger.warning("Rejected empty image upload for %s", file.filename)
         PREDICTION_COUNTER.labels(status="invalid_input").inc()
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Invalid or corrupted image upload.",
         )
 
@@ -215,7 +215,7 @@ async def predict_species(
         logger.warning("Rejected undecodable upload %s: %s", file.filename, img_err)
         PREDICTION_COUNTER.labels(status="invalid_input").inc()
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Invalid or corrupted image upload.",
         ) from img_err
     except ModelNotReadyError as model_err:

@@ -359,7 +359,7 @@ Key engineering decisions in `TriageQueue`:
 When `run_prediction` flags an observation (`is_ood = True` or `requires_human_review = True`), `persist_flagged_observation` in `src/taxon_vision/service/storage.py` writes the record to disk:
 
 1. **Tabular Decision Metadata**: Stored as an individual JSON file (`{observation_id}_meta.json`) containing timestamp, top prediction, conformal set names, OOD energy score, raw probabilities, and review flags.
-2. **Dense Visual Embedding**: Serialized as a binary NumPy file (`{observation_id}_embedding.npy`). Caching the embedding ensures downstream active learning loops and vector stores (e.g., LanceDB or MinIO) can consume representations without re-executing heavy vision foundation forward passes.
+2. **Dense Visual Embedding**: Serialized as a binary NumPy file (`{observation_id}_embedding.npy`). Caching the embedding ensures downstream active learning loops and vector stores (e.g., LanceDB) can consume representations without re-executing heavy vision foundation forward passes.
 3. **Audit Log Manifest**: Appends the JSON record to an append-only line-delimited log (`manifest.jsonl`).
 
 ---

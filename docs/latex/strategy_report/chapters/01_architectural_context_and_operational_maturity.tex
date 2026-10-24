@@ -2,7 +2,7 @@
 \chapter{Architectural Context and Operational Maturity}
 \label{ch:context_maturity}
 
-The transition from localised machine learning prototypes to global ecological monitoring platforms requires us to fundamentally rethink how our systems handle scale, uncertainty, and regulatory compliance. In order to achieve this, this chapter establishes the baseline operational context for the TaxonVision-MLOps architecture. We first define the scale of citizen-science data streams, then identify the failure modes of manual data science workflows, and finally formalise the phased Machine Learning Operations (MLOps) maturity framework which is required to sustain a robust production environment.
+The transition from localised machine learning prototypes to global ecological monitoring platforms requires fundamentally re-evaluating how systems manage scale, uncertainty, and regulatory compliance. Accordingly, this chapter establishes the operational baseline for the TaxonVision-MLOps architecture. It formalises the scale of citizen-science data streams, identifies the failure modes of unmanaged workflows, and defines the phased Machine Learning Operations (MLOps) maturity framework required to sustain a production environment.
 
 \section{Data Topography and Open-Access Mandates}
 Global biodiversity portals such as iNaturalist and the Global Biodiversity Information Facility (GBIF) aggregate continuous streams of species observations worldwide. Combined, these ecosystems host an estimated 270 million raw observations (as of public registry reporting in 2024 -- 2026), of which roughly 170 million have achieved ``research grade'' status through community validation. Processing this high-volume stream requires strict cryptographic and legal compliance safeguards right at the ingestion edge.
@@ -25,7 +25,7 @@ To process citizen-science visual streams reliably, the TaxonVision-MLOps archit
 \toprule
 \textbf{Maturity Level} & \textbf{Infrastructure Configuration} & \textbf{Operational Focus} \\
 \midrule
-\textbf{0: Manual (Google Baseline)} & Isolated interactive notebooks; manual state handoffs. & Localized algorithm prototyping. \\
+\textbf{0: Manual (Google Baseline)} & Isolated interactive notebooks; manual state handoffs. & Localised algorithm prototyping. \\
 \textbf{1: Pipeline (Google Baseline)} & Automated DAGs; basic data validation. & Continuous training baseline. \\
 \textbf{2: CI/CD (Google Baseline)} & GitHub Actions \& Jenkins; ONNX graph export. & Rapid, repeatable code \& model releases. \\
 \textbf{3: Feedback (TaxonVision Extension)} & Telemetry scraping; Active Learning triage queues. & Real-time drift detection \& data loops. \\
