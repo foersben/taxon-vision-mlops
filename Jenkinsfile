@@ -253,7 +253,7 @@ spec:
             echo ">>> Executing zero-downtime rolling deployment to Kubernetes cluster..."
             kubectl version --client
 
-            # Hydrate model checkpoints from DVC (prefer in-cluster SeaweedFS edge cache, fallback to DagsHub origin)
+            # Hydrate model checkpoints from DVC (prefer in-cluster SeaweedFS cache, fallback to DagsHub origin)
             echo ">>> Hydrating model checkpoints from DVC remotes..."
             PULLED=false
             if kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
