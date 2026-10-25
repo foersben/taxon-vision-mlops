@@ -22,7 +22,7 @@ $$\hat{q} = \text{Quantile}\left(1 - \alpha; \frac{\lceil (n+1)(1-\alpha) \rceil
 
 The prediction set $\mathcal{C}(X_{\text{test}})$ for a novel image $X_{\text{test}}$ is then dynamically constructed:
 
-$$\mathcal{C}(X_{\text{test}}) = \left\{ y \in \mathcal{Y} : 1 - \hat{f}(X_{\text{test}})_y \le \hat{q} \right\}$$
+$$\mathcal{C}(X_{\text{test}}) = \left\{ y \in \mathcal{Y}:\; 1 - \hat{f}(X_{\text{test}})_y \le \hat{q} \right\}$$
 
 This provides the finite-sample distribution-free theoretical guarantee that the true label $Y_{n+1}$ will be included in the prediction set $\mathcal{C}(X_{n+1})$ with probability at least $1 - \alpha$:
 

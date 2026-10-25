@@ -29,18 +29,15 @@ tracks all experiments with MLflow, and automatically promotes the best model us
 ## Design Principles
 
 * **Pure remote CI/CD execution paradigm.** The local developer workstation has zero dedicated GPU resources for model training and serves strictly as an authoring, testing, and orchestration plane. All PyTorch model training, Optuna hyperparameter sweeps, and ONNX graph serialization execute remotely on bare-metal CI/CD agents (`hive-mind`) inside isolated Kubernetes pods equipped with GPU time-slicing slots and VRAM limits.
-* **Zero backbone backpropagation.** All training iterates only over the
-  linear head (`Dropout` + `Linear`), operating on embeddings pre-extracted by the
-  frozen backbone (`vit_base_patch14_reg4_dinov2`, `bioclip-2`, `mobilenetv4_conv_small`). This reduces a full training epoch to milliseconds.
+* **Zero backbone backpropagation.** All training iterates only over the linear head (`Dropout` + `Linear`), operating on embeddings pre-extracted by the frozen backbone (`vit_base_patch14_reg4_dinov2`, `bioclip-2`, `mobilenetv4_conv_small`). This reduces a full training epoch to milliseconds.
 * **Class-Balanced Loss for Long-Tail Distributions.** The loss formulation is defined as:
 
-  $$\mathcal{L}_{\text{CB}}(p, y) = -\frac{1 - \beta}{1 - \beta^{n_y}} \log(p_y)$$
+    $$\mathcal{L}_{\text{CB}}(p, y) = -\frac{1 - \beta}{1 - \beta^{n_y}} \log(p_y)$$
 
-  Where $\beta \to 1$ approximates standard class-frequency inverse weighting and intermediate $\beta \in [0.99, 0.9999]$ is optimal for long-tail species classification.
+    Where $\beta \to 1$ approximates standard class-frequency inverse weighting and intermediate $\beta \in [0.99, 0.9999]$ is optimal for long-tail species classification.
+
 * **Multi-Head Hierarchical Taxonomic Loss.** Rather than relying solely on a single-head flat classification over terminal leaf nodes, the system can optionally project embeddings into a multi-head taxonomy (Class, Order, Family, Genus, Species) ensuring coarse-grained taxonomic errors are penalized far more heavily than fine-grained errors.
-* **Single promotion metric.** Macro PR-AUC is the authoritative comparison signal.
-  It is robust to severe class imbalance (characteristic of species observation data)
-  and does not require threshold selection.
+* **Single promotion metric.** Macro PR-AUC is the authoritative comparison signal. It is robust to severe class imbalance (characteristic of species observation data) and does not require threshold selection.
 * **DagsHub Integrated Ecosystem.** DVC remote storage (`s3://dvc`), centralized MLflow experiment tracking (`https://dagshub.com/foersben/taxon-vision-mlops.mlflow`), and hosted Label Studio are unified under DagsHub. Credentials are authenticated securely in memory via Linux Secret Service without persistent plaintext tokens on disk.
 * **Git-free DVC versioning.** Dataset hashes are sourced by parsing `dvc.lock` directly.
   No `git` commands or `.git` state are required, satisfying the zero-allocation
