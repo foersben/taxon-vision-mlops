@@ -46,7 +46,7 @@
 
         % Host Box
         \begin{scope}[on background layer]
-            \node[host_box, fit=(cloudflared) (k3s_cluster), label={[font=\bfseries, text=TaxonDark]above:Physical Bare-Metal Host: \texttt{hive-mind} (Ubuntu 26.04.1 LTS, Intel Core i7-14700K 20C/28T, 128\,GB DDR5, ZOTAC RTX 5070 Ti 16GB, 2TB FireCuda 530)}] (host) {};
+            \node[host_box, fit=(cloudflared) (k3s_cluster), label={[font=\bfseries, text=TaxonDark]above:Physical Bare-Metal Host: \texttt{hive-mind} (Ubuntu 26.04.1 LTS, Intel Core i7-14700K 20C/28T, 128\,GB DDR5, RTX 5070 Ti 16GB, 2TB NVMe SSD)}] (host) {};
         \end{scope}
 
         % External users

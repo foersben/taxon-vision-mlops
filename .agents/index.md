@@ -18,7 +18,7 @@
 | `src/taxon_vision/monitoring/` or Pareto scripts | `08-observability-engineer` | YES |
 | `src/taxon_vision/service/` or `templates/` | `09-api-and-ui-developer` | YES |
 | `tests/` | `10-qa-automator` | YES |
-| `docs/` or `.agents/` | `11-docs-librarian` | YES (validate-okf) |
+| `docs/` or `.agents/` | `11-docs-librarian` | YES (validate-okf, verify-hardware) |
 | `.github/` or `pyproject.toml` | `12-git-operator` | NO |
 | Cross-cutting / Planning | `01-orchestrator` | DEPENDS |
 

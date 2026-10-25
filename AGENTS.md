@@ -13,6 +13,7 @@
 pixi run -e dev ruff check . && pixi run -e dev mypy src scripts
 pixi run -e dev python -m taxon_vision.pipelines.audit_license
 pixi run -e dev python scripts/governance/validate_okf.py
+pixi run -e dev python scripts/governance/verify_hardware_invariants.py
 ```
 
 ## Fast Module & Test Routing Map
@@ -31,6 +32,7 @@ Read ONLY the files in your active task row:
 | **Active Learning** | `active_learning/{query,triage_queue}.py` | `unit/test_active_learning.py` | `@07`, `06-conformal` |
 | **Monitoring** | `monitoring/{telemetry,drift}.py` | `unit/test_monitoring.py` | `@08`, `02-latency` |
 | **FastAPI & HTMX** | `service/{api,inference,schemas,storage}.py`, `service/routes/*.py` | `integration/test_api_endpoints.py`, `integration/test_views_and_routes.py` | `@09`, `02-latency` |
+| **Hardware & Infra** | `deploy/`, `Justfile`, `docs/latex/` | `invariants/test_hardware_invariants.py` | `@11`, `07-hardware` |
 
 ## Token-Optimal Execution Protocol
 

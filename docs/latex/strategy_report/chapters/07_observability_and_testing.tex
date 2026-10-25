@@ -96,7 +96,7 @@ The ingestion engine bypasses external relational databases, committing streamin
 \end{enumerate}
 
 \paragraph{Underlying Filesystem Invariants (BTRFS NOCOW).}
-The TSDB persistent volume is bound to host storage at \nolinkurl{/var/lib/taxon-vision/prometheus-data} across the Seagate FireCuda 530 NVMe drive. Because BTRFS utilises a Copy-on-Write (CoW) allocation policy by default, continuous appending to WAL segments and frequent two-hour block compactions inevitably induce severe physical block fragmentation and latency degradation over longitudinal runs. To enforce deterministic write throughput, the persistent directory is provisioned on a dedicated BTRFS subvolume with the \texttt{NOCOW} attribute applied prior to initialisation:
+The TSDB persistent volume is bound to host storage at \nolinkurl{/var/lib/taxon-vision/prometheus-data} across the host NVMe SSD. Because BTRFS utilises a Copy-on-Write (CoW) allocation policy by default, continuous appending to WAL segments and frequent two-hour block compactions inevitably induce severe physical block fragmentation and latency degradation over longitudinal runs. To enforce deterministic write throughput, the persistent directory is provisioned on a dedicated BTRFS subvolume with the \texttt{NOCOW} attribute applied prior to initialisation:
 \begin{minted}{bash}
 mkdir -p /var/lib/taxon-vision/prometheus-data
 chattr +C /var/lib/taxon-vision/prometheus-data

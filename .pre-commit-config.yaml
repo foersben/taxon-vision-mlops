@@ -87,6 +87,13 @@ repos:
         files: ^(docs/|\.agents/|openwiki/).*\.md$
         pass_filenames: true
 
+      - id: verify-hardware-invariants
+        name: Enforce Rule 07 Hardware Invariants
+        entry: pixi run -e dev python scripts/governance/verify_hardware_invariants.py
+        language: system
+        files: ^(docs/|\.agents/|README\.md)
+        pass_filenames: false
+
       - id: openwiki-sync
         name: Update OpenWiki Code Documentation (OKF)
         entry: bash -c 'openwiki code --update --print'

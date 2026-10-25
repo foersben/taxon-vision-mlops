@@ -91,6 +91,11 @@ validate-okf:
 lint-md:
 	pixi run --frozen -e dev python scripts/governance/verify_markdown_rules.py --fix
 
+# Verify Rule 07 Hardware Invariants across documentation and LaTeX
+[group("quality")]
+check-hardware:
+	pixi run --frozen -e dev python scripts/governance/verify_hardware_invariants.py
+
 # ── Testing ─────────────────────────────────────────────────────────────────
 
 # Run complete test suite with coverage reporting

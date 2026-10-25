@@ -2,16 +2,21 @@
 \chapter{Physical Infrastructure and Data Topology}
 \label{ch:infrastructure_topology}
 
-The computational demands of high-throughput vision architectures strictly dictate physical and operational determinism. In order to move beyond volatile cloud abstractions, this chapter establishes the bare-metal hardware topography, memory budgeting, and cryptographic data storage strategies which are necessary to sustain continuous model training and real-time inference without performance degradation or unnecessary cloud expenditures.
+The deployment and continuous training of dense Vision Foundation Models (VFMs) require a balanced trade-off between infrastructure flexibility, execution predictability, and cost efficiency. While managed public cloud environments provide elastic scalability, sustaining persistent GPU instances and high-throughput data transfers for iterative research and continuous integration incurs prohibitive operational expenditures. To establish a cost-effective, self-contained development and execution plane, the platform deploys a dedicated on-premise compute node, combining hardware-level workload isolation with deterministic memory budgeting and transparent storage compression.
 
-\section{Heterogeneous Silicon and Physical Determinism}
-Training and deploying dense Vision Foundation Models (VFMs) at high throughput necessitate deterministic physical execution. Relying on shared public cloud infrastructure inevitably introduces hypervisor virtualisation overhead and variable PCIe bandwidth. This obscures true performance metrics during latency profiling. Consequently, the platform utilises a dedicated bare-metal host architecture.
+\section{Compute Topology and Workload Allocation}
 
-The computational core relies on an Intel Core i7-14700K processor (20-core / 28-thread architecture: 8 Performance-cores up to 5.5~GHz turbo boost, and 12 Efficient-cores up to 4.3~GHz) anchored by an ASRock B760M Pro RS Micro-ATX motherboard. This hybrid topology provides massive parallel compute capability to cleanly isolate heterogeneous workloads. High-frequency neural execution paths and PyTorch gradient calculations are pinned strictly to the 16 P-core execution threads (\texttt{taskset -c 0-15}), preserving dedicated 2\,MB L2 and 33\,MB Intel Smart Cache (L3) lines for mathematical hot loops. Conversely, background asynchronous I/O operations -- such as streaming HTTP requests, Apache Arrow columnar dataset extraction, and database indexing -- are pinned to the 12 single-threaded E-cores (\texttt{taskset -c 16-27}) to prevent CPU context switching.
+Rather than provisioning continuous, multi-tenant cloud GPU infrastructure, the platform standardises on a dedicated bare-metal host engineered to isolate distinct computational regimes. This architecture amortises infrastructure costs while granting direct control over kernel process isolation, thread pinning, and storage caching.
 
-Neural network acceleration is driven by a ZOTAC GAMING GeForce RTX 5070 Ti SOLID CORE graphics card possessing 16~GB of GDDR7 VRAM across a 256-bit interface, supported by 128~GB of Crucial DDR5-5600 system memory (installed in dual-channel configuration across slots A2 and B2). This provides the necessary computational throughput and absolute physical stability required to reliably prevent clock-speed variance during critical CI/CD latency validation tests and continuous multi-day benchmarking suites.
+The central processor features an Intel Core i7-14700K (20 cores, 28 threads: 8 Performance-cores and 12 Efficient-cores), supported by 128~GB of DDR5-5600 system memory. This hybrid core topology allows explicit segregation of heterogeneous workloads:
+\begin{itemize}
+    \item \textbf{Mathematical Hot Loops:} Compute-intensive operations---such as classification head forward passes, PyTorch gradient calculations, and ONNX Runtime execution---are pinned strictly to the 16 Performance-core threads (\texttt{taskset -c 0-15}), preserving dedicated L2 and L3 cache lines.
+    \item \textbf{Asynchronous I/O and Telemetry:} Concurrent background tasks---including Apache Arrow streaming, database indexing, Prometheus scraping, and HTTP ingress handling---are allocated to the 12 Efficient-core threads (\texttt{taskset -c 16-27}), eliminating thread context-switching on critical execution paths.
+\end{itemize}
 
-Storage I/O is managed across a 2~TB Seagate FireCuda 530 Gen4 NVMe SSD (Phison PS5018-E18 controller, 2,550 TBW endurance rating, seated in slot M2\_1). In order to maximise read bandwidth across the PCIe bus when streaming millions of small image chunks, the underlying BTRFS filesystem utilises transparent \texttt{zstd:3} compression. Because BTRFS operates as a Copy-on-Write (CoW) filesystem, continuous database writes and Data Version Control (DVC) chunk caching induce severe physical block fragmentation. To mitigate this, a dedicated storage subvolume is initialised with the NOCOW attribute (\texttt{chattr +C}), ensuring contiguous physical block allocations for all local data caches.
+Neural network acceleration is provided by an NVIDIA GeForce RTX 5070 Ti graphics processor equipped with 16~GB of GDDR7 VRAM across a 256-bit memory bus. This provides sufficient Tensor Core throughput and memory bandwidth to execute local batch training, static INT8 post-training quantisation, and sub-15\,ms inference validation without remote latency overhead.
+
+High-throughput storage I/O is backed by a 2~TB PCIe Gen4 NVMe solid-state drive. To maximise read bandwidth when streaming millions of citizen-science image crops, the underlying BTRFS filesystem applies transparent \texttt{zstd:3} compression. However, because BTRFS utilizes Copy-on-Write (CoW) allocation by default, continuous database writes and Data Version Control (DVC) chunk mutations induce significant block fragmentation. To guarantee deterministic read/write performance, all database backends and cache subvolumes are provisioned with the non-CoW attribute (\texttt{chattr +C}), ensuring contiguous physical block allocation across the NVMe bus.
 
 \section{Verified Software Baseline of the Host}
 \label{sec:host_baseline}
@@ -77,7 +82,7 @@ SeaweedFS solves this structural bottleneck by adopting the Facebook Haystack ne
 \[
 \text{Memory}_{\text{Index}} = N \times 16 \text{ bytes} \approx 100{,}000 \times 16\text{ B} = 1.6\text{ MB}.
 \]
-Consequently, object lookups require exactly $O(1)$ disk seeks, enabling SeaweedFS to sustain sub-$2\text{ ms}$ p95 read latencies on our Seagate FireCuda 530 NVMe drive under saturated 4~KiB random-read workloads.
+Consequently, object lookups require exactly $O(1)$ disk seeks, enabling SeaweedFS to sustain sub-$2\text{ ms}$ p95 read latencies on host NVMe storage under saturated 4~KiB random-read workloads.
 
 \subsubsection{Consolidated Cluster Daemon and Dynamic Bucket Provisioning}
 In Kubernetes, SeaweedFS is deployed as a consolidated, lightweight single-container daemon executing \texttt{weed server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -volume.max=20}. This encapsulates four coordinated internal subsystems within an active memory envelope of approximately 80~MB RAM:
