@@ -292,6 +292,7 @@ spec:
 
             # Apply API deployment and service manifests
             kubectl apply -f deploy/k8s/api-deployment.yaml
+            kubectl apply -f deploy/k8s/monitoring-prometheus-grafana.yaml
 
             # Trigger rolling restart to serve fresh weights
             kubectl rollout restart deployment/taxon-vision-serving -n taxon-vision
