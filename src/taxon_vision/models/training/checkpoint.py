@@ -14,14 +14,17 @@ from taxon_vision.config import get_settings
 from taxon_vision.service.inference import get_classifier
 
 
-def _save_checkpoint(head: nn.Module, checkpoint_path: Path | str | None) -> Path:
+def save_checkpoint(head: nn.Module, checkpoint_path: Path | str | None = None) -> Path:
     """Persist trained head weights and invalidate runtime classifier cache.
 
     Why:
-        Persisting model weights to disk ensures deployment permanence and enables fast restoration during service cold starts. Clearing the runtime inference classifier cache (`get_classifier.cache_clear()`) ensures subsequent inference requests immediately consume the updated weights without requiring a service restart.
+        Persisting model weights to disk ensures deployment permanence and enables fast restoration
+        during service cold starts. Clearing the runtime inference classifier cache (`get_classifier.cache_clear()`)
+        ensures subsequent inference requests immediately consume the updated weights without requiring a service restart.
 
     How:
-        Resolves target filesystem destination, creates parent directories if missing, serializes state dictionary via `torch.save`, and calls `cache_clear()` on `get_classifier`.
+        Resolves target filesystem destination, creates parent directories if missing, serializes state
+        dictionary via `torch.save`, and calls `cache_clear()` on `get_classifier`.
 
     Args:
         head: PyTorch classification head module.
@@ -32,7 +35,7 @@ def _save_checkpoint(head: nn.Module, checkpoint_path: Path | str | None) -> Pat
     """
     if checkpoint_path is None:
         settings = get_settings()
-        target_path = Path(__file__).resolve().parents[4] / settings.model.head_checkpoint_path
+        target_path = Path(settings.model.head_checkpoint_path)
     else:
         target_path = Path(checkpoint_path)
 

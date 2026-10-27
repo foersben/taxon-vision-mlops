@@ -14,8 +14,7 @@ import pytest
 from PIL import Image
 
 from taxon_vision.data.inat_client import INatAPIClient
-from taxon_vision.data.s3_streamer import S3ImageStreamer, _fetch_record_image
-from taxon_vision.data.s3_streamer import main as streamer_main
+from taxon_vision.data.s3_streamer import S3ImageStreamer, _fetch_record_image, main as streamer_main
 from taxon_vision.domain.license import AttributionRecord, OpenLicense
 from taxon_vision.domain.observation import ObservationRecord
 from taxon_vision.domain.taxonomy import TaxonNode

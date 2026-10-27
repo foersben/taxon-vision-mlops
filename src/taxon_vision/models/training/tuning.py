@@ -24,9 +24,11 @@ from torch import nn, optim
 
 from taxon_vision.config import get_settings
 from taxon_vision.models.loss import ClassBalancedLoss
+from taxon_vision.models.training.dataset import get_dvc_dataset_hash
 from taxon_vision.models.training.embeddings import train_head_on_cached_embeddings
-from taxon_vision.models.training.tracking import _get_dvc_dataset_hash
+from taxon_vision.models.training.tracking import _inject_lineage_tags
 from taxon_vision.models.training.types import EmbeddingSplit, HeadTrainingConfig, TuningConfig
+from taxon_vision.models.training.visualizations import log_optuna_diagnostic_plots
 
 warnings.filterwarnings("ignore", category=ExperimentalWarning)
 
@@ -145,7 +147,8 @@ class HyperparameterObjective:
         if run is None:
             return
         try:
-            run_id = getattr(getattr(run, "info", None), "run_id", None)
+            run_info = run.info if run is not None else None
+            run_id = str(run_info.run_id) if run_info is not None and run_info.run_id is not None else None
             now_ms = int(time.time() * 1000)
             metrics: list[Metric] = []
             for ep, (t_loss, v_loss, v_acc, v_f1, v_pr) in enumerate(
@@ -273,55 +276,7 @@ def _setup_mlflow(cfg: TuningConfig) -> bool:
 
 def _apply_git_lineage_tags() -> None:
     """Resolve and attach Git commit and branch tags to active MLflow run."""
-    try:
-        import os
-        import subprocess
-
-        git_sha = os.environ.get("GIT_COMMIT")
-        if not git_sha:
-            git_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-        git_branch = os.environ.get("GIT_BRANCH")
-        if not git_branch:
-            git_branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
-        mlflow.set_tag("git.commit_sha", git_sha)
-        mlflow.set_tag("git.branch", git_branch)
-    except Exception:
-        pass
-
-
-def _log_optuna_diagnostic_plots(study: optuna.Study | None) -> None:
-    """Render and log Optuna optimization history and parameter importance plots.
-
-    Args:
-        study: Optuna study instance containing completed evaluation trials.
-    """
-    if study is None or len(study.trials) == 0:
-        return
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    import optuna.visualization.matplotlib as optuna_plt
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        try:
-            ax_hist = optuna_plt.plot_optimization_history(study)
-            mlflow.log_figure(ax_hist.figure, "visualizations/optuna_optimization_history.png")
-            plt.close()
-        except Exception as err:
-            logger.debug("Failed to log Optuna optimization history plot: %s", err)
-
-        try:
-            completed_values = [
-                t.value for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE and t.value is not None
-            ]
-            if len(set(completed_values)) > 1:
-                ax_imp = optuna_plt.plot_param_importances(study)
-                mlflow.log_figure(ax_imp.figure, "visualizations/optuna_param_importances.png")
-                plt.close()
-        except Exception as err:
-            logger.debug("Failed to log Optuna parameter importance plot: %s", err)
+    _inject_lineage_tags()
 
 
 def _log_best_run(
@@ -341,14 +296,12 @@ def _log_best_run(
     if not active:
         return
     try:
-        from taxon_vision.models.training.tracking import _get_dvc_dataset_hash
-
         active_run = mlflow.active_run()
         if active_run:
             mlflow.log_params(best_params)
             mlflow.log_metric("best_val_pr_auc", best_value)
             mlflow.set_tag("optuna.optimization_algorithm", "TPE+ASHA")
-            _log_optuna_diagnostic_plots(study)
+            log_optuna_diagnostic_plots(study)
         else:
             with mlflow.start_run(run_name="optuna_best_model"):
                 mlflow.log_params(best_params)
@@ -356,12 +309,12 @@ def _log_best_run(
                 mlflow.set_tag("optuna.optimization_algorithm", "TPE+ASHA")
                 mlflow.set_tag("pipeline.stage", "Phase1_Step3_Tuning")
 
-                dvc_hash = _get_dvc_dataset_hash()
+                dvc_hash = get_dvc_dataset_hash()
                 if dvc_hash:
                     mlflow.log_param("dvc_dataset_hash", dvc_hash)
 
                 _apply_git_lineage_tags()
-                _log_optuna_diagnostic_plots(study)
+                log_optuna_diagnostic_plots(study)
     except Exception as err:
         logger.debug("Failed to log best run to MLflow: %s", err)
 
@@ -485,7 +438,7 @@ def _persist_best_params(
             "best_val_pr_auc": round(best_val, 6),
             "n_trials": len(study.trials),
             "updated_at_utc": datetime.now(UTC).isoformat(),
-            "dvc_dataset_hash": _get_dvc_dataset_hash(),
+            "dvc_dataset_hash": get_dvc_dataset_hash(),
         }
 
         with best_params_yaml.open("w", encoding="utf-8") as f:

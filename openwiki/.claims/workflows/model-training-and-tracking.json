@@ -170,18 +170,18 @@
           "version": "repo-lines-v1:sha256:3d6fd029ffb5489e88377529596defcc09278da21b7553405f1209b7dd648f9a:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4YmU2M2Y1MTUzNDY4NWVmNjBhZjVhY2M1ZDZhZDgxZjhlYWQyZmY0MDFhZWI3YmQxMGI2Zjc0MzUxYzJjN2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY2N2UyOWFlNWNhY2RhNjFhODk4YTY2YjRkY2JiZGM2ZTUzMTI1YTE1NjQyODU1NTRkNmI1NDE0YmU4ZjQ1YTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJjOWQwZWFlZDliY2Y3M2QwMzVjNmM3MWYyOTJlMmIyZDY5NGUzZDY5MjA1MWIxZjczNGI2MDNiYjYwMTA0M2IifQ"
         }
       ],
-      "ast_target": "FunctionDef:_try_load_split_from_pair"
+      "ast_target": "FunctionDef:configure_cuda_memory_budget"
     },
     {
       "id": "claim_a3700bf4e832499992a8562705594e42",
-      "statement": "_save_checkpoint persists trained classification head weights to disk and invokes get_classifier.cache_clear() to immediately invalidate the runtime serving classifier singleton cache without service restarts.",
+      "statement": "save_checkpoint persists trained classification head weights to disk and invokes get_classifier.cache_clear() to immediately invalidate the runtime serving classifier singleton cache without service restarts.",
       "evidence": [
         {
           "resource": "repo://src/taxon_vision/models/training/checkpoint.py#L17-L46",
           "version": "repo-lines-v1:sha256:8a486d72f22fff661d8419769d66ef9cc26286acfaf4ee9bacc69b9705f19712:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFlNjc1ZWI0ODNmNDQyNjEwZWI0ZTc3ZGQ4ODM2ZWQ0MzlmMzE0YjRhODQwM2YyOWE2ZWY5YTZjNjk5ZjEwODgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU2Y2NjZDVhMzRmNTUzOWU2MjExZjRjNTVmYmE4NzEwNDA0MjY3NDI5OTY0OWFjNTYzZjdhYjgwODEwZTc2MjMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjlkYmU2ZmM1YzE3OTRmYzhjM2QxZTBjZjcxNTMxOGQzN2ZjMTFmZTU2NGUwZjg5MDNhMmU2ODJiZjUxZGQyYjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         }
       ],
-      "ast_target": "FunctionDef:_save_checkpoint"
+      "ast_target": "FunctionDef:save_checkpoint"
     },
     {
       "id": "claim_451f3090a85348f886651387b0edcb86",

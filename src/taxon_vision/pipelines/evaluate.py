@@ -281,12 +281,6 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional destination path to export summary evaluation metrics JSON.",
     )
-    # Legacy flags for compatibility
-    parser.add_argument("--cache-path", type=Path, default=None, help=argparse.SUPPRESS)
-    parser.add_argument("--checkpoint", type=Path, default=None, help=argparse.SUPPRESS)
-    parser.add_argument("--split", type=str, default="test", help=argparse.SUPPRESS)
-    parser.add_argument("--data-dir", type=Path, default=None, help=argparse.SUPPRESS)
-    parser.add_argument("--allow-synthetic", action="store_true", default=False, help=argparse.SUPPRESS)
     return parser
 
 
@@ -314,8 +308,6 @@ def evaluate_cli(argv: list[str] | None = None) -> int:
     print(f"Pareto profiles exported to {args.out}")
 
     emb_path = args.embeddings
-    if not emb_path.exists() and args.cache_path and args.cache_path.exists():
-        emb_path = args.cache_path
 
     test_metrics: dict[str, Any] = {}
     eval_result = _evaluate_onnx_holdout(

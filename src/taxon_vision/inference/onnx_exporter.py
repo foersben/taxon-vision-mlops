@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import sys
 import warnings
 from pathlib import Path
 from typing import Literal
@@ -424,25 +423,3 @@ def _finalize_export_artifacts(target_artifact: Path, output_arg: str | None, qu
         if stale_fp32.exists():
             stale_fp32.unlink()
     return 0
-
-
-def export_classifier_cli(argv: list[str] | None = None) -> int:
-    """CLI entrypoint for exporting the trained TaxonClassifier to ONNX format.
-
-    Why:
-        Preserves backwards-compatibility for existing tests and callers while delegating
-        to the canonical implementation in taxon_vision.pipelines.export_onnx.
-
-    Args:
-        argv: Optional list of command-line argument strings.
-
-    Returns:
-        Exit code: 0 for success, 1 on failure.
-    """
-    from taxon_vision.pipelines.export_onnx import export_onnx_cli
-
-    return export_onnx_cli(argv)
-
-
-if __name__ == "__main__":
-    sys.exit(export_classifier_cli())

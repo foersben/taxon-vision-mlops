@@ -4,60 +4,73 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import os
-from collections.abc import Generator
+import subprocess
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 import mlflow
 import numpy as np
-import torch
+import onnx
 from mlflow.models import ModelSignature
 from mlflow.types.schema import Schema, TensorSpec
 from torch import nn
 
 from taxon_vision.config import get_settings
+from taxon_vision.models.training.dataset import get_dvc_dataset_hash
+from taxon_vision.models.training.promotion import (
+    _apply_model_version_metadata as _apply_model_version_metadata,
+    _determine_promotion_alias as _determine_promotion_alias,
+    _fetch_run_safely as _fetch_run_safely,
+    _get_alias_version_safe as _get_alias_version_safe,
+    _get_incumbent_score as _get_incumbent_score,
+    _log_model_artifact as _log_model_artifact,
+    _prepare_model_signature_and_example as _prepare_model_signature_and_example,
+    _promote_model_if_better as _promote_model_if_better,
+)
+from taxon_vision.models.training.types import PromotionAlias as PromotionAlias
+from taxon_vision.models.training.visualizations import (
+    _plot_confusion_matrix as _plot_confusion_matrix,
+    _plot_energy_distribution as _vis_plot_energy_distribution,
+    _plot_precision_recall_curves as _plot_precision_recall_curves,
+    log_training_visualizations as log_training_visualizations,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def _get_dvc_dataset_hash() -> str | None:
-    """Parse dvc.lock to extract the dataset hash from the ingestion stage.
+def _plot_energy_distribution(
+    id_logits: np.ndarray,
+    energy_threshold: float,
+) -> Any:
+    """Plot histogram and KDE distribution of negative energy scores.
 
-    Why:
-        In auditable MLOps pipelines, every trained checkpoint must be cryptographically linked to the exact immutable dataset snapshot used during training. Logging the DVC manifest hash to MLflow provides end-to-end lineage tracking from raw observations to deployed models.
+    Backward compatibility delegation function for OKF claims and tests.
+    """
+    return _vis_plot_energy_distribution(id_logits, energy_threshold)
 
-    How:
-        Reads `dvc.lock`, parses the YAML stage graph, extracts the output MD5 checksum associated with `data/manifests`, and returns the hex digest string.
+
+def _safe_mlflow_call[T](action_name: str, fn: Callable[[], T], default: T | None = None) -> T | None:
+    """Execute a non-critical MLflow action, suppressing transient network or API errors.
+
+    Args:
+        action_name: Short human-readable identifier for the operation being performed.
+        fn: Zero-argument callable executing the MLflow operation.
+        default: Fallback return value if an exception occurs.
 
     Returns:
-        The MD5 hash of the data/manifests directory, or None if unavailable.
+        The result of fn(), or default if an exception was raised.
     """
     try:
-        from pathlib import Path
-
-        import yaml
-
-        dvc_lock_path = Path("dvc.lock")
-        if not dvc_lock_path.exists():
-            logger.debug("dvc.lock not found; skipping DVC hash logging.")
-            return None
-
-        with dvc_lock_path.open("r", encoding="utf-8") as f:
-            dvc_data = yaml.safe_load(f)
-
-        outs = dvc_data.get("stages", {}).get("ingestion", {}).get("outs", [])
-        for out in outs:
-            if out.get("path") == "data/manifests":
-                return str(out.get("md5"))
-
-        logger.debug("data/manifests output not found in dvc.lock")
-    except Exception as e:
-        logger.debug("Could not parse dvc.lock for dataset hashing: %s", e)
-    return None
+        return fn()
+    except Exception as err:
+        logger.debug("Non-fatal MLflow error during %s: %s", action_name, err)
+        return default
 
 
 def _end_mlflow_run_safely(status: str) -> None:
@@ -66,10 +79,7 @@ def _end_mlflow_run_safely(status: str) -> None:
     Args:
         status: The status to set the run to (e.g., "FAILED", "FINISHED").
     """
-    try:
-        mlflow.end_run(status=status)
-    except Exception as err:
-        logger.debug("Failed to set MLflow run status to %s: %s", status, err)
+    _safe_mlflow_call(f"end_run({status})", lambda: mlflow.end_run(status=status))
 
 
 def _attach_mlflow_artifact_safely(log_file: Path | str | None) -> None:
@@ -80,10 +90,33 @@ def _attach_mlflow_artifact_safely(log_file: Path | str | None) -> None:
     """
     if not log_file or not Path(log_file).exists():
         return
+    _safe_mlflow_call("log_artifact", lambda: mlflow.log_artifact(str(log_file)))
+
+
+def _inject_lineage_tags() -> None:
+    """Inject Git commit lineage and CI/CD orchestration tags into the active MLflow run."""
     try:
-        mlflow.log_artifact(str(log_file))
-    except Exception as err:
-        logger.debug("Failed to attach log artifact to MLflow: %s", err)
+        git_sha = os.environ.get("GIT_COMMIT")
+        if not git_sha:
+            git_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+        git_branch = os.environ.get("GIT_BRANCH")
+        if not git_branch:
+            git_branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
+        mlflow.set_tag("git.commit_sha", git_sha)
+        mlflow.set_tag("git.branch", git_branch)
+
+        ci_mappings = (
+            ("BUILD_TAG", "ci.jenkins_build_tag"),
+            ("BUILD_URL", "ci.jenkins_build_url"),
+            ("GITHUB_RUN_ID", "ci.github_run_id"),
+            ("GITHUB_WORKFLOW", "ci.github_workflow"),
+        )
+        for env_var, tag_key in ci_mappings:
+            val = os.environ.get(env_var)
+            if val:
+                mlflow.set_tag(tag_key, val)
+    except Exception as git_err:
+        logger.debug("Could not resolve git lineage tags: %s", git_err)
 
 
 @contextmanager
@@ -91,6 +124,7 @@ def mlflow_run_scope(
     run_name: str,
     params: dict[str, Any] | None = None,
     log_file: Path | str | None = None,
+    nested: bool = False,
 ) -> Generator[mlflow.ActiveRun | None, None, None]:
     """Provide RAII (Resource Acquisition Is Initialization) lifecycle management for MLflow experiment tracking.
 
@@ -101,17 +135,19 @@ def mlflow_run_scope(
 
     How:
         1. Configures MLflow tracking URI and experiment name from project settings.
-        2. Starts an active MLflow run with the given `run_name`.
+        2. Starts an active MLflow run with the given `run_name` (optionally nested).
         3. Logs initial training parameters and DVC dataset manifest hashes.
-        4. Yields the active run object to the caller.
-        5. If an unhandled exception occurs inside the block, marks the run status as FAILED via `mlflow.end_run(status="FAILED")` and re-raises.
-        6. On normal exit, logs execution log file artifacts (if present) and marks the run as FINISHED via `mlflow.end_run(status="FINISHED")`.
-        7. If MLflow tracking server is unreachable, catches connection errors gracefully, logs a debug notice, and yields None to allow offline training to proceed unimpeded.
+        4. Injects cryptographic Git lineage tags and CI/CD orchestration tags (Jenkins/GitHub Actions).
+        5. Yields the active run object to the caller.
+        6. If an unhandled exception occurs inside the block, marks the run status as FAILED via `mlflow.end_run(status="FAILED")` and re-raises.
+        7. On normal exit, logs execution log file artifacts (if present) and marks the run as FINISHED via `mlflow.end_run(status="FINISHED")`.
+        8. If MLflow tracking server is unreachable, catches connection errors gracefully, logs a debug notice, and yields None to allow offline training to proceed unimpeded.
 
     Args:
         run_name: Human-readable run name for identification in the MLflow UI.
         params: Optional dictionary of hyperparameter key-value pairs to log.
         log_file: Optional path to an execution log file to attach as an MLflow artifact.
+        nested: Whether to start a nested child run within an existing active run scope.
 
     Yields:
         Active MLflow run instance if tracking succeeded, or None if unavailable.
@@ -125,27 +161,16 @@ def mlflow_run_scope(
         if settings.mlflow.experiment_name:
             mlflow.set_experiment(settings.mlflow.experiment_name)
 
-        active_run = mlflow.start_run(run_name=run_name)
+        active_run = mlflow.start_run(run_name=run_name, nested=True) if nested else mlflow.start_run(run_name=run_name)
+
         if params:
             mlflow.log_params(params)
 
-        dataset_hash = _get_dvc_dataset_hash()
+        dataset_hash = get_dvc_dataset_hash()
         if dataset_hash:
             mlflow.log_param("dvc_dataset_hash", dataset_hash)
 
-        try:
-            import subprocess
-
-            git_sha = os.environ.get("GIT_COMMIT")
-            if not git_sha:
-                git_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-            git_branch = os.environ.get("GIT_BRANCH")
-            if not git_branch:
-                git_branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
-            mlflow.set_tag("git.commit_sha", git_sha)
-            mlflow.set_tag("git.branch", git_branch)
-        except Exception as git_err:
-            logger.debug("Could not resolve git lineage tags: %s", git_err)
+        _inject_lineage_tags()
     except Exception as err:
         logger.debug("MLflow tracking setup skipped or unavailable: %s", err)
         active_run = None
@@ -202,212 +227,43 @@ def _log_dataset_lineage(train_emb: np.ndarray, train_lbl: np.ndarray) -> None:
     """
     if not mlflow.active_run():
         return
-    try:
-        from mlflow import data as mlflow_data
 
-        dataset = mlflow_data.from_numpy(  # type: ignore[attr-defined]
+    def _log() -> None:
+        dataset = mlflow.data.from_numpy(  # type: ignore[attr-defined]
             features=train_emb,
             targets=train_lbl,
             name="train_embeddings",
         )
         mlflow.log_input(dataset, context="training")
-    except Exception as err:
-        logger.debug("Failed to log dataset lineage to MLflow: %s", err)
+
+    _safe_mlflow_call("log_dataset_lineage", _log)
 
 
-def _plot_confusion_matrix(
-    val_labels: np.ndarray,
-    pred_labels: np.ndarray,
-    class_names: list[str],
-) -> Any:
-    """Render class-normalized confusion matrix figure.
+def _log_training_hyperparameters(params: dict[str, Any]) -> None:
+    """Log resolved training hyperparameters and source tags to the active MLflow run.
 
     Args:
-        val_labels: 1D array of ground truth label indices.
-        pred_labels: 1D array of predicted class indices.
-        class_names: List of human-readable class names.
-
-    Returns:
-        Matplotlib figure instance.
+        params: Dictionary of resolved hyperparameters and execution parameters.
     """
-    import matplotlib
 
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from sklearn.metrics import confusion_matrix
+    def _action() -> None:
+        mlflow.log_params(params)
+        if "hyperparameter_source" in params:
+            mlflow.set_tag("hyperparameter_source", str(params["hyperparameter_source"]))
 
-    n_classes = len(class_names)
-    cm = confusion_matrix(val_labels, pred_labels, labels=list(range(n_classes)))
-    cm_norm = cm.astype(float) / (cm.sum(axis=1, keepdims=True) + 1e-12)
-
-    fig, ax = plt.subplots(figsize=(8, 6), dpi=100)
-    cax = ax.imshow(cm_norm, interpolation="nearest", cmap="Blues")
-    fig.colorbar(cax)
-
-    ax.set_xticks(range(n_classes))
-    ax.set_xticklabels(class_names, rotation=45, ha="right", fontsize=8)
-    ax.set_yticks(range(n_classes))
-    ax.set_yticklabels(class_names, fontsize=8)
-    ax.set_xlabel("Predicted Label")
-    ax.set_ylabel("True Label")
-    ax.set_title("Validation Confusion Matrix (Normalized)")
-
-    for i in range(cm.shape[0]):
-        for j in range(cm.shape[1]):
-            val = cm[i, j]
-            color = "white" if cm_norm[i, j] > 0.5 else "black"
-            ax.text(j, i, str(val), ha="center", va="center", color=color, fontsize=8)
-
-    fig.tight_layout()
-    return fig
+    _safe_mlflow_call("log_training_hyperparameters", _action)
 
 
-def _plot_precision_recall_curves(
-    val_labels: np.ndarray,
-    val_probs: np.ndarray,
-    class_names: list[str],
-) -> Any:
-    """Render multiclass Precision-Recall curves figure.
+def _log_calibrated_energy_threshold(threshold: float) -> None:
+    """Log the calibrated 95th percentile OOD energy threshold to the active MLflow run.
 
     Args:
-        val_labels: 1D array of ground truth label indices.
-        val_probs: 2D array of class probabilities of shape (N, num_classes).
-        class_names: List of human-readable class names.
-
-    Returns:
-        Matplotlib figure instance.
+        threshold: Calibrated scalar Helmholtz free energy threshold.
     """
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from sklearn.metrics import average_precision_score, precision_recall_curve
-
-    fig, ax = plt.subplots(figsize=(8, 6), dpi=100)
-    n_classes = val_probs.shape[1]
-
-    for k in range(n_classes):
-        y_true = (val_labels == k).astype(int)
-        if np.sum(y_true) == 0:
-            continue
-        precision, recall, _ = precision_recall_curve(y_true, val_probs[:, k])
-        ap = average_precision_score(y_true, val_probs[:, k])
-        label = f"{class_names[k]} (AP={ap:.2f})" if k < len(class_names) else f"Class {k} (AP={ap:.2f})"
-        ax.plot(recall, precision, lw=1.5, label=label)
-
-    ax.set_xlabel("Recall")
-    ax.set_ylabel("Precision")
-    ax.set_ylim(0.0, 1.05)
-    ax.set_xlim(0.0, 1.0)
-    ax.set_title("Per-Class Precision-Recall Curves")
-    ax.grid(True, linestyle="--", alpha=0.5)
-    ax.legend(loc="lower left", fontsize=7)
-    fig.tight_layout()
-    return fig
-
-
-def _plot_energy_distribution(
-    val_logits: np.ndarray,
-    calibrated_threshold: float | None = None,
-) -> Any:
-    """Render Helmholtz free energy distribution and epistemic decision boundary.
-
-    Args:
-        val_logits: 2D array of validation logits with shape (N, num_classes).
-        calibrated_threshold: Optional calibrated scalar energy threshold.
-
-    Returns:
-        Matplotlib figure instance.
-    """
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    from taxon_vision.uncertainty.ood_detector import EnergyOODDetector
-
-    detector = EnergyOODDetector()
-    energies = np.array([detector.compute_energy(logit) for logit in val_logits])
-
-    fig, ax = plt.subplots(figsize=(8, 5), dpi=100)
-    ax.hist(energies, bins=25, alpha=0.75, color="#1f77b4", edgecolor="black", label="In-Distribution (Val)")
-
-    if calibrated_threshold is not None:
-        ax.axvline(
-            calibrated_threshold,
-            color="#d62728",
-            linestyle="--",
-            linewidth=2,
-            label=f"Calibrated OOD Threshold ({calibrated_threshold:.2f})",
-        )
-
-    ax.set_xlabel("Helmholtz Free Energy E(x)")
-    ax.set_ylabel("Observation Count")
-    ax.set_title("Validation Free Energy Distribution & Epistemic Boundary")
-    ax.grid(True, linestyle="--", alpha=0.5)
-    ax.legend(loc="upper right", fontsize=8)
-    fig.tight_layout()
-    return fig
-
-
-def log_training_visualizations(
-    val_logits: np.ndarray,
-    val_labels: np.ndarray,
-    taxa_catalog: list[dict[str, Any]] | None = None,
-    calibrated_energy_threshold: float | None = None,
-) -> None:
-    """Render and log publication-grade performance evaluation figures to MLflow.
-
-    Args:
-        val_logits: 2D NumPy array of validation logits with shape (N, num_classes).
-        val_labels: 1D NumPy array of ground truth labels with shape (N,).
-        taxa_catalog: Optional catalog containing taxa metadata dictionaries.
-        calibrated_energy_threshold: Calibrated energy threshold boundary to annotate.
-    """
-    if not mlflow.active_run():
-        return
-
-    import matplotlib.pyplot as plt
-
-    try:
-        class_names = [
-            str(t.get("common_name", t.get("scientific_name", f"Class {i}"))) for i, t in enumerate(taxa_catalog or [])
-        ]
-        num_classes = val_logits.shape[1]
-        if len(class_names) < num_classes:
-            class_names.extend([f"Class {i}" for i in range(len(class_names), num_classes)])
-
-        # 1. Confusion Matrix
-        pred_labels = np.argmax(val_logits, axis=1)
-        fig_cm = _plot_confusion_matrix(val_labels, pred_labels, class_names)
-        mlflow.log_figure(fig_cm, "visualizations/confusion_matrix.png")
-        plt.close(fig_cm)
-
-        # 2. Precision-Recall Curves
-        shifted = val_logits - np.max(val_logits, axis=1, keepdims=True)
-        exp_logits = np.exp(shifted)
-        probs = exp_logits / (np.sum(exp_logits, axis=1, keepdims=True) + 1e-12)
-        fig_pr = _plot_precision_recall_curves(val_labels, probs, class_names)
-        mlflow.log_figure(fig_pr, "visualizations/precision_recall_curves.png")
-        plt.close(fig_pr)
-
-        from sklearn.metrics import average_precision_score
-
-        per_class_aps = [
-            float(average_precision_score((val_labels == k).astype(int), probs[:, k]))
-            for k in range(num_classes)
-            if np.sum(val_labels == k) > 0
-        ]
-        if per_class_aps:
-            mlflow.log_metric("worst_class_ap", float(np.min(per_class_aps)))
-            mlflow.log_metric("median_class_ap", float(np.median(per_class_aps)))
-
-        # 3. Energy Distribution
-        fig_energy = _plot_energy_distribution(val_logits, calibrated_energy_threshold)
-        mlflow.log_figure(fig_energy, "visualizations/energy_distribution.png")
-        plt.close(fig_energy)
-    except Exception as err:
-        logger.warning("Failed to render and log training visualizations to MLflow: %s", err)
+    _safe_mlflow_call(
+        "log_calibrated_energy_threshold",
+        lambda: mlflow.log_metric("calibrated_ood_energy_threshold", threshold),
+    )
 
 
 def _resolve_model_dims(
@@ -456,6 +312,11 @@ def _log_pytorch_model_with_fallback(
     Returns:
         ModelInfo instance on success, or None on failure.
     """
+    if not isinstance(signature, ModelSignature):
+        raise ValueError(
+            f"Strict contract violation: signature must be an instance of ModelSignature, got {type(signature).__name__}"
+        )
+
     try:
         return mlflow.pytorch.log_model(
             model,
@@ -495,8 +356,7 @@ class MLflowTracker:
         """Construct explicit MLflow ModelSignature for backbone embeddings -> taxonomic logits.
 
         Why:
-            Populates explicit named inputs and outputs in MLflow Model Registry metadata,
-            preventing unpopulated schema definitions (`Inputs (0) / Outputs (0)`).
+            Populates explicit named inputs and outputs in MLflow Model Registry metadata, preventing unpopulated schema definitions (`Inputs (0) / Outputs (0)`).
 
         Args:
             input_dim: Dimensionality of feature embeddings.
@@ -554,13 +414,16 @@ class MLflowTracker:
         Returns:
             ModelInfo instance on success, or None on failure.
         """
-        import copy
-
         cpu_model = copy.deepcopy(model).cpu().eval()
         resolved_dim, resolved_classes = _resolve_model_dims(cpu_model, input_dim, num_classes)
 
         if signature is None:
             signature = cls.build_embedding_signature(resolved_dim, resolved_classes)
+
+        if not isinstance(signature, ModelSignature):
+            raise ValueError(
+                f"Strict contract violation: signature must be an instance of ModelSignature, got {type(signature).__name__}"
+            )
 
         if input_example is None:
             input_example = np.zeros((1, resolved_dim), dtype=np.float32)
@@ -596,18 +459,19 @@ class MLflowTracker:
         Returns:
             ModelInfo instance on success, or None on failure.
         """
-        import mlflow.onnx
-
         if signature is None:
             signature = cls.build_onnx_signature(num_classes=num_classes, image_size=image_size)
+
+        if not isinstance(signature, ModelSignature):
+            raise ValueError(
+                f"Strict contract violation: signature must be an instance of ModelSignature, got {type(signature).__name__}"
+            )
 
         if input_example is None:
             input_example = np.zeros((1, 3, image_size, image_size), dtype=np.float32)
 
         model_proto = onnx_model
         if isinstance(onnx_model, (str, Path)):
-            import onnx
-
             model_proto = onnx.load(str(onnx_model))
 
         try:
@@ -622,225 +486,6 @@ class MLflowTracker:
         except Exception as err:
             logger.warning("Failed to log ONNX model to MLflow: %s", err)
             return None
-
-
-def _prepare_model_signature_and_example(
-    model: nn.Module,
-    val_embeddings: torch.Tensor | None,
-) -> tuple[ModelSignature, np.ndarray]:
-    """Infer model signature and input example from real validation data or module geometry.
-
-    Args:
-        model: Trained PyTorch classification head.
-        val_embeddings: Optional real validation embeddings.
-
-    Returns:
-        Tuple of (signature, input_example).
-    """
-    import copy
-
-    cpu_model = copy.deepcopy(model).cpu().eval()
-    input_dim, num_classes = _resolve_model_dims(cpu_model, None, None)
-
-    if val_embeddings is not None and val_embeddings.shape[0] > 0:
-        input_dim = val_embeddings.shape[1]
-        sample_size = min(5, val_embeddings.shape[0])
-        input_example = val_embeddings[:sample_size].detach().cpu().numpy()
-    else:
-        input_example = np.zeros((1, input_dim), dtype=np.float32)
-
-    signature = MLflowTracker.build_embedding_signature(input_dim, num_classes)
-    return signature, input_example
-
-
-def _log_model_artifact(
-    model: nn.Module,
-    model_name: str,
-    signature: Any,
-    input_example: Any,
-) -> Any:
-    """Log PyTorch model to MLflow artifact store without registering to registry.
-
-    Args:
-        model: PyTorch model module.
-        model_name: Target model name.
-        signature: Inferred model signature.
-        input_example: Real or zero-padded input example array.
-
-    Returns:
-        ModelInfo instance on success, or None on failure.
-    """
-    return MLflowTracker.log_model(
-        model=model,
-        model_name=model_name,
-        signature=signature,
-        input_example=input_example,
-        registered_model_name=None,
-    )
-
-
-def _get_incumbent_score(client: Any, model_name: str) -> float | None:
-    """Retrieve the highest promotion score among Production and Challenger aliases.
-
-    Args:
-        client: MlflowClient instance.
-        model_name: Registered model name.
-
-    Returns:
-        Highest incumbent score observed, or None if no aliased versions exist.
-    """
-    scores: list[float] = []
-    for alias in ("Production", "Challenger"):
-        try:
-            mv = client.get_model_version_by_alias(model_name, alias)
-            if mv and mv.run_id:
-                run = client.get_run(mv.run_id)
-                score = run.data.metrics.get("val_promotion_score")
-                if score is not None:
-                    scores.append(float(score))
-        except Exception:
-            pass
-    return max(scores) if scores else None
-
-
-def _apply_model_version_metadata(
-    client: Any,
-    model_name: str,
-    version: str,
-    extractor: str | None,
-    pr_auc: float,
-) -> None:
-    """Attach human-readable description and audit tags to registered model version.
-
-    Args:
-        client: MlflowClient instance.
-        model_name: Registered model name.
-        version: Model version identifier string.
-        extractor: Vision foundation backbone name.
-        pr_auc: Validation Macro PR-AUC score.
-    """
-    try:
-        desc = f"TaxonVision classifier head ({extractor or 'backbone'}). Validation Macro PR-AUC: {pr_auc:.4f}."
-        client.update_model_version(
-            name=model_name,
-            version=version,
-            description=desc,
-        )
-        if extractor:
-            client.set_model_version_tag(model_name, version, "extractor", extractor)
-        client.set_model_version_tag(model_name, version, "val_pr_auc", f"{pr_auc:.4f}")
-        dataset_hash = _get_dvc_dataset_hash()
-        if dataset_hash:
-            client.set_model_version_tag(model_name, version, "dvc_dataset_hash", dataset_hash)
-    except Exception as meta_err:
-        logger.debug("Failed to set model version metadata: %s", meta_err)
-
-
-def _determine_promotion_alias(
-    client: Any,
-    model_name: str,
-    version: str,
-    pr_auc: float,
-) -> str:
-    """Compare performance against current production alias and tag candidate accordingly.
-
-    Args:
-        client: MlflowClient instance.
-        model_name: Registered model name.
-        version: Model version identifier string.
-        pr_auc: Validation Macro PR-AUC score.
-
-    Returns:
-        Applied alias string ('Challenger', 'Archived', or 'Production').
-    """
-    try:
-        prod_version = client.get_model_version_by_alias(model_name, "Production")
-        if not prod_version.run_id:
-            raise ValueError("Production model missing run_id")
-        prod_run = client.get_run(prod_version.run_id)
-        prod_score = prod_run.data.metrics.get("val_promotion_score", 0.0)
-
-        if pr_auc >= prod_score:
-            logger.info(
-                "New model meets or outperforms production (%.4f >= %.4f). Tagging as Challenger.", pr_auc, prod_score
-            )
-            client.set_registered_model_alias(model_name, "Challenger", version)
-            return "Challenger"
-        logger.info("New model is worse than production (%.4f < %.4f). Tagging as Archived.", pr_auc, prod_score)
-        client.set_registered_model_alias(model_name, "Archived", version)
-        return "Archived"
-    except Exception:
-        logger.info("No production alias found. Tagging initial model as Production.")
-        client.set_registered_model_alias(model_name, "Production", version)
-        return "Production"
-
-
-def _promote_model_if_better(
-    model: nn.Module,
-    pr_auc: float,
-    val_embeddings: torch.Tensor | None = None,
-    extractor: str | None = None,
-) -> str | None:
-    """Evaluate performance and conditionally promote the model via MLflow Model Registry.
-
-    Why:
-        Automated continuous deployment requires programmatic model promotion gates.
-        Pre-gating prevents registering unpromoted models, preserving a clean registry.
-
-    How:
-        Logs the validation PR-AUC promotion score and model artifact. Checks incumbent
-        scores across Production and Challenger aliases. If candidate does not strictly
-        beat the incumbent, skips registration and tags the run as skipped_below_incumbent.
-        If it beats the incumbent (or is the initial model), registers it and tags appropriately.
-
-    Args:
-        model: The trained PyTorch classification head.
-        pr_auc: The final validation Macro PR-AUC score.
-        val_embeddings: Optional real validation embeddings used for signature inference.
-        extractor: Optional backbone feature extractor identifier.
-
-    Returns:
-        The applied promotion alias string ('Challenger', 'Production', 'skipped_below_incumbent'), or None.
-    """
-    from mlflow.tracking import MlflowClient
-
-    mlflow.log_metric("val_promotion_score", pr_auc)
-    model_name = "taxon_vision_classifier"
-
-    signature, input_example = _prepare_model_signature_and_example(model, val_embeddings)
-    model_info = _log_model_artifact(model, model_name, signature, input_example)
-    if model_info is None:
-        return None
-
-    client = MlflowClient()
-    incumbent_score = _get_incumbent_score(client, model_name)
-
-    if incumbent_score is not None and pr_auc <= incumbent_score:
-        logger.info(
-            "Candidate PR-AUC (%.4f) did not strictly beat incumbent (%.4f). Skipping registry registration.",
-            pr_auc,
-            incumbent_score,
-        )
-        try:
-            mlflow.set_tag("registry.status", "skipped_below_incumbent")
-        except Exception:
-            pass
-        return "skipped_below_incumbent"
-
-    try:
-        reg_model = mlflow.register_model(model_uri=model_info.model_uri, name=model_name)
-        version = str(reg_model.version)
-    except Exception as reg_err:
-        logger.warning("Failed to register model in MLflow Model Registry: %s", reg_err)
-        return None
-
-    _apply_model_version_metadata(client, model_name, version, extractor, pr_auc)
-    promotion_status = _determine_promotion_alias(client, model_name, version, pr_auc)
-    try:
-        mlflow.set_tag("registry.status", f"promoted_{promotion_status.lower()}")
-    except Exception:
-        pass
-    return promotion_status
 
 
 def log_stage_metrics_to_parent_run(

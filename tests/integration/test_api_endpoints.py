@@ -15,8 +15,7 @@ from PIL import Image
 
 from taxon_vision.config import get_settings
 from taxon_vision.service.api import app
-from taxon_vision.service.routes import health as health_mod
-from taxon_vision.service.routes import predict as predict_mod
+from taxon_vision.service.routes import health as health_mod, predict as predict_mod
 from taxon_vision.service.routes.predict import _build_live_prediction
 
 client = TestClient(app)

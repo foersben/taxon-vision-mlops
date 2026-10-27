@@ -4,9 +4,9 @@
 
 from __future__ import annotations
 
-import copy
 import logging
 
+import numpy as np
 import torch
 from sklearn.metrics import average_precision_score, f1_score
 from sklearn.preprocessing import label_binarize
@@ -35,8 +35,6 @@ def _compute_additional_metrics(val_logits: torch.Tensor, val_lbl: torch.Tensor)
         returns (0.0, 0.0) to prevent crashing the training loop.
     """
     try:
-        import numpy as np
-
         y_true = val_lbl.cpu().numpy()
         preds = torch.argmax(val_logits, dim=1).cpu().numpy()
         y_score = torch.softmax(val_logits, dim=1).cpu().numpy()
@@ -162,7 +160,7 @@ def _track_checkpoint(
         Tuple of (updated_best_pr_auc, updated_best_weights, updated_patience).
     """
     if val_pr_auc > best_pr_auc:
-        return val_pr_auc, copy.deepcopy(head.state_dict()), 0
+        return val_pr_auc, {k: v.clone() for k, v in head.state_dict().items()}, 0
     return best_pr_auc, best_weights, patience + 1
 
 

@@ -543,19 +543,19 @@ def test_export_onnx_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
     def mock_export(_argv: list[str] | None = None) -> int:
         return 0
 
-    monkeypatch.setattr(export_module, "export_classifier_cli", mock_export)
+    monkeypatch.setattr(export_module, "export_onnx_cli", mock_export)
     assert export_module.main(["--help"]) == 0
 
 
 def test_calibrate_and_evaluate_pipelines(tmp_path: Path) -> None:
     """Verify Stage 6 calibrate and Stage 7 evaluate pipelines against INT8 ONNX graph."""
-    from taxon_vision.inference.onnx_exporter import export_classifier_cli
     from taxon_vision.pipelines.calibrate import calibrate_cli, load_embeddings_and_labels
     from taxon_vision.pipelines.evaluate import evaluate_cli, get_canonical_pareto_profiles
+    from taxon_vision.pipelines.export_onnx import export_onnx_cli
 
     # 1. Export small quantized ONNX model
     int8_model = tmp_path / "model_int8.onnx"
-    export_ret = export_classifier_cli(
+    export_ret = export_onnx_cli(
         [
             "--quantize-int8",
             "--quantize-mode",

@@ -75,7 +75,7 @@ flowchart TD
         OPTUNA --> BEST_HP["Sampled Optimal Hyperparameters<br/>(lr, weight_decay, dropout, beta)"]
         TUNE_CHECK -- "No" --> DEF_HP["Default Hyperparameters<br/>(lr=1e-3, beta=0.99, dropout=0.2)"]
         
-        BEST_HP --> BUILD_HEAD["_build_training_components()<br/>TaxonClassifier Head (D -> K)"]
+        BEST_HP --> BUILD_HEAD["build_training_components()<br/>TaxonClassifier Head (D -> K)"]
         DEF_HP --> BUILD_HEAD
         
         BUILD_HEAD --> CB_LOSS["ClassBalancedLoss(beta)<br/>E(N) = (1 - beta^N)/(1 - beta)"]
@@ -87,11 +87,11 @@ flowchart TD
     end
 
     subgraph Registry["4. Experiment Tracking & Promotion (src/taxon_vision/models/training/tracking.py)"]
-        TRAIN_LOOP --> CHECKPOINT["_save_checkpoint()<br/>(models/checkpoints/head.pt)"]
+        TRAIN_LOOP --> CHECKPOINT["save_checkpoint()<br/>(models/checkpoints/head.pt)"]
         CHECKPOINT --> CLEAR_CACHE["get_classifier.cache_clear()<br/>(Runtime serving cache invalidation)"]
         
         TRAIN_LOOP --> SCOPE["mlflow_run_scope (RAII Context)<br/>(DagsHub MLflow Server)"]
-        SCOPE --> DVC_HASH["_get_dvc_dataset_hash()<br/>(Links dvc.lock manifest MD5)"]
+        SCOPE --> DVC_HASH["get_dvc_dataset_hash()<br/>(Links dvc.lock manifest MD5)"]
         SCOPE --> LOG_METRICS["_log_mlflow_metrics()<br/>(train_loss, val_pr_auc, val_f1)"]
         SCOPE --> LOG_PLOTS["log_training_visualizations()<br/>(Confusion Matrix, PR Curves, Free Energy)"]
         
@@ -483,7 +483,7 @@ def mlflow_run_scope(
         if params:
             mlflow.log_params(params)
 
-        dataset_hash = _get_dvc_dataset_hash()
+        dataset_hash = get_dvc_dataset_hash()
         if dataset_hash:
             mlflow.log_param("dvc_dataset_hash", dataset_hash)
 
@@ -511,7 +511,7 @@ If the remote MLflow tracking server is unreachable (such as in offline developm
 
 To guarantee auditability, every model trained in TaxonVision is linked to the immutable dataset snapshot that produced it.
 
-The function `_get_dvc_dataset_hash()` reads `dvc.lock`, parses the stage DAG, and extracts the MD5 output hash of the `ingestion` stage associated with `data/manifests`. This hash is logged as `dvc_dataset_hash` in MLflow parameters, establishing end-to-end provenance from raw iNaturalist API responses to deployed model binaries.
+The function `get_dvc_dataset_hash()` reads `dvc.lock`, parses the stage DAG, and extracts the MD5 output hash of the `ingestion` stage associated with `data/manifests`. This hash is logged as `dvc_dataset_hash` in MLflow parameters, establishing end-to-end provenance from raw iNaturalist API responses to deployed model binaries.
 
 ### Publication-Grade Diagnostic Visualizations
 
@@ -538,7 +538,7 @@ Automated continuous deployment requires programmatic promotion gates based on v
 
 Following training completion:
 
-1. Trained linear head weights are serialized to disk (default `models/checkpoints/head.pt`) via `_save_checkpoint()`.
+1. Trained linear head weights are serialized to disk (default `models/checkpoints/head.pt`) via `save_checkpoint()`.
 2. `get_classifier.cache_clear()` is invoked on the runtime serving classifier provider (`src/taxon_vision/service/inference.py`). This invalidates in-memory classifier singletons, ensuring subsequent inference API requests immediately load the newly trained weights without requiring a process restart.
 
 ### Multi-Tenant CUDA VRAM Management

@@ -144,11 +144,6 @@ def _build_arg_parser(default_alpha: float) -> argparse.ArgumentParser:
         default=False,
         help="Allow synthetic score generation when calibration files are absent.",
     )
-    # Legacy flags for compatibility
-    parser.add_argument("--cache-path", type=str, default=None, help=argparse.SUPPRESS)
-    parser.add_argument("--split", type=str, default="cal", help=argparse.SUPPRESS)
-    parser.add_argument("--checkpoint", type=str, default=None, help=argparse.SUPPRESS)
-    parser.add_argument("--scores-path", type=Path, default=None, help=argparse.SUPPRESS)
     return parser
 
 
@@ -167,8 +162,6 @@ def calibrate_cli(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     emb_path = args.embeddings
-    if not emb_path.exists() and args.cache_path and Path(args.cache_path).exists():
-        emb_path = Path(args.cache_path)
 
     if not emb_path.exists():
         if not args.allow_synthetic and not settings.model.allow_untrained_fallback:

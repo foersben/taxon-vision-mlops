@@ -84,6 +84,7 @@ convention = "google"
 
 [tool.ruff.lint.isort]
 known-first-party = ["taxon_vision"]
+combine-as-imports = true
 
 [tool.ruff.format]
 quote-style = "double"

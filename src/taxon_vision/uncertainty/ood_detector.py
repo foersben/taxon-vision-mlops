@@ -69,18 +69,6 @@ class EnergyOODDetector:
         energy = -temp * (max_val + np.log(np.sum(np.exp(scaled - max_val))))
         return float(energy)
 
-    def compute_energy_score(self, logits: np.ndarray, temperature: float | None = None) -> float:
-        """Alias for compute_energy to calculate Helmholtz free energy score.
-
-        Args:
-            logits: 1D NumPy array of unnormalized class logits z.
-            temperature: Scaling hyperparameter T modulating the logit sharpness.
-
-        Returns:
-            Scalar float representing the input's Helmholtz free energy score.
-        """
-        return self.compute_energy(logits, temperature=temperature)
-
     @staticmethod
     def compute_entropy(probabilities: np.ndarray) -> float:
         """Compute Shannon predictive entropy of class probability distribution.

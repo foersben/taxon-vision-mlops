@@ -250,7 +250,7 @@ def _load_calibrated_ood_threshold() -> float | None:
             data = yaml.safe_load(f)
         if isinstance(data, dict):
             calib = data.get("calibration", {})
-            val = calib.get("ood_energy_threshold", calib.get("tau_ood"))
+            val = calib.get("ood_energy_threshold")
             if val is not None:
                 return float(val)
     except Exception as exc:
@@ -483,7 +483,7 @@ def run_prediction(image_bytes: bytes) -> dict[str, Any]:
 
     # Out-of-distribution energy and entropy detection
     ood_detector = get_ood_detector()
-    ood_energy_score = float(ood_detector.compute_energy_score(logits_np))
+    ood_energy_score = float(ood_detector.compute_energy(logits_np))
     is_energy_ood = ood_detector.is_ood(logits_np)
     is_entropy_ood = ood_detector.is_high_entropy(probabilities)
     shannon_entropy = float(ood_detector.compute_entropy(probabilities))

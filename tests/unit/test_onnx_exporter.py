@@ -18,9 +18,9 @@ import torch.nn as nn
 from taxon_vision.inference.onnx_engine import ONNXInferenceEngine
 from taxon_vision.inference.onnx_exporter import (
     _load_head_checkpoint,
-    export_classifier_cli,
     export_to_onnx,
 )
+from taxon_vision.pipelines.export_onnx import export_onnx_cli
 
 
 def test_export_to_onnx_dummy_module(tmp_path: Path) -> None:
@@ -45,7 +45,7 @@ def test_export_to_onnx_dummy_module(tmp_path: Path) -> None:
 def test_export_classifier_cli_allow_untrained(tmp_path: Path) -> None:
     """Test CLI execution of export_classifier_cli with --allow-untrained flag and dual outputs."""
     out_file = tmp_path / "cli_model.onnx"
-    ret = export_classifier_cli(
+    ret = export_onnx_cli(
         [
             "--output",
             str(out_file),
@@ -74,7 +74,7 @@ def test_export_classifier_cli_fails_when_checkpoint_missing(tmp_path: Path, mon
     out_file = tmp_path / "should_not_exist.onnx"
     missing_ckpt = tmp_path / "nonexistent_head.pt"
 
-    ret = export_classifier_cli(
+    ret = export_onnx_cli(
         [
             "--output",
             str(out_file),
@@ -99,7 +99,7 @@ def test_export_classifier_cli_strict_failure_on_mismatch(tmp_path: Path, monkey
     torch.save({"1.weight": torch.randn(10, 64), "1.bias": torch.randn(10)}, mismatched_ckpt)
     out_file = tmp_path / "should_fail.onnx"
 
-    ret = export_classifier_cli(
+    ret = export_onnx_cli(
         [
             "--output",
             str(out_file),
@@ -120,7 +120,7 @@ def test_export_classifier_cli_with_valid_checkpoint_and_quantization(tmp_path: 
     torch.save({"1.weight": torch.randn(10, 1280), "1.bias": torch.randn(10)}, ckpt_file)
     out_file = tmp_path / "trained_model.onnx"
 
-    ret = export_classifier_cli(
+    ret = export_onnx_cli(
         [
             "--output",
             str(out_file),
@@ -176,7 +176,7 @@ def test_export_classifier_module_subprocess(tmp_path: Path) -> None:
         [
             sys.executable,
             "-m",
-            "taxon_vision.inference.onnx_exporter",
+            "taxon_vision.pipelines.export_onnx",
             "--output",
             str(out_file),
             "--extractor",
@@ -209,7 +209,7 @@ def test_export_classifier_cli_quantize_int8(tmp_path: Path) -> None:
     """Test CLI execution with dynamic INT8 quantization enabled."""
     out_file = tmp_path / "model.onnx"
     int8_file = tmp_path / "model_int8.onnx"
-    ret = export_classifier_cli(
+    ret = export_onnx_cli(
         [
             "--output",
             str(out_file),
@@ -236,7 +236,7 @@ def test_export_classifier_cli_quantize_int8(tmp_path: Path) -> None:
 def test_onnx_inference_engine_embedding_projections(tmp_path: Path) -> None:
     """Test project_embeddings and predict_from_embeddings directly on ONNX linear head."""
     int8_file = tmp_path / "model_int8.onnx"
-    ret = export_classifier_cli(
+    ret = export_onnx_cli(
         [
             "--quantize-int8",
             "--quantize-mode",

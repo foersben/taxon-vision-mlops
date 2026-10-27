@@ -12,6 +12,9 @@ import argparse
 import json
 import logging
 import sys
+import urllib.error
+import urllib.request
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +22,69 @@ from taxon_vision.config import get_settings
 from taxon_vision.models.training import runner as training_runner
 
 logger = logging.getLogger(__name__)
+
+
+def setup_logging(level: int = logging.INFO, log_file: Path | str | None = None) -> None:
+    """Configure structured logging directed to stdout and an optional log file.
+
+    Args:
+        level: Base logging severity level (default: logging.INFO).
+        log_file: Optional path to a file destination for persistent log storage.
+    """
+    root = logging.getLogger()
+    root.setLevel(level)
+    root.handlers.clear()
+
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(level)
+    console_handler.setFormatter(
+        logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%H:%M:%S")
+    )
+    root.addHandler(console_handler)
+
+    if log_file:
+        file_path = Path(log_file)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(file_path, encoding="utf-8")
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s:%(lineno)d: %(message)s"))
+        root.addHandler(file_handler)
+
+
+def dispatch_remote_training(api_url: str, extractor: str, epochs: int, batch_size: int, lr: float) -> int:
+    """Trigger training remotely on a running FastAPI service.
+
+    Args:
+        api_url: Host base URL of the FastAPI service.
+        extractor: Feature extractor backbone name.
+        epochs: Number of training epochs.
+        batch_size: Mini-batch size.
+        lr: Learning rate.
+
+    Returns:
+        Process exit code (0 for success, 1 for error).
+    """
+    endpoint = f"{api_url.rstrip('/')}/training"
+    payload = json.dumps(
+        {
+            "extractor": extractor,
+            "epochs": epochs,
+            "batch_size": batch_size,
+            "learning_rate": lr,
+        }
+    ).encode("utf-8")
+    req = urllib.request.Request(endpoint, data=payload, headers={"Content-Type": "application/json"}, method="POST")
+    logger.info("Triggering remote training via API: %s", endpoint)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            logger.info("Remote Training Completed: %s", data.get("message", "Success"))
+            logger.info("  Status: %s | Epochs: %s", data.get("status"), data.get("epochs_trained"))
+            logger.info("  Val Acc: %s | Loss: %s", data.get("final_val_accuracy"), data.get("final_val_loss"))
+            return 0
+    except urllib.error.URLError as err:
+        logger.error("Failed to communicate with API server at %s: %s", endpoint, err)
+        return 1
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
@@ -138,7 +204,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _save_metrics_json(metrics_out: str | None, result: dict[str, Any]) -> None:
+def _save_metrics_json(metrics_out: str | None, result: Mapping[str, Any]) -> None:
     """Save execution summary metrics to target JSON destination if requested."""
     if not metrics_out:
         return
@@ -173,12 +239,10 @@ def train_cli(argv: list[str] | None = None) -> int:
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
 
-    training_runner.setup_logging(level=logging.INFO, log_file=args.log_file)
+    setup_logging(level=logging.INFO, log_file=args.log_file)
 
     if args.api_url:
-        return training_runner._dispatch_remote_training(
-            args.api_url, args.extractor, args.epochs, args.batch_size, args.lr
-        )
+        return dispatch_remote_training(args.api_url, args.extractor, args.epochs, args.batch_size, args.lr)
 
     settings = get_settings()
     should_tune = args.tune or settings.training.tune

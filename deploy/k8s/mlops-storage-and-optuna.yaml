@@ -75,6 +75,7 @@ spec:
                 until wget -q -O - http://127.0.0.1:8888/ >/dev/null 2>&1; do sleep 1; done;
                 wget -q -O - --post-data="" "http://127.0.0.1:8888/buckets/taxon-dvc-cache/?op=mkdir" || true;
                 wget -q -O - --post-data="" "http://127.0.0.1:8888/buckets/triage-queue/?op=mkdir" || true;
+                wget -q -O - --post-data="" "http://127.0.0.1:8888/buckets/mlflow-artifacts/?op=mkdir" || true;
         volumeMounts:
         - name: seaweedfs-storage
           mountPath: /data

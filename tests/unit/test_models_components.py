@@ -22,7 +22,7 @@ from taxon_vision.models.factory import (
 )
 from taxon_vision.models.head import TaxonClassifier
 from taxon_vision.models.loss import ClassBalancedLoss
-from taxon_vision.models.training.checkpoint import _save_checkpoint
+from taxon_vision.models.training.checkpoint import save_checkpoint
 from taxon_vision.models.training.embeddings import train_head_on_cached_embeddings
 from taxon_vision.models.training.loops import evaluate_head, train_head_epoch
 from taxon_vision.models.training.tuning import tune_hyperparameters
@@ -249,6 +249,6 @@ def test_save_head_checkpoint_explicit_path(tmp_path: Path) -> None:
     """Verify checkpoint persistence to an explicitly provided file destination."""
     head = nn.Sequential(nn.Linear(10, 2))
     target = tmp_path / "custom_checkpoint.pt"
-    saved = _save_checkpoint(head, checkpoint_path=target)
+    saved = save_checkpoint(head, checkpoint_path=target)
     assert saved == target
     assert saved.exists()

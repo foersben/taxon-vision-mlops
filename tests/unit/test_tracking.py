@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, cast
 from unittest.mock import MagicMock
 
 import mlflow
@@ -16,12 +17,12 @@ import torch.nn as nn
 from mlflow.models import ModelSignature
 from mlflow.types.schema import Schema, TensorSpec
 
+from taxon_vision.models.training.dataset import get_dvc_dataset_hash
 from taxon_vision.models.training.tracking import (
     MLflowTracker,
     _attach_mlflow_artifact_safely,
     _determine_promotion_alias,
     _end_mlflow_run_safely,
-    _get_dvc_dataset_hash,
     _log_mlflow_metrics,
     _plot_confusion_matrix,
     _prepare_model_signature_and_example,
@@ -34,7 +35,7 @@ from taxon_vision.models.training.tracking import (
 def test_get_dvc_dataset_hash_missing_lock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify None is returned when dvc.lock does not exist."""
     monkeypatch.chdir(tmp_path)
-    assert _get_dvc_dataset_hash() is None
+    assert get_dvc_dataset_hash() is None
 
 
 def test_get_dvc_dataset_hash_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -52,7 +53,7 @@ stages:
     lock_file.write_text(lock_content, encoding="utf-8")
     monkeypatch.chdir(tmp_path)
 
-    assert _get_dvc_dataset_hash() == "8f9b2d4e6a1c"
+    assert get_dvc_dataset_hash() == "8f9b2d4e6a1c"
 
 
 def test_get_dvc_dataset_hash_no_manifest_out(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -68,7 +69,7 @@ stages:
     lock_file.write_text(lock_content, encoding="utf-8")
     monkeypatch.chdir(tmp_path)
 
-    assert _get_dvc_dataset_hash() is None
+    assert get_dvc_dataset_hash() is None
 
 
 def test_get_dvc_dataset_hash_malformed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -77,7 +78,7 @@ def test_get_dvc_dataset_hash_malformed(tmp_path: Path, monkeypatch: pytest.Monk
     lock_file.write_text("invalid: [yaml: broken", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
 
-    assert _get_dvc_dataset_hash() is None
+    assert get_dvc_dataset_hash() is None
 
 
 def test_end_mlflow_run_safely(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -130,7 +131,7 @@ def test_mlflow_run_scope_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(mlflow, "log_params", mock_log_params)
     monkeypatch.setattr(mlflow, "log_param", mock_log_param)
     monkeypatch.setattr(mlflow, "set_tag", mock_set_tag)
-    monkeypatch.setattr("taxon_vision.models.training.tracking._get_dvc_dataset_hash", lambda: "mock_dvc_hash")
+    monkeypatch.setattr("taxon_vision.models.training.tracking.get_dvc_dataset_hash", lambda: "mock_dvc_hash")
 
     log_file = tmp_path / "run.log"
     log_file.write_text("test logs", encoding="utf-8")
@@ -157,7 +158,7 @@ def test_mlflow_run_scope_failure_propagation(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(mlflow, "log_params", MagicMock())
     monkeypatch.setattr(mlflow, "log_param", MagicMock())
     monkeypatch.setattr(mlflow, "set_tag", MagicMock())
-    monkeypatch.setattr("taxon_vision.models.training.tracking._get_dvc_dataset_hash", lambda: "mock_dvc_hash")
+    monkeypatch.setattr("taxon_vision.models.training.tracking.get_dvc_dataset_hash", lambda: "mock_dvc_hash")
 
     with pytest.raises(ValueError, match="Training exploded"), mlflow_run_scope("failing_run"):
         raise ValueError("Training exploded")
@@ -414,13 +415,17 @@ def test_build_embedding_and_onnx_signatures() -> None:
     assert isinstance(emb_sig, ModelSignature)
     assert isinstance(emb_sig.inputs, Schema)
     assert isinstance(emb_sig.outputs, Schema)
+    from mlflow.types import TensorSpec
+
     assert len(emb_sig.inputs.inputs) == 1
     assert emb_sig.inputs.inputs[0].name == "backbone_embeddings"
+    assert isinstance(emb_sig.inputs.inputs[0], TensorSpec)
     assert emb_sig.inputs.inputs[0].shape == (-1, 512)
     assert emb_sig.inputs.inputs[0].type == np.dtype(np.float32)
 
     assert len(emb_sig.outputs.inputs) == 1
     assert emb_sig.outputs.inputs[0].name == "taxonomic_logits"
+    assert isinstance(emb_sig.outputs.inputs[0], TensorSpec)
     assert emb_sig.outputs.inputs[0].shape == (-1, 15)
     assert emb_sig.outputs.inputs[0].type == np.dtype(np.float32)
 
@@ -430,11 +435,13 @@ def test_build_embedding_and_onnx_signatures() -> None:
     assert isinstance(onnx_sig.outputs, Schema)
     assert len(onnx_sig.inputs.inputs) == 1
     assert onnx_sig.inputs.inputs[0].name == "input_images"
+    assert isinstance(onnx_sig.inputs.inputs[0], TensorSpec)
     assert onnx_sig.inputs.inputs[0].shape == (-1, 3, 224, 224)
     assert onnx_sig.inputs.inputs[0].type == np.dtype(np.float32)
 
     assert len(onnx_sig.outputs.inputs) == 1
     assert onnx_sig.outputs.inputs[0].name == "taxonomic_logits"
+    assert isinstance(onnx_sig.outputs.inputs[0], TensorSpec)
     assert onnx_sig.outputs.inputs[0].shape == (-1, 15)
     assert onnx_sig.outputs.inputs[0].type == np.dtype(np.float32)
 
@@ -519,3 +526,84 @@ def test_log_onnx_model_signature(monkeypatch: pytest.MonkeyPatch) -> None:
     assert isinstance(example, np.ndarray)
     assert example.shape == (1, 3, 224, 224)
     assert example.dtype == np.float32
+
+
+def test_mlflow_run_scope_nested_and_ci_tags(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify mlflow_run_scope supports nested runs and injects CI/CD lineage tags."""
+    mock_active_run = MagicMock()
+    mock_start_run = MagicMock(return_value=mock_active_run)
+    mock_set_tag = MagicMock()
+
+    monkeypatch.setattr(mlflow, "set_tracking_uri", MagicMock())
+    monkeypatch.setattr(mlflow, "set_experiment", MagicMock())
+    monkeypatch.setattr(mlflow, "start_run", mock_start_run)
+    monkeypatch.setattr(mlflow, "end_run", MagicMock())
+    monkeypatch.setattr(mlflow, "set_tag", mock_set_tag)
+    monkeypatch.setattr("taxon_vision.models.training.tracking.get_dvc_dataset_hash", lambda: None)
+
+    monkeypatch.setenv("BUILD_TAG", "jenkins-taxon-pipeline-42")
+    monkeypatch.setenv("BUILD_URL", "https://ci.taxon.org/job/taxon/42/")
+    monkeypatch.setenv("GITHUB_RUN_ID", "99887766")
+    monkeypatch.setenv("GITHUB_WORKFLOW", "Vision CI")
+
+    with mlflow_run_scope("nested_trial_run", nested=True) as run:
+        assert run == mock_active_run
+
+    mock_start_run.assert_called_once_with(run_name="nested_trial_run", nested=True)
+    tag_calls = {call.args[0]: call.args[1] for call in mock_set_tag.call_args_list}
+    assert tag_calls.get("ci.jenkins_build_tag") == "jenkins-taxon-pipeline-42"
+    assert tag_calls.get("ci.jenkins_build_url") == "https://ci.taxon.org/job/taxon/42/"
+    assert tag_calls.get("ci.github_run_id") == "99887766"
+    assert tag_calls.get("ci.github_workflow") == "Vision CI"
+
+
+def test_log_model_strict_signature_enforcement() -> None:
+    """Verify MLflowTracker.log_model raises ValueError when signature contract is violated."""
+    dummy_model = nn.Linear(16, 4)
+    with pytest.raises(ValueError, match="Strict contract violation"):
+        MLflowTracker.log_model(
+            model=dummy_model,
+            signature=cast(Any, "not_a_model_signature"),
+        )
+
+
+def test_log_dataset_lineage(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify _log_dataset_lineage converts arrays via mlflow.data and calls mlflow.log_input."""
+    from taxon_vision.models.training.tracking import _log_dataset_lineage
+
+    mock_log_input = MagicMock()
+    mock_from_numpy = MagicMock(return_value="mock_dataset")
+    monkeypatch.setattr(mlflow, "active_run", MagicMock(return_value=MagicMock()))
+    monkeypatch.setattr(mlflow, "log_input", mock_log_input)
+    monkeypatch.setattr(mlflow.data, "from_numpy", mock_from_numpy)
+
+    emb = np.zeros((10, 16), dtype=np.float32)
+    lbl = np.ones((10,), dtype=int)
+    _log_dataset_lineage(emb, lbl)
+
+    mock_from_numpy.assert_called_once_with(features=emb, targets=lbl, name="train_embeddings")
+    mock_log_input.assert_called_once_with("mock_dataset", context="training")
+
+
+def test_log_onnx_model_from_file_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify log_onnx_model loads ONNX model using onnx.load when given a file path."""
+    import onnx
+
+    dummy_onnx_path = tmp_path / "model.onnx"
+    dummy_onnx_path.write_bytes(b"dummy_onnx_proto")
+
+    mock_onnx_load = MagicMock(return_value="mock_proto")
+    mock_log_onnx = MagicMock()
+    monkeypatch.setattr(onnx, "load", mock_onnx_load)
+    monkeypatch.setattr(mlflow.onnx, "log_model", mock_log_onnx)
+
+    MLflowTracker.log_onnx_model(
+        onnx_model=dummy_onnx_path,
+        artifact_path="model",
+        num_classes=5,
+        image_size=224,
+    )
+
+    mock_onnx_load.assert_called_once_with(str(dummy_onnx_path))
+    mock_log_onnx.assert_called_once()
+    assert mock_log_onnx.call_args.kwargs["onnx_model"] == "mock_proto"

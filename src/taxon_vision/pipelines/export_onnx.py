@@ -172,12 +172,9 @@ def export_onnx_cli(argv: list[str] | None = None) -> int:
             temp_fp32_path.unlink()
 
 
-export_classifier_cli = export_onnx_cli
-
-
 def main(argv: list[str] | None = None) -> int:
     """CLI entrypoint for Stage 5: ONNX Model Export & Quantization."""
-    return export_classifier_cli(argv)
+    return export_onnx_cli(argv)
 
 
 if __name__ == "__main__":
