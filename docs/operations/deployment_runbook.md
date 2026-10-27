@@ -101,14 +101,16 @@ The deployment infrastructure separates Day-0 cluster prerequisites from Day-2 c
 * **Day-0 Cluster Bootstrap (One-Time Setup):**
     * Configures host-level infrastructure, hardware device plugins, and authentication boundaries on `hive-mind` (`192.168.178.30`).
     * Applied once by cluster administrators using `kubectl apply`:
-        * [deploy/k8s/jenkins-agent-rbac.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/jenkins-agent-rbac.yaml): Provisions `jenkins-ci` and `taxon-vision` namespaces, machine ServiceAccount `jenkins-agent`, and RBAC bindings.
+        * [deploy/k8s/jenkins-agent-rbac.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/jenkins-agent-rbac.yaml): Provisions `jenkins-ci` and `taxon-vision` namespaces, machine ServiceAccount `jenkins-agent`, and RBAC bindings for deployments, services, pods, configmaps, secrets, persistentvolumeclaims, and Traefik CRDs.
         * [deploy/k8s/nvidia-time-slicing-config.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/nvidia-time-slicing-config.yaml): Partitions the physical RTX 5070 Ti into 4 virtual GPU slices in `kube-system`.
         * [deploy/k8s/mlops-storage-and-optuna.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/mlops-storage-and-optuna.yaml): Provisions the in-cluster SeaweedFS object store (ports 8333 S3, 8888 Filer, 9333 Master, 8080 Volume) and the persistent Optuna SQLite telemetry dashboard (`NodePort 30081`).
+        * [deploy/k8s/monitoring-prometheus-grafana.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/monitoring-prometheus-grafana.yaml): Provisions in-cluster Prometheus TSDB (`NodePort 30090`) and Grafana visualizer (`NodePort 30300`) with BTRFS NOCOW persistent storage.
+        * [deploy/k8s/traefik-ingress.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/traefik-ingress.yaml): Provisions Traefik v3.1 `IngressRoute` and 80/20 weighted `TraefikService` for canary deployment.
     * Storing these manifests in Git provides Infrastructure as Code (IaC) without requiring repetitive manual execution.
 * **Day-2 Continuous Delivery (Automated via Jenkins):**
     * Operates entirely within the CI/CD pipeline triggered by Git commits and PR events.
     * Eliminates brittle host-level cronjobs, systemd file watchers, or local `git pull` shell loops on the server.
-    * Jenkins checks out code via authenticated GitHub PAT, executes test gates, builds documentation, and applies [deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) directly via the in-cluster `jenkins-agent` ServiceAccount.
+    * Jenkins checks out code via authenticated GitHub PAT, executes test gates, builds documentation, applies manifests directly via the in-cluster `jenkins-agent` ServiceAccount, and performs rolling updates.
 
 ## Section 7: NVIDIA Device Plugin GPU Time-Slicing Specification
 
@@ -179,7 +181,7 @@ When commits are pushed to `main` or release tags, the declarative pipeline in [
     * Re-exports and quantizes the ONNX graph (`taxon_vision.pipelines.export_onnx`) and pushes `models/checkpoints/head.pt` and `models/checkpoints/model_int8.onnx` to the DagsHub DVC remote.
     * Logs metrics and registry aliases to DagsHub MLflow.
 * **Step 4 (Deployment Rollout):**
-    * Applies [deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) using `jenkins-deployer-role` permissions. `imagePullPolicy: Always` ensures the pod pulls the fresh container published by GitHub Actions.
+    * Applies [deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) and [deploy/k8s/monitoring-prometheus-grafana.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/monitoring-prometheus-grafana.yaml) using `jenkins-deployer-role` permissions. `imagePullPolicy: Always` ensures the pod pulls the fresh container published by GitHub Actions.
     * Triggers zero-downtime rolling update: `kubectl rollout restart deployment/taxon-vision-api -n taxon-vision`.
     * Awaits readiness probe verification: `kubectl rollout status deployment/taxon-vision-api -n taxon-vision --timeout=120s`.
 
@@ -254,3 +256,150 @@ Hyperparameter optimization telemetry is persisted across pipeline runs to preve
     ```
 
 * **Concurrent Access Integrity:** WAL mode guarantees that the web dashboard process (reading historical trials) does not acquire exclusive database locks that could stall active training jobs on the GPU.
+
+---
+
+## Section 11: In-Cluster Observability & Traefik A/B Canary Runbook
+
+Operating the production serving plane requires monitoring real-time telemetry and managing traffic splitting across candidate model versions.
+
+### Cluster Observability Health Inspection
+
+Operators can verify in-cluster observability components from any machine on the local network (`192.168.178.0/24`):
+
+```bash
+# Verify Prometheus TSDB health and active scrape targets
+curl -s http://192.168.178.30:30090/-/healthy
+curl -s http://192.168.178.30:30090/api/v1/targets | jq .data.activeTargets[].scrapeUrl
+
+# Verify Grafana visualizer availability
+curl -s http://192.168.178.30:30300/api/health
+
+# Verify live model serving endpoint health
+curl -s http://192.168.178.30:30080/health
+```
+
+### Traefik A/B Canary Traffic Management
+
+The Traefik ingress controller on `hive-mind` manages weighted traffic distribution between the baseline production model and challenger models via [`deploy/k8s/traefik-ingress.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/traefik-ingress.yaml):
+
+* **Baseline 80/20 Distribution:** Default configuration sends $80\%$ of traffic to `taxon-vision-serving:8000` and $20\%$ to `taxon-vision-serving-challenger:8000`.
+* **Canary Promotion Step 1 (50/50 Split):** Once the challenger model processes initial inference requests with zero runtime exceptions, increase confidence by adjusting weights in `deploy/k8s/traefik-ingress.yaml`:
+
+    ```yaml
+    spec:
+      weighted:
+        services:
+          - name: taxon-vision-serving
+            port: 8000
+            weight: 50
+          - name: taxon-vision-serving-challenger
+            port: 8000
+            weight: 50
+    ```
+
+    Apply the update without pod restarts:
+
+    ```bash
+    kubectl apply -f deploy/k8s/traefik-ingress.yaml
+    ```
+
+* **Canary Promotion Step 2 (Full Cutover 100/0):** If Prometheus metrics confirm the challenger meets latency SLA (p95 $\le 15.0\text{ ms}$) and conformal error guarantees ($1 - \alpha \ge 0.90$), update the primary deployment image tag to the challenger release and reset weights to 100/0.
+* **Instant Emergency Rollback:** If the challenger experiences elevated error rates, instantly route 100% of traffic back to the stable baseline:
+
+    ```bash
+    kubectl patch traefikservice taxon-vision-ab-service -n taxon-vision --type=json \
+        -p='[{"op": "replace", "path": "/spec/weighted/services/0/weight", "value": 100}, {"op": "replace", "path": "/spec/weighted/services/1/weight", "value": 0}]'
+    ```
+
+### HostPath Storage Permissions Maintenance
+
+Prometheus and Grafana run as unprivileged users (`UID 65534` and `UID 472`). While declarative `initContainers` automatically enforce ownership during pod startups, manual filesystem resets or backup restorations on the host may require explicit permission alignment:
+
+```bash
+# Correct hostPath volume permissions on hive-mind (if manual reset occurs)
+sudo chown -R 65534:65534 /var/lib/taxon-vision/prometheus && sudo chmod -R 775 /var/lib/taxon-vision/prometheus
+sudo chown -R 472:472 /var/lib/taxon-vision/grafana && sudo chmod -R 775 /var/lib/taxon-vision/grafana
+```
+
+---
+
+## Section 12: Evidently AI Drift Monitoring & Retraining Workflows
+
+The platform deploys a dual-tier drift strategy: an inline real-time 1D Wasserstein-1 check and an offline multivariate RKHS MMD batch analysis.
+
+### Online Real-Time Drift Alerting
+
+* **Prometheus Exposition:** Forward passes calculate the Wasserstein-1 distance across unnormalized $L_2$ embedding norms in $< 1\text{ ms}$ on CPU, exposed at `GET /metrics` via gauge `embedding_drift_w1`.
+* **Alert Trigger:** A sustained value exceeding threshold $\tau = 0.15$ indicates sudden sensor exposure shifts, optical fouling, or severe feature magnitude distortion.
+
+### Offline Scheduled Batch Audit via Evidently AI
+
+For deep geometric manifold audits across scheduled weekly windows:
+
+```bash
+# Execute batch drift analysis across calibration baseline and current window
+pixi run -e dev python -m taxon_vision.pipelines.audit_drift \
+    --reference data/embeddings/cal_embeddings.pt \
+    --current data/embeddings/production_window.pt \
+    --report-html reports/data_drift_report.html \
+    --metrics-json metrics/drift_summary.json
+```
+
+* **Interactive Report Inspection:** Operators inspect distribution comparisons, feature energy shifts, and multivariate MMD test statistics in `reports/data_drift_report.html`.
+* **Automated Pipeline Retraining:** If the multivariate permutation test rejects the null hypothesis ($p < 0.01$), the script exits with status code 2, signalling Jenkins to trigger the unified DVC retraining DAG:
+
+    ```bash
+    dvc repro extract_features train export_onnx calibrate evaluate
+    ```
+
+---
+
+## Section 13: Enterprise GitOps & Multi-Cluster Migration Runbook
+
+For enterprise organizations migrating from in-cluster Jenkins ServiceAccount deployments to pull-based GitOps, the cluster architecture transitions seamlessly to **ArgoCD** or **Flux CD**.
+
+### ArgoCD Bootstrapping on K3s
+
+Deploy the ArgoCD control plane into an isolated namespace:
+
+```bash
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl rollout status deployment -n argocd argocd-server --timeout=120s
+```
+
+### Declarative Application CRD
+
+Create and apply the GitOps Application definition (`deploy/k8s/argocd-application.yaml`):
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: taxon-vision-mlops
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/foersben/taxon-vision-mlops.git
+    targetRevision: main
+    path: deploy/k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: taxon-vision
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+```
+
+### Decoupling Continuous Integration from Continuous Delivery
+
+Upon adopting GitOps:
+
+1. **Jenkins Scope Narrowing:** The Jenkins declarative pipeline no longer executes `kubectl apply`. Its responsibility terminates after static quality gates, GPU training, container image publishing to GHCR, and committing updated image tags to the Git repository.
+2. **Pull-Based Continuous Reconciliation:** ArgoCD detects changes in `deploy/k8s/` and reconciles cluster state automatically, eliminating cluster administrative credentials from CI runners.
+3. **Enterprise Monitoring Migration:** For multi-cluster observability, single-node Prometheus is upgraded to **Prometheus Operator (`kube-prometheus-stack`)** using Helm, and long-term storage is federated to **VictoriaMetrics** or **Thanos**.

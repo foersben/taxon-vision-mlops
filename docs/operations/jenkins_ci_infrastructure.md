@@ -310,14 +310,117 @@ The manifest declares eight Kubernetes objects designed to isolate runtime compu
     * Isolates the production web serving layer and model inference containers (`taxon-vision-api`) from CI/CD runners and cluster system daemons.
 
 * **7. Role (`jenkins-deployer-role`): Continuous Delivery Privileges**
-    * Grants permissions to create, update, patch, and watch `deployments` (apps API group) and `services`, `pods`, `events` (core API group) strictly inside `taxon-vision`.
-    * Powers the automated pipeline deployment step without requiring cluster-wide admin rights or brittle host-level cron/systemd automation.
+    * Grants permissions to create, update, patch, and watch `deployments` (apps API group), `services`, `pods`, `pods/log`, `events`, `configmaps`, `secrets`, `persistentvolumeclaims` (core API group), and `ingressroutes`, `traefikservices`, `middlewares` (`traefik.io` API group) strictly inside `taxon-vision`.
+    * Enables declarative deployment of serving pods, storage volumes, Traefik canary ingress routes, and monitoring stacks (Prometheus and Grafana) without requiring cluster-wide admin rights or brittle host-level automation.
 
 * **8. RoleBinding (`jenkins-deployer-binding`): Cross-Namespace Deployment Authorization**
     * Maps the `jenkins-agent` identity in `jenkins-ci` to `jenkins-deployer-role` in `taxon-vision`.
-    * Enables the in-cluster runner to execute `kubectl apply -f deploy/k8s/api-deployment.yaml` and `kubectl rollout restart deployment/taxon-vision-api` seamlessly upon successful test completion.
+    * Enables the in-cluster runner to execute `kubectl apply -f deploy/k8s/api-deployment.yaml`, `kubectl apply -f deploy/k8s/monitoring-prometheus-grafana.yaml`, and `kubectl rollout restart deployment/taxon-vision-api` seamlessly upon successful test completion.
 
-### 5.2 Kubernetes Cloud Configuration in Jenkins
+### 5.2 Architectural Alternatives for Continuous Delivery
+
+When designing continuous deployment into Kubernetes, engineering teams face distinct trade-offs across four operational paradigms:
+
+```mermaid
+flowchart TD
+    subgraph PatternA ["1. Scoped Role (Current Implementation)"]
+        JA1["jenkins-agent SA"] -->|Limited Verbs/Resources| R1["Role: jenkins-deployer-role<br/>(taxon-vision only)"]
+        R1 --> K8S1["k3s API Server"]
+    end
+
+    subgraph PatternB ["2. Namespaced Admin Pattern"]
+        JA2["jenkins-agent SA"] -->|RoleBinding| CA["ClusterRole: admin<br/>(Bound inside taxon-vision)"]
+        CA --> K8S2["k3s API Server"]
+    end
+
+    subgraph PatternC ["3. Enterprise GitOps Operator"]
+        GIT["Git Manifest Repo"] -->|Continuous Pull| ARGO["ArgoCD / Flux CD Controller<br/>(In-Cluster Reconciler)"]
+        ARGO -->|Zero CI Push Access| K8S3["k3s API Server"]
+        JC["Jenkins CI Pipeline"] -->|Push Image Tag| GIT
+    end
+
+    subgraph PatternD ["4. Host SSH Anti-Pattern (Strictly Prohibited)"]
+        JC_SSH["Jenkins Agent"] -.->|Bypasses K8s RBAC| SSH["Host SSH / sudo kubectl"]
+        SSH -.->|Host-level compromise| HOST["Host OS hive-mind"]
+    end
+```
+
+#### Architecture A: Scoped In-Cluster ServiceAccount (Current Production Baseline)
+
+* **Mechanism:** The ephemeral `jenkins-agent` pod runs with an in-cluster ServiceAccount token bound to an explicit `Role` within `namespace: taxon-vision`.
+* **Security Strengths:** Implements least-privilege RBAC. If a pipeline job is compromised, the blast radius is strictly confined to explicitly enumerated resource verbs within `taxon-vision`. The agent cannot access `kube-system`, cannot read cluster node secrets, and cannot alter cluster-wide daemonsets.
+* **Operational Overhead:** Requires manual RBAC manifest updates whenever new Kubernetes resource types (such as `ConfigMap`, `Secret`, or custom third-party CRDs like `IngressRoute`) are added to deployment manifests.
+
+#### Architecture B: Namespaced Admin RoleBinding Pattern
+
+* **Mechanism:** The `jenkins-agent` ServiceAccount is bound to the native Kubernetes default `ClusterRole/admin` via a namespaced `RoleBinding` inside `taxon-vision`:
+
+    ```yaml
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: RoleBinding
+    metadata:
+      name: jenkins-admin-binding
+      namespace: taxon-vision
+    subjects:
+      - kind: ServiceAccount
+        name: jenkins-agent
+        namespace: jenkins-ci
+    roleRef:
+      kind: ClusterRole
+      name: admin
+      apiGroup: rbac.authorization.k8s.io
+    ```
+
+* **Rationale & Trade-offs:** The pre-defined `admin` ClusterRole grants full create, read, update, and delete access to all standard namespaced resources (Deployments, Services, ConfigMaps, Secrets, PVCs, Ingress) while strictly forbidding cluster-scoped modifications (such as Nodes, PersistentVolumes, Namespaces, or RBAC definitions). Binding this role eliminates ongoing maintenance friction when expanding application manifests, while maintaining strong namespace isolation.
+
+#### Architecture C: Enterprise GitOps Operator Pattern (ArgoCD / Flux CD)
+
+* **Mechanism:** Continuous delivery is decoupled from the CI engine. Jenkins executes static quality gates, unit tests, GPU model training, and publishes immutable container images (`ghcr.io/foersben/taxon-vision-mlops:sha-<commit>`). Jenkins updates the desired image tag in a declarative Git repository. An in-cluster GitOps operator (ArgoCD or Flux CD) observes the repository and reconciles cluster state via continuous pull loops.
+* **Architectural Advantages:**
+    * **Zero Cluster Write Credentials in CI:** The CI runner requires zero Kubernetes write credentials or `kubectl` cluster access, eliminating token leakage risks from CI logs.
+    * **Automated Drift Detection & Self-Healing:** The GitOps controller continuously detects out-of-band cluster modifications and reverts them to the declarative Git ground truth.
+    * **Auditable Git Rollbacks:** Rolling back production requires solely reverting a Git commit (`git revert`), generating an immutable, cryptographic audit log.
+
+#### Architecture D: Host SSH Execution Anti-Pattern (Strictly Prohibited)
+
+* **The Anti-Pattern:** Granting Jenkins SSH access to the bare-metal host (e.g. `ssh taxon-main "kubectl apply ..."`) or mounting the host Docker socket (`/var/run/docker.sock`) and host kubeconfig (`/root/.kube/config`).
+* **Why It Is Forbidden:**
+    * **Host Boundary Violation:** Bypasses Kubernetes RBAC and container cgroups isolation, exposing host filesystems (`/home/benni/`, `/mnt/storage/`, LUKS decryption keys) to container processes.
+    * **Privilege Escalation:** Any pipeline vulnerability (such as a malicious dependency running arbitrary code during test execution) yields immediate root access to the physical server.
+    * **Auditability Collapse:** Kubernetes API server audit logs attribute changes to the cluster administrator rather than the automated CI service identity.
+
+---
+
+### 5.3 Credential Isolation & SSH Key Segregation Principles
+
+A fundamental requirement of production systems engineering is strict segregation between human developer identities and automated machine credentials:
+
+#### The Committer Identity Key Anti-Pattern
+
+Human developers sign Git commits and authenticate SSH terminal sessions using dedicated asymmetric key pairs (e.g. `id_ed25519` or GPG hardware tokens). Storing or loading a personal developer key inside Jenkins or CI runners is strictly prohibited:
+
+* **Identity Spoofing Risk:** A pipeline script executing with a personal key can push arbitrary commits, create signed tags, or access third-party repositories under the developer's name, destroying cryptographic non-repudiation.
+* **Credential Blast Radius:** If CI job workspaces or diagnostic memory dumps are inspected, personal SSH keys can be extracted and used to access personal workstations or infrastructure.
+
+#### The Dedicated Machine Deploy Key Pattern
+
+When CI/CD pipelines require Git write access (e.g. pushing automated DVC lockfile updates or generated documentation):
+
+* **Dedicated Machine Identity (`jenkins-ci-hivemind`):** A distinct ED25519 key pair generated exclusively for the CI controller.
+* **Scoped Repository Permissions:** Configured in GitHub as a repository Deploy Key with restricted write access strictly limited to `taxon-vision-mlops`, without organization-wide or account-wide permissions.
+* **Fine-Grained GitHub App / PAT:** Alternatively, automated automation utilizes a GitHub Fine-Grained Personal Access Token with read/write access scoped exclusively to repository contents and pull requests, expiring on a mandatory 90-day rotation schedule.
+
+#### In-Cluster ServiceAccount Token Isolation
+
+For Kubernetes deployment interactions, the pipeline uses in-cluster bearer tokens minted dynamically by the Kubernetes `service-account-token` controller:
+
+* Tokens are bound to the specific `jenkins-agent` ServiceAccount in `jenkins-ci`.
+* Tokens expire automatically and are rotated by the Kubernetes control plane.
+* Network boundaries ensure the token can only communicate with `https://192.168.178.30:6443` and cannot authenticate against external cloud providers or host SSH daemons.
+
+---
+
+### 5.4 Kubernetes Cloud Configuration in Jenkins
 
 The Jenkins Kubernetes plugin manages agent pod lifecycles using the following configuration parameters:
 
@@ -433,6 +536,34 @@ The deployment stage was hardened against these failure modes:
 
 * **Dynamic Credential Provisioning:** The deployment script checks for the active existence of `service/seaweedfs` in namespace `taxon-vision` and dynamically injects `taxonadmin` access keys into the ephemeral `.dvc/config.local` prior to any S3 network calls.
 * **Resilient Dual-Remote Hydration with Host-Tier Fallback:** Rather than enforcing a brittle fail-fast checkout, DVC attempts hydration sequentially from `local-seaweedfs` and `origin` (DagsHub S3). If remote artifacts are absent (e.g. during a non-training documentation or configuration commit), the script gracefully emits a warning and falls back to existing model checkpoints already mounted from the host NVMe drive (`/var/lib/taxon-vision/checkpoints/`). This guarantees continuous zero-downtime rolling deployments while preserving release model consistency.
+
+### 6.4 Post-Mortem & Forensic Root-Cause Analysis: ConfigMap RBAC Forbidden in Deployment Stage (Build #65)
+
+During continuous integration Build #65 on branch `develop`, all static quality gates, linting, type checks, and unit tests completed with zero errors. However, the pipeline failed during the `Deploy to Kubernetes` stage upon executing `kubectl apply -f deploy/k8s/monitoring-prometheus-grafana.yaml`:
+
+```text
+21:04:42 + kubectl apply -f deploy/k8s/monitoring-prometheus-grafana.yaml -n taxon-vision
+21:04:42 Error from server (Forbidden): error when retrieving current configuration of:
+21:04:42 Resource: "/v1, Resource=configmaps", GroupVersionKind: "/v1, Kind=ConfigMap"
+21:04:42 Name: "prometheus-config", Namespace: "taxon-vision"
+21:04:42 from server for: "deploy/k8s/monitoring-prometheus-grafana.yaml":
+21:04:42 configmaps "prometheus-config" is forbidden: User "system:serviceaccount:jenkins-ci:jenkins-agent"
+21:04:42 cannot get resource "configmaps" in API group "" in the namespace "taxon-vision"
+```
+
+#### Forensic Root-Cause Analysis
+
+1. **Role Scope Drift:** The `jenkins-deployer-role` was authored during Day-0 bootstrap when continuous deployment managed solely the stateless inference service (`deploy/k8s/api-deployment.yaml`). At that time, granting permissions across `deployments` (apps API group) and `services`, `pods`, `events` (core API group) satisfied all deployment requirements.
+2. **Incremental Infrastructure Expansion:** Build #65 introduced declarative in-cluster observability (`deploy/k8s/monitoring-prometheus-grafana.yaml`), requiring ConfigMaps (`prometheus-config`, `grafana-datasources`) to mount scrape jobs and datasources dynamically. When `kubectl apply` performed its initial server-side `get` request to compute three-way strategic merge diffs, the Kubernetes API server rejected the call with HTTP 403 Forbidden because `configmaps` was missing from the `resources` whitelist.
+3. **Privilege Escalation Prevention Invariant:** Because Kubernetes RBAC prevents ServiceAccounts from granting themselves permissions exceeding their current scope, the `jenkins-agent` could not mutate its own role.
+
+#### Architectural Remediation & Hardening Implemented
+
+* **Declarative RBAC Expansion:** [`deploy/k8s/jenkins-agent-rbac.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/jenkins-agent-rbac.yaml) was updated to grant comprehensive management of:
+    * Core resources: `services`, `pods`, `pods/log`, `events`, `configmaps`, `secrets`, `persistentvolumeclaims`.
+    * Traefik resources (`traefik.io` API group): `ingressroutes`, `traefikservices`, `middlewares`.
+* **Out-of-Band Administrative Application:** An administrator with cluster-admin context applied the updated manifest directly to the k3s cluster (`kubectl apply -f deploy/k8s/jenkins-agent-rbac.yaml`), unblocking subsequent CI/CD executions without granting excessive host-level access.
+* **Strategic Evolution:** Evaluated the Namespaced Admin Pattern (binding native `ClusterRole/admin` inside `taxon-vision`) and the Enterprise GitOps Operator Pattern (ArgoCD / Flux) to permanently eliminate RBAC verb maintenance during service additions.
 
 ---
 

@@ -137,9 +137,17 @@ kubectl get nodes "-o=custom-columns=NAME:.metadata.name,GPU:.status.allocatable
 
 The output confirms 4 allocatable `nvidia.com/gpu` virtual units on the `hive-mind` node, permitting concurrent multi-tenant execution across Web API inference, PyTorch batch training, and CI test runners without exclusive locking.
 
-### Live Production Ingress
+### Live Production Ingress & Traefik A/B Canary Routing
 
-The live API and server-rendered operator dashboard are publicly accessible at `https://taxon.benjamin-foerster.eu/`. Edge traffic terminates on Cloudflare and routes through an outbound-initiated Cloudflare Tunnel (`cloudflared`) directly to the Kubernetes NodePort service (`30080`) in the `taxon-vision` namespace, maintaining a zero-open-inbound-ports posture on the host network.
+The live API and server-rendered operator dashboard are publicly accessible at `https://taxon.benjamin-foerster.eu/`. Edge traffic terminates on Cloudflare and routes through an outbound-initiated Cloudflare Tunnel (`cloudflared`) directly into the cluster:
+
+* **Zero Public Inbound Ports:** The host firewall blocks all incoming WAN connections; edge traffic reaches the host exclusively via the authenticated Cloudflare Tunnel.
+* **Traefik v3.1 IngressRoute & A/B Canary Routing:** Deployed via [`deploy/k8s/traefik-ingress.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/traefik-ingress.yaml), incoming requests are evaluated by custom resources in the `traefik.io/v1alpha1` API group:
+    * `IngressRoute` (`taxon-vision-ingress`): Matches host `taxon.benjamin-foerster.eu` and routes to `taxon-vision-serving:8000`.
+    * `TraefikService` (`taxon-vision-ab-service`): Weighted Canary / A/B routing distributing live inference traffic:
+        * Production baseline (`taxon-vision-serving:8000`): Weight $80$ ($80\%$ of inbound requests).
+        * Challenger model (`taxon-vision-serving-challenger:8000`): Weight $20$ ($20\%$ of inbound requests).
+* **Zero-Downtime Weight Shifting:** Traffic split weights are updated in-place via declarative YAML changes without restarting application pods or dropping in-flight HTTP connections.
 
 ## Actions Runner Controller (ARC) Setup
 
@@ -328,7 +336,44 @@ The system implements a production two-layer CI/CD architecture:
     * `Integration & Conformal Invariants` - Verifies integration endpoints and asserts split conformal prediction empirical coverage bounds ($1 - \alpha \ge 0.90$).
     * `Documentation Strict Build` - Validates OKF knowledge graph and verifies documentation integrity via `zensical build --strict`.
     * `Model Training & Checkpoint (GPU)` - Runs on `develop` or `main` within a dedicated GPU agent pod requesting `nvidia.com/gpu: 1` on `hive-mind`. Pulls DVC manifests, streams real image observations from AWS S3 via `extract_features.py` into 4 stratified embedding splits on SeaweedFS, trains the head via Optuna sweeps, exports the ONNX graph, and pushes updated release checkpoints to DagsHub DVC.
-    * `Deploy to Kubernetes` - Automatically injects SeaweedFS credentials, hydrates models (with fallback to host-volume checkpoints), applies [`deploy/k8s/api-deployment.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) (`imagePullPolicy: Always`), executes a zero-downtime rolling restart, and runs the automated verification smoke test ([`scripts/ci/verify_deployment.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/ci/verify_deployment.sh)).
+    * `Deploy to Kubernetes` - Automatically injects SeaweedFS credentials, hydrates models (with fallback to host-volume checkpoints), applies [`deploy/k8s/api-deployment.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) and [`deploy/k8s/monitoring-prometheus-grafana.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/monitoring-prometheus-grafana.yaml) (`imagePullPolicy: Always`), executes a zero-downtime rolling restart, and runs the automated verification smoke test ([`scripts/ci/verify_deployment.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/ci/verify_deployment.sh)).
+
+---
+
+## In-Cluster Observability Plane: Prometheus & Grafana on K3s
+
+To guarantee operational autonomy without external telemetry egress or SaaS dependencies, the cluster hosts an in-cluster Prometheus and Grafana stack in `namespace: taxon-vision`, deployed via [`deploy/k8s/monitoring-prometheus-grafana.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/monitoring-prometheus-grafana.yaml):
+
+* **Service Endpoints & NodePort Registry:**
+    * **Port `30080`:** FastAPI inference service & operator dashboard (`taxon-vision-serving:8000`).
+    * **Port `30081`:** Optuna Bayesian hyperparameter search visualizer (`optuna-dashboard:8080`).
+    * **Port `30090`:** Prometheus TSDB web UI and API (`prometheus:9090`), scraping targets every 10 seconds.
+    * **Port `30300`:** Grafana visualizer (`grafana:3000`), authenticated with auto-provisioned Prometheus datasources.
+* **Storage Persistence & BTRFS NOCOW Allocation:** Prometheus and Grafana persist time-series indices and dashboard state to `/var/lib/taxon-vision/prometheus` and `/var/lib/taxon-vision/grafana` on the NVMe drive. Subvolumes are marked with the `NOCOW` (`chattr +C`) attribute to eliminate filesystem block fragmentation from frequent write appends.
+* **Linux Process Isolation & Root initContainers:** Unprivileged containers (Prometheus UID `65534`, Grafana UID `472`) are paired with root `initContainers` (`docker.io/busybox:latest`) that enforce correct ownership (`chown -R 65534:65534 /prometheus`, `chown -R 472:472 /var/lib/grafana`) and mode `775` before the main processes spawn, preventing `permission denied` startup crashes on hostPath volumes.
+* **Declarative Datasource Auto-Provisioning:** Grafana boots with a pre-configured datasource ConfigMap (`grafana-datasources`) targeting `http://prometheus:9090` internally, enabling immediate out-of-the-box telemetry without manual UI setup.
+
+---
+
+## Evidently AI Hybrid Drift Architecture
+
+To monitor ecological representation drift across non-stationary visual environments, the platform implements a dual-layer drift detection strategy:
+
+* **Online Real-Time Gate (1D Wasserstein-1):** In [`src/taxon_vision/monitoring/drift.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/monitoring/drift.py), the service evaluates the Earth Mover's Distance across unnormalized $L_2$ activation norms ($W_1(P_{\text{ref}}, P_{\text{curr}})$) in $< 1\text{ ms}$ on CPU, immediately catching sensor degradation and feature collapse without violating the 15 ms inference SLA.
+* **Offline Scheduled Batch Audit (Multivariate RKHS MMD via Evidently AI):** For deep semantic manifold drift, scheduled Jenkins pipeline stages execute Evidently AI test suites (`EmbeddingsDriftMetric(drift_method=mmd())` and `ColumnDriftMetric("embedding_norm", stattest="wasserstein")`). If the non-parametric permutation test rejects the null hypothesis ($p < 0.01$), the pipeline exports a structured drift flag and triggers DVC feature extraction and retraining stages.
+
+---
+
+## Enterprise Cloud-Native Alternatives & Evolution Horizons
+
+The bare-metal K3s architecture is designed for deterministic execution on on-premise hardware (`hive-mind`). For enterprise multi-cluster environments, components transition directly to standard cloud-native equivalents:
+
+* **Metrics & Observability:** Transition from single-pod Prometheus to **Prometheus Operator (`kube-prometheus-stack`)** or distributed TSDB engines like **VictoriaMetrics** / **Thanos** for multi-year deduplicated storage; Grafana transitions to **Grafana Enterprise** or **Datadog / Dynatrace** with OpenTelemetry distributed tracing.
+* **Model & Data Drift:** Transition from custom `drift.py` and batch Evidently HTML reports to **Evidently Enterprise**, **Arize AI**, or **Fiddler AI** for real-time embedding vector ingestion, interactive UMAP projections, and automated root-cause analysis.
+* **Model Serving & Ingress:** Transition from Traefik CRDs to **Istio** or **Linkerd Service Mesh** with mTLS and request mirroring, or **Cilium Service Mesh** for eBPF-accelerated L7 routing with zero sidecar proxy overhead.
+* **Continuous Delivery:** Transition from in-cluster Jenkins ServiceAccount execution to **Enterprise GitOps (ArgoCD / Flux CD)**, separating CI build pipelines from deployment cluster credentials and enabling continuous pull-based reconciliation.
+
+---
 
 ## Local Development Stack
 
