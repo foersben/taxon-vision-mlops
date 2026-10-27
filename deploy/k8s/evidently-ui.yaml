@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: evidently-ui
+  namespace: taxon-vision
+  labels:
+    app.kubernetes.io/name: evidently-ui
+    app.kubernetes.io/part-of: taxon-vision-mlops
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: evidently-ui
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: evidently-ui
+        app.kubernetes.io/part-of: taxon-vision-mlops
+    spec:
+      containers:
+        - name: evidently-ui
+          image: docker.io/evidently/evidently-service:latest
+          args:
+            - "ui"
+            - "--workspace"
+            - "/workspace"
+            - "--port"
+            - "8000"
+          ports:
+            - name: http
+              containerPort: 8000
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1024Mi"
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+      volumes:
+        - name: workspace
+          hostPath:
+            path: /var/lib/taxon-vision/evidently
+            type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: evidently-ui
+  namespace: taxon-vision
+  labels:
+    app.kubernetes.io/name: evidently-ui
+    app.kubernetes.io/part-of: taxon-vision-mlops
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: evidently-ui
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000

@@ -10,6 +10,35 @@ spec:
   entryPoints:
     - web
   routes:
+    # --------------------------------------------------------------------------
+    # On-Demand Dashboard Routes (Scale-to-Zero via Sablier)
+    # --------------------------------------------------------------------------
+    - match: PathPrefix(`/optuna`) || Host(`optuna.taxon.benjamin-foerster.eu`)
+      kind: Rule
+      middlewares:
+        - name: sablier-optuna
+        - name: strip-optuna
+      services:
+        - name: optuna-dashboard
+          port: 8080
+    - match: PathPrefix(`/grafana`) || Host(`grafana.taxon.benjamin-foerster.eu`)
+      kind: Rule
+      middlewares:
+        - name: sablier-grafana
+      services:
+        - name: grafana
+          port: 3000
+    - match: PathPrefix(`/evidently`) || Host(`evidently.taxon.benjamin-foerster.eu`)
+      kind: Rule
+      middlewares:
+        - name: sablier-evidently
+        - name: strip-evidently
+      services:
+        - name: evidently-ui
+          port: 8000
+    # --------------------------------------------------------------------------
+    # Production Model Serving & Operator Dashboard (Always Warm)
+    # --------------------------------------------------------------------------
     - match: Host(`taxon.benjamin-foerster.eu`) || PathPrefix(`/`)
       kind: Rule
       services:
@@ -17,10 +46,90 @@ spec:
           port: 8000
 ---
 # ==============================================================================
-# Traefik A/B Testing & Canary Service Specification
+# Traefik Path-Stripping Middlewares
 # ==============================================================================
-# Distributes live traffic between Production model (80%) and Challenger (20%)
-# with zero pod reloads and zero downtime.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-optuna
+  namespace: taxon-vision
+spec:
+  stripPrefix:
+    prefixes:
+      - "/optuna"
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-evidently
+  namespace: taxon-vision
+spec:
+  stripPrefix:
+    prefixes:
+      - "/evidently"
+---
+# ==============================================================================
+# Sablier Scale-to-Zero Middlewares
+# ==============================================================================
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: sablier-optuna
+  namespace: taxon-vision
+  labels:
+    app.kubernetes.io/name: sablier-optuna
+    app.kubernetes.io/part-of: taxon-vision-mlops
+spec:
+  plugin:
+    sablier:
+      sablierUrl: http://sablier.taxon-vision.svc.cluster.local:10000
+      names: "deployment_taxon-vision_optuna-dashboard_1"
+      sessionDuration: "15m"
+      dynamic:
+        displayName: "Optuna Bayesian Dashboard"
+        theme: "hacker-terminal"
+        refreshFrequency: "2s"
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: sablier-grafana
+  namespace: taxon-vision
+  labels:
+    app.kubernetes.io/name: sablier-grafana
+    app.kubernetes.io/part-of: taxon-vision-mlops
+spec:
+  plugin:
+    sablier:
+      sablierUrl: http://sablier.taxon-vision.svc.cluster.local:10000
+      names: "deployment_taxon-vision_grafana_1"
+      sessionDuration: "20m"
+      dynamic:
+        displayName: "Grafana Telemetry Console"
+        theme: "ghost"
+        refreshFrequency: "2s"
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: sablier-evidently
+  namespace: taxon-vision
+  labels:
+    app.kubernetes.io/name: sablier-evidently
+    app.kubernetes.io/part-of: taxon-vision-mlops
+spec:
+  plugin:
+    sablier:
+      sablierUrl: http://sablier.taxon-vision.svc.cluster.local:10000
+      names: "deployment_taxon-vision_evidently-ui_1"
+      sessionDuration: "15m"
+      dynamic:
+        displayName: "Evidently AI Drift Dashboard"
+        theme: "shuffle"
+        refreshFrequency: "2s"
+---
+# ==============================================================================
+# Traefik A/B Testing & Canary Service Specification
 # ==============================================================================
 apiVersion: traefik.io/v1alpha1
 kind: TraefikService

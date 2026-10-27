@@ -120,7 +120,7 @@ metadata:
     app.kubernetes.io/name: grafana
     app.kubernetes.io/part-of: taxon-vision-mlops
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app.kubernetes.io/name: grafana

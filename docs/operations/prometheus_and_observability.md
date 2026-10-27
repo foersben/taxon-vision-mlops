@@ -365,3 +365,65 @@ The bare-metal K3s implementation on `hive-mind` represents a self-contained, to
 | **Data & Concept Drift** | Custom Wasserstein-1 in `drift.py` + Evidently AI offline batch HTML reports. | **Evidently Enterprise**, **Arize AI**, or **Fiddler AI**. | Current open-source pipeline has zero subscription cost and full offline reproducibility; enterprise platforms offer streaming vector database ingestion, automated UMAP projection, and real-time attribution root-cause analysis. |
 | **Model Ingress & Canary Routing** | Traefik v3.1 CRDs (`IngressRoute`, `TraefikService` weighted round-robin). | **Istio / Linkerd Service Mesh** or **Cilium Service Mesh (eBPF)**. | Traefik CRDs provide lightweight weighted routing without Envoy sidecars; enterprise service meshes add cryptographic mTLS between microservices, automatic traffic mirroring/shadowing, and eBPF-accelerated kernel bypass. |
 | **Continuous Delivery** | Jenkins in-cluster ServiceAccount (`jenkins-deployer-role`) applying manifests via `kubectl`. | **Enterprise GitOps (ArgoCD / Flux CD)**. | In-cluster ServiceAccount is self-contained; GitOps decouples CI build runners from deployment credentials, automating continuous pull reconciliation against declarative Git repositories. |
+
+---
+
+## 10. On-Demand Scale-to-Zero Architecture for Human Dashboards (Sablier & Traefik)
+
+Human-facing operational dashboards (Optuna Dashboard, Grafana Visualizer, Evidently UI) are critical for periodic telemetry inspection and model audits, but remain idle during standard production serving. Keeping these web servers running 24/7 wastes host memory and CPU cycles on the dedicated bare-metal compute node (`hive-mind`).
+
+To maximize hardware efficiency while maintaining seamless access, the platform implements **On-Demand Scale-to-Zero** utilizing **Sablier** and the **Sablier Traefik Plugin**.
+
+### 10.1 Workload State Allocation Policy
+
+Workloads are strictly segregated based on operational necessity:
+
+* **Always Warm (24/7 Running):**
+    * `taxon-vision-serving` (2 replicas): Preserves sub-15ms p95 latency guarantees and zero cold-start penalties for incoming inference requests.
+    * `prometheus` (1 replica): Continuous 10-second scrape intervals are required to maintain uninterrupted time-series data without metric gaps.
+    * `jenkins-controller` (1 replica): Must receive incoming GitHub webhook events and Cloudflare Tunnel triggers continuously.
+    * `seaweedfs` (1 replica): In-cluster S3 storage tier must be reachable at all times for DVC checkpoint hydration and feature streaming.
+    * `sablier` (1 replica): Lightweight control daemon ($\approx 20\text{ MiB}$ RAM, $0.01$ CPU) that intercepts requests and scales idle pods.
+* **On-Demand Scale-to-Zero (`replicas: 0` when idle):**
+    * `optuna-dashboard` (0 replicas): Spins up on demand via `/optuna` or `optuna.taxon.benjamin-foerster.eu`, shutting down after 15 minutes of inactivity.
+    * `grafana` (0 replicas): Spins up on demand via `/grafana` or `grafana.taxon.benjamin-foerster.eu`, shutting down after 20 minutes of inactivity.
+    * `evidently-ui` (0 replicas): Spins up on demand via `/evidently` or `evidently.taxon.benjamin-foerster.eu`, shutting down after 15 minutes of inactivity.
+
+### 10.2 Architectural Dataflow & Interception
+
+```mermaid
+flowchart TD
+    USER["Operator Browser<br/>(e.g. /grafana)"] --> EDGE["Cloudflare Tunnel / Edge"]
+    EDGE --> TRAEFIK["Traefik Ingress Controller<br/>(k3s kube-system)"]
+
+    subgraph TraefikPlugin ["Traefik Sablier Middleware Interception"]
+        TRAEFIK --> PLUGIN["sablier-traefik-plugin (v1.3.0)"]
+        PLUGIN -->|Check Pod Readiness| SABLIER_SRV["Sablier Core Server (:10000)<br/>sablier.taxon-vision.svc"]
+    end
+
+    subgraph DecisionState ["Scale-to-Zero State Machine"]
+        SABLIER_SRV -->|Replicas == 0| SCALE_UP["Scale Deployment to 1 Replica<br/>(via Kubernetes API)"]
+        SABLIER_SRV -->|Replicas == 0| RENDER["Render Interactive Waiting HTML<br/>(Themes: hacker-terminal / ghost / shuffle)<br/>with 2s Auto-Refresh"]
+        RENDER --> USER
+        SCALE_UP --> POD_READY["Pod Reaches Ready State<br/>(Readiness Probe HTTP 200)"]
+        POD_READY --> FORWARD["Traefik Proxies Browser to Service"]
+    end
+
+    FORWARD --> GRAF_SRV["Grafana Pod (:3000)<br/>taxon-vision namespace"]
+    SABLIER_SRV -->|Inactivity Timer > 20m| SCALE_DOWN["Scale Deployment to 0 Replicas"]
+```
+
+### 10.3 Component Implementation
+
+* **Sablier Scaler Daemon ([`deploy/k8s/sablier-scaler.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/sablier-scaler.yaml)):** Runs `ghcr.io/sablierapp/sablier:latest` with a `ClusterRole` granting `get, list, watch, update, patch` over `deployments/scale` and `statefulsets/scale`. Starts with `--provider.name=kubernetes --provider.kubernetes.ready-on-first-replica --sessions.default-duration=15m`.
+* **K3s Traefik Plugin Integration ([`deploy/k8s/traefik-sablier-config.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/traefik-sablier-config.yaml)):** Declared via K3s `HelmChartConfig` in `namespace: kube-system` under `experimental.plugins`:
+    * `moduleName`: `github.com/sablierapp/sablier-traefik-plugin`
+    * `version`: `v1.3.0` (validated against the Traefik plugin registry integrity checks).
+* **Traefik Scale-to-Zero Middlewares ([`deploy/k8s/traefik-ingress.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/traefik-ingress.yaml)):** Target workloads use the Kubernetes provider naming format `kind_namespace_name_replicas`:
+    * **`sablier-optuna`:** Targets `deployment_taxon-vision_optuna-dashboard_1`, theme `hacker-terminal`, duration `15m`.
+    * **`sablier-grafana`:** Targets `deployment_taxon-vision_grafana_1`, theme `ghost`, duration `20m`.
+    * **`sablier-evidently`:** Targets `deployment_taxon-vision_evidently-ui_1`, theme `shuffle`, duration `15m`.
+* **Enterprise Scale-to-Zero Alternatives:** In large-scale enterprise Kubernetes clusters, scale-to-zero across human interfaces transitions to:
+    * **KEDA (Kubernetes Event-driven Autoscaling) HTTP Add-on:** Uses an external proxy (`keda-http-add-on`) to buffer requests and scale deployments from zero based on pending HTTP concurrency metrics.
+    * **Knative Serving:** Scales pods to zero using the Knative Activator and Queue-Proxy sidecars, with revision management and traffic splitting.
+    * **vCluster / DevSpace Hibernation:** Hibernates entire tenant namespaces when developer activity ceases, saving cluster-wide memory across multi-tenant teams.
