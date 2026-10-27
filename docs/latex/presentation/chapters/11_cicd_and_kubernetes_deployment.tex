@@ -366,7 +366,7 @@
                 \item \textbf{Stage 1 (\texttt{builder}):} Ubuntu 24.04 with full Pixi toolchain, compilers, and Rattler build cache.
                 \item \textbf{Stage 2 (\texttt{runtime}):} Stripped minimal Ubuntu image copying solely the compiled environment (\texttt{/app/.pixi/envs/default}) and application source. Final image size $< 1.5$ GB (reduced from $> 10$ GB).
             \end{itemize}
-            \item \textbf{Local Development (\texttt{flagship}):} \texttt{deploy/compose/docker-compose.local.yaml} orchestration with local MinIO, mock DagsHub S3, and Prometheus scraper for zero-cloud offline debugging.
+            \item \textbf{Local Development (\texttt{flagship}):} \texttt{docker-compose.yml} orchestration with FastAPI, SeaweedFS S3, Optuna dashboard, and Prometheus scraper for zero-cloud offline debugging.
             \item \textbf{Bare-Metal Production (\texttt{hive-mind}):} Declarative Kubernetes (k3s) manifests with Traefik ingress controller, zero-downtime rolling updates, and NVIDIA GPU time-slicing daemonsets.
         \end{itemize}
     \end{block}

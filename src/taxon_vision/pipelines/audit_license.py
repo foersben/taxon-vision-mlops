@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: MIT
 """Stage 2: Active License Gatekeeper & Open Compliance Verifier.
 
-Filters candidate observations strictly through LicenseFilter (CC0, CC-BY, CC-BY-NC + non-empty attribution),
-producing the authoritative dataset_manifest.parquet and emitting reports/license_audit.json.
+Filters candidate observations strictly through LicenseFilter (CC0, CC-BY, CC-BY-NC + non-empty attribution), producing the authoritative dataset_manifest.parquet and emitting reports/license_audit.json.
 """
 
 from __future__ import annotations

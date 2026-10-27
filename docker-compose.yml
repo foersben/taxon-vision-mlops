@@ -1,0 +1,122 @@
+
+# ==============================================================================
+# TaxonVision-MLOps Multi-Microservice Orchestration
+# ==============================================================================
+# Deploys the complete containerized stack:
+# 1. traefik: Edge reverse proxy with native Prometheus metrics (ports 80, 8081, 9100)
+# 2. app: FastAPI inference service & Jinja2/HTMX dashboard (port 8000 & routed via :80)
+# 3. seaweedfs: S3-compatible local object storage (port 8333 S3, 9333 Master UI)
+# 4. optuna-dashboard: Bayesian hyperparameter optimization visualizer (port 8080)
+# 5. prometheus: Real-time time-series telemetry scraping /metrics (port 9090)
+# 6. grafana: Operational metrics dashboards (port 3000, admin/admin)
+# ==============================================================================
+
+services:
+  traefik:
+    image: traefik:v3.1
+    container_name: taxon_traefik
+    command:
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.metrics.address=:9100"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--metrics.prometheus=true"
+      - "--metrics.prometheus.entrypoint=metrics"
+      - "--metrics.prometheus.addentrypointslabels=true"
+      - "--metrics.prometheus.addserviceslabels=true"
+      - "--accesslog=true"
+      - "--accesslog.format=json"
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+    ports:
+      - "80:80"       # Public HTTP entrypoint
+      - "8081:8080"   # Traefik Web UI & Dashboard
+      - "9100:9100"   # Traefik Prometheus metrics port
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile
+    container_name: taxon_vision_app
+    ports:
+      - "8000:8000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.app.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.app.entrypoints=web"
+      - "traefik.http.services.app.loadbalancer.server.port=8000"
+    environment:
+      - PORT=8000
+      - HOST=0.0.0.0
+      - TAXON_OPTUNA_STORAGE_URI=sqlite:////optuna/optuna_studies.db
+      - TAXON_ALLOW_UNTRAINED_FALLBACK=true
+    volumes:
+      - ./data/optuna:/optuna
+      - ./data/flagged_observations:/app/data/flagged_observations
+      - ./models/checkpoints:/app/models/checkpoints
+      - ./data/sample:/app/data/sample
+    depends_on:
+      - seaweedfs
+      - prometheus
+    healthcheck:
+      test: ["CMD", "pixi", "run", "--frozen", "-e", "ci", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready')"]
+      interval: 15s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    container_name: taxon_seaweedfs
+    ports:
+      - "8333:8333" # S3 API
+      - "9333:9333" # Master UI
+      - "8888:8888" # Filer UI
+    command: "server -dir=/data -s3 -s3.port=8333 -s3.allowEmptyFolder=true"
+    volumes:
+      - ./data/seaweedfs:/data
+    restart: unless-stopped
+
+  optuna-dashboard:
+    image: ghcr.io/optuna/optuna-dashboard:latest
+    container_name: taxon_optuna_dashboard
+    ports:
+      - "8080:8080"
+    command: ["sqlite:////optuna/optuna_studies.db", "--port", "8080", "--host", "0.0.0.0"]
+    volumes:
+      - ./data/optuna:/optuna
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: taxon_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yaml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: taxon_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  grafana_data:

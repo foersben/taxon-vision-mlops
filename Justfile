@@ -203,9 +203,13 @@ calibrate:
 pareto:
 	pixi run --frozen -e dev python -m taxon_vision.pipelines.evaluate
 
-# Run CLI prediction script on an observation image
+# Run CLI prediction script on an observation image (downloads samples if absent)
 [group("mlops")]
 predict image="data/sample/406185885_taxon_47120.jpg":
+	@if [ ! -f "{{image}}" ]; then \
+		echo ">>> Sample image {{image}} not found; downloading verified sample observations..."; \
+		just download-samples; \
+	fi
 	pixi run --frozen -e dev python -m taxon_vision.inference.cli {{image}}
 
 # Download verified open-license sample images for all 10 catalog taxa from iNaturalist
@@ -227,13 +231,16 @@ dvc-push remote="origin":
 # Pull tracked datasets & models from DagsHub or local remote
 [group("mlops")]
 dvc-pull remote="origin":
-	@TOKEN=$(secret-tool lookup Title DagsHub 2>/dev/null || secret-tool lookup service dagshub 2>/dev/null); \
-	if [ -z "$TOKEN" ] && [ "{{remote}}" = "origin" ]; then \
-		echo "❌ Error: KeePassXC is locked or DagsHub token not found in Secret Service." >&2; \
-		exit 1; \
-	fi; \
-	AWS_ACCESS_KEY_ID="$TOKEN" AWS_SECRET_ACCESS_KEY="$TOKEN" \
-	pixi run --frozen -e dev dvc pull -r {{remote}}
+	@TOKEN="${DAGSHUB_TOKEN:-$(secret-tool lookup Title DagsHub 2>/dev/null || secret-tool lookup service dagshub 2>/dev/null || true)}"; \
+	if [ -n "$TOKEN" ]; then \
+		AWS_ACCESS_KEY_ID="$TOKEN" AWS_SECRET_ACCESS_KEY="$TOKEN" \
+		pixi run --frozen -e dev dvc pull -r {{remote}}; \
+	else \
+		echo "ℹ️  No DagsHub token found in environment or Secret Service; attempting anonymous pull..."; \
+		if ! pixi run --frozen -e dev dvc pull -r {{remote}} 2>/dev/null; then \
+			echo "⚠️  Remote requires authentication. Provide DAGSHUB_TOKEN, or train a new model via: just train"; \
+		fi; \
+	fi
 
 # Display DVC pipeline Directed Acyclic Graph
 [group("mlops")]
@@ -256,6 +263,21 @@ run-api:
 [group("app")]
 run:
 	@just run-api
+
+# Launch complete multi-service microservice stack via Docker Compose (FastAPI, SeaweedFS, Optuna, Prometheus, Grafana)
+[group("app")]
+up:
+	docker compose up -d --build
+
+# Stop multi-service Docker Compose microservices
+[group("app")]
+down:
+	docker compose down
+
+# Follow live logs from Docker Compose microservices
+[group("app")]
+logs:
+	docker compose logs -f
 
 # Validate live Kubernetes deployment health, endpoints, and inference
 [group("app")]

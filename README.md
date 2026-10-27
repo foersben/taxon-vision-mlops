@@ -20,23 +20,55 @@ This repository provides a highly formalised, end-to-end MLOps pipeline and high
 
 ## Quickstart
 
-### Prerequisites
+### Option A: One-Command Microservices Deployment (Docker Compose)
 
-* [Pixi](https://pixi.sh) installed (`curl -fsSL https://pixi.sh/install.sh | bash`)
-* [Just](https://github.com/casey/just) installed (`cargo install just` or `pixi global install just`)
-
-### 1. Bootstrapping
+Deploy the complete multi-service stack with a single command (requires only [Docker](https://docs.docker.com/get-docker/)):
 
 ```bash
 # Clone the repository
 git clone https://github.com/foersben/taxon-vision-mlops.git
 cd taxon-vision-mlops
 
-# Setup environment, pre-commit hooks, and scratch notebook space
+# Launch all 6 microservices (Traefik gateway, FastAPI app, SeaweedFS, Optuna, Prometheus, Grafana)
+docker compose up -d --build
+```
+
+Access the operational interfaces:
+
+* **Traefik Edge Ingress Gateway:** [http://localhost](http://localhost)
+* **Traefik Management Dashboard:** [http://localhost:8081](http://localhost:8081)
+* **TaxonVision Direct REST API:** [http://localhost:8000](http://localhost:8000)
+* **Prometheus Telemetry Scraper:** [http://localhost:9090](http://localhost:9090)
+* **Grafana Operational Dashboards:** [http://localhost:3000](http://localhost:3000) (credentials: `admin` / `admin`)
+* **Optuna Bayesian Tuning Cockpit:** [http://localhost:8080](http://localhost:8080)
+* **SeaweedFS S3 Storage UI:** [http://localhost:9333](http://localhost:9333)
+
+To inspect logs or tear down the stack:
+
+```bash
+docker compose logs -f app
+docker compose down
+```
+
+### Option B: Native Workstation Setup (Pixi & Just)
+
+#### Prerequisites
+
+* [Pixi](https://pixi.sh) installed (`curl -fsSL https://pixi.sh/install.sh | bash`)
+* [Just](https://github.com/casey/just) installed (`cargo install just` or `pixi global install just`)
+
+#### 1. Bootstrapping
+
+```bash
+# Clone the repository
+git clone https://github.com/foersben/taxon-vision-mlops.git
+cd taxon-vision-mlops
+
+# Bootstrap Pixi dev environment, pre-commit hooks, and baseline weights
 just setup --scratch
 ```
 
-### 2. Quality & Tests
+#### 2. Quality & Tests
 
 ```bash
 # Run linting and type checks
@@ -49,7 +81,7 @@ just test
 just validate-okf
 ```
 
-### 3. Running the Service
+#### 3. Running the Service Locally
 
 ```bash
 # Launch unified FastAPI + HTMX service on http://localhost:8000

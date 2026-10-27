@@ -45,7 +45,7 @@ The repository is structured as an enterprise-grade MLOps monorepo engineered to
 
 * **`src/taxon_vision/`:** Core Python library package containing 10 modular, high-cohesion subpackages spanning data ingestion, vision model backbones, ONNX inference, conformal calibration, active learning triage, telemetry, and web presentation.
 * **`config/`:** Centralized configuration repository containing base runtime defaults (`default_config.yaml`), empirical conformal calibration parameters (`conformal_config.yaml`), taxonomic catalog definitions (`taxa_catalog.yaml`), and Prometheus scraper definitions (`prometheus.yaml`).
-* **`deploy/`:** Production infrastructure deployment artifacts, including Kubernetes bare-metal manifests (`deploy/k8s/`), Dockerfiles for CPU and CUDA execution targets, and local multi-service Docker Compose files (`docker-compose.local.yaml`).
+* **`deploy/`:** Production infrastructure deployment artifacts, including Kubernetes bare-metal manifests (`deploy/k8s/`), Dockerfiles for CPU and CUDA execution targets, and root multi-service Docker Compose files (`docker-compose.yml`).
 * **`scripts/`:** Operational automation utilities, CLI execution wrappers, governance verifiers (`validate_okf.py`, `verify_markdown_rules.py`, `visualize_okf.py`), benchmark runners, and database migration helpers.
 * **`tests/`:** Test harnesses partitioned into fast isolated unit tests (`tests/unit/`), realistic multi-component integration tests (`tests/integration/`), and shared synthetic fixtures.
 * **`.agents/`:** AI pair-programming infrastructure, defining specialized engineering roles, behavioral rules, automated skills, and multi-step execution workflows.

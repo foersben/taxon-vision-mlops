@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: MIT
 """Stage 5: ONNX Model Export & Quantization Pipeline.
 
-First-class CLI entrypoint that traces trained PyTorch backbone representations
-and classification head into a production ONNX graph with optional INT8 quantization.
+First-class CLI entrypoint that traces trained PyTorch backbone representations and classification head into a production ONNX graph with optional INT8 quantization.
 """
 
 from __future__ import annotations

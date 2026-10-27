@@ -332,20 +332,20 @@ The system implements a production two-layer CI/CD architecture:
 
 ## Local Development Stack
 
-For local development and debugging, a `docker-compose.local.yaml` is provided in
-`deploy/compose/docker-compose.local.yaml`. It spins up the infrastructure components that cannot run inside Pixi:
+For local multi-service orchestration and debugging, a canonical `docker-compose.yml` is provided in the repository root. It orchestrates the complete 5-microservice topology (FastAPI app, SeaweedFS, Optuna dashboard, Prometheus, Grafana).
+
+For running only the background infrastructure services alongside a local host FastAPI server:
 
 * **SeaweedFS** (ports `8333` / `9333` / `8888`) - S3-compatible local object store for DVC remotes
   and S3 streamer development without hitting real AWS.
-* **Prometheus** (port `9090`) - scrapes the local FastAPI `/metrics` endpoint at
-  `host.docker.internal:8000`. Configuration lives in `config/prometheus.yaml`.
-* **Grafana** (port `3000`) - connected to the local Prometheus instance for building
-  and testing dashboards before exporting to production.
+* **Optuna Dashboard** (port `8080`) - interactive Bayesian hyperparameter search visualizer.
+* **Prometheus** (port `9090`) - scrapes `/metrics` endpoints. Configuration lives in `config/prometheus.yaml`.
+* **Grafana** (port `3000`) - connected to Prometheus for operational dashboards (credentials: `admin` / `admin`).
 
-Start the stack with:
+Start the infrastructure stack with:
 
 ```bash
-docker compose -f deploy/compose/docker-compose.local.yaml up -d
+docker compose up -d seaweedfs optuna-dashboard prometheus grafana
 ```
 
 The MLflow local tracking server is managed via Pixi (not Docker) to keep it inside the

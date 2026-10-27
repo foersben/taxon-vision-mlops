@@ -15,6 +15,7 @@ USER appuser
 # Copy dependency specifications, README, and source code required for editable hatchling build
 COPY --chown=appuser:appgroup pyproject.toml pixi.lock README.md ./
 COPY --chown=appuser:appgroup src/ src/
+COPY --chown=appuser:appgroup scripts/ scripts/
 
 # Install the minimal CPU-only production/inference environment directly as non-root user
 RUN pixi install --frozen -e ci
@@ -22,14 +23,16 @@ RUN pixi install --frozen -e ci
 # Copy configuration, model checkpoints, and default parameters
 COPY --chown=appuser:appgroup config/ config/
 COPY --chown=appuser:appgroup params.yaml ./params.yaml
-RUN mkdir -p models/checkpoints && chown -R appuser:appgroup models/checkpoints
+RUN mkdir -p models/checkpoints data/sample data/optuna data/flagged_observations reports && \
+  chown -R appuser:appgroup models data reports
 
 # Expose FastAPI HTTP serving port
 EXPOSE 8000
 
 ENV PORT=8000 \
   HOST=0.0.0.0 \
-  PYTHONUNBUFFERED=1
+  PYTHONUNBUFFERED=1 \
+  TAXON_ALLOW_UNTRAINED_FALLBACK=true
 
 # Healthcheck hitting the readiness probe (validating model warmup & cache)
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \

@@ -18,13 +18,10 @@ def save_checkpoint(head: nn.Module, checkpoint_path: Path | str | None = None) 
     """Persist trained head weights and invalidate runtime classifier cache.
 
     Why:
-        Persisting model weights to disk ensures deployment permanence and enables fast restoration
-        during service cold starts. Clearing the runtime inference classifier cache (`get_classifier.cache_clear()`)
-        ensures subsequent inference requests immediately consume the updated weights without requiring a service restart.
+        Persisting model weights to disk ensures deployment permanence and enables fast restoration during service cold starts. Clearing the runtime inference classifier cache (`get_classifier.cache_clear()`) ensures subsequent inference requests immediately consume the updated weights without requiring a service restart.
 
     How:
-        Resolves target filesystem destination, creates parent directories if missing, serializes state
-        dictionary via `torch.save`, and calls `cache_clear()` on `get_classifier`.
+        Resolves target filesystem destination, creates parent directories if missing, serializes state dictionary via `torch.save`, and calls `cache_clear()` on `get_classifier`.
 
     Args:
         head: PyTorch classification head module.

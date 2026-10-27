@@ -59,7 +59,7 @@ BADGE active learning \& triage queue & \textbf{partial} & \texttt{compute\_badg
 \addlinespace
 Conformal calibration \& Pareto evaluation & \textbf{implemented} & Single-trunk 7-stage DVC DAG integrates \texttt{calibrate} (\texttt{taxon\_vision.pipelines.calibrate}) and \texttt{eval} (\texttt{taxon\_vision.pipelines.evaluate}), calculating non-conformity quantiles $\hat{q}_\alpha$ and asserting coverage $\ge 1 - \alpha$ on holdout test partitions. \\
 \addlinespace
-In-cluster S3 cache \& Optuna dashboard & \textbf{implemented} & Kubernetes manifests deploy SeaweedFS (Apache 2.0, port 8333) and Optuna dashboard (NodePort 30081) backed by NVMe SQLite WAL persistence; \texttt{deploy/compose/docker-compose.local.yaml} mirrors the stack locally. \\
+In-cluster S3 cache \& Optuna dashboard & \textbf{implemented} & Kubernetes manifests deploy SeaweedFS (Apache 2.0, port 8333) and Optuna dashboard (NodePort 30081) backed by NVMe SQLite WAL persistence; \texttt{docker-compose.yml} mirrors the stack locally. \\
 \midrule
 Full-manifold MMD drift gate & \textbf{planned} & Specified in Section~\ref{sec:evidently_drift_gate} as the Tier-2 offline RKHS kernel drift gate ($\text{MMD}^2$) within the Evidently AI quality gate, pending implementation in \texttt{monitoring/drift.py} or \texttt{Jenkinsfile}. \\
 \addlinespace

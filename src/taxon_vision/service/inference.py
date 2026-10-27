@@ -148,10 +148,14 @@ def get_onnx_engine() -> ONNXInferenceEngine | None:
 
     onnx_path = _resolve_artifact(cfg.onnx_model_path)
     if not onnx_path.exists():
-        if cfg.inference_backend == "onnx":
+        canonical_fallback = _resolve_artifact("models/checkpoints/model_int8.onnx")
+        if canonical_fallback.exists():
+            onnx_path = canonical_fallback
+        elif cfg.inference_backend == "onnx":
             raise ModelNotReadyError(f"ONNX model not found at {onnx_path}. Run the export_onnx stage first.")
-        logger.warning("ONNX artefact %s not found; serving with the PyTorch classifier.", onnx_path)
-        return None
+        else:
+            logger.warning("ONNX artefact %s not found; serving with the PyTorch classifier.", onnx_path)
+            return None
 
     engine = ONNXInferenceEngine(str(onnx_path))
     expected = len(load_taxa_catalog())

@@ -26,12 +26,12 @@ Read ONLY the files in your active task row:
 | **Data & S3** | `data/{s3_streamer,inat_client,license_filter}.py` | `unit/test_data_components.py` | `@03`, `05-license` |
 | **Pipelines** | `pipelines/{ingest,audit_license,extract_features,train,export_onnx,calibrate,evaluate}.py` | `unit/test_pipelines.py` | `@03`, `01-mlops` |
 | **Models & Loss** | `models/{factory,head,loss,trainer}.py` | `unit/test_models_components.py` | `@04`, `01-mlops` |
-| **Training & HPO** | `models/training/{runner,loops,embeddings,tuning,tracking,checkpoint,types}.py` | `unit/test_tuning.py`, `unit/test_tracking.py` | `@04`, `01-mlops` |
+| **Training & HPO** | `models/training/{runner,loops,embeddings,tuning,tracking,checkpoint,types}.py` | `unit/test_tuning.py`, `unit/test_tracking.py` | `@04`, `01-mlops`, `08-clean-code` |
 | **ONNX & CAM** | `inference/{onnx_exporter,onnx_engine,quantizer,cam,calibration,cli}.py` | `unit/test_onnx_exporter.py`, `unit/test_quantizer.py` | `@05`, `02-latency` |
 | **OOD & Conformal** | `uncertainty/{ood_detector,conformal}.py` | `unit/test_ood_energy.py`, `unit/test_conformal_bounds.py` | `@06`, `06-conformal` |
 | **Active Learning** | `active_learning/{query,triage_queue}.py` | `unit/test_active_learning.py` | `@07`, `06-conformal` |
-| **Monitoring** | `monitoring/{telemetry,drift}.py` | `unit/test_monitoring.py` | `@08`, `02-latency` |
-| **FastAPI & HTMX** | `service/{api,inference,schemas,storage}.py`, `service/routes/*.py` | `integration/test_api_endpoints.py`, `integration/test_views_and_routes.py` | `@09`, `02-latency` |
+| **Monitoring** | `monitoring/{telemetry,drift}.py` | `unit/test_monitoring.py` | `@08`, `02-latency`, `08-clean-code` |
+| **FastAPI & HTMX** | `service/{api,inference,schemas,storage}.py`, `service/routes/*.py` | `integration/test_api_endpoints.py`, `integration/test_views_and_routes.py` | `@09`, `02-latency`, `08-clean-code` |
 | **Hardware & Infra** | `deploy/`, `Justfile`, `docs/latex/` | `invariants/test_hardware_invariants.py` | `@11`, `07-hardware` |
 
 ## Token-Optimal Execution Protocol

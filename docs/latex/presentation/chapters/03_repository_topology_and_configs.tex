@@ -33,7 +33,7 @@
             \begin{block}{Data, Deployment \& Documentation}
                 \begin{itemize}\scriptsize
                     \item \textbf{\texttt{data/}}: Versioned Parquet manifests (\texttt{data/manifests/}) and 4-way stratified embedding tensors (\texttt{data/embeddings/}).
-                    \item \textbf{\texttt{deploy/}}: Production Dockerfile (\texttt{deploy/docker/}), local Compose stack (\texttt{deploy/compose/}), and k3s manifests (\texttt{deploy/k8s/}).
+                    \item \textbf{\texttt{deploy/}}: Production Dockerfile (\texttt{deploy/docker/}) and k3s manifests (\texttt{deploy/k8s/}); root \texttt{docker-compose.yml}.
                     \item \textbf{\texttt{docs/}}: Zensical MkDocs markdown specifications and complete LaTeX Beamer/Article source trees.
                     \item \textbf{\texttt{openwiki/}}: Open Knowledge Format (OKF v0.2) concept documents and cryptographic evidence claim graphs.
                 \end{itemize}
@@ -332,7 +332,7 @@
             \begin{block}{Containerization Architecture}
                 \begin{itemize}\scriptsize
                     \item \textbf{\texttt{deploy/docker/Dockerfile}}: Multi-stage production container based on Pixi. Strips build tooling, runs as non-root user \texttt{taxon}, and installs ONNX Runtime CPU.
-                    \item \textbf{\texttt{deploy/compose/} \texttt{docker-compose.local.yaml}}: Complete standalone local deployment running FastAPI, SeaweedFS S3, Prometheus, and Grafana.
+                    \item \textbf{\texttt{docker-compose.yml}}: Complete standalone local deployment running FastAPI, SeaweedFS S3, Optuna dashboard, Prometheus, and Grafana.
                 \end{itemize}
             \end{block}
         \end{column}

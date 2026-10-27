@@ -1,0 +1,41 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: taxon-vision-ingress
+  namespace: taxon-vision
+  labels:
+    app.kubernetes.io/name: taxon-vision-ingress
+    app.kubernetes.io/part-of: taxon-vision-mlops
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`taxon.benjamin-foerster.eu`) || PathPrefix(`/`)
+      kind: Rule
+      services:
+        - name: taxon-vision-serving
+          port: 8000
+---
+# ==============================================================================
+# Traefik A/B Testing & Canary Service Specification
+# ==============================================================================
+# Distributes live traffic between Production model (80%) and Challenger (20%)
+# with zero pod reloads and zero downtime.
+# ==============================================================================
+apiVersion: traefik.io/v1alpha1
+kind: TraefikService
+metadata:
+  name: taxon-vision-ab-service
+  namespace: taxon-vision
+  labels:
+    app.kubernetes.io/name: taxon-vision-ab-service
+    app.kubernetes.io/part-of: taxon-vision-mlops
+spec:
+  weighted:
+    services:
+      - name: taxon-vision-serving
+        port: 8000
+        weight: 80
+      - name: taxon-vision-serving-challenger
+        port: 8000
+        weight: 20

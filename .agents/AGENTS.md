@@ -20,6 +20,7 @@ Primary routing table for AI IDEs defining roles in `.agents/roles/` and core co
 * **Conformal Coverage Guarantee:** Split Conformal Prediction must mathematically guarantee user-specified coverage ($1 - \alpha$). Observations exceeding uncertainty bounds or empty prediction sets route to human triage.
 * **Epistemic Diamond DAG:** 7 canonical pipeline stages in `src/taxon_vision/pipelines/` governed by root `params.yaml`: `raw_manifest.parquet` -> `dataset_manifest.parquet` -> 4 split tensors (`train_embeddings.pt`, `val_embeddings.pt`, `cal_embeddings.pt`, `test_embeddings.pt`) -> `head.pt` -> `model_int8.onnx` -> `calibrate` & `eval`.
 * **Hardware Invariants:** Hardware specifications must strictly adhere to Rule 07 (`.agents/rules/07-hardware-invariants.md`). Only attributes with direct mathematical or architectural necessity may be stated; PC-builder trivia and unscientific cloud volatility claims are strictly prohibited.
+* **Clean Code & Invariants:** Code must conform to Rule 08 (`.agents/rules/08-clean-code-and-antipatterns.md`), enforcing 4-part architectural docstrings, typed parameter models (no tuple blindness), async event-loop non-blocking I/O, and RAII lifecycle management.
 * **Unified Web Service:** FastAPI powers both the machine REST API and the server-rendered Jinja2/HTMX operator dashboard.
 
 ## AI Role Registry

@@ -16,10 +16,10 @@ verified: {by: process:agent-jules, at: "2026-10-10T17:30:00Z"}
 
 The local development environment requires initialization of the dependent infrastructure and application services.
 
-Start the local infrastructure stack (SeaweedFS, Prometheus, Grafana) via Docker Compose:
+Start the complete local microservices stack via Docker Compose:
 
 ```bash
-docker compose -f deploy/compose/docker-compose.local.yaml up -d
+docker compose up -d
 ```
 
 Start the Pixi-managed FastAPI service:

@@ -62,15 +62,10 @@ def configure_cuda_memory_budget(fraction: float | None = None) -> float | None:
     """Configure per-process CUDA memory fraction for safe multi-tenant GPU time-slicing.
 
     Why:
-        Under NVIDIA Device Plugin time-slicing on shared single-GPU nodes (e.g. RTX 5070 Ti),
-        compute is time-multiplexed across virtual slices, but VRAM is shared globally. Unbounded
-        PyTorch allocations can trigger Out-Of-Memory (OOM) failures in co-located real-time
-        inference services. Capping training VRAM (e.g. to 70% / 11.2 GB) permanently reserves
-        sufficient memory for ONNX inference serving and system displays.
+        Under NVIDIA Device Plugin time-slicing on shared single-GPU nodes (e.g. RTX 5070 Ti), compute is time-multiplexed across virtual slices, but VRAM is shared globally. Unbounded PyTorch allocations can trigger Out-Of-Memory (OOM) failures in co-located real-time inference services. Capping training VRAM (e.g. to 70% / 11.2 GB) permanently reserves sufficient memory for ONNX inference serving and system displays.
 
     How:
-        Inspects CUDA availability. If available, reads `fraction` or the `TAXON_CUDA_MEMORY_FRACTION`
-        environment variable (defaulting to 0.7), and applies `torch.cuda.set_per_process_memory_fraction`.
+        Inspects CUDA availability. If available, reads `fraction` or the `TAXON_CUDA_MEMORY_FRACTION` environment variable (defaulting to 0.7), and applies `torch.cuda.set_per_process_memory_fraction`.
 
     Args:
         fraction: Optional explicit memory fraction between 0.0 and 1.0.
@@ -142,8 +137,7 @@ def _resolve_tier_hyperparameters(
     """Resolve training hyperparameters via 3-tier hierarchy: live study, persisted yaml, or default.
 
     Why:
-        Decouples parameter discovery (Bayesian search) from routine training while enabling
-        deterministic reuse of peak-performing hyperparameters across CI/CD and deployment runs.
+        Decouples parameter discovery (Bayesian search) from routine training while enabling deterministic reuse of peak-performing hyperparameters across CI/CD and deployment runs.
 
     Args:
         extractor: Name of the feature extractor.
@@ -222,8 +216,7 @@ def build_training_components(
     """Build and wire classification head, loss criterion, optimizer, config, and params.
 
     Why:
-        Encapsulates neural architecture and optimization setup from pre-resolved hyperparameters,
-        eliminating the 15-parameter data clump and returning a strongly-typed container.
+        Encapsulates neural architecture and optimization setup from pre-resolved hyperparameters, eliminating the 15-parameter data clump and returning a strongly-typed container.
 
     Args:
         dim: Dimensionality of feature vectors.
@@ -286,8 +279,7 @@ def _resolve_training_hyperparameters(
     """Resolve hyperparameter defaults from application settings.
 
     Why:
-        Encapsulates ternary fallback logic to decouple configuration loading from
-        training loop execution, reducing cognitive complexity in the main runner.
+        Encapsulates ternary fallback logic to decouple configuration loading from training loop execution, reducing cognitive complexity in the main runner.
 
     Complexity:
         O(1) constant time resolution.

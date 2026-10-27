@@ -21,13 +21,10 @@ def get_dvc_dataset_hash(lock_path: Path | str = "dvc.lock") -> str | None:
     """Parse dvc.lock to extract the dataset hash from the ingestion stage.
 
     Why:
-        In auditable MLOps pipelines, every trained checkpoint must be cryptographically linked
-        to the exact immutable dataset snapshot used during training. Extracting the DVC manifest
-        hash provides end-to-end lineage tracking from raw observations to deployed models.
+        In auditable MLOps pipelines, every trained checkpoint must be cryptographically linked to the exact immutable dataset snapshot used during training. Extracting the DVC manifest hash provides end-to-end lineage tracking from raw observations to deployed models.
 
     How:
-        Reads `dvc.lock`, parses the YAML stage graph, extracts the output MD5 checksum
-        associated with `data/manifests`, and returns the hex digest string.
+        Reads `dvc.lock`, parses the YAML stage graph, extracts the output MD5 checksum associated with `data/manifests`, and returns the hex digest string.
 
     Args:
         lock_path: Path to dvc.lock file (default: "dvc.lock").
