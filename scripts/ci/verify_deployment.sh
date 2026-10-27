@@ -75,6 +75,9 @@ echo "    Prediction Response: ${PREDICT_RESP}"
 METRICS_MATCH=$(curl "${CURL_OPTS[@]}" "${TARGET_URL}/metrics" | grep -c "taxon_predictions_total" || true)
 echo "    Prometheus metrics verified (${METRICS_MATCH} matches for taxon_predictions_total)"
 
+# Prune any historical failed or evicted pods from older rollouts
+kubectl delete pods -n "${NAMESPACE}" --field-selector=status.phase=Failed --ignore-not-found=true >/dev/null 2>&1 || true
+
 echo "=================================================================="
 echo "   DEPLOYMENT VERIFICATION PASSED: TaxonVision is operational!"
 echo "=================================================================="
