@@ -15,6 +15,7 @@ spec:
   containers:
   - name: ml-runner
     image: ghcr.io/prefix-dev/pixi:latest
+    imagePullPolicy: IfNotPresent
     command: ["sleep"]
     args: ["99d"]
     tty: true
@@ -310,10 +311,12 @@ spec:
   post {
     always {
       script {
-        try {
-          cleanWs notFailBuild: true
-        } catch (Throwable t) {
-          echo "Workspace cleanup skipped: ${t.message}"
+        if (env.WORKSPACE != null) {
+          try {
+            cleanWs notFailBuild: true
+          } catch (Throwable t) {
+            echo "Workspace cleanup skipped: ${t.message}"
+          }
         }
       }
     }

@@ -9,6 +9,7 @@ spec:
   containers:
   - name: ml-runner
     image: ghcr.io/prefix-dev/pixi:latest
+    imagePullPolicy: IfNotPresent
     command: ["sleep"]
     args: ["99d"]
     tty: true
