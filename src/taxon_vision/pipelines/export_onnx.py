@@ -20,6 +20,7 @@ from taxon_vision.inference.onnx_exporter import (
     _resolve_export_output,
     export_to_onnx,
 )
+from taxon_vision.models.head import TaxonClassifier
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,39 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _export_dedicated_head(
+    classifier: TaxonClassifier,
+    target_artifact: Path,
+    quantize_int8: bool,
+) -> None:
+    """Export the standalone classification head as an ONNX graph for embedding projections.
+
+    Why:
+        Executing linear classification on pre-computed feature representations via ONNX Runtime
+        avoids parsing raw tensor initializers or loading PyTorch models in inference runtimes.
+
+    Args:
+        classifier: Trained TaxonClassifier containing the linear projection head.
+        target_artifact: Path to the exported model graph (used to determine checkpoint directory).
+        quantize_int8: Whether dynamic INT8 quantization should also be applied to the head.
+    """
+    head_dir = target_artifact.parent
+    head_fp32 = head_dir / "head.onnx"
+    try:
+        logger.info("Exporting dedicated classification head ONNX graph to %s...", head_fp32)
+        export_to_onnx(classifier.head, head_fp32, input_shape=(1, classifier.feature_dim))
+        if quantize_int8:
+            from taxon_vision.inference.quantizer import quantize_onnx_dynamic
+
+            head_int8 = head_dir / "head_int8.onnx"
+            quantize_onnx_dynamic(head_fp32, head_int8)
+            logger.info("Quantized dedicated classification head ONNX graph saved to %s", head_int8)
+            if head_fp32.exists():
+                head_fp32.unlink()
+    except Exception as exc:
+        logger.warning("Could not export dedicated classification head ONNX graph: %s", exc)
+
+
 def export_onnx_cli(argv: list[str] | None = None) -> int:
     """CLI entrypoint for Stage 5: ONNX Model Export & Quantization.
 
@@ -136,6 +170,8 @@ def export_onnx_cli(argv: list[str] | None = None) -> int:
         target_artifact: Path = output_file
         if args.quantize_int8:
             target_artifact = _quantize_exported_graph(output_file, args, settings)
+
+        _export_dedicated_head(classifier, target_artifact, args.quantize_int8)
 
         import mlflow
 

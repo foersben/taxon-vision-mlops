@@ -25,19 +25,21 @@ import torch.nn.functional as F
 class ClassBalancedLoss(nn.Module):
     r"""Loss function dynamically weighted by the effective number of samples per class.
 
-    Given $N_i$ training examples for class $i$, the effective number of samples is:
+    Why:
+        Biological field datasets exhibit extreme Zipfian class imbalance where common species outnumber rare taxa by orders of magnitude. Unweighted cross-entropy underfits rare species, whereas naive inverse class frequency weighting ($1 / N_i$) amplifies gradient variance on singletons and destabilizes linear head optimization. Weighting by inverse effective sample volume smooths class weights across orders of magnitude.
 
-    $$E_{N_i} = \frac{1 - \beta^{N_i}}{1 - \beta}$$
+    How:
+        Given $N_i$ training examples for class $i$, computes the effective number of samples $E_{N_i} = (1 - \beta^{N_i}) / (1 - \beta)$ and corresponding class weight $W_i = (1 - \beta) / (1 - \beta^{N_i})$, normalized such that $\sum_{i=1}^K W_i = K$. Registers $W$ as a persistent PyTorch buffer and applies it to `F.cross_entropy`.
 
-    The corresponding class weight is inversely proportional to the effective volume:
-
-    $$W_i = \frac{1 - \beta}{1 - \beta^{N_i}}$$
-
-    normalized such that $\sum_{i=1}^K W_i = K$ where $K$ is the number of classes.
+    Complexity:
+        O(K) initialization time and space for K classes; O(B * K) per-batch forward evaluation.
 
     Attributes:
         beta: Hyperparameter controlling the scale of effective samples, typically chosen in $[0.9, 0.9999]$. When $\beta \to 1$, weights approach inverse class frequency. When $\beta = 0$, weights collapse to standard unweighted cross-entropy.
         weights: 1D tensor of pre-calculated normalized class weights of shape `(num_classes,)`.
+
+    References:
+        Cui, Y., Jia, M., Lin, T.-Y., Song, Y., & Belongie, S. (2019). Class-Balanced Loss Based on Effective Number of Samples. CVPR 2019.
     """
 
     def __init__(
@@ -89,6 +91,9 @@ class ClassBalancedLoss(nn.Module):
 
         How:
             Transfers precomputed normalized class buffer weights to the active device (CPU/CUDA), and evaluates weighted cross-entropy loss against ground-truth target indices via `torch.nn.functional.cross_entropy`.
+
+        Complexity:
+            O(B * K) time complexity for batch size B and class count K.
 
         Args:
             logits: Unnormalized class predictions of shape `(batch_size, num_classes)`.

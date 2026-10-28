@@ -10,6 +10,7 @@ import logging
 import threading
 import time
 from collections import OrderedDict
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
@@ -163,31 +164,46 @@ def get_image_cache() -> EphemeralImageCache:
     )
 
 
+@dataclass(frozen=True)
+class FlaggedObservationPayload:
+    """Consolidated payload for an observation flagged during inference."""
+
+    observation_id: str
+    prediction_result: dict[str, Any]
+    embedding: npt.NDArray[np.float32] | None = None
+    image_bytes: bytes | None = None
+    storage_dir: Path | str | None = None
+
+
 def persist_flagged_observation(
     observation_id: str,
     prediction_result: dict[str, Any],
     embedding: npt.NDArray[np.float32] | None = None,
     storage_dir: Path | str | None = None,
+    *,
+    image_bytes: bytes | None = None,
 ) -> Path:
-    """Atomically persist metadata and embeddings for observations flagged during inference.
+    """Atomically persist metadata, image crop, and embeddings for observations flagged during inference.
 
     Why:
-        Observations identified as Out-of-Distribution (OOD) or exhibiting high conformal ambiguity require human expert review and provide the highest information gain for active learning retrain loops. Staging both the tabular decision metadata and the dense visual feature embedding allows subsequent ingestion services (e.g. SeaweedFS, LanceDB, or triage queues) to consume high-priority edge cases without recomputing vision foundation forward passes.
+        Observations identified as Out-of-Distribution (OOD) or exhibiting high conformal ambiguity require human expert review and provide the highest information gain for active learning retrain loops. Staging the tabular decision metadata, the dense visual feature embedding, and the raw visual image crop allows subsequent ingestion services (e.g. SeaweedFS, LanceDB, or DagsHub Label Studio triage queues) to consume high-priority edge cases without recomputing vision foundation forward passes.
 
     How:
         1. Resolves destination storage directory from arguments or application configuration.
         2. Compiles a consolidated record containing prediction metrics and timestamp.
         3. If an embedding vector is provided, serializes it to disk as an optimized `.npy` file.
-        4. Serializes the metadata record as an individual JSON artifact and appends a line to `manifest.jsonl`.
+        4. If raw image bytes are provided, saves the observation image crop as `{observation_id}_crop.jpg`.
+        5. Serializes the metadata record as an individual JSON artifact and appends a line to `manifest.jsonl`.
 
     Complexity:
-        O(D) where D is the dimensionality of the feature embedding vector.
+        O(D + B) where D is feature dimension and B is raw image byte length.
 
     Args:
         observation_id: Unique identifier for the observation capture.
         prediction_result: Dictionary returned by the prediction pipeline containing classification results.
         embedding: Optional dense feature representation vector of shape (D,).
         storage_dir: Optional filesystem path override for the staging directory.
+        image_bytes: Optional binary payload of the raw uploaded image crop.
 
     Returns:
         Path to the written metadata JSON artifact.
@@ -205,6 +221,13 @@ def persist_flagged_observation(
         emb_path = target_dir / emb_filename
         np.save(str(emb_path), embedding)
         embedding_rel_path = emb_filename
+
+    image_rel_path: str | None = None
+    if image_bytes is not None:
+        img_filename = f"{observation_id}_crop.jpg"
+        img_path = target_dir / img_filename
+        img_path.write_bytes(image_bytes)
+        image_rel_path = img_filename
 
     meta_filename = f"{observation_id}_meta.json"
     meta_path = target_dir / meta_filename
@@ -225,6 +248,7 @@ def persist_flagged_observation(
         "top_prediction": top_pred,
         "probabilities": list(prediction_result.get("probabilities", [])),
         "embedding_path": embedding_rel_path,
+        "image_path": image_rel_path,
     }
 
     meta_path.write_text(json.dumps(record, indent=2), encoding="utf-8")
@@ -233,5 +257,5 @@ def persist_flagged_observation(
     with manifest_path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record) + "\n")
 
-    logger.info("Persisted flagged observation %s to %s", observation_id, target_dir)
+    logger.info("Persisted flagged observation %s (crop=%s) to %s", observation_id, bool(image_bytes), target_dir)
     return meta_path

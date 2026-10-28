@@ -12,7 +12,7 @@ import time
 import warnings
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import mlflow
 import optuna
@@ -33,6 +33,21 @@ from taxon_vision.models.training.visualizations import log_optuna_diagnostic_pl
 warnings.filterwarnings("ignore", category=ExperimentalWarning)
 
 logger = logging.getLogger(__name__)
+
+
+class TrialComponents(NamedTuple):
+    """Instantiated classification head, loss criterion, and optimizer for an Optuna trial."""
+
+    head: nn.Module
+    criterion: ClassBalancedLoss
+    optimizer: optim.Optimizer
+
+
+class TuningResult(NamedTuple):
+    """Best hyperparameter mapping paired with the completed Optuna Study object."""
+
+    best_params: dict[str, Any]
+    study: optuna.Study
 
 
 class HyperparameterObjective:
@@ -97,14 +112,14 @@ class HyperparameterObjective:
             "noise_std": trial.suggest_float("noise_std", 0.0, 0.05),
         }
 
-    def _construct_components(self, params: dict[str, Any]) -> tuple[nn.Module, ClassBalancedLoss, optim.Optimizer]:
+    def _construct_components(self, params: dict[str, Any]) -> TrialComponents:
         """Construct the classification head, loss criterion, and optimizer.
 
         Args:
             params: Hyperparameter configuration.
 
         Returns:
-            Tuple containing the classification head, loss criterion, and optimizer.
+            TrialComponents containing the classification head, loss criterion, and optimizer.
         """
         lr = float(params.get("learning_rate", params.get("lr", 1e-3)))
         beta = float(params.get("cb_beta", params.get("beta", 0.9999)))
@@ -116,7 +131,7 @@ class HyperparameterObjective:
         )
         criterion = ClassBalancedLoss(samples_per_class=self.samples_per_class, beta=beta)
         optimizer = optim.AdamW(head.parameters(), lr=lr, weight_decay=weight_decay)
-        return head, criterion, optimizer
+        return TrialComponents(head=head, criterion=criterion, optimizer=optimizer)
 
     def _start_mlflow_trial(self, trial: optuna.Trial, params: dict[str, Any]) -> Any:
         """Initialize an MLflow nested run and log trial parameters.
@@ -234,8 +249,8 @@ class HyperparameterObjective:
             if active_run:
                 try:
                     mlflow.log_metric("peak_val_pr_auc", best_val)
-                except Exception:
-                    pass
+                except Exception as metric_err:
+                    logger.debug("Failed to log peak_val_pr_auc metric: %s", metric_err)
             return best_val
 
         finally:
@@ -456,7 +471,7 @@ def tune_hyperparameters(
     config: TuningConfig | None = None,
     checkpoint_dir: Path | str = "models/checkpoints",
     reports_dir: Path | str = "reports",
-) -> tuple[dict[str, Any], optuna.Study]:
+) -> TuningResult:
     r"""Automate Bayesian hyperparameter tuning using Optuna with ASHA pruning and MLflow tracking.
 
     Why:
@@ -483,7 +498,7 @@ def tune_hyperparameters(
         reports_dir: Destination directory for tuning_trials.parquet export.
 
     Returns:
-        A tuple `(best_params, study)` of the best configuration and the Optuna study.
+        TuningResult `(best_params, study)` of the best configuration and the Optuna study.
     """
     cfg = config or TuningConfig()
     settings = get_settings()
@@ -533,4 +548,4 @@ def tune_hyperparameters(
     _export_trials_history(study, Path(reports_dir))
 
     _log_best_run(best_params, study.best_value, mlflow_available, study=study)
-    return best_params, study
+    return TuningResult(best_params=best_params, study=study)

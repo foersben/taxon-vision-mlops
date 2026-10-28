@@ -5,13 +5,14 @@
 from __future__ import annotations
 
 import concurrent.futures
-import functools
 import io
 import logging
+import threading
 import time
 from collections.abc import Generator
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, NamedTuple, Protocol, runtime_checkable
 
 import httpx
 import polars as pl
@@ -20,6 +21,31 @@ from PIL import Image
 from taxon_vision.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+
+class StreamedObservation(NamedTuple):
+    """Typed container for a single streamed observation record and decoded RGB image."""
+
+    observation_uuid: str
+    taxon_id: int
+    image: Image.Image
+
+
+class _FetchAttemptOutcome(NamedTuple):
+    """Outcome of a single HTTP GET attempt."""
+
+    content: bytes | None
+    should_retry: bool
+
+
+@dataclass(frozen=True)
+class StreamSelectionConfig:
+    """Configuration parameters governing manifest record selection and shuffling."""
+
+    limit: int | None = None
+    shuffle: bool = False
+    balanced: bool = False
+    seed: int = 42
 
 
 @runtime_checkable
@@ -40,60 +66,50 @@ class ClosableResource(Protocol):
 
 def _prepare_balanced_manifest(
     df: pl.DataFrame,
-    limit: int | None,
-    shuffle: bool,
-    seed: int,
+    config: StreamSelectionConfig,
 ) -> list[dict[str, Any]]:
     """Sample records evenly across unique taxa in the manifest.
 
     Args:
         df: Polars DataFrame holding observation records.
-        limit: Optional upper bound on records to yield.
-        shuffle: Whether to pseudorandomly shuffle records.
-        seed: PRNG seed for reproducible shuffling.
+        config: Selection configuration specifying limit, shuffle, and seed.
 
     Returns:
         List of observation record dictionaries.
     """
     taxa = df["taxon_id"].unique().to_list()
-    per_taxon = max(1, (limit + len(taxa) - 1) // len(taxa)) if limit is not None else len(df)
+    per_taxon = max(1, (config.limit + len(taxa) - 1) // len(taxa)) if config.limit is not None else len(df)
     dfs = []
     for tid in taxa:
         sub = df.filter(pl.col("taxon_id") == tid)
-        if shuffle:
-            sub = sub.sample(fraction=1.0, shuffle=True, seed=seed)
+        if config.shuffle:
+            sub = sub.sample(fraction=1.0, shuffle=True, seed=config.seed)
         dfs.append(sub.head(per_taxon))
     combined = pl.concat(dfs)
-    if shuffle:
-        combined = combined.sample(fraction=1.0, shuffle=True, seed=seed)
-    return combined.head(limit).to_dicts() if limit is not None else combined.to_dicts()
+    if config.shuffle:
+        combined = combined.sample(fraction=1.0, shuffle=True, seed=config.seed)
+    return combined.head(config.limit).to_dicts() if config.limit is not None else combined.to_dicts()
 
 
 def _prepare_stream_records(
     df: pl.DataFrame,
-    limit: int | None,
-    shuffle: bool,
-    balanced: bool,
-    seed: int,
+    config: StreamSelectionConfig,
 ) -> list[dict[str, Any]]:
     """Select, balance, and shuffle observation records for streaming.
 
     Args:
         df: Polars DataFrame holding observation records.
-        limit: Optional upper bound on records to yield.
-        shuffle: Whether to pseudorandomly shuffle records.
-        balanced: Whether to balance sample counts across unique taxon categories.
-        seed: PRNG seed for reproducible shuffling.
+        config: Selection configuration governing limit, shuffle, balance, and seed.
 
     Returns:
         List of selected observation record dictionaries.
     """
-    if balanced and "taxon_id" in df.columns:
-        return _prepare_balanced_manifest(df, limit, shuffle, seed)
-    if shuffle:
-        shuffled = df.sample(fraction=1.0, shuffle=True, seed=seed)
-        return shuffled.head(limit).to_dicts() if limit is not None else shuffled.to_dicts()
-    return df.head(limit).to_dicts() if limit is not None else df.to_dicts()
+    if config.balanced and "taxon_id" in df.columns:
+        return _prepare_balanced_manifest(df, config)
+    if config.shuffle:
+        shuffled = df.sample(fraction=1.0, shuffle=True, seed=config.seed)
+        return shuffled.head(config.limit).to_dicts() if config.limit is not None else shuffled.to_dicts()
+    return df.head(config.limit).to_dicts() if config.limit is not None else df.to_dicts()
 
 
 def create_streaming_http_client(
@@ -150,6 +166,34 @@ def _is_transient_http_error(status_code: int) -> bool:
     return status_code == 429 or (500 <= status_code < 600)
 
 
+def _attempt_http_get(url: str, client: httpx.Client, attempt: int, retries: int) -> _FetchAttemptOutcome:
+    """Execute a single HTTP GET request and classify retry eligibility.
+
+    Args:
+        url: Remote image URL to retrieve.
+        client: HTTP client instance.
+        attempt: Current zero-based attempt index.
+        retries: Maximum configured retry attempts.
+
+    Returns:
+        _FetchAttemptOutcome containing content bytes and retry indicator.
+    """
+    try:
+        response = client.get(url)
+        status_code = response.status_code if isinstance(response, HttpResponseWithStatus) else 200
+        if status_code == 200:
+            return _FetchAttemptOutcome(content=response.content, should_retry=False)
+        if _is_transient_http_error(status_code) and attempt < retries:
+            return _FetchAttemptOutcome(content=None, should_retry=True)
+        logger.warning("HTTP %d when fetching %s (attempt %d/%d)", status_code, url, attempt + 1, retries + 1)
+        return _FetchAttemptOutcome(content=None, should_retry=False)
+    except (httpx.RequestError, OSError) as exc:
+        if attempt < retries:
+            return _FetchAttemptOutcome(content=None, should_retry=True)
+        logger.warning("Request failed for %s after %d retries: %s", url, retries, exc)
+        return _FetchAttemptOutcome(content=None, should_retry=False)
+
+
 def fetch_image_with_retry(
     url: str,
     client: httpx.Client,
@@ -162,7 +206,7 @@ def fetch_image_with_retry(
         Remote object store endpoints can encounter DNS lookup throttling, socket exhaustion, or rate-limiting during high-concurrency ingestion. Retrying with exponential backoff prevents transient dropouts from corrupting training datasets.
 
     How:
-        Executes HTTP GET requests up to max_retries times. Catches httpx.RequestError and OSError (encompassing DNS gaierror), and identifies HTTP 429/5xx status codes, sleeping for backoff_factor * (2 ** attempt) seconds before retrying. Returns content bytes on HTTP 200, or None after exhaustion.
+        Executes HTTP GET requests up to max_retries times via `_attempt_http_get`. Sleeps for backoff_factor * (2 ** attempt) seconds before retrying transient HTTP 429/5xx or transport errors. Returns content bytes on HTTP 200, or None after exhaustion.
 
     Args:
         url: Remote image URL to retrieve.
@@ -178,35 +222,19 @@ def fetch_image_with_retry(
     factor = backoff_factor if backoff_factor is not None else settings.streaming.http_backoff_factor
 
     for attempt in range(retries + 1):
-        try:
-            response = client.get(url)
-            status_code = response.status_code if isinstance(response, HttpResponseWithStatus) else 200
-            if status_code == 200:
-                return response.content
-            if _is_transient_http_error(status_code) and attempt < retries:
-                time.sleep(factor * (2**attempt))
-                continue
-            logger.warning(
-                "HTTP %d when fetching %s (attempt %d/%d)",
-                status_code,
-                url,
-                attempt + 1,
-                retries + 1,
-            )
+        outcome = _attempt_http_get(url, client, attempt, retries)
+        if outcome.content is not None:
+            return outcome.content
+        if not outcome.should_retry:
             return None
-        except (httpx.RequestError, OSError) as exc:
-            if attempt < retries:
-                time.sleep(factor * (2**attempt))
-                continue
-            logger.warning("Request failed for %s after %d retries: %s", url, retries, exc)
-            return None
+        time.sleep(factor * (2**attempt))
     return None
 
 
 def _fetch_record_image(
     record: dict[str, Any],
     client: httpx.Client | None = None,
-) -> tuple[str, int, Image.Image] | None:
+) -> StreamedObservation | None:
     """Fetch and decode an image from a single observation record.
 
     Why:
@@ -220,7 +248,7 @@ def _fetch_record_image(
         client: Optional existing httpx.Client to reuse across requests.
 
     Returns:
-        Tuple of (observation_uuid, taxon_id, Image) or None if retrieval or decoding failed.
+        StreamedObservation tuple of (observation_uuid, taxon_id, Image) or None if retrieval or decoding failed.
     """
     obs_uuid = str(record["observation_uuid"])
     taxon_id = int(record["taxon_id"])
@@ -238,7 +266,7 @@ def _fetch_record_image(
 
         raw_img = Image.open(io.BytesIO(content))
         img: Image.Image = raw_img.convert("RGB") if raw_img.mode != "RGB" else raw_img
-        return obs_uuid, taxon_id, img
+        return StreamedObservation(obs_uuid, taxon_id, img)
     except Exception as e:
         logger.warning("Failed to stream %s from %s: %s", obs_uuid, image_url, e)
         return None
@@ -247,7 +275,7 @@ def _fetch_record_image(
 def _stream_sequential(
     records: list[dict[str, Any]],
     client: httpx.Client | None = None,
-) -> Generator[tuple[str, int, Image.Image], None, None]:
+) -> Generator[StreamedObservation, None, None]:
     """Stream records sequentially using a persistent HTTP client session.
 
     Args:
@@ -255,7 +283,7 @@ def _stream_sequential(
         client: Optional persistent httpx.Client session.
 
     Yields:
-        Tuple of (observation_uuid, taxon_id, Image).
+        StreamedObservation of (observation_uuid, taxon_id, Image).
     """
     if client is not None:
         for record in records:
@@ -270,37 +298,58 @@ def _stream_sequential(
                     yield res
 
 
+class _WorkerTLS(threading.local):
+    """Thread-local storage for dedicated worker HTTP clients."""
+
+    client: httpx.Client | None = None
+
+
+_tls = _WorkerTLS()
+
+
 def _stream_concurrent(
     records: list[dict[str, Any]],
     max_workers: int,
     client: httpx.Client | None = None,
-) -> Generator[tuple[str, int, Image.Image], None, None]:
-    """Stream records concurrently using a ThreadPoolExecutor with pooled HTTP connections.
+) -> Generator[StreamedObservation, None, None]:
+    """Stream records concurrently using a ThreadPoolExecutor with per-worker HTTP clients.
 
     Args:
         records: Observation record dictionaries to stream.
         max_workers: Thread worker pool concurrency limit.
-        client: Optional persistent httpx.Client session to reuse across worker threads.
+        client: Optional explicit httpx.Client override (used for mock injection in tests).
 
     Yields:
-        Tuple of (observation_uuid, taxon_id, Image).
+        StreamedObservation of (observation_uuid, taxon_id, Image).
     """
     chunk_size = max(1, min(32, len(records)))
+    active_clients: list[httpx.Client] = []
+    pool_lock = threading.Lock()
 
-    def _execute(http_client: httpx.Client) -> Generator[tuple[str, int, Image.Image], None, None]:
-        fetch_fn = functools.partial(_fetch_record_image, client=http_client)
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+    def _init_thread_worker() -> None:
+        if client is None:
+            c = create_streaming_http_client()
+            _tls.client = c
+            with pool_lock:
+                active_clients.append(c)
+
+    def _fetch_worker(record: dict[str, Any]) -> StreamedObservation | None:
+        active_client = client if client is not None else _tls.client
+        return _fetch_record_image(record, client=active_client)
+
+    try:
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=max_workers, initializer=_init_thread_worker
+        ) as executor:
             for i in range(0, len(records), chunk_size):
                 chunk = records[i : i + chunk_size]
-                for result in executor.map(fetch_fn, chunk):
+                for result in executor.map(_fetch_worker, chunk):
                     if result is not None:
                         yield result
-
-    if client is not None:
-        yield from _execute(client)
-    else:
-        with create_streaming_http_client() as new_client:
-            yield from _execute(new_client)
+    finally:
+        for c in active_clients:
+            if isinstance(c, ClosableResource):
+                c.close()
 
 
 class S3ImageStreamer:
@@ -368,7 +417,7 @@ class S3ImageStreamer:
         balanced: bool = False,
         seed: int = 42,
         max_workers: int = 8,
-    ) -> Generator[tuple[str, int, Image.Image], None, None]:
+    ) -> Generator[StreamedObservation, None, None]:
         """Lazily yield streamed PIL images directly from remote S3 URLs.
 
         Why:
@@ -385,20 +434,14 @@ class S3ImageStreamer:
             max_workers: Concurrency level for parallel HTTP GET streaming requests.
 
         Yields:
-            Tuple of (observation_uuid, taxon_id, PIL.Image.Image) for each streamed record.
+            StreamedObservation of (observation_uuid, taxon_id, PIL.Image.Image) for each streamed record.
         """
-        records = _prepare_stream_records(self.df, limit, shuffle, balanced, seed)
-        if self._client is not None:
-            if max_workers <= 1 or len(records) <= 2:
-                yield from _stream_sequential(records, client=self._client)
-            else:
-                yield from _stream_concurrent(records, max_workers, client=self._client)
+        selection = StreamSelectionConfig(limit=limit, shuffle=shuffle, balanced=balanced, seed=seed)
+        records = _prepare_stream_records(self.df, selection)
+        if max_workers <= 1 or len(records) <= 2:
+            yield from _stream_sequential(records, client=self._client)
         else:
-            with create_streaming_http_client() as local_client:
-                if max_workers <= 1 or len(records) <= 2:
-                    yield from _stream_sequential(records, client=local_client)
-                else:
-                    yield from _stream_concurrent(records, max_workers, client=local_client)
+            yield from _stream_concurrent(records, max_workers, client=self._client)
 
 
 def main() -> None:

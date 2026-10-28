@@ -254,11 +254,16 @@ def _resolve_ast_node_lines(file_path: Path, ast_target: str) -> tuple[int, int]
     parts = dotted.split(".")
     for idx, name in enumerate(parts):
         wanted_kind = kind if idx == len(parts) - 1 else "ClassDef"
+        body = (
+            scope.body if isinstance(scope, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef) else []
+        )
         node = next(
             (
                 child
-                for child in getattr(scope, "body", [])
-                if type(child).__name__ == wanted_kind and getattr(child, "name", None) == name
+                for child in body
+                if isinstance(child, ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef)
+                and type(child).__name__ == wanted_kind
+                and child.name == name
             ),
             None,
         )

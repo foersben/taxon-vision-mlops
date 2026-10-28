@@ -6,16 +6,23 @@ import io
 import logging
 import time
 import uuid
+from functools import partial
 from typing import Annotated, Any
 
 import anyio
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from PIL import Image
 
-from taxon_vision.config import get_settings
+from taxon_vision.config import ConformalConfig, get_settings
 from taxon_vision.inference.cam import generate_cam_overlay
-from taxon_vision.monitoring.telemetry import PREDICTION_COUNTER
-from taxon_vision.service.inference import InvalidImageError, ModelNotReadyError, load_taxa_catalog, run_prediction
+from taxon_vision.monitoring.telemetry import LATENCY_HISTOGRAM, PREDICTION_COUNTER, REFERRAL_RATE
+from taxon_vision.service.inference import (
+    InvalidImageError,
+    ModelNotReadyError,
+    get_classifier,
+    load_taxa_catalog,
+    run_prediction,
+)
 from taxon_vision.service.schemas import ConformalRoutingTier, PredictionResponse, TaxonPrediction
 from taxon_vision.service.storage import persist_flagged_observation
 
@@ -28,10 +35,19 @@ def _resolve_routing_tier(
     raw_tier: str,
     pred_set: list[str],
     confidence: float,
-    min_confidence: float,
-    k_max: int,
+    conformal_cfg: ConformalConfig,
 ) -> ConformalRoutingTier:
-    """Safely map raw prediction tier string or infer from prediction set metrics."""
+    """Safely map raw prediction tier string or infer from prediction set metrics.
+
+    Args:
+        raw_tier: Raw routing tier string from prediction output.
+        pred_set: List of scientific names in the conformal prediction set.
+        confidence: Top-1 prediction confidence score.
+        conformal_cfg: Conformal configuration specifying thresholds.
+
+    Returns:
+        Resolved ConformalRoutingTier enumeration value.
+    """
     try:
         return ConformalRoutingTier(raw_tier)
     except ValueError:
@@ -40,11 +56,27 @@ def _resolve_routing_tier(
             return ConformalRoutingTier.ABSTENTION
         if cardinality == 1:
             return (
-                ConformalRoutingTier.DECISIVE if confidence >= min_confidence else ConformalRoutingTier.SEVERE_AMBIGUITY
+                ConformalRoutingTier.DECISIVE
+                if confidence >= conformal_cfg.min_confidence
+                else ConformalRoutingTier.SEVERE_AMBIGUITY
             )
-        if cardinality <= k_max:
+        if cardinality <= conformal_cfg.k_max:
             return ConformalRoutingTier.MODERATE_AMBIGUITY
         return ConformalRoutingTier.SEVERE_AMBIGUITY
+
+
+def _generate_cam_from_bytes(content: bytes, top1_idx: int | None) -> str:
+    """Decode raw image bytes and render a base64 CAM saliency overlay synchronously.
+
+    Args:
+        content: Encoded image bytes.
+        top1_idx: Optional top-1 class index to explain.
+
+    Returns:
+        Base64-encoded PNG overlay string.
+    """
+    img = Image.open(io.BytesIO(content)).convert("RGB")
+    return generate_cam_overlay(img, get_classifier(), top1_idx, 0.5)
 
 
 def _build_live_prediction(
@@ -114,8 +146,7 @@ def _build_live_prediction(
         raw_tier=str(pred.get("routing_tier", "")),
         pred_set=pred_set,
         confidence=confidence,
-        min_confidence=settings.conformal.min_confidence_threshold,
-        k_max=settings.conformal.k_max,
+        conformal_cfg=settings.conformal,
     )
 
     return PredictionResponse(
@@ -153,9 +184,9 @@ async def predict_species(
         1. Reads raw bytes asynchronously from the multipart file upload.
         2. Validates payload non-emptiness and size constraints.
         3. Dispatches `run_prediction` to AnyIO's threadpool worker via `run_sync`.
-        4. If flagged as OOD or requiring human review, persists observation metadata and embeddings.
-        5. If `explain=True`, computes forward-only CAM attribution for top-1 taxon and encodes as base64 PNG.
-        6. On success: increments `taxon_predictions_total{status="success"}` and returns `PredictionResponse`.
+        4. If flagged as OOD or requiring human review, offloads persistence of observation metadata and embeddings to a worker thread.
+        5. If `explain=True`, computes forward-only CAM attribution for top-1 taxon and encodes as base64 PNG off the main event loop.
+        6. On success: records latency in `LATENCY_HISTOGRAM`, updates `REFERRAL_RATE` if flagged, increments `taxon_predictions_total{status="success"}` and returns `PredictionResponse`.
         7. On an undecodable/empty image (`InvalidImageError`): logs a warning, increments `status="invalid_input"` and raises HTTP 422.
         8. On missing model artefacts or unexpected runtime inference failure: logs exception, increments counter, and raises HTTP 503.
 
@@ -193,18 +224,28 @@ async def predict_species(
 
     try:
         pred = await anyio.to_thread.run_sync(run_prediction, content)
-        latency = (time.perf_counter() - t0) * 1000.0
+        duration_sec = time.perf_counter() - t0
+        latency = duration_sec * 1000.0
+        LATENCY_HISTOGRAM.observe(duration_sec)
 
         if pred.get("is_ood") or pred.get("requires_human_review"):
             obs_id = str(uuid.uuid4())
-            persist_flagged_observation(obs_id, pred, embedding=pred.get("embedding"))
+            REFERRAL_RATE.inc()
+            await anyio.to_thread.run_sync(
+                partial(
+                    persist_flagged_observation,
+                    obs_id,
+                    pred,
+                    pred.get("embedding"),
+                    image_bytes=content,
+                )
+            )
 
         cam_base64: str | None = None
         if explain:
             try:
-                img = Image.open(io.BytesIO(content)).convert("RGB")
                 top1_idx = pred.get("top1_idx")
-                cam_base64 = await anyio.to_thread.run_sync(generate_cam_overlay, img, None, top1_idx, 0.5)
+                cam_base64 = await anyio.to_thread.run_sync(_generate_cam_from_bytes, content, top1_idx)
             except Exception as cam_err:
                 logger.warning("CAM overlay generation failed for %s: %s", file.filename, cam_err)
                 cam_base64 = None

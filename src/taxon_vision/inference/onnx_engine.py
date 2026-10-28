@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -15,6 +16,8 @@ from taxon_vision.inference.head_projector import (
     compute_onnx_logits,
     extract_onnx_head_weights,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -69,6 +72,30 @@ class ONNXInferenceEngine:
         out_dim = self.session.get_outputs()[0].shape[-1]
         self.num_classes: int | None = out_dim if isinstance(out_dim, int) else None
         self._head_weights: tuple[np.ndarray, np.ndarray] | None = None
+        self._head_session: ort.InferenceSession | None = self._resolve_head_session(opts)
+
+    def _resolve_head_session(self, opts: ort.SessionOptions) -> ort.InferenceSession | None:
+        """Resolve optional dedicated ONNX linear classification head graph session.
+
+        Why:
+            Executing linear classification on pre-extracted embeddings via a dedicated ONNX head graph
+            eliminates the need to parse raw tensor initializers out of the full backbone graph.
+        """
+        model_p = Path(self.model_path)
+        head_candidates = [
+            model_p.with_name("head_int8.onnx"),
+            model_p.with_name("head.int8.onnx"),
+            model_p.with_name("head.onnx"),
+            Path("models/checkpoints/head_int8.onnx"),
+            Path("models/checkpoints/head.onnx"),
+        ]
+        for candidate in head_candidates:
+            if candidate.is_file():
+                try:
+                    return ort.InferenceSession(str(candidate), opts, providers=["CPUExecutionProvider"])
+                except Exception as exc:
+                    logger.debug("Could not initialize dedicated head session from %s: %s", candidate, exc)
+        return None
 
     def predict_outputs(self, input_array: npt.NDArray[np.float32]) -> InferenceOutputs:
         """Run inference returning both class logits and dense feature embeddings.
@@ -132,6 +159,16 @@ class ONNXInferenceEngine:
         Returns:
             Classification logits array of shape (N, num_classes).
         """
+        if self._head_session is not None:
+            try:
+                inp_name = self._head_session.get_inputs()[0].name
+                raw = self._head_session.run(None, {inp_name: np.asarray(embeddings, dtype=np.float32)})
+                return np.asarray(raw[0], dtype=np.float32)
+            except Exception as head_err:
+                logger.debug(
+                    "Dedicated ONNX head execution failed (%s); falling back to initializer extraction", head_err
+                )
+
         if self._head_weights is None:
             self._head_weights = extract_onnx_head_weights(self.model_path)
         weight, bias = self._head_weights

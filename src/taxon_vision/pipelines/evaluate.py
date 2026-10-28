@@ -16,7 +16,7 @@ import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 import torch
@@ -25,6 +25,29 @@ import yaml
 from taxon_vision.inference.onnx_engine import ONNXInferenceEngine
 
 logger = logging.getLogger(__name__)
+
+
+class ConformalEvalParams(NamedTuple):
+    """Calibrated conformal parameters parsed for holdout evaluation."""
+
+    q_hat: float
+    alpha: float
+    nominal_coverage: float
+
+
+class EmbeddingsAndLabels(NamedTuple):
+    """Deserialized NumPy embedding matrix and ground-truth label vector."""
+
+    embeddings: np.ndarray
+    labels: np.ndarray
+
+
+class ONNXLatencyProfile(NamedTuple):
+    """Measured p50/p95 latency (ms) and throughput (FPS) for ONNX Runtime."""
+
+    p50_ms: float
+    p95_ms: float
+    throughput_fps: float
 
 
 @dataclass
@@ -126,7 +149,7 @@ def get_canonical_pareto_profiles() -> list[ParetoResult]:
     ]
 
 
-def _load_conformal_params(conformal_config_path: Path) -> tuple[float, float, float]:
+def _load_conformal_params(conformal_config_path: Path) -> ConformalEvalParams:
     """Parse q_hat, alpha, and nominal_coverage from conformal config."""
     conf_data: dict[str, Any]
     if conformal_config_path.suffix in (".yaml", ".yml"):
@@ -153,10 +176,10 @@ def _load_conformal_params(conformal_config_path: Path) -> tuple[float, float, f
 
     raw_cov = conf_data.get("nominal_coverage")
     nominal_cov = float(raw_cov) if raw_cov is not None else (1.0 - alpha)
-    return q_hat, alpha, nominal_cov
+    return ConformalEvalParams(q_hat=q_hat, alpha=alpha, nominal_coverage=nominal_cov)
 
 
-def _load_embeddings_and_labels(path: Path) -> tuple[np.ndarray, np.ndarray]:
+def _load_embeddings_and_labels(path: Path) -> EmbeddingsAndLabels:
     """Load embeddings and corresponding labels from a serialized .pt split file."""
     data = torch.load(path, map_location="cpu", weights_only=True)
     if isinstance(data, dict):
@@ -170,7 +193,7 @@ def _load_embeddings_and_labels(path: Path) -> tuple[np.ndarray, np.ndarray]:
 
     embs_np = embs.numpy() if isinstance(embs, torch.Tensor) else np.asarray(embs, dtype=np.float32)
     lbls_np = lbls.numpy() if isinstance(lbls, torch.Tensor) else np.asarray(lbls, dtype=np.int64)
-    return embs_np, lbls_np
+    return EmbeddingsAndLabels(embeddings=embs_np, labels=lbls_np)
 
 
 def _evaluate_onnx_holdout(
@@ -216,10 +239,10 @@ def _evaluate_onnx_holdout(
     }
 
 
-def _profile_onnx_inference(onnx_path: Path) -> tuple[float, float, float]:
+def _profile_onnx_inference(onnx_path: Path) -> ONNXLatencyProfile:
     """Profile ONNX Runtime inference latency and throughput on CPU."""
     if not onnx_path.exists():
-        return 9.5, 12.0, 105.0
+        return ONNXLatencyProfile(p50_ms=9.5, p95_ms=12.0, throughput_fps=105.0)
 
     try:
         import onnxruntime as ort
@@ -241,10 +264,10 @@ def _profile_onnx_inference(onnx_path: Path) -> tuple[float, float, float]:
         p95 = float(np.percentile(durations, 95))
         mean_dur = float(np.mean(durations))
         fps = 1000.0 / mean_dur if mean_dur > 0 else 0.0
-        return round(p50, 2), round(p95, 2), round(fps, 1)
+        return ONNXLatencyProfile(p50_ms=round(p50, 2), p95_ms=round(p95, 2), throughput_fps=round(fps, 1))
     except Exception as exc:
         logger.warning("ONNX profiling failed (%s); using baseline estimates", exc)
-        return 9.5, 12.0, 105.0
+        return ONNXLatencyProfile(p50_ms=9.5, p95_ms=12.0, throughput_fps=105.0)
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:

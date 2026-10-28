@@ -14,13 +14,35 @@ How:
     - `views`: Interactive Jinja2/HTMX dashboard views for field biologists.
 """
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from taxon_vision.config import get_settings
+from taxon_vision.service.inference import get_image_transform, load_taxa_catalog, reset_model_caches
 from taxon_vision.service.routes import explain, health, predict, train, views
+from taxon_vision.service.storage import get_image_cache
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Manage ASGI application startup warm-up and deterministic shutdown cleanup.
+
+    Args:
+        _app: FastAPI application instance.
+
+    Yields:
+        None during the active lifetime of the ASGI server.
+    """
+    load_taxa_catalog()
+    get_image_transform()
+    yield
+    get_image_cache().clear()
+    reset_model_caches()
+
 
 settings = get_settings()
 
@@ -28,6 +50,7 @@ app = FastAPI(
     title=settings.service.name,
     description="Automated MLOps pipeline for species classification with conformal uncertainty guarantees.",
     version=settings.service.version,
+    lifespan=lifespan,
 )
 
 static_dir = Path(__file__).parent / "static"

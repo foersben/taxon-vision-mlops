@@ -7,7 +7,7 @@ import logging
 import time
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 import numpy.typing as npt
@@ -30,6 +30,20 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 EVAL_RESIZE_RATIO = 256 / 224
 """Shorter-edge resize factor preceding the centre crop; identical to the feature-extraction transform."""
+
+
+class ReadinessStatus(NamedTuple):
+    """Typed container for Kubernetes readiness probe check outcomes."""
+
+    ready: bool
+    checks: dict[str, str]
+
+
+class ModelForwardOutputs(NamedTuple):
+    """Typed container for model forward pass logits and penultimate embeddings."""
+
+    logits: npt.NDArray[np.float32]
+    embeddings: npt.NDArray[np.float32] | None
 
 
 class InvalidImageError(ValueError):
@@ -167,14 +181,14 @@ def get_onnx_engine() -> ONNXInferenceEngine | None:
     return engine
 
 
-def check_readiness() -> tuple[bool, dict[str, str]]:
+def check_readiness() -> ReadinessStatus:
     """Probe every dependency required to serve predictions.
 
     Why:
         A readiness probe that always reports healthy routes traffic to pods that cannot answer. This probe loads the catalogue and the serving model (ONNX graph or PyTorch classifier), so a missing or incompatible artefact surfaces as not-ready.
 
     Returns:
-        Tuple of overall readiness and a mapping of check name to a human-readable status.
+        ReadinessStatus containing overall readiness and a mapping of check name to status string.
     """
     checks: dict[str, str] = {}
     ready = True
@@ -183,11 +197,11 @@ def check_readiness() -> tuple[bool, dict[str, str]]:
         catalog = load_taxa_catalog()
         if not catalog:
             checks["taxa_catalog"] = "failed: empty catalog"
-            return False, checks
+            return ReadinessStatus(ready=False, checks=checks)
         checks["taxa_catalog"] = f"ok ({len(catalog)} taxa)"
     except Exception as exc:
         checks["taxa_catalog"] = f"failed: {exc}"
-        return False, checks
+        return ReadinessStatus(ready=False, checks=checks)
 
     try:
         get_classifier()
@@ -205,7 +219,7 @@ def check_readiness() -> tuple[bool, dict[str, str]]:
         checks["model"] = f"failed: {exc}"
         ready = False
 
-    return ready, checks
+    return ReadinessStatus(ready=ready, checks=checks)
 
 
 @lru_cache(maxsize=1)
@@ -347,7 +361,7 @@ def _get_image_tensor(image_bytes: bytes) -> torch.Tensor:
 
 def compute_model_outputs(
     tensor: torch.Tensor,
-) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.float32] | None]:
+) -> ModelForwardOutputs:
     """Compute raw class logits and optional visual embedding vector for a preprocessed image.
 
     Why:
@@ -368,8 +382,8 @@ def compute_model_outputs(
         tensor: Preprocessed image tensor of shape (1, 3, H, W).
 
     Returns:
-        Tuple of (logits, embeddings) where logits has shape (num_classes,) and
-        embeddings has shape (feature_dim,) or None if embeddings are unavailable.
+        ModelForwardOutputs containing logits of shape (num_classes,) and
+        embeddings of shape (feature_dim,) or None if embeddings are unavailable.
 
     Raises:
         ModelNotReadyError: If model artefacts fail to evaluate or are missing.
@@ -379,14 +393,14 @@ def compute_model_outputs(
         outputs = engine.predict_outputs(tensor.numpy())
         logits: npt.NDArray[np.float32] = outputs.logits[0]
         embedding: npt.NDArray[np.float32] | None = outputs.embeddings[0] if outputs.embeddings is not None else None
-        return logits, embedding
+        return ModelForwardOutputs(logits=logits, embeddings=embedding)
 
     with torch.no_grad():
         classifier = get_classifier()
         logits_t, embeddings_t = classifier.forward_with_embeddings(tensor)
         logits_arr: npt.NDArray[np.float32] = np.asarray(logits_t.squeeze(0).cpu().numpy(), dtype=np.float32)
         embeddings_arr: npt.NDArray[np.float32] = np.asarray(embeddings_t.squeeze(0).cpu().numpy(), dtype=np.float32)
-        return logits_arr, embeddings_arr
+        return ModelForwardOutputs(logits=logits_arr, embeddings=embeddings_arr)
 
 
 def compute_logits(tensor: torch.Tensor) -> npt.NDArray[np.float32]:

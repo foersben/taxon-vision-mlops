@@ -16,9 +16,17 @@ Typical usage example:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import NamedTuple
 
 import torch
 import torch.nn as nn
+
+
+class ClassifierOutputs(NamedTuple):
+    """Dual outputs emitted by TaxonClassifier forward execution."""
+
+    logits: torch.Tensor
+    embeddings: torch.Tensor
 
 
 def load_head_checkpoint(head: nn.Module, checkpoint_file: Path | str) -> None:
@@ -132,7 +140,7 @@ class TaxonClassifier(nn.Module):
         features = self.forward_features(x)
         return self.forward_head(features)
 
-    def forward_with_embeddings(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward_with_embeddings(self, x: torch.Tensor) -> ClassifierOutputs:
         """Execute forward pass returning both taxonomic class logits and dense feature embeddings.
 
         Why:
@@ -148,9 +156,9 @@ class TaxonClassifier(nn.Module):
             x: 4D input image tensor of shape `(batch_size, channels, height, width)`.
 
         Returns:
-            Tuple of `(logits, embeddings)` where `logits` has shape `(batch_size, num_classes)` and
+            ClassifierOutputs of `(logits, embeddings)` where `logits` has shape `(batch_size, num_classes)` and
             `embeddings` has shape `(batch_size, feature_dim)`.
         """
         features = self.forward_features(x)
         logits = self.forward_head(features)
-        return logits, features
+        return ClassifierOutputs(logits=logits, embeddings=features)

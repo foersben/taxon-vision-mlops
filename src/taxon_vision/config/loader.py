@@ -150,13 +150,38 @@ def _apply_direct_env_overrides(config_data: dict[str, Any]) -> dict[str, Any]:
     return config_data
 
 
+def _resolve_workspace_root() -> Path:
+    """Resolve the active workspace root directory across source checkouts and packaged installs.
+
+    Returns:
+        Path: Directory containing `config/default_config.yaml`.
+    """
+    env_root = os.getenv("TAXON_WORKSPACE_ROOT") or os.getenv("TAXON_CONFIG_ROOT")
+    if env_root:
+        candidate = Path(env_root).resolve()
+        if (candidate / "config" / "default_config.yaml").is_file():
+            return candidate
+        if (candidate / "default_config.yaml").is_file():
+            return candidate.parent
+
+    source_root = Path(__file__).resolve().parents[3]
+    if (source_root / "config" / "default_config.yaml").is_file():
+        return source_root
+
+    cwd = Path.cwd().resolve()
+    if (cwd / "config" / "default_config.yaml").is_file():
+        return cwd
+
+    return source_root
+
+
 def get_params_path() -> Path:
-    """Resolve the canonical params.yaml path, checking repository root first then config/.
+    """Resolve the canonical params.yaml path, checking workspace root first then config/.
 
     Returns:
         Path: Canonical path to params.yaml.
     """
-    repo_root = Path(__file__).resolve().parents[3]
+    repo_root = _resolve_workspace_root()
     root_params = repo_root / "params.yaml"
     if root_params.is_file():
         return root_params
@@ -165,15 +190,22 @@ def get_params_path() -> Path:
 
 @lru_cache(maxsize=1)
 def get_settings(config_path: str | Path | None = None) -> Settings:
-    """Retrieve the validated global application configuration settings.
+    """Retrieve and cache the validated global application configuration settings.
 
-    Loads base configuration from `config/default_config.yaml`. Layers `params.yaml` and `conformal_config.yaml`
-    if present in the configuration root. If an explicit `config_path` is provided, its values are layered on top,
-    followed by any active `TAXON_` environment variables.
+    Why:
+        Centralizes configuration resolution across YAML defaults, DVC pipeline parameters,
+        conformal calibration artefacts, and runtime environment variables into a single
+        type-safe, immutable Pydantic hierarchy, avoiding repeated disk I/O via LRU caching.
+
+    How:
+        1. Resolves workspace root and loads base defaults from `config/default_config.yaml`.
+        2. Deep-merges DVC hyperparameter overrides from `params.yaml`.
+        3. Overlays calibrated conformal thresholds from `config/conformal_config.yaml`.
+        4. Applies optional custom file overrides (`config_path` or `TAXON_CONFIG_PATH`) and `TAXON_` env variables.
+        5. Validates and constructs the `Settings` Pydantic root model.
 
     Args:
-        config_path (str | Path | None, optional): Explicit filesystem path to YAML configuration overrides.
-            If None, resolves from the `TAXON_CONFIG_PATH` environment variable. Defaults to None.
+        config_path: Optional filesystem path to YAML configuration overrides.
 
     Returns:
         Settings: The validated application configuration instance.
@@ -182,7 +214,7 @@ def get_settings(config_path: str | Path | None = None) -> Settings:
         FileNotFoundError: If the base configuration file does not exist.
         pydantic.ValidationError: If the loaded configuration fails schema constraints.
     """
-    repo_root = Path(__file__).resolve().parents[3]
+    repo_root = _resolve_workspace_root()
     base_path = repo_root / "config" / "default_config.yaml"
     if not base_path.is_file():
         raise FileNotFoundError(f"Base configuration file not found at: {base_path}")

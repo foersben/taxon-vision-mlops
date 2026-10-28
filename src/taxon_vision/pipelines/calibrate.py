@@ -13,7 +13,9 @@ import argparse
 import json
 import logging
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 import torch
@@ -27,14 +29,32 @@ from taxon_vision.uncertainty.ood_detector import EnergyOODDetector
 logger = logging.getLogger(__name__)
 
 
-def load_embeddings_and_labels(path: Path) -> tuple[np.ndarray, np.ndarray]:
+class EmbeddingsAndLabels(NamedTuple):
+    """Deserialized NumPy embedding matrix and ground-truth label vector."""
+
+    embeddings: np.ndarray
+    labels: np.ndarray
+
+
+@dataclass(frozen=True)
+class _CalibrationSummary:
+    """Calibrated conformal and OOD thresholds with empirical sample statistics."""
+
+    alpha: float
+    q_hat: float
+    tau_ood: float | None
+    sample_size: int
+    empirical_coverage: float
+
+
+def load_embeddings_and_labels(path: Path) -> EmbeddingsAndLabels:
     """Load embeddings and corresponding labels from a serialized .pt split file.
 
     Args:
         path: Path to serialized PyTorch embedding partition dictionary.
 
     Returns:
-        Tuple of (embeddings, labels) as numpy arrays.
+        EmbeddingsAndLabels of (embeddings, labels) as numpy arrays.
     """
     if not path.exists():
         raise FileNotFoundError(f"Embedding partition file not found: {path}")
@@ -51,32 +71,28 @@ def load_embeddings_and_labels(path: Path) -> tuple[np.ndarray, np.ndarray]:
 
     embs_np = embs.numpy() if isinstance(embs, torch.Tensor) else np.asarray(embs, dtype=np.float32)
     lbls_np = lbls.numpy() if isinstance(lbls, torch.Tensor) else np.asarray(lbls, dtype=np.int64)
-    return embs_np, lbls_np
+    return EmbeddingsAndLabels(embeddings=embs_np, labels=lbls_np)
 
 
 def _save_calibration_artifacts(
     out_path: Path,
     metrics_path: Path | None,
-    alpha: float,
-    q_hat: float,
-    tau_ood: float | None,
-    sample_size: int,
-    empirical_coverage: float,
+    summary: _CalibrationSummary,
 ) -> None:
     """Save calibration configuration and optional DVC summary metrics to disk."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
     yaml_payload = {
         "calibration": {
             "method": "split-conformal",
-            "nominal_coverage": round(1.0 - alpha, 4),
-            "alpha": round(alpha, 4),
-            "q_hat": round(q_hat, 4),
-            "tau_ood": round(tau_ood, 4) if tau_ood is not None else None,
-            "ood_energy_threshold": round(tau_ood, 4) if tau_ood is not None else None,
+            "nominal_coverage": round(1.0 - summary.alpha, 4),
+            "alpha": round(summary.alpha, 4),
+            "q_hat": round(summary.q_hat, 4),
+            "tau_ood": round(summary.tau_ood, 4) if summary.tau_ood is not None else None,
+            "ood_energy_threshold": round(summary.tau_ood, 4) if summary.tau_ood is not None else None,
             "max_set_size_for_auto_accept": 3,
             "empty_set_action": "route_to_human_triage",
             "min_confidence_threshold": 0.60,
-            "num_calibration_samples": sample_size,
+            "num_calibration_samples": summary.sample_size,
         }
     }
     with out_path.open("w", encoding="utf-8") as f:
@@ -86,13 +102,13 @@ def _save_calibration_artifacts(
     if metrics_path is not None:
         metrics_path.parent.mkdir(parents=True, exist_ok=True)
         metrics_meta = {
-            "alpha": round(alpha, 4),
-            "nominal_coverage": round(1.0 - alpha, 4),
-            "empirical_calibration_coverage": round(empirical_coverage, 4),
-            "q_hat": round(q_hat, 4),
-            "tau_ood": round(tau_ood, 4) if tau_ood is not None else None,
-            "ood_energy_threshold": round(tau_ood, 4) if tau_ood is not None else None,
-            "num_calibration_samples": sample_size,
+            "alpha": round(summary.alpha, 4),
+            "nominal_coverage": round(1.0 - summary.alpha, 4),
+            "empirical_calibration_coverage": round(summary.empirical_coverage, 4),
+            "q_hat": round(summary.q_hat, 4),
+            "tau_ood": round(summary.tau_ood, 4) if summary.tau_ood is not None else None,
+            "ood_energy_threshold": round(summary.tau_ood, 4) if summary.tau_ood is not None else None,
+            "num_calibration_samples": summary.sample_size,
         }
         with metrics_path.open("w", encoding="utf-8") as f:
             json.dump(metrics_meta, f, indent=2)
@@ -210,11 +226,13 @@ def calibrate_cli(argv: list[str] | None = None) -> int:
     _save_calibration_artifacts(
         out_path=args.out,
         metrics_path=args.metrics_out,
-        alpha=args.alpha,
-        q_hat=q_hat,
-        tau_ood=tau_ood,
-        sample_size=cal_sample_size,
-        empirical_coverage=empirical_coverage,
+        summary=_CalibrationSummary(
+            alpha=args.alpha,
+            q_hat=q_hat,
+            tau_ood=tau_ood,
+            sample_size=cal_sample_size,
+            empirical_coverage=empirical_coverage,
+        ),
     )
 
     from taxon_vision.models.training.tracking import log_stage_metrics_to_parent_run

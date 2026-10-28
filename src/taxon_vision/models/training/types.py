@@ -8,12 +8,32 @@ from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, NamedTuple, TypedDict
 
 import torch
 from torch import nn, optim
 
 from taxon_vision.models.loss import ClassBalancedLoss
+
+
+class TrainingComponentsTuple(NamedTuple):
+    """NamedTuple representation of wired training components."""
+
+    head: nn.Module
+    criterion: ClassBalancedLoss
+    optimizer: optim.Optimizer
+    config: HeadTrainingConfig
+    params: dict[str, Any]
+
+
+class ResolvedTrainingParametersTuple(NamedTuple):
+    """NamedTuple representation of resolved baseline training parameters."""
+
+    extractor: str
+    epochs: int
+    batch_size: int
+    learning_rate: float
+    checkpoint_path: Path | str
 
 
 class PromotionAlias(StrEnum):
@@ -299,9 +319,15 @@ class TrainingComponents:
     config: HeadTrainingConfig
     params: dict[str, Any]
 
-    def to_tuple(self) -> tuple[nn.Module, ClassBalancedLoss, optim.Optimizer, HeadTrainingConfig, dict[str, Any]]:
-        """Export as canonical 5-tuple for legacy function boundaries."""
-        return self.head, self.criterion, self.optimizer, self.config, self.params
+    def to_tuple(self) -> TrainingComponentsTuple:
+        """Export as typed 5-tuple for sequence-unpacking boundaries."""
+        return TrainingComponentsTuple(
+            head=self.head,
+            criterion=self.criterion,
+            optimizer=self.optimizer,
+            config=self.config,
+            params=self.params,
+        )
 
     def __iter__(self) -> Iterator[Any]:
         """Enable tuple-style unpacking: head, criterion, optimizer, config, params = components."""
@@ -322,9 +348,15 @@ class ResolvedTrainingParameters:
     learning_rate: float
     checkpoint_path: Path | str
 
-    def to_tuple(self) -> tuple[str, int, int, float, Path | str]:
-        """Export as canonical 5-tuple for legacy function boundaries."""
-        return self.extractor, self.epochs, self.batch_size, self.learning_rate, self.checkpoint_path
+    def to_tuple(self) -> ResolvedTrainingParametersTuple:
+        """Export as typed 5-tuple for sequence-unpacking boundaries."""
+        return ResolvedTrainingParametersTuple(
+            extractor=self.extractor,
+            epochs=self.epochs,
+            batch_size=self.batch_size,
+            learning_rate=self.learning_rate,
+            checkpoint_path=self.checkpoint_path,
+        )
 
     def __iter__(self) -> Iterator[Any]:
         """Enable tuple-style unpacking for backwards compatibility."""

@@ -248,6 +248,17 @@ def load_or_create_training_split(
 ) -> EmbeddingSplit:
     """Construct or restore deterministic embedding splits for rapid head training.
 
+    Why:
+        Stage 3 (`extract_features.py`) materializes split-isolated tensor partitions (`train_embeddings.pt`, `val_embeddings.pt`) in production while unit and smoke tests may pass composite caches or rely on deterministic synthetic Gaussian splits. Centralizing split resolution enforces feature dimensionality checks and prevents silent fallback to synthetic random noise unless `allow_synthetic=True` is explicitly authorized.
+
+    How:
+        1. Probes explicit `train_embeddings_path` / `val_embeddings_path` pair or canonical `data/embeddings/{train,val}_embeddings.pt` files.
+        2. Falls back to composite `cache_path` (or `data/embeddings/cached_features.pt`) via `_try_load_cached_split`.
+        3. Raises `FileNotFoundError` when no valid cache matches `dim` and `allow_synthetic` is False; otherwise generates a seeded Gaussian split.
+
+    Complexity:
+        O(N * D) disk deserialization and memory allocation for N total samples of dimension D.
+
     Args:
         dim: Dimensionality of feature vectors.
         num_classes: Total number of classification categories.

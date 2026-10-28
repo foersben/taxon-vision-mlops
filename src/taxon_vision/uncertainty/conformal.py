@@ -4,13 +4,35 @@
 
 from __future__ import annotations
 
+from typing import NamedTuple
+
 import numpy as np
 
 from taxon_vision.config import get_settings
 
 
+class ConformalPredictionSet(NamedTuple):
+    """Conformal prediction set indices paired with human triage referral status."""
+
+    indices: list[int]
+    requires_human_review: bool
+
+
 class SplitConformalPredictor:
-    """Helper for Split Conformal calibration and quantile calculation (Angelopoulos & Bates, 2021)."""
+    """Stateless calibration routines for Split Conformal Prediction (Angelopoulos & Bates, 2021).
+
+    Why:
+        Neural network softmax outputs are systematically overconfident on long-tailed biological datasets. Split Conformal Prediction decouples calibration from training by computing an empirical order-statistic quantile on an exchangeable calibration split, guaranteeing marginal coverage P(Y in C(X)) >= 1 - alpha without distributional assumptions.
+
+    How:
+        Computes non-conformity scores s_i = 1 - p(y_i | x_i) on holdout calibration observations and selects the ceil((n + 1)(1 - alpha)) / n empirical quantile using the conservative higher-order statistic.
+
+    Complexity:
+        O(N log N) time complexity and O(N) auxiliary space for sorting N calibration scores.
+
+    References:
+        Angelopoulos, A. N., & Bates, S. (2021). A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification. arXiv:2107.07511.
+    """
 
     @staticmethod
     def compute_quantile(scores: np.ndarray, alpha: float) -> float:
@@ -23,6 +45,9 @@ class SplitConformalPredictor:
         How:
             Evaluates the empirical quantile at ceil((n + 1) * (1 - alpha)) / n using
             the higher order statistic.
+
+        Complexity:
+            O(N log N) time complexity for N calibration scores.
 
         Args:
             scores: Non-conformity scores array of shape (N,).
@@ -41,6 +66,15 @@ class SplitConformalPredictor:
     @classmethod
     def calibrate(cls, probabilities: np.ndarray, labels: np.ndarray, alpha: float) -> float:
         """Calibrate non-conformity threshold q_hat on holdout probabilities and labels.
+
+        Why:
+            Translates predicted softmax class probabilities and ground-truth labels on D_cal into non-conformity scores s_i = 1 - p_{y_i} to derive the conformal threshold q_hat.
+
+        How:
+            Indexes the true class probability for each sample via vectorized NumPy indexing and delegates quantile evaluation to `compute_quantile`.
+
+        Complexity:
+            O(N log N) time complexity for N calibration samples.
 
         Args:
             probabilities: Array of shape (N, K) containing predicted class probabilities.
@@ -98,7 +132,7 @@ class ConformalPredictionEngine:
             else settings.conformal.min_confidence_threshold
         )
 
-    def predict_set(self, probabilities: np.ndarray) -> tuple[list[int], bool]:
+    def predict_set(self, probabilities: np.ndarray) -> ConformalPredictionSet:
         """Construct finite-sample distribution-free prediction sets with bounded error rates.
 
         Why:
@@ -114,8 +148,8 @@ class ConformalPredictionEngine:
             probabilities: 1D NumPy array of normalized class probabilities summing to 1.0.
 
         Returns:
-            A tuple (conformal_indices, requires_human_review) containing:
-                - conformal_indices: List of integer taxon indices admitted into the valid set.
+            ConformalPredictionSet (indices, requires_human_review) containing:
+                - indices: List of integer taxon indices admitted into the valid set.
                 - requires_human_review: Boolean flag indicating if human taxonomist review is mandated.
 
         References:
@@ -128,4 +162,4 @@ class ConformalPredictionEngine:
         top_prob = float(np.max(probabilities)) if len(probabilities) > 0 else 0.0
         # Referral rule: empty set, ambiguous set exceeding k_max, or low top confidence
         refer_to_human = len(pred_set) == 0 or len(pred_set) > self.k_max or top_prob < self.min_confidence_threshold
-        return pred_set, refer_to_human
+        return ConformalPredictionSet(indices=pred_set, requires_human_review=refer_to_human)

@@ -11,8 +11,9 @@ import argparse
 import json
 import logging
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from taxon_vision.data.license_filter import LicenseFilter
 
@@ -26,14 +27,40 @@ ALLOWED_LICENSES: set[str] = {
 }
 
 
+class LicenseGateResult(NamedTuple):
+    """Verified observation records paired with compliance rejection error messages."""
+
+    verified_records: list[dict[str, Any]]
+    errors: list[str]
+
+
+@dataclass(frozen=True)
+class _AuditReportStats:
+    """Summary counts and error list for license audit reporting."""
+
+    total_count: int
+    verified_count: int
+    errors: list[str]
+    is_gatekeeper: bool = False
+
+
 def verify_observation_compliance(obs: dict[str, Any]) -> list[str]:
-    """Verify compliance for a single observation record.
+    """Verify open license and photographer attribution compliance for a single observation record.
+
+    Why:
+        Citizen-science repositories contain observations under restrictive All-Rights-Reserved (ARR) or non-open licenses, and `static.inaturalist.org` mirrors lack open-dataset redistribution provenance unless explicitly verified. Enforcing Rule 05 at the ingestion gate guarantees that only CC0, CC-BY, and CC-BY-NC observations with retained photographer attribution enter training manifests.
+
+    How:
+        Normalizes `license_code` to lowercase hyphenated form and checks membership in `ALLOWED_LICENSES`, rejects unverified `static.inaturalist.org` URLs, and asserts that `attribution` or `photographer_name` contains at least 3 non-whitespace characters.
+
+    Complexity:
+        O(1) per-observation string and set membership inspection.
 
     Args:
-        obs: The observation record to verify.
+        obs: The observation record dictionary to verify.
 
     Returns:
-        A list of errors found in the observation record.
+        A list of compliance violation messages (empty if compliant).
     """
     errors: list[str] = []
     obs_id = obs.get("observation_id") or obs.get("observation_uuid") or "unknown"
@@ -79,14 +106,14 @@ def _load_observations(manifest_path: Path) -> list[dict[str, Any]]:
 
 def _filter_observations_gate(
     raw_observations: list[dict[str, Any]],
-) -> tuple[list[dict[str, Any]], list[str]]:
+) -> LicenseGateResult:
     """Filter candidate observations strictly through LicenseFilter and compliance checks.
 
     Args:
         raw_observations: Raw candidate observation dictionaries.
 
     Returns:
-        Tuple of (verified records list, error messages list).
+        LicenseGateResult of (verified_records, errors).
     """
     verified_records: list[dict[str, Any]] = []
     errors: list[str] = []
@@ -117,7 +144,7 @@ def _filter_observations_gate(
             }
         )
 
-    return verified_records, errors
+    return LicenseGateResult(verified_records=verified_records, errors=errors)
 
 
 def _write_verified_manifest(records: list[dict[str, Any]], out_path: Path) -> None:
@@ -138,29 +165,23 @@ def _write_verified_manifest(records: list[dict[str, Any]], out_path: Path) -> N
 def _write_audit_report(
     out_path: Path,
     manifest_path: Path,
-    total_count: int,
-    verified_count: int,
-    errors: list[str],
-    is_gatekeeper: bool = False,
+    stats: _AuditReportStats,
 ) -> None:
     """Emit structured license compliance audit report JSON.
 
     Args:
         out_path: Destination path for report JSON.
         manifest_path: Evaluated input manifest path.
-        total_count: Total raw observations inspected.
-        verified_count: Number of observations verified.
-        errors: List of compliance error strings.
-        is_gatekeeper: Whether execution is in active gatekeeper mode.
+        stats: Summary counts and error list.
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    status = "PASSED" if (verified_count > 0 if is_gatekeeper else not errors) else "FAILED"
+    status = "PASSED" if (stats.verified_count > 0 if stats.is_gatekeeper else not stats.errors) else "FAILED"
     report = {
         "status": status,
         "manifest": str(manifest_path),
-        "total_observations": total_count,
-        "verified_observations": verified_count,
-        "violations": len(errors),
+        "total_observations": stats.total_count,
+        "verified_observations": stats.verified_count,
+        "violations": len(stats.errors),
         "allowed_licenses": sorted(ALLOWED_LICENSES),
     }
     with out_path.open("w", encoding="utf-8") as f:
@@ -230,10 +251,12 @@ def _run_gatekeeper_mode(
         _write_audit_report(
             out_report,
             target_path,
-            len(observations),
-            len(verified_records),
-            errors,
-            is_gatekeeper=True,
+            _AuditReportStats(
+                total_count=len(observations),
+                verified_count=len(verified_records),
+                errors=errors,
+                is_gatekeeper=True,
+            ),
         )
     print(f"License Gatekeeper PASSED: {len(verified_records)}/{len(observations)} compliant observations verified.")
     return 0
@@ -260,7 +283,13 @@ def _run_audit_mode(
 
     if out_report is not None:
         _write_audit_report(
-            out_report, target_path, len(observations), len(observations) - len(total_errors), total_errors
+            out_report,
+            target_path,
+            _AuditReportStats(
+                total_count=len(observations),
+                verified_count=len(observations) - len(total_errors),
+                errors=total_errors,
+            ),
         )
 
     if total_errors:

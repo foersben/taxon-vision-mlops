@@ -8,8 +8,10 @@ import argparse
 import logging
 import warnings
 from pathlib import Path
-from typing import Literal
+from typing import Literal, NamedTuple
 
+import numpy as np
+import numpy.typing as npt
 import torch
 import torch.nn as nn
 from torch.jit._trace import TracerWarning
@@ -17,10 +19,24 @@ from torch.jit._trace import TracerWarning
 from taxon_vision.config import Settings, get_settings
 from taxon_vision.inference.calibration import load_calibration_tensors
 from taxon_vision.models.factory import create_feature_extractor, get_feature_dimension
-from taxon_vision.models.head import TaxonClassifier, load_head_checkpoint
+from taxon_vision.models.head import ClassifierOutputs, TaxonClassifier, load_head_checkpoint
 from taxon_vision.service.inference import load_taxa_catalog
 
 logger = logging.getLogger(__name__)
+
+
+class ExportOutputPaths(NamedTuple):
+    """Resolved destination and optional temporary FP32 path for ONNX export."""
+
+    output_path: Path
+    temp_fp32_path: Path | None
+
+
+class QuantizationResolution(NamedTuple):
+    """Resolved quantization mode and optional calibration tensors."""
+
+    mode: Literal["auto", "static", "dynamic"]
+    calibration: list[npt.NDArray[np.float32]] | None
 
 
 class _ONNXDualOutputModule(nn.Module):
@@ -46,14 +62,14 @@ class _ONNXDualOutputModule(nn.Module):
         super().__init__()
         self.classifier = classifier
 
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> ClassifierOutputs:
         """Execute forward pass returning (logits, embeddings).
 
         Args:
             x: Input 4D image tensor of shape (batch_size, channels, height, width).
 
         Returns:
-            Tuple of (logits, embeddings) where embeddings are pre-normalized penultimate features.
+            ClassifierOutputs of (logits, embeddings) where embeddings are pre-normalized penultimate features.
         """
         return self.classifier.forward_with_embeddings(x)
 
@@ -166,8 +182,6 @@ def _restore_head(
     checkpoint_file: Path,
     allow_untrained: bool,
     extractor_name: str,
-    feat_dim: int,
-    num_classes: int,
 ) -> bool:
     """Restore checkpoint weights or validate fallback behavior.
 
@@ -176,8 +190,6 @@ def _restore_head(
         checkpoint_file: Path to checkpoint file.
         allow_untrained: Whether to allow untrained backbone.
         extractor_name: Name of the feature extractor.
-        feat_dim: Feature dimension.
-        num_classes: Number of classes.
 
     Returns:
         True if head was restored or fallback is allowed, False otherwise.
@@ -202,8 +214,8 @@ def _restore_head(
                 "Checkpoint %s is incompatible with backbone '%s' (feat_dim=%d, classes=%d): %s",
                 checkpoint_file,
                 extractor_name,
-                feat_dim,
-                num_classes,
+                classifier.feature_dim,
+                classifier.num_classes,
                 load_err,
             )
             return False
@@ -285,6 +297,38 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _resolve_quantization_mode(
+    requested: str,
+    cal_dir: Path,
+    cal_samples: int,
+) -> QuantizationResolution:
+    """Resolve effective INT8 quantization mode and load calibration tensors if needed.
+
+    Args:
+        requested: Requested quantization mode ('auto', 'static', or 'dynamic').
+        cal_dir: Directory containing representative calibration images.
+        cal_samples: Maximum number of calibration samples to load.
+
+    Returns:
+        QuantizationResolution pairing effective mode and loaded calibration tensors.
+    """
+    if requested == "static":
+        return QuantizationResolution(
+            mode="static",
+            calibration=load_calibration_tensors(cal_dir, cal_samples),
+        )
+    if requested == "auto":
+        if cal_dir.exists() and any(cal_dir.glob("*.*")):
+            return QuantizationResolution(
+                mode="static",
+                calibration=load_calibration_tensors(cal_dir, cal_samples),
+            )
+        return QuantizationResolution(mode="dynamic", calibration=None)
+    if requested == "dynamic":
+        return QuantizationResolution(mode="dynamic", calibration=None)
+    return QuantizationResolution(mode="auto", calibration=None)
+
+
 def _quantize_exported_graph(fp32_path: Path, args: argparse.Namespace, settings: Settings) -> Path:
     """Quantize the exported FP32 backbone+head graph to INT8 using the operator-appropriate mode.
 
@@ -307,32 +351,12 @@ def _quantize_exported_graph(fp32_path: Path, args: argparse.Namespace, settings
     model_cfg = settings.model
     requested = args.quantize_mode or model_cfg.quantization_mode
     cal_dir = Path(args.calibration_dir or model_cfg.calibration_dir)
-    calibration = None
-    mode: Literal["auto", "static", "dynamic"]
-    if requested == "static":
-        calibration = load_calibration_tensors(
-            cal_dir,
-            args.calibration_samples or model_cfg.calibration_samples,
-        )
-        mode = "static"
-    elif requested == "auto":
-        if cal_dir.exists() and any(cal_dir.glob("*.*")):
-            calibration = load_calibration_tensors(
-                cal_dir,
-                args.calibration_samples or model_cfg.calibration_samples,
-            )
-            mode = "static"
-        else:
-            mode = "dynamic"
-    elif requested == "dynamic":
-        mode = "dynamic"
-    else:
-        mode = "auto"
+    cal_samples = args.calibration_samples or model_cfg.calibration_samples
+    mode, calibration = _resolve_quantization_mode(requested, cal_dir, cal_samples)
 
+    is_custom_output = bool(args.output and args.output != "models/checkpoints/model.onnx")
     default_quantized = (
-        fp32_path.with_name(f"{fp32_path.stem}.int8.onnx")
-        if args.output and args.output != "models/checkpoints/model.onnx"
-        else Path(model_cfg.onnx_model_path)
+        fp32_path.with_name(f"{fp32_path.stem}.int8.onnx") if is_custom_output else Path(model_cfg.onnx_model_path)
     )
     quantized_path = Path(args.quantized_output or default_quantized)
 
@@ -341,7 +365,7 @@ def _quantize_exported_graph(fp32_path: Path, args: argparse.Namespace, settings
     return quantized_path
 
 
-def _resolve_export_output(output_arg: str | None, quantize_int8: bool) -> tuple[Path, Path | None]:
+def _resolve_export_output(output_arg: str | None, quantize_int8: bool) -> ExportOutputPaths:
     """Resolve target output path and optional temporary FP32 path.
 
     Args:
@@ -349,19 +373,19 @@ def _resolve_export_output(output_arg: str | None, quantize_int8: bool) -> tuple
         quantize_int8: Whether INT8 quantization is requested.
 
     Returns:
-        Tuple of (output_path, temporary_fp32_path_or_none).
+        ExportOutputPaths of (output_path, temporary_fp32_path_or_none).
     """
     if output_arg is not None:
-        return Path(output_arg), None
+        return ExportOutputPaths(output_path=Path(output_arg), temp_fp32_path=None)
     if not quantize_int8:
-        return Path("models/checkpoints/model.onnx"), None
+        return ExportOutputPaths(output_path=Path("models/checkpoints/model.onnx"), temp_fp32_path=None)
 
     import tempfile
 
     temp_fp32 = tempfile.NamedTemporaryFile(suffix=".onnx", delete=False)
     temp_path = Path(temp_fp32.name)
     temp_fp32.close()
-    return temp_path, temp_path
+    return ExportOutputPaths(output_path=temp_path, temp_fp32_path=temp_path)
 
 
 def _build_and_restore_classifier(args: argparse.Namespace, settings: Settings) -> TaxonClassifier | None:
@@ -395,8 +419,6 @@ def _build_and_restore_classifier(args: argparse.Namespace, settings: Settings) 
         checkpoint_file,
         args.allow_untrained,
         extractor_name,
-        feat_dim,
-        num_classes,
     ):
         return None
     return classifier

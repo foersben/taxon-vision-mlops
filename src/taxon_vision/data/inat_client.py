@@ -4,10 +4,10 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 import httpx
+from aiolimiter import AsyncLimiter
 
 
 class INatAPIClient:
@@ -30,8 +30,10 @@ class INatAPIClient:
         Args:
             max_requests_per_minute: Maximum allowed requests per minute to prevent API throttling.
         """
+        self.max_requests_per_minute = max_requests_per_minute
         self.delay_seconds = 60.0 / max_requests_per_minute
         self.base_url = "https://api.inaturalist.org/v1"
+        self.limiter = AsyncLimiter(max_rate=max_requests_per_minute, time_period=60.0)
 
     async def fetch_observations(self, taxon_id: int, per_page: int = 10) -> list[dict[str, Any]]:
         """Fetch verified research-grade observations for a target taxon.
@@ -45,7 +47,7 @@ class INatAPIClient:
             Biological training data must maintain high label fidelity. By querying exclusively for `quality_grade=research`, we ensure that community taxonomists have reached consensus on the organism's species identification. Upgrading image URLs from `square` (75x75 thumbnails) to `medium` (500px longest dimension) provides sufficient spatial resolution for neural feature extraction.
 
         How:
-            1. Enforces asynchronous rate limiting via `await asyncio.sleep(self.delay_seconds)`.
+            1. Enforces asynchronous leaky-bucket rate limiting via `aiolimiter.AsyncLimiter`.
             2. Issues an HTTP GET request to `/observations` with `taxon_id`, `quality_grade=research`, and `has[]=photos`.
             3. Validates HTTP response status code via `raise_for_status()`.
             4. Parses JSON response and filters observations with valid photo records.
@@ -63,8 +65,6 @@ class INatAPIClient:
             httpx.HTTPStatusError: If iNaturalist responds with 4xx or 5xx status codes.
             httpx.RequestError: If network connectivity or DNS resolution fails.
         """
-        await asyncio.sleep(self.delay_seconds)
-
         url = f"{self.base_url}/observations"
         params: dict[str, str | int] = {
             "taxon_id": taxon_id,
@@ -73,10 +73,11 @@ class INatAPIClient:
             "quality_grade": "research",
         }
 
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, params=params, timeout=10.0)
-            response.raise_for_status()
-            data = response.json()
+        async with self.limiter:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, params=params, timeout=10.0)
+                response.raise_for_status()
+                data = response.json()
 
         results = []
         for obs in data.get("results", []):

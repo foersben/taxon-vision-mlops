@@ -7,7 +7,7 @@ from __future__ import annotations
 import copy
 import logging
 from collections.abc import Callable
-from typing import Any
+from typing import Any, NamedTuple
 
 import mlflow
 import mlflow.pytorch
@@ -22,6 +22,20 @@ from taxon_vision.models.training.dataset import get_dvc_dataset_hash
 from taxon_vision.models.training.types import PromotionAlias
 
 logger = logging.getLogger(__name__)
+
+
+class ModelDimensions(NamedTuple):
+    """Resolved input embedding dimension and output class count for a model."""
+
+    input_dim: int
+    num_classes: int
+
+
+class SignatureAndExample(NamedTuple):
+    """MLflow ModelSignature paired with a representative NumPy input example."""
+
+    signature: ModelSignature
+    input_example: np.ndarray
 
 
 def _safe_mlflow_call[T](action_name: str, fn: Callable[[], T], default: T | None = None) -> T | None:
@@ -46,7 +60,7 @@ def _resolve_model_dims(
     model: nn.Module,
     input_dim: int | None,
     num_classes: int | None,
-) -> tuple[int, int]:
+) -> ModelDimensions:
     """Resolve embedding dimension and class count from linear layer geometry.
 
     Args:
@@ -55,18 +69,18 @@ def _resolve_model_dims(
         num_classes: Optional explicit number of output classes.
 
     Returns:
-        Tuple of (resolved_input_dim, resolved_num_classes).
+        ModelDimensions of (input_dim, num_classes).
     """
     resolved_dim = input_dim or 1280
     resolved_classes = num_classes or 10
     linear_layers = [m for m in model.modules() if isinstance(m, nn.Linear)]
     if not linear_layers:
-        return resolved_dim, resolved_classes
+        return ModelDimensions(input_dim=resolved_dim, num_classes=resolved_classes)
     if input_dim is None:
         resolved_dim = linear_layers[0].in_features
     if num_classes is None:
         resolved_classes = linear_layers[-1].out_features
-    return resolved_dim, resolved_classes
+    return ModelDimensions(input_dim=resolved_dim, num_classes=resolved_classes)
 
 
 def _build_embedding_signature(input_dim: int, num_classes: int) -> ModelSignature:
@@ -87,7 +101,7 @@ def _build_embedding_signature(input_dim: int, num_classes: int) -> ModelSignatu
 def _prepare_model_signature_and_example(
     model: nn.Module,
     val_embeddings: torch.Tensor | None = None,
-) -> tuple[ModelSignature, np.ndarray]:
+) -> SignatureAndExample:
     """Infer model signature and construct a dummy or sampled input example.
 
     Args:
@@ -95,7 +109,7 @@ def _prepare_model_signature_and_example(
         val_embeddings: Optional real validation embeddings used for signature inference.
 
     Returns:
-        Tuple of (signature, input_example).
+        SignatureAndExample of (signature, input_example).
     """
     input_dim, num_classes = _resolve_model_dims(model, None, None)
 
@@ -107,7 +121,7 @@ def _prepare_model_signature_and_example(
         input_example = np.zeros((1, input_dim), dtype=np.float32)
 
     signature = _build_embedding_signature(input_dim, num_classes)
-    return signature, input_example
+    return SignatureAndExample(signature=signature, input_example=input_example)
 
 
 def _log_model_artifact(

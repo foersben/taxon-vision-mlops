@@ -9,7 +9,7 @@ import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 import torch
@@ -23,6 +23,29 @@ from taxon_vision.models.training.types import EmbeddingSplit
 from taxon_vision.service.inference import load_taxa_catalog
 
 logger = logging.getLogger(__name__)
+
+
+class ExtractedRepresentations(NamedTuple):
+    """Concatenated feature embedding matrix and ground-truth integer labels."""
+
+    embeddings: torch.Tensor
+    labels: torch.Tensor
+
+
+class CalTestIndices(NamedTuple):
+    """Disjoint calibration and holdout test index lists."""
+
+    cal_idx: list[int]
+    test_idx: list[int]
+
+
+class StratifiedSplitIndices(NamedTuple):
+    """Disjoint train, validation, calibration, and test index lists."""
+
+    train_idx: list[int]
+    val_idx: list[int]
+    cal_idx: list[int]
+    test_idx: list[int]
 
 
 def get_catalog_inat_taxon_map(catalog: list[dict[str, Any]] | None = None) -> dict[int, int]:
@@ -42,7 +65,8 @@ def get_catalog_inat_taxon_map(catalog: list[dict[str, Any]] | None = None) -> d
     """
     try:
         records: list[dict[str, Any]] = catalog if catalog is not None else load_taxa_catalog()
-    except Exception:
+    except Exception as exc:
+        logger.warning("Could not load taxa catalog for default mapping: %s", exc)
         records = []
 
     mapping: dict[int, int] = {}
@@ -178,7 +202,8 @@ def _resolve_raw_catalog(catalog: list[dict[str, Any]] | None) -> list[dict[str,
         return catalog
     try:
         return load_taxa_catalog()
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to load taxa catalog from disk: %s", exc)
         return []
 
 
@@ -265,7 +290,7 @@ def stream_and_extract_representations(
     batch_size: int,
     device: torch.device,
     limit: int | None = None,
-) -> tuple[torch.Tensor, torch.Tensor]:
+) -> ExtractedRepresentations:
     r"""Lazily stream remote imagery, apply transformations, and extract representations in mini-batches.
 
     Why:
@@ -284,7 +309,7 @@ def stream_and_extract_representations(
         limit: Optional upper bound on observations to stream.
 
     Returns:
-        Tuple of `(embeddings, labels)` where `embeddings` has shape `(N, D)` and `labels` has shape `(N,)`.
+        ExtractedRepresentations of `(embeddings, labels)` where `embeddings` has shape `(N, D)` and `labels` has shape `(N,)`.
 
     Raises:
         ValueError: If zero compliant images could be streamed or mapped from the manifest.
@@ -331,7 +356,7 @@ def stream_and_extract_representations(
 
     all_x = torch.cat(collected_embeddings, dim=0)
     all_y = torch.tensor(collected_labels, dtype=torch.long)
-    return all_x, all_y
+    return ExtractedRepresentations(embeddings=all_x, labels=all_y)
 
 
 def _can_stratify(y_sub: np.ndarray, test_size: int) -> bool:
@@ -343,30 +368,39 @@ def _can_stratify(y_sub: np.ndarray, test_size: int) -> bool:
     return bool(np.min(counts) >= 2 and test_size >= n_classes and (len(y_sub) - test_size) >= n_classes)
 
 
+@dataclass(frozen=True)
+class _SplitAllocationSpec:
+    """Target sample proportions and PRNG seed for multi-way stratified splitting."""
+
+    val_split: float
+    cal_split: float
+    test_split: float
+    random_seed: int
+
+
 def _split_cal_and_test(
     cal_test_idx: list[int],
     labels: np.ndarray,
-    n_cal: int,
-    n_test: int,
+    counts: tuple[int, int],
     random_seed: int,
-) -> tuple[list[int], list[int]]:
+) -> CalTestIndices:
     """Partition candidate calibration and test indices into two disjoint subsets.
 
     Args:
         cal_test_idx: Indices representing the combined calibration and test pool.
         labels: 1D NumPy array of ground truth labels for stratification.
-        n_cal: Target sample count for calibration.
-        n_test: Target sample count for holdout test.
+        counts: Pair of (n_cal, n_test) target sample counts.
         random_seed: PRNG seed for deterministic splitting.
 
     Returns:
-        Tuple of (cal_idx, test_idx).
+        CalTestIndices of (cal_idx, test_idx).
     """
+    n_cal, n_test = counts
     empty_list: list[int] = []
     if n_test == 0:
-        return cal_test_idx, empty_list
+        return CalTestIndices(cal_idx=cal_test_idx, test_idx=empty_list)
     if n_cal == 0:
-        return empty_list, cal_test_idx
+        return CalTestIndices(cal_idx=empty_list, test_idx=cal_test_idx)
 
     cal_test_labels = labels[cal_test_idx]
     stratify_labels_test = cal_test_labels if _can_stratify(cal_test_labels, n_test) else None
@@ -376,34 +410,28 @@ def _split_cal_and_test(
         stratify=stratify_labels_test,
         random_state=random_seed,
     )
-    return cal_idx, test_idx
+    return CalTestIndices(cal_idx=cal_idx, test_idx=test_idx)
 
 
 def _partition_stratified_subsets(
     indices: list[int],
     labels: np.ndarray,
-    val_split: float,
-    cal_split: float,
-    test_split: float,
-    random_seed: int,
-) -> tuple[list[int], list[int], list[int], list[int]]:
+    spec: _SplitAllocationSpec,
+) -> StratifiedSplitIndices:
     """Partition observation indices into stratified train, val, cal, and test subsets.
 
     Args:
         indices: List of index integers into the source dataset.
         labels: 1D NumPy array of ground truth class labels.
-        val_split: Fraction allocated to validation.
-        cal_split: Fraction allocated to conformal calibration.
-        test_split: Fraction allocated to holdout testing.
-        random_seed: PRNG seed for deterministic partitioning.
+        spec: Split proportions and random seed.
 
     Returns:
-        Tuple of (train_idx, val_idx, cal_idx, test_idx).
+        StratifiedSplitIndices of (train_idx, val_idx, cal_idx, test_idx).
     """
     n_total = len(indices)
-    n_val = max(1, round(n_total * val_split)) if val_split > 0 else 0
-    n_cal = max(1, round(n_total * cal_split)) if cal_split > 0 else 0
-    n_test = max(1, round(n_total * test_split)) if test_split > 0 else 0
+    n_val = max(1, round(n_total * spec.val_split)) if spec.val_split > 0 else 0
+    n_cal = max(1, round(n_total * spec.cal_split)) if spec.cal_split > 0 else 0
+    n_test = max(1, round(n_total * spec.test_split)) if spec.test_split > 0 else 0
     n_holdout = n_val + n_cal + n_test
 
     if n_holdout <= 0 or n_holdout >= n_total:
@@ -414,12 +442,12 @@ def _partition_stratified_subsets(
         indices,
         test_size=n_holdout,
         stratify=stratify_labels_holdout,
-        random_state=random_seed,
+        random_state=spec.random_seed,
     )
 
     empty_list: list[int] = []
     if n_cal == 0 and n_test == 0:
-        return train_idx, holdout_idx, empty_list, empty_list
+        return StratifiedSplitIndices(train_idx=train_idx, val_idx=holdout_idx, cal_idx=empty_list, test_idx=empty_list)
 
     holdout_labels = labels[holdout_idx]
     if n_val == 0:
@@ -431,11 +459,11 @@ def _partition_stratified_subsets(
             holdout_idx,
             test_size=(n_cal + n_test),
             stratify=stratify_labels_cal_test,
-            random_state=random_seed,
+            random_state=spec.random_seed,
         )
 
-    cal_idx, test_idx = _split_cal_and_test(cal_test_idx, labels, n_cal, n_test, random_seed)
-    return train_idx, val_idx, cal_idx, test_idx
+    cal_idx, test_idx = _split_cal_and_test(cal_test_idx, labels, (n_cal, n_test), spec.random_seed)
+    return StratifiedSplitIndices(train_idx=train_idx, val_idx=val_idx, cal_idx=cal_idx, test_idx=test_idx)
 
 
 def create_stratified_embedding_split(
@@ -480,10 +508,12 @@ def create_stratified_embedding_split(
     train_idx, val_idx, cal_idx, test_idx = _partition_stratified_subsets(
         indices=indices,
         labels=labels_np,
-        val_split=val_split,
-        cal_split=cal_split,
-        test_split=test_split,
-        random_seed=random_seed,
+        spec=_SplitAllocationSpec(
+            val_split=val_split,
+            cal_split=cal_split,
+            test_split=test_split,
+            random_seed=random_seed,
+        ),
     )
 
     train_z, train_y = embeddings[train_idx], labels[train_idx]
@@ -615,6 +645,7 @@ def _save_split_artifacts(
     split: EmbeddingSplit,
     extractor: str,
     num_classes: int,
+    *,
     output_file: Path | None = None,
 ) -> None:
     """Save composite embedding split and individual 4-way partition files to disk.

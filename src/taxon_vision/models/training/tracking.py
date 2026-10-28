@@ -24,6 +24,7 @@ from torch import nn
 from taxon_vision.config import get_settings
 from taxon_vision.models.training.dataset import get_dvc_dataset_hash
 from taxon_vision.models.training.promotion import (
+    ModelDimensions,
     _apply_model_version_metadata as _apply_model_version_metadata,
     _determine_promotion_alias as _determine_promotion_alias,
     _fetch_run_safely as _fetch_run_safely,
@@ -270,7 +271,7 @@ def _resolve_model_dims(
     model: nn.Module,
     input_dim: int | None,
     num_classes: int | None,
-) -> tuple[int, int]:
+) -> ModelDimensions:
     """Resolve embedding dimension and class count from linear layer geometry.
 
     Args:
@@ -279,18 +280,18 @@ def _resolve_model_dims(
         num_classes: Optional explicit number of output classes.
 
     Returns:
-        Tuple of (resolved_input_dim, resolved_num_classes).
+        ModelDimensions of (input_dim, num_classes).
     """
     resolved_dim = input_dim or 1280
     resolved_classes = num_classes or 10
     linear_layers = [m for m in model.modules() if isinstance(m, nn.Linear)]
     if not linear_layers:
-        return resolved_dim, resolved_classes
+        return ModelDimensions(input_dim=resolved_dim, num_classes=resolved_classes)
     if input_dim is None:
         resolved_dim = linear_layers[0].in_features
     if num_classes is None:
         resolved_classes = linear_layers[-1].out_features
-    return resolved_dim, resolved_classes
+    return ModelDimensions(input_dim=resolved_dim, num_classes=resolved_classes)
 
 
 def _log_pytorch_model_with_fallback(
@@ -326,8 +327,8 @@ def _log_pytorch_model_with_fallback(
             input_example=input_example,
             pip_requirements=pip_reqs,
         )
-    except Exception:
-        pass
+    except Exception as default_err:
+        logger.debug("Default MLflow PyTorch model serialization failed; retrying with pickle: %s", default_err)
 
     try:
         return mlflow.pytorch.log_model(

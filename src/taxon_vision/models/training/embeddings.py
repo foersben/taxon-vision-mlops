@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
+from typing import NamedTuple
 
 import numpy as np
 import torch
@@ -17,7 +19,42 @@ from taxon_vision.models.training.types import EmbeddingSplit, HeadTrainingConfi
 logger = logging.getLogger(__name__)
 
 
-def _compute_additional_metrics(val_logits: torch.Tensor, val_lbl: torch.Tensor) -> tuple[float, float]:
+class ValidationScores(NamedTuple):
+    """Macro F1 and Macro PR-AUC scores computed on a validation split."""
+
+    macro_f1: float
+    macro_pr_auc: float
+
+
+class SplitEvaluationMetrics(NamedTuple):
+    """Validation metrics evaluated on cached feature embeddings."""
+
+    val_loss: float
+    val_accuracy: float
+    val_f1: float
+    val_pr_auc: float
+
+
+class CheckpointState(NamedTuple):
+    """Tracked best validation score, model state dict, and early-stopping patience counter."""
+
+    best_pr_auc: float
+    best_weights: dict[str, torch.Tensor] | None
+    patience: int
+
+
+@dataclass(frozen=True)
+class _CachedEpochContext:
+    """Device tensors and hyperparameters for a single cached-embedding training epoch."""
+
+    train_emb: torch.Tensor
+    train_lbl: torch.Tensor
+    permutation: torch.Tensor
+    batch_size: int
+    noise_std: float
+
+
+def _compute_additional_metrics(val_logits: torch.Tensor, val_lbl: torch.Tensor) -> ValidationScores:
     """Compute Macro F1-Score and Macro PR-AUC from validation logits and labels.
 
     Why:
@@ -31,8 +68,7 @@ def _compute_additional_metrics(val_logits: torch.Tensor, val_lbl: torch.Tensor)
         val_lbl: Ground truth class indices of shape (batch_size,).
 
     Returns:
-        A tuple containing (macro_f1, macro_pr_auc). If computation fails,
-        returns (0.0, 0.0) to prevent crashing the training loop.
+        ValidationScores containing (macro_f1, macro_pr_auc).
     """
     try:
         y_true = val_lbl.cpu().numpy()
@@ -60,18 +96,15 @@ def _compute_additional_metrics(val_logits: torch.Tensor, val_lbl: torch.Tensor)
             val_pr_auc = float(np.mean(ap_scores)) if ap_scores else 0.0
         else:
             val_pr_auc = float(average_precision_score(y_true_bin, y_score, average="macro"))
-        return val_f1, val_pr_auc
-    except Exception:
-        return 0.0, 0.0
+        return ValidationScores(macro_f1=val_f1, macro_pr_auc=val_pr_auc)
+    except Exception as exc:
+        logger.warning("Failed to compute macro validation metrics (F1/PR-AUC); defaulting to 0.0: %s", exc)
+        return ValidationScores(macro_f1=0.0, macro_pr_auc=0.0)
 
 
 def _train_cached_epoch(
     head: nn.Module,
-    train_emb: torch.Tensor,
-    train_lbl: torch.Tensor,
-    permutation: torch.Tensor,
-    batch_size: int,
-    noise_std: float,
+    ctx: _CachedEpochContext,
     optimizer: optim.Optimizer,
     criterion: nn.Module,
 ) -> float:
@@ -79,11 +112,7 @@ def _train_cached_epoch(
 
     Args:
         head: Differentiable classification head module.
-        train_emb: Device tensor of training representations.
-        train_lbl: Device tensor of training integer targets.
-        permutation: Pseudo-random permutation of indices.
-        batch_size: Mini-batch size.
-        noise_std: Standard deviation of Gaussian noise injected into representations.
+        ctx: Device tensors and batch/noise parameters for the epoch.
         optimizer: Optimizer targeting head parameters.
         criterion: Loss criterion.
 
@@ -93,13 +122,13 @@ def _train_cached_epoch(
     head.train()
     epoch_loss = 0.0
     num_batches = 0
-    num_samples = train_emb.shape[0]
+    num_samples = ctx.train_emb.shape[0]
 
-    for i in range(0, num_samples, batch_size):
-        indices = permutation[i : i + batch_size]
-        batch_x, batch_y = train_emb[indices], train_lbl[indices]
-        if noise_std > 0.0:
-            batch_x = batch_x + torch.randn_like(batch_x) * noise_std
+    for i in range(0, num_samples, ctx.batch_size):
+        indices = ctx.permutation[i : i + ctx.batch_size]
+        batch_x, batch_y = ctx.train_emb[indices], ctx.train_lbl[indices]
+        if ctx.noise_std > 0.0:
+            batch_x = batch_x + torch.randn_like(batch_x) * ctx.noise_std
 
         optimizer.zero_grad()
         logits = head(batch_x)
@@ -118,7 +147,7 @@ def _evaluate_cached_split(
     val_emb: torch.Tensor,
     val_lbl: torch.Tensor,
     criterion: nn.Module,
-) -> tuple[float, float, float, float]:
+) -> SplitEvaluationMetrics:
     """Evaluate validation loss, accuracy, Macro F1, and PR-AUC on cached embeddings.
 
     Args:
@@ -128,7 +157,7 @@ def _evaluate_cached_split(
         criterion: Differentiable loss function.
 
     Returns:
-        Tuple of (val_loss, val_accuracy, val_f1, val_pr_auc).
+        SplitEvaluationMetrics of (val_loss, val_accuracy, val_f1, val_pr_auc).
     """
     head.eval()
     with torch.no_grad():
@@ -137,31 +166,35 @@ def _evaluate_cached_split(
         preds = torch.argmax(val_logits, dim=1)
         val_acc = float((preds == val_lbl).sum().item()) / max(1, val_lbl.size(0))
         val_f1, val_pr_auc = _compute_additional_metrics(val_logits, val_lbl)
-    return val_loss, val_acc, val_f1, val_pr_auc
+    return SplitEvaluationMetrics(val_loss=val_loss, val_accuracy=val_acc, val_f1=val_f1, val_pr_auc=val_pr_auc)
 
 
 def _track_checkpoint(
     head: nn.Module,
     val_pr_auc: float,
-    best_pr_auc: float,
-    best_weights: dict[str, torch.Tensor] | None,
-    patience: int,
-) -> tuple[float, dict[str, torch.Tensor] | None, int]:
+    state: CheckpointState,
+) -> CheckpointState:
     """Update best validation score and checkpoint state dict.
 
     Args:
         head: Model head module.
         val_pr_auc: Validation PR-AUC score for current epoch.
-        best_pr_auc: Peak validation PR-AUC observed so far.
-        best_weights: State dict of best model observed so far.
-        patience: Current counter of stagnant epochs.
+        state: Previous CheckpointState containing best score, weights, and patience.
 
     Returns:
-        Tuple of (updated_best_pr_auc, updated_best_weights, updated_patience).
+        Updated CheckpointState.
     """
-    if val_pr_auc > best_pr_auc:
-        return val_pr_auc, {k: v.clone() for k, v in head.state_dict().items()}, 0
-    return best_pr_auc, best_weights, patience + 1
+    if val_pr_auc > state.best_pr_auc:
+        return CheckpointState(
+            best_pr_auc=val_pr_auc,
+            best_weights={k: v.clone() for k, v in head.state_dict().items()},
+            patience=0,
+        )
+    return CheckpointState(
+        best_pr_auc=state.best_pr_auc,
+        best_weights=state.best_weights,
+        patience=state.patience + 1,
+    )
 
 
 def _should_stop_early(
@@ -254,19 +287,20 @@ def train_head_on_cached_embeddings(
         else None
     )
 
-    best_pr_auc = -1.0
-    best_weights: dict[str, torch.Tensor] | None = None
-    patience_counter = 0
+    ckpt_state = CheckpointState(best_pr_auc=-1.0, best_weights=None, patience=0)
 
     for epoch in range(cfg.epochs):
         permutation = torch.randperm(num_samples, device=device)
-        avg_train_loss = _train_cached_epoch(
-            head=head,
+        epoch_ctx = _CachedEpochContext(
             train_emb=train_emb,
             train_lbl=train_lbl,
             permutation=permutation,
             batch_size=cfg.batch_size,
             noise_std=cfg.noise_std,
+        )
+        avg_train_loss = _train_cached_epoch(
+            head=head,
+            ctx=epoch_ctx,
             optimizer=optimizer,
             criterion=criterion,
         )
@@ -288,15 +322,13 @@ def train_head_on_cached_embeddings(
             scheduler.step(val_pr_auc)
 
         tracking_score = val_pr_auc if val_pr_auc > 0.0 else val_acc
-        best_pr_auc, best_weights, patience_counter = _track_checkpoint(
-            head, tracking_score, best_pr_auc, best_weights, patience_counter
-        )
+        ckpt_state = _track_checkpoint(head, tracking_score, ckpt_state)
 
-        if _should_stop_early(epoch, tracking_score, patience_counter, cfg):
+        if _should_stop_early(epoch, tracking_score, ckpt_state.patience, cfg):
             break
 
-    if cfg.restore_best_weights and best_weights is not None:
-        head.load_state_dict(best_weights)
-        logger.debug("Restored best model weights with val_pr_auc: %.4f", best_pr_auc)
+    if cfg.restore_best_weights and ckpt_state.best_weights is not None:
+        head.load_state_dict(ckpt_state.best_weights)
+        logger.debug("Restored best model weights with val_pr_auc: %.4f", ckpt_state.best_pr_auc)
 
     return history

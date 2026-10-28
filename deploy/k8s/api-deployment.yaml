@@ -56,6 +56,8 @@ spec:
         - name: checkpoints-volume
           mountPath: /app/models/checkpoints
           readOnly: true
+        - name: flagged-observations-volume
+          mountPath: /app/data/flagged_observations
         livenessProbe:
           httpGet:
             path: /health
@@ -76,6 +78,10 @@ spec:
       - name: checkpoints-volume
         hostPath:
           path: /var/lib/taxon-vision/checkpoints
+          type: DirectoryOrCreate
+      - name: flagged-observations-volume
+        hostPath:
+          path: /var/lib/taxon-vision/flagged_observations
           type: DirectoryOrCreate
 ---
 apiVersion: v1
