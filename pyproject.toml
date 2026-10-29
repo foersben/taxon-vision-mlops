@@ -30,6 +30,8 @@ dependencies = [
     "prometheus-client>=0.21.0",
     "nvidia-ml-py>=13.615.71,<14",
     "aiolimiter>=1.1.0",
+    "filelock>=3.16.0",
+    "redis>=5.0.0",
 ]
 
 [dependency-groups]
@@ -40,6 +42,7 @@ dev = [
     "pytest-benchmark>=5.0.0",
     "pytest-mock>=3.14.0",
     "hypothesis>=6.120.0",
+    "fakeredis>=2.26.0",
     "ruff>=0.9.0",
     "mypy>=1.14.0",
     "pre-commit>=4.0.0",

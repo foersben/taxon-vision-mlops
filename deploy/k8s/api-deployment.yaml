@@ -43,6 +43,8 @@ spec:
           value: "8000"
         - name: TAXON_SERVICE__HOST
           value: "0.0.0.0"
+        - name: TAXON_SERVICE__REDIS_URL
+          value: "redis://redis-ephemeral.taxon-vision.svc.cluster.local:6379/0"
         resources:
           requests:
             cpu: "200m"

@@ -193,3 +193,50 @@ def test_ui_predict_htmx_saliency_failure_surfaces_on_demand(monkeypatch: pytest
     explain = client.post(f"/api/v1/explain?image_hash={image_hash}", headers={"HX-Request": "true"})
     assert explain.status_code == 200
     assert "Spatial map unavailable for model" in explain.text
+
+
+def test_multi_pod_split_brain_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify multi-pod split-brain resolution with shared Redis cache backend.
+
+    Why:
+        In a multi-replica Kubernetes deployment, an upload request to `/ui/predict-htmx`
+        lands on Pod 1, whereas a subsequent HTMX CAM request (`/api/v1/explain`) may be routed
+        to Pod 2. Without a shared distributed cache, Pod 2 returns HTTP 422.
+
+    How:
+        Simulate Pod 1 and Pod 2 as separate cache instances backed by a shared FakeServer.
+        Pod 1 stores the upload; Pod 2 successfully resolves the image and computes CAM.
+    """
+    import fakeredis
+
+    from taxon_vision.service.storage import RedisImageCache
+
+    server = fakeredis.FakeServer()
+    pod1_client = fakeredis.FakeRedis(server=server)
+    pod2_client = fakeredis.FakeRedis(server=server)
+
+    pod1_cache = RedisImageCache("redis://fake:6379/0", ttl_seconds=60.0, redis_client=pod1_client)
+    pod2_cache = RedisImageCache("redis://fake:6379/0", ttl_seconds=60.0, redis_client=pod2_client)
+
+    # 1. Pod 1 handles the upload
+    monkeypatch.setattr("taxon_vision.service.routes.views.get_image_cache", lambda: pod1_cache)
+    resp_upload = client.post(
+        "/ui/predict-htmx",
+        files={"file": ("leaf.jpg", _jpeg_buffer("green", 32), "image/jpeg")},
+    )
+    assert resp_upload.status_code == 200
+
+    image_bytes = _jpeg_buffer("green", 32).getvalue()
+    image_hash = pod1_cache.hash_bytes(image_bytes)
+    assert pod1_cache.get(image_hash) is not None
+    # Verify Pod 2 sees the key through the shared backend
+    assert pod2_cache.get(image_hash) is not None
+
+    # 2. Pod 2 handles the CAM request
+    monkeypatch.setattr("taxon_vision.service.routes.explain.get_image_cache", lambda: pod2_cache)
+    resp_explain = client.post(
+        f"/api/v1/explain?image_hash={image_hash}&target_class_index=0",
+        headers={"HX-Request": "true"},
+    )
+    assert resp_explain.status_code == 200
+    assert "cam-overlay" in resp_explain.text

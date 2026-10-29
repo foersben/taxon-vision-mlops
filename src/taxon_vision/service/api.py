@@ -24,7 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from taxon_vision.config import get_settings
 from taxon_vision.service.inference import get_image_transform, load_taxa_catalog, reset_model_caches
 from taxon_vision.service.routes import explain, health, predict, train, views
-from taxon_vision.service.storage import get_image_cache
+from taxon_vision.service.storage import MemoryImageCache, get_image_cache
 
 
 @asynccontextmanager
@@ -40,7 +40,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     load_taxa_catalog()
     get_image_transform()
     yield
-    get_image_cache().clear()
+    cache = get_image_cache()
+    if isinstance(cache, MemoryImageCache):
+        cache.clear()
     reset_model_caches()
 
 

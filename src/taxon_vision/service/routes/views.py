@@ -101,7 +101,8 @@ async def predict_htmx(request: Request, file: Annotated[UploadFile, File(...)])
     except ModelNotReadyError as err:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(err)) from err
 
-    image_hash = get_image_cache().store(image_bytes)
+    cache = get_image_cache()
+    image_hash = await anyio.to_thread.run_sync(cache.store, image_bytes)
     catalog = load_taxa_catalog()
     top_candidates = build_top_candidates(
         probabilities=result["probabilities"],

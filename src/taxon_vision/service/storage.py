@@ -14,35 +14,59 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 import numpy.typing as npt
+import redis
 
 from taxon_vision.config import get_settings
 
 logger = logging.getLogger(__name__)
 
 
-class EphemeralImageCache:
+@runtime_checkable
+class ImageCacheProtocol(Protocol):
+    """Protocol defining the interface for temporary observation image caches.
+
+    Why:
+        Decouples the HTTP presentation and CAM explanation layers from physical caching
+        mechanisms, enabling transparent switching between in-process memory and distributed
+        Redis storage without code alterations.
+
+    How:
+        Requires implementations of content-addressed byte storage (`store`), retrieval (`get`),
+        cache clearing (`clear`), and item counting (`__len__`).
+    """
+
+    def store(self, image_bytes: bytes) -> str:
+        """Insert an image and return its content hash."""
+        ...
+
+    def get(self, image_hash: str) -> bytes | None:
+        """Look up a cached image by hash."""
+        ...
+
+    def clear(self) -> None:
+        """Remove all entries from the cache."""
+        ...
+
+    def __len__(self) -> int:
+        """Return the count of cached entries."""
+        ...
+
+
+class MemoryImageCache:
     """Thread-safe, bounded in-memory cache of uploaded observation images.
 
     Why:
-        HTMX is stateless: the multipart upload stream is consumed by `/ui/predict-htmx`, so a follow-up
-        request (such as the CAM button) cannot re-submit the file and would otherwise fail with
-        HTTP 422. Persisting temporary uploads to disk would cause avoidable SSD write amplification
-        and leak potentially sensitive imagery, so the bytes are held in RAM only and addressed by
-        their SHA-256 content hash.
+        HTMX is stateless: the multipart upload stream is consumed by `/ui/predict-htmx`, so a follow-up request (such as the CAM button) cannot re-submit the file and would otherwise fail with HTTP 422. Persisting temporary uploads to disk would cause avoidable SSD write amplification and leak potentially sensitive imagery, so the bytes are held in RAM only and addressed by their SHA-256 content hash.
 
     How:
-        Entries live in an `OrderedDict` ordered by recency of use. On insertion, expired entries
-        (older than `ttl_seconds`, measured with the monotonic clock) are pruned first and the least
-        recently used entry is evicted if `max_items` would be exceeded. A `threading.Lock` guards all
-        mutations because FastAPI executes synchronous work in a worker thread pool.
+        Entries live in an `OrderedDict` ordered by recency of use. On insertion, expired entries (older than `ttl_seconds`, measured with the monotonic clock) are pruned first and the least recently used entry is evicted if `max_items` would be exceeded. A `threading.Lock` guards all mutations because FastAPI executes synchronous work in a worker thread pool.
 
     Complexity:
-        `store` and `get` are O(1) amortised; pruning in `store` is O(n) in the number of entries,
-        which is bounded by `max_items`.
+        `store` and `get` are O(1) amortised; pruning in `store` is O(n) in the number of entries, which is bounded by `max_items`.
 
     Attributes:
         max_items: Maximum number of images retained simultaneously.
@@ -146,19 +170,180 @@ class EphemeralImageCache:
             self._entries.popitem(last=False)
 
 
+EphemeralImageCache = MemoryImageCache
+"""Alias of MemoryImageCache to preserve backward compatibility for callers and tests."""
+
+
+class RedisImageCache:
+    """Distributed Redis-backed cache for temporary observation images.
+
+    Why:
+        In multi-replica Kubernetes deployments, user uploads to `/ui/predict-htmx` land on
+        arbitrary pods. Follow-up requests (such as CAM attribution via `/api/v1/explain`) are routed
+        round-robin across pods. A centralized in-memory store prevents HTTP 422 cache misses without
+        requiring sticky sessions or local disk write amplification.
+
+    How:
+        Images are keyed by their SHA-256 digest with prefix `taxon:img:`. Images are stored
+        using `SETEX` with a configurable TTL. Lookups fetch bytes and refresh TTL via `EXPIRE`.
+        Connection pool handles connection reuse and timeouts.
+
+    Complexity:
+        `store` and `get` are O(1) network roundtrips bounded by socket timeouts. Space complexity
+        in Redis is bounded by TTL and the Redis `maxmemory` eviction policy (`allkeys-lru`).
+
+    Attributes:
+        ttl_seconds: Lifetime of an entry in seconds.
+        key_prefix: Redis key namespace prefix to prevent collision.
+    """
+
+    def __init__(
+        self,
+        url: str,
+        ttl_seconds: float,
+        *,
+        key_prefix: str = "taxon:img:",
+        socket_timeout: float = 2.0,
+        redis_client: Any | None = None,
+    ) -> None:
+        """Initialise the distributed Redis image cache.
+
+        Args:
+            url: Redis connection URL (e.g. `redis://localhost:6379/0`).
+            ttl_seconds: Time-to-live of each entry in seconds. Must be strictly positive.
+            key_prefix: Redis key namespace prefix for cached images.
+            socket_timeout: Socket timeout for Redis operations in seconds.
+            redis_client: Optional pre-configured Redis client instance (e.g. for testing with fakeredis).
+
+        Raises:
+            ValueError: If `ttl_seconds` is not strictly positive.
+        """
+        if ttl_seconds <= 0:
+            raise ValueError("ttl_seconds must be strictly positive.")
+        self.ttl_seconds = ttl_seconds
+        self.key_prefix = key_prefix
+        if redis_client is not None:
+            self._redis = redis_client
+        else:
+            pool = redis.ConnectionPool.from_url(
+                url,
+                socket_timeout=socket_timeout,
+                socket_connect_timeout=socket_timeout,
+            )
+            self._redis = redis.Redis(connection_pool=pool)
+
+    @staticmethod
+    def hash_bytes(image_bytes: bytes) -> str:
+        """Compute the content address of an image.
+
+        Args:
+            image_bytes: Raw encoded image bytes.
+
+        Returns:
+            Lower-case hexadecimal SHA-256 digest.
+        """
+        return hashlib.sha256(image_bytes).hexdigest()
+
+    def store(self, image_bytes: bytes) -> str:
+        """Insert an image into Redis with TTL and return its SHA-256 hash.
+
+        Args:
+            image_bytes: Raw encoded image bytes.
+
+        Returns:
+            SHA-256 hex digest usable as a lookup key in `get`.
+        """
+        image_hash = self.hash_bytes(image_bytes)
+        key = f"{self.key_prefix}{image_hash}"
+        ttl = max(1, int(self.ttl_seconds))
+        self._redis.setex(key, ttl, image_bytes)
+        return image_hash
+
+    def get(self, image_hash: str) -> bytes | None:
+        """Look up a cached image in Redis and refresh its TTL.
+
+        Args:
+            image_hash: SHA-256 hex digest returned by `store`.
+
+        Returns:
+            The original bytes, or None if the hash is unknown or expired.
+        """
+        key = f"{self.key_prefix}{image_hash}"
+        data = self._redis.get(key)
+        if data is None:
+            return None
+        ttl = max(1, int(self.ttl_seconds))
+        self._redis.expire(key, ttl)
+        if isinstance(data, (bytes, bytearray)):
+            return bytes(data)
+        return str(data).encode("latin1")
+
+    def clear(self) -> None:
+        """Remove all keys with the cache prefix."""
+        pattern = f"{self.key_prefix}*"
+        cursor: Any = 0
+        while True:
+            cursor, keys = self._redis.scan(cursor=cursor, match=pattern, count=100)
+            if keys:
+                self._redis.delete(*keys)
+            if cursor in (0, "0", b"0"):
+                break
+
+    def __len__(self) -> int:
+        """Return the count of cached keys matching the prefix."""
+        pattern = f"{self.key_prefix}*"
+        cursor: Any = 0
+        total = 0
+        while True:
+            cursor, keys = self._redis.scan(cursor=cursor, match=pattern, count=100)
+            total += len(keys)
+            if cursor in (0, "0", b"0"):
+                break
+        return total
+
+    def ping(self) -> bool:
+        """Verify Redis connectivity.
+
+        Returns:
+            True if Redis ping succeeds, False otherwise.
+        """
+        try:
+            return bool(self._redis.ping())
+        except (redis.ConnectionError, redis.TimeoutError, OSError) as exc:
+            logger.warning("Redis ping failed: %s", exc)
+            return False
+
+
 @lru_cache(maxsize=1)
-def get_image_cache() -> EphemeralImageCache:
+def get_image_cache() -> ImageCacheProtocol:
     """Return the process-wide ephemeral image cache, configured from application settings.
 
     Why:
-        A lazily constructed singleton avoids reading settings at import time and can be reset in
-        tests via `get_image_cache.cache_clear()`.
+        A lazily constructed singleton avoids reading settings at import time and can be reset in tests via `get_image_cache.cache_clear()`.
 
     Returns:
-        The shared `EphemeralImageCache` instance.
+        The shared `ImageCacheProtocol` instance (RedisImageCache if configured and reachable, else MemoryImageCache).
     """
     service = get_settings().service
-    return EphemeralImageCache(
+    if service.redis_url:
+        try:
+            cache = RedisImageCache(
+                url=service.redis_url,
+                ttl_seconds=service.image_cache_ttl_seconds,
+            )
+            if cache.ping():
+                logger.info("Initialized distributed RedisImageCache connecting to %s", service.redis_url)
+                return cache
+            logger.warning(
+                "Redis connection failed for %s; falling back to local MemoryImageCache",
+                service.redis_url,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to initialize RedisImageCache (%s); falling back to local MemoryImageCache",
+                exc,
+            )
+    return MemoryImageCache(
         max_items=service.image_cache_max_items,
         ttl_seconds=service.image_cache_ttl_seconds,
     )

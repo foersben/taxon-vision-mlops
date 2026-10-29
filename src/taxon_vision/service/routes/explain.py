@@ -106,7 +106,7 @@ def _decode_image(image_bytes: bytes) -> Image.Image:
         ) from exc
 
 
-def _resolve_image_payload(upload_bytes: bytes | None, image_hash: str | None) -> bytes | None:
+async def _resolve_image_payload(upload_bytes: bytes | None, image_hash: str | None) -> bytes | None:
     """Select the image to explain, honouring the documented source priority.
 
     Why:
@@ -115,7 +115,7 @@ def _resolve_image_payload(upload_bytes: bytes | None, image_hash: str | None) -
 
     How:
         1. A non-empty direct upload always wins.
-        2. Otherwise a supplied ``image_hash`` is resolved against the ephemeral cache.
+        2. Otherwise a supplied ``image_hash`` is resolved against the ephemeral cache via threadpool offloading.
         3. With neither, None is returned and the caller falls back to the headless probe image.
 
     Args:
@@ -132,7 +132,8 @@ def _resolve_image_payload(upload_bytes: bytes | None, image_hash: str | None) -
         return upload_bytes
     if image_hash is None:
         return None
-    cached = get_image_cache().get(image_hash)
+    cache = get_image_cache()
+    cached = await anyio.to_thread.run_sync(cache.get, image_hash)
     if cached is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -256,7 +257,8 @@ async def explain_prediction(
     is_htmx = request.headers.get(HTMX_REQUEST_HEADER) == "true"
 
     try:
-        content = _resolve_image_payload(await _read_upload(file), image_hash)
+        upload_bytes = await _read_upload(file)
+        content = await _resolve_image_payload(upload_bytes, image_hash)
         resolved_class = _resolve_target_class_index(target_class_index)
         status_str, shape, overlay_b64 = await anyio.to_thread.run_sync(
             _run_heatmap_generation, content, resolved_class

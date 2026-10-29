@@ -24,6 +24,7 @@ class ServiceConfig(BaseModel):
             in-memory cache that backs follow-up HTMX requests (e.g. CAM attribution).
         image_cache_ttl_seconds (float): Time-to-live in seconds after which a cached image expires.
         ui_top_k_candidates (int): Number of ranked taxa shown in the dashboard probability drawer.
+        redis_url (str | None): Optional Redis connection URL for distributed multi-pod image caching.
     """
 
     name: str
@@ -35,6 +36,7 @@ class ServiceConfig(BaseModel):
     image_cache_max_items: int = Field(gt=0)
     image_cache_ttl_seconds: float = Field(gt=0)
     ui_top_k_candidates: int = Field(gt=0)
+    redis_url: str | None = None
 
 
 class ModelConfig(BaseModel):

@@ -26,6 +26,7 @@ service:
   image_cache_max_items: 100        # ~20 MB RAM at ~200 KB per image
   image_cache_ttl_seconds: 900.0    # 15 minutes
   ui_top_k_candidates: 5
+  redis_url: null                   # Optional distributed Redis URL (e.g. redis://localhost:6379/0)
 
 model:
   default_extractor: "dinov3"
