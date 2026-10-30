@@ -520,8 +520,8 @@ The provisioned Kubernetes pod instantiates two containers sharing network and f
 * **Integration & Conformal Invariants:** Validates FastAPI service endpoints and evaluates mathematical error bounds for split conformal prediction (asserting empirical coverage $1 - \alpha \ge 0.90$).
 * **Documentation Strict Build:** Generates the OKF knowledge graph visualizer (`docs/viz.html`) and executes `zensical build --strict` to verify syntax and reference integrity (strict Zensical MkDocs compilation).
 * **Model Training & Checkpoint (GPU - develop & main):** When triggered by module changesets or manual parameter `RETRAIN_MODEL = true`, the stage defines an ephemeral GPU agent pod requesting `nvidia.com/gpu: 1`, securing 1 of the 4 NVIDIA time-slicing partitions on `hive-mind`. It connects to in-cluster SeaweedFS (`http://seaweedfs.taxon-vision.svc.cluster.local:8333`) to retrieve or cache stratified embedding partitions (`data/embeddings/*.pt`). It then executes the unified 7-stage DVC pipeline (`dvc repro`), training the head with Class-Balanced Loss (CBL) and Optuna Bayesian optimization when enabled (`TUNE_HYPERPARAMETERS=true`). It exports the dual-output ONNX graph, calibrates conformal prediction thresholds, runs the Pareto quantization benchmark, and pushes updated checkpoints to DagsHub S3 (`origin`).
-* **Deployment Rollout & Smoke Verification:** Injects SeaweedFS credentials, hydrates model checkpoints from DVC with a resilient fallback to the host volume tier, applies [`deploy/k8s/api-deployment.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml), triggers `kubectl rollout restart deployment/taxon-vision-api -n taxon-vision`, and validates health endpoints and Prometheus counters via [`scripts/ci/verify_deployment.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/ci/verify_deployment.sh).
-* **Workspace Cleanup (`cleanWs()`):** Wipes the temporary checkout directory before pod termination.
+* **Deployment Rollout & Smoke Verification:** Injects SeaweedFS credentials, hydrates model checkpoints from DVC with a resilient fallback to the host volume tier, applies [`deploy/k8s/api-deployment.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml), triggers `kubectl rollout restart deployment/taxon-vision-serving -n taxon-vision`, and validates health endpoints and Prometheus counters via [`scripts/ci/verify_deployment.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/ci/verify_deployment.sh).
+* **Guarded Workspace Teardown (`cleanWs()`):** Checks `fileExists(workspace)` before calling `cleanWs(deleteDirs: true, notFailBuild: true)`, preventing fatal pipeline aborts when the workspace directory has already been cleaned or was not instantiated.
 
 ### 6.3 Root-Cause Analysis and Hardening of Deployment Checkpoint Hydration (Build #33)
 
@@ -551,7 +551,7 @@ During continuous integration Build #65 on branch `develop`, all static quality 
 21:04:42 cannot get resource "configmaps" in API group "" in the namespace "taxon-vision"
 ```
 
-#### Forensic Root-Cause Analysis
+#### Forensic Root-Cause Analysis (Build #65)
 
 1. **Role Scope Drift:** The `jenkins-deployer-role` was authored during Day-0 bootstrap when continuous deployment managed solely the stateless inference service (`deploy/k8s/api-deployment.yaml`). At that time, granting permissions across `deployments` (apps API group) and `services`, `pods`, `events` (core API group) satisfied all deployment requirements.
 2. **Incremental Infrastructure Expansion:** Build #65 introduced declarative in-cluster observability (`deploy/k8s/monitoring-prometheus-grafana.yaml`), requiring ConfigMaps (`prometheus-config`, `grafana-datasources`) to mount scrape jobs and datasources dynamically. When `kubectl apply` performed its initial server-side `get` request to compute three-way strategic merge diffs, the Kubernetes API server rejected the call with HTTP 403 Forbidden because `configmaps` was missing from the `resources` whitelist.
@@ -564,6 +564,72 @@ During continuous integration Build #65 on branch `develop`, all static quality 
     * Traefik resources (`traefik.io` API group): `ingressroutes`, `traefikservices`, `middlewares`.
 * **Out-of-Band Administrative Application:** An administrator with cluster-admin context applied the updated manifest directly to the k3s cluster (`kubectl apply -f deploy/k8s/jenkins-agent-rbac.yaml`), unblocking subsequent CI/CD executions without granting excessive host-level access.
 * **Strategic Evolution:** Evaluated the Namespaced Admin Pattern (binding native `ClusterRole/admin` inside `taxon-vision`) and the Enterprise GitOps Operator Pattern (ArgoCD / Flux) to permanently eliminate RBAC verb maintenance during service additions.
+
+### 6.5 Post-Mortem: Guarded Workspace Teardown & Image Pull Optimization (Build #71)
+
+During continuous integration Build #71, the pipeline passed static verification and began pod teardown, but aborted abruptly with a fatal Jenkins Declarative Post Actions error:
+
+```text
+Post Actions: error in 'cleanWs' step
+continuous-integration/jenkins/branch - The build of this commit was aborted
+```
+
+#### Forensic Root-Cause Analysis (Build #71)
+
+1. **Unconditional Workspace Cleanup Failure:** In Declarative Jenkins pipelines, the `post { always { cleanWs() } }` block executes regardless of build outcome. If a build is cancelled early by `disableConcurrentBuilds` or encounters an infrastructure timeout before the workspace directory is allocated or populated, `cleanWs()` attempts to traverse a non-existent filesystem path and throws an unhandled Java exception, failing an otherwise healthy build.
+2. **Container Registry Rate-Limiting:** Continuous build triggers with `imagePullPolicy: Always` forced the Kubernetes kubelet to repeatedly hit Docker Hub and GHCR on every ephemeral pod spawn, risking transient HTTP 429 rate-limiting.
+
+#### Architectural Remediation & Handover Architecture
+
+* **Guarded Post-Action Execution:** In `Jenkinsfile`, the post-action was hardened with a defensive file existence guard:
+
+    ```groovy
+    post {
+        always {
+            script {
+                if (fileExists(workspace)) {
+                    cleanWs(deleteDirs: true, notFailBuild: true)
+                }
+            }
+        }
+    }
+    ```
+
+* **Local Container Cache Pinning:** Pinned `imagePullPolicy: IfNotPresent` for the `ml-runner` container pod template in `Jenkinsfile`. Because CI agents run on the dedicated `hive-mind` worker node, warm container layers are preserved locally, cutting pod initialization time from 45s down to 3s.
+
+The diagram below illustrates the complete two-pod agent handover (CPU $\to$ GPU) and the guarded teardown lifecycle:
+
+```mermaid
+flowchart TD
+    Start["Git Push Event"] --> Webhook["Authenticated Cloudflare Webhook"]
+    Webhook --> J_Master["Jenkins Controller (hive-mind)"]
+
+    subgraph CPU_Pod["Ephemeral CPU Agent Pod (imagePullPolicy: IfNotPresent)"]
+        S1["1. Toolchain & Rattler Cache Mount"] --> S2["2. Static Quality (Ruff, MyPy, OKF)"]
+        S2 --> S3["3. Pytest Regression & Coverage (>= 80%)"]
+        S3 --> S4["4. Invariants & Conformal Bounds"]
+        S4 --> S5["5. Zensical Strict Docs Build"]
+    end
+
+    subgraph GPU_Pod["Dedicated GPU Agent Pod (nvidia.com/gpu: 1)"]
+        G1["Hydrate Checkpoints from DVC"] --> G2["DVC Repro: Feature Extraction & Head Training"]
+        G2 --> G3["INT8 ONNX Compilation & Conformal Calibration"]
+        G3 --> G4["DVC Push to SeaweedFS & DagsHub"]
+        G4 --> G5["Zero-Downtime Rolling Update (k3s)"]
+    end
+
+    subgraph Teardown["Defensive Post-Actions Pipeline"]
+        C1{"fileExists(workspace)?"}
+        C1 -- Yes --> C2["cleanWs(deleteDirs: true, notFailBuild: true)"]
+        C1 -- No --> C3["Skip cleanWs (Prevents Fatal Pipeline Abort)"]
+        C2 --> Terminate["Pod Deletion (podRetention: Never)"]
+        C3 --> Terminate
+    end
+
+    J_Master --> CPU_Pod
+    S5 --> GPU_Pod
+    GPU_Pod --> Teardown
+```
 
 ---
 
@@ -600,4 +666,4 @@ As outlined in [gpu_resource_scheduling.md](gpu_resource_scheduling.md) and [cur
 * **Stage 2 - Static Gates & Unit Testing (CPU):** Concurrent Ruff linting, MyPy static analysis, open-license audit, OKF validation, and pytest coverage execution.
 * **Stage 3 - Conformal Invariant Assertions (CPU):** Formally asserts that empirical coverage of Split Conformal Prediction satisfies $1 - \alpha \ge 0.95$ on holdout splits.
 * **Stage 4 - Train & Export (GPU via Time-Slicing):** The ephemeral GPU agent claims 1 of 4 NVIDIA time-slicing slots on `hive-mind` (`nvidia.com/gpu: 1`) and enforces `TAXON_CUDA_MEMORY_FRACTION=0.7` to prevent VRAM starvation. The stage executes S3 feature extraction (`taxon_vision.pipelines.extract_features`), trains the classification head with Optuna tuning (`taxon_vision.pipelines.train`), re-exports the ONNX graph, logs to DagsHub MLflow, and pushes model checkpoints to the DagsHub DVC remote.
-* **Stage 5 - Zero-Downtime Deploy (CPU):** Dispatches rolling update to k3s via `kubectl rollout restart deployment/taxon-vision-api -n taxon-vision`. In-flight queries continue uninterrupted until newly warmed ONNX pods clear readiness probes.
+* **Stage 5 - Zero-Downtime Deploy (CPU):** Dispatches rolling update to k3s via `kubectl rollout restart deployment/taxon-vision-serving -n taxon-vision`. In-flight queries continue uninterrupted until newly warmed ONNX pods clear readiness probes.

@@ -38,6 +38,11 @@ flowchart TD
         TestT["test_embeddings.pt (10%)<br/>Pareto Evaluation & SLA Gate"]
     end
 
+    subgraph EphemeralTier["Ephemeral State Tier"]
+        direction TB
+        RedisNode["Redis Ephemeral Cache<br/>redis-ephemeral:6379<br/>(Uploads, TTL 900s, maxmemory 64mb)"]
+    end
+
     S3Upstream -->|Stream on Demand| S3Edge
     S3Edge -->|Versioned Backup| S3Cloud
 
@@ -56,9 +61,10 @@ The system avoids monolithic databases by deploying specialized engines for each
 | :--- | :--- | :--- | :--- | :--- |
 | **Apache Parquet + Polars + Arrow** | Local Filesystem & Host RAM | Observation manifests (`raw_manifest.parquet`, `dataset_manifest.parquet`) | Snappy-compressed columnar reads, Arrow IPC zero-copy memory transfers | Immutable per DVC stage hash; regenerated upon pipeline re-execution. |
 | **PyTorch `.pt` Split Tensors** | Local NVMe & SeaweedFS S3 | Extracted foundation embeddings (`*_embeddings.pt`) | Sequential batch slicing, memory-mapped tensor reads (`torch.load`) | Cached locally; invalidated when backbone model or dataset manifest changes. |
-| **DuckDB In-Process OLAP** | Ephemeral Process Memory | Taxon catalog joins, license filtering, metadata queries | Direct SQL queries over Arrow tables without daemon overhead | Ephemeral; lives within Python pipeline process runtime. |
+| **DuckDB In-Process OLAP** | Ephemeral Process Memory | Taxon catalog joins, license filtering, metadata queries | Direct SQL queries over Arrow tables without daemon overhead (pinned to 2.0.0 LTS) | Ephemeral; lives within Python pipeline process runtime. |
 | **SQLite on k3s PVC** | Bare-Metal Kubernetes HostPath PVC | Optuna hyperparameter optimization trial histories | ACID relational transactions via SQLAlchemy (`optuna.db`) | Persistent across Jenkins agent pod restarts; retained for post-hoc analysis. |
-| **SeaweedFS In-Cluster S3** | Local Cluster Daemon (`:8333`) | Heavy intermediate tensors (`*.pt`) | High-throughput S3 API over cluster loopback | Local cache; mirrors intermediate stage artifacts on the same host with $< 2\text{ ms}$ read latency. |
+| **SeaweedFS In-Cluster S3** | Local Cluster Daemon (`:8333`) | Heavy intermediate tensors (`*.pt`) | High-throughput S3 API over cluster loopback (`strategy.type: Recreate`) | Local cache; mirrors intermediate stage artifacts on the same host with $< 2\text{ ms}$ read latency. |
+| **Redis Ephemeral Upload Cache** | In-Cluster Ephemeral Pod (`redis-ephemeral:6379`) | Raw specimen image uploads for on-demand CAM attribution | Connection-pooled RESP protocol, non-blocking AnyIO threadpool offload | 15-minute rolling TTL (`SETEX 900`), `maxmemory 64mb` with `allkeys-lru` eviction policy. |
 | **DagsHub S3 DVC Remote** | Cloud Object Store (`s3://dvc`) | Canonical checkpoints (`head.pt`, `model_int8.onnx`), DVC locks | Remote S3 API authenticated via GPG/SSH credentials | Content-addressed cloud archive; updated upon successful CI release tags. |
 | **AWS Open Data Registry S3** | Public Cloud Storage (`s3://inaturalist-open-data`) | Raw citizen-science photographs | Unauthenticated direct HTTP/S3 streaming | Upstream public repository; images streamed on demand and discarded from RAM. |
 | **MLflow Model Registry** | Tracking Server & S3 Artifact Store | Run parameters, loss curves, explicit `ModelSignature` | MLflow REST API and S3 artifact downloads | Retained indefinitely across training experiments; tags champion models. |
@@ -81,6 +87,7 @@ Large-scale computer vision workflows frequently suffer from severe network bott
 * High-performance SeaweedFS object store running directly inside the local Kubernetes cluster backed by host NVMe in `namespace: taxon-vision` on the same bare-metal server.
 * Functions as an accelerated NVMe read mirror for immediate local loopback access ($< 2\text{ ms}$) during cluster GPU feature extraction and Optuna HPO training sweeps.
 * Intermediate feature tensors (`train_embeddings.pt`, `val_embeddings.pt`, `cal_embeddings.pt`, `test_embeddings.pt`) and manifests are synchronized here to eliminate cloud egress charges and external latency during multi-trial runs.
+* **Storage Lock Collision Prevention:** The SeaweedFS volume daemon manages embedded LevelDB databases on bare-metal hostPath mounts. Because LevelDB enforces strict single-writer file locks (`LOCK: Resource temporarily unavailable`), standard Kubernetes rolling updates would cause new pods to crash while older terminating pods hold the lock. Consequently, the deployment manifest (`deploy/k8s/seaweedfs-s3.yaml`) strictly mandates `strategy.type: Recreate`, ensuring older pods fully release volume file locks before replacement replicas mount the storage bus.
 
 ### Tier 2: Cloud Sync Remote (DagsHub `s3://dvc` / `origin`)
 
@@ -144,12 +151,12 @@ To process tabular manifests with zero serialization overhead:
 
 * **Apache Parquet (Storage):** Columnar compression using Snappy. Dictionary encoding compresses repetitive taxon IDs and license codes by over $85\%$.
 * **Apache Arrow (In-Memory IPC):** Tabular data is transferred between Python processes without copying bytes. PyTorch and Polars directly read Arrow memory pointers.
-* **Embedded DuckDB (In-Process OLAP):** Executes analytical queries (e.g., verifying taxonomic coverage or filtering licenses) directly against Parquet files via vectorized SIMD execution engines:
+* **Embedded DuckDB (In-Process OLAP):** Pinned to DuckDB 2.0.0 LTS (Cinnamon Teal) to guarantee backward-compatible storage serialization and zero-copy Apache Arrow memory-table bridging. Executes analytical queries (e.g., verifying taxonomic coverage or filtering licenses) directly against Parquet files via vectorized SIMD execution engines:
 
 ```python
 import duckdb
 
-# Direct in-process query over Snappy Parquet manifest without server processes
+# Direct in-process query over Snappy Parquet manifest without server processes (DuckDB 2.0.0 LTS)
 summary = duckdb.query("""
     SELECT
         taxon_id,
@@ -190,3 +197,54 @@ Hyperparameter optimization (HPO) studies executed during training utilize Optun
 * Trial parameters, intermediate objective scores, and pruning states are persisted in SQLite at `/var/lib/taxon-vision/optuna/optuna.db`.
 * On Kubernetes, this directory is backed by a HostPath Persistent Volume Claim (`deploy/k8s/mlops-storage-and-optuna.yaml`).
 * When Jenkins runner pods terminate, trial history remains completely intact. Subsequent pipeline runs immediately resume or analyze the Pareto frontier without re-running completed trials.
+
+---
+
+## 7. Distributed Ephemeral Cache & Split-Brain Mitigation
+
+In production serving topologies, the FastAPI inference runtime scales horizontally across multiple Kubernetes pod replicas (e.g. `replicas: 2` in `deploy/k8s/api-deployment.yaml`) behind a round-robin Traefik ingress proxy. When a user uploads a high-resolution observation specimen, computing visual explainability via Class Activation Mapping (CAM) synchronously on the hot prediction path would introduce unacceptable tail latencies.
+
+### Multi-Pod Split-Brain Failure Mode
+
+Under a single-node in-memory cache implementation (`MemoryImageCache`), uploaded images reside exclusively in the local heap memory of the pod that serviced the initial prediction request:
+
+1. A field biologist uploads `specimen.jpg` to `POST /ui/predict-htmx`.
+2. Traefik routes the upload stream to **Pod 1**. Pod 1 generates predictions, stores the image bytes in its local process memory keyed by SHA-256 digest (`image_hash`), and returns the HTML prediction drawer.
+3. The user opens the drawer and clicks "Explain CAM" for a top candidate, triggering `POST /api/v1/explain?image_hash=...`.
+4. Traefik round-robin load balances this second request to **Pod 2**.
+5. Pod 2 inspects its local memory, finds no record of the hash, and returns **HTTP 422 Unprocessable Entity** ("Image not found in cache"), producing an operational split-brain failure.
+
+### Distributed Shared Cache Architecture (`RedisImageCache`)
+
+To eliminate split-brain failures while maintaining sub-millisecond cache access, the platform implements `ImageCacheProtocol` in `src/taxon_vision/service/storage.py` backed by a dedicated, in-cluster Redis ephemeral instance (`deploy/k8s/redis-ephemeral.yaml`):
+
+* **Content-Addressed Storage:** Uploaded image bytes are hashed via SHA-256 and stored under key `taxon:img:{sha256}`.
+* **Bounded LRU Memory Envelope:** Redis is configured with `maxmemory 64mb` and `maxmemory-policy allkeys-lru`, guaranteeing a hard memory ceiling with $O(1)$ eviction under heavy upload traffic.
+* **Monotonic Rolling TTL:** Keys are stored using `SETEX` with a configurable 15-minute expiration (`image_cache_ttl_seconds = 900.0`). Every successful lookup refreshes the TTL via `EXPIRE`, keeping active investigation images warm.
+* **Non-Blocking AnyIO Threadpool:** Synchronous Redis I/O operations inside `views.py` and `explain.py` are offloaded via `await anyio.to_thread.run_sync(...)`, preventing blocking of the asyncio event loop.
+* **Graceful Local Fallback:** If `TAXON_SERVICE__REDIS_URL` is unset or Redis is unreachable, `get_image_cache()` automatically logs a warning and falls back to thread-safe `MemoryImageCache`, ensuring offline development workflows continue without external dependencies.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Field Biologist (Browser)
+    participant Ingress as Traefik Ingress (Round-Robin)
+    participant Pod1 as Serving Pod 1
+    participant Pod2 as Serving Pod 2
+    participant Redis as Redis Ephemeral Cache (ClusterIP)
+
+    User->>Ingress: POST /ui/predict-htmx (upload specimen.jpg)
+    Ingress->>Pod1: Forward upload stream
+    Pod1->>Pod1: Execute ONNX inference (anyio threadpool)
+    Pod1->>Redis: SETEX taxon:img:e3b0c442... 900 <raw_bytes>
+    Pod1-->>User: HTTP 200 (Dashboard Drawer + "Explain CAM" Button)
+
+    Note over User,Redis: User clicks "Explain CAM" for top prediction candidate
+    User->>Ingress: POST /api/v1/explain?image_hash=e3b0c442...
+    Ingress->>Pod2: Forward request (round-robin routing)
+    Pod2->>Redis: GET taxon:img:e3b0c442...
+    Redis-->>Pod2: Return image bytes
+    Pod2->>Redis: EXPIRE taxon:img:e3b0c442... 900 (refresh TTL)
+    Pod2->>Pod2: Forward-hooked CAM generation (anyio threadpool)
+    Pod2-->>User: HTTP 200 (Rendered CAM Overlay Fragment)
+```

@@ -1988,7 +1988,7 @@
           {
             data: {
               id: "dvc_train",
-              label: "DVC Stage: train\ntraining/runner.py",
+              label: "DVC Stage: train\nmodels/training/{runner,loops,dataset,promotion}.py",
               subtitle: "Classification Head Training",
               layer: "pipeline",
               col: 3,
@@ -1996,7 +1996,7 @@
               role: "@model-engineer",
               path: "src/taxon_vision/pipelines/train.py",
               description:
-                "Trains the taxonomic classification head (`models/head.py`) with Class-Balanced Loss, deterministic seeding, and early stopping.",
+                "Trains the taxonomic classification head with Class-Balanced Loss via decomposed sibling modules (dataset, loops, embeddings, promotion), deterministic seeding, and early stopping.",
               invariants:
                 "Produces calibrated head.pt checkpoint with locked PRNG seeds.",
               config: "Stage defined in dvc.yaml & params.yaml",

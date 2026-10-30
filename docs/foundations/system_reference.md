@@ -91,14 +91,16 @@ flowchart TD
 
     subgraph S_SRV["Runtime Serving Subsystem"]
         SRV_API["service.api<br/>(FastAPI HTTP Server)"]
-        SRV_INF["service.inference<br/>.TaxonClassifierService"]
+        SRV_INF["service.inference<br/>.predict_species"]
         SRV_CAM["inference.cam<br/>.generate_heatmap"]
-        SRV_STR["service.storage<br/>.LocalFlaggedStorage"]
+        SRV_STR["service.storage<br/>.RedisImageCache / MemoryImageCache"]
+        SRV_FLG["service.storage<br/>.persist_flagged_observation"]
         A5 --> SRV_INF
         A6 --> SRV_INF
         SRV_API --> SRV_INF
         SRV_API --> SRV_CAM
         SRV_API --> SRV_STR
+        SRV_INF --> SRV_FLG
     end
 ```
 
@@ -111,7 +113,8 @@ The TaxonVision platform relies on specialized, purpose-built storage technologi
 | **Apache Parquet / Polars** | `data/manifests/*.parquet` | Snappy Columnar Parquet | High-performance columnar scan and predicate pushdown for metadata filtering without reading image payload bytes. |
 | **PyTorch Tensors** | `data/embeddings/*.pt` | Serialized FP32 Tensors | Decoupled 4-way embedding splits (`train`, `val`, `cal`, `test`) allowing linear classification head training in seconds on cached representations. |
 | **SQLite (PVC)** | `/workspace/optuna/optuna_studies.db` | Relational SQL DB | Persistent RDB backend for Optuna Bayesian hyperparameter studies, ensuring search trials resume seamlessly across pod restarts. |
-| **SeaweedFS S3** | `s3://taxon-dvc-cache` (`local-seaweedfs`) | S3 Object Store API | Fast in-cluster object store deployed on host NVMe storage inside Kubernetes, acting as an accelerated local NVMe cache ($< 2\text{ ms}$). |
+| **SeaweedFS S3** | `s3://taxon-dvc-cache` (`local-seaweedfs`) | S3 Object Store API | Fast in-cluster object store deployed on host NVMe storage inside Kubernetes (`strategy.type: Recreate`), acting as an accelerated local NVMe cache ($< 2\text{ ms}$). |
+| **Redis Ephemeral Cache** | In-Cluster Pod (`redis-ephemeral:6379`) | Raw specimen image uploads for CAM | In-memory key-value cache with 15-minute rolling TTL (`SETEX 900`) and 64 MB LRU ceiling, eliminating multi-pod serving split-brain. |
 | **DagsHub DVC S3** | `s3://dvc` (`origin`) | Content-Addressed Hash | Cryptographically hashed DVC remote repository storing canonical cloud mirror for all 8 pipeline artifacts (~25 MB total). |
 | **MLflow Model Registry** | Remote DagsHub Registry | Artifacts + Schema Metadata | Centralized experiment tracking server storing training loss curves, Macro PR-AUC scores, and model versions with input/output `TensorSpec` contracts. |
 | **Prometheus / Evidently** | `/metrics` endpoint | Time-Series Metrics & JSON | Real-time monitoring of p95 latency SLAs, HTTP status distributions, prediction set cardinality, and feature representation drift. |
@@ -189,6 +192,16 @@ Defines default service infrastructure, model registry mappings, and connection 
 | `streaming` | `min_extraction_success_ratio` | `float` | `0.95` | Threshold ratio of successful downloads required. |
 | `optuna` | `optuna_storage_uri` | `str` | SQLite URI | SQLAlchemy URI for Optuna study database. |
 | `optuna` | `optuna_study_prefix` | `str` | `"taxon_vision"` | Prefix for generated study names. |
+| `service` | `name` | `str` | `"TaxonVision Service"` | Service title exposed via OpenAPI documentation. |
+| `service` | `version` | `str` | `"0.1.0"` | Semantic API release version. |
+| `service` | `port` | `int` | `8000` | Default TCP bind port. |
+| `service` | `host` | `str` | `"0.0.0.0"` | Network interface listener address. |
+| `service` | `max_image_upload_bytes` | `int` | `15728640` | Maximum allowed multipart image upload size (15 MB). |
+| `service` | `allowed_mime_types` | `list[str]` | `['image/jpeg', 'image/png', 'image/webp']` | Accepted MIME image types for classification. |
+| `service` | `image_cache_max_items` | `int` | `100` | In-memory cache capacity before LRU eviction. |
+| `service` | `image_cache_ttl_seconds` | `float` | `900.0` | Monotonic time-to-live for ephemeral uploads (15 minutes). |
+| `service` | `ui_top_k_candidates` | `int` | `5` | Maximum prediction candidate drawers rendered on UI. |
+| `service` | `redis_url` | `str \| None` | `None` | Optional Redis connection URL (`redis://redis-ephemeral:6379/0`). |
 
 ### 3.3 Calibrated Conformal Parameters (`config/conformal_config.yaml`)
 

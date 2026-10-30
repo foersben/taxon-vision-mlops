@@ -12,26 +12,25 @@ verified: {by: process:docs-librarian, at: "2026-10-18T12:00:00Z"}
 
 # Agentic Governance & Open Knowledge Format (OKF v0.2)
 
-Modern MLOps codebases are developed and maintained collaboratively by human engineers and autonomous AI agents (such as Google Antigravity and GitHub Jules). Without formal behavioral guardrails and cryptographic documentation contracts, context drift, stale documentation, broken links, and unauthorized environment mutations accumulate rapidly.
+Modern MLOps codebases are developed and maintained collaboratively by human engineers and autonomous AI agents (such as Google Antigravity). Without formal behavioral guardrails and cryptographic documentation contracts, context drift, stale documentation, broken links, and unauthorized environment mutations accumulate rapidly.
 
 TaxonVision-MLOps solves multi-agent coordination through a two-pillar governance architecture:
 
-1. **Path-Scoped Agent Routing:** A directory-level policy defining 12 specialized AI roles, 7 immutable invariant rules, 5 on-demand agent skills, and 6 canonical slash workflows.
+1. **Path-Scoped Agent Routing:** A directory-level policy defining 12 specialized AI roles, immutable invariant rules, and on-demand agent skills.
 2. **Google Open Knowledge Format (OKF v0.2):** A semantic documentation graph where every assertion is backed by machine-verified frontmatter and cryptographically bound to concrete source-code line ranges via `openwiki/.claims/`.
 
 ```mermaid
 flowchart TD
-    subgraph Agents["Multi-Agent Autonomous Tier"]
+    subgraph Agents["Autonomous Agent & Maintainer Tier"]
         AGY["Antigravity IDE Agent<br/>(Local Dev & Signed Commits)"]
-        JUL["Jules Cloud Sandbox Agent<br/>(PR Feature Branches)"]
         HUM["Human Maintainer<br/>(Architecture & Governance)"]
     end
 
     subgraph Governance["Governance Guardrails & Rules"]
         ROLES["12 Path-Scoped AI Roles<br/>(.agents/roles/*.md)"]
-        RULES["7 Core Invariant Rules<br/>(Rule 00 to Rule 06)"]
-        SKILLS["5 On-Demand Agent Skills<br/>(.agents/skills/*)"]
-        FLOWS["6 Canonical Workflows<br/>(.agents/workflows/*)"]
+        RULES["Core Invariant Rules<br/>(Rules 00 to 08)"]
+        SKILLS["On-Demand Agent Skills<br/>(.agents/skills/*)"]
+        MEM["Persistent Memory Banks<br/>(.agents/memory/*)"]
     end
 
     subgraph OKF["OKF v0.2 & Cryptographic Evidence"]
@@ -112,28 +111,18 @@ Repository rules defined in `.agents/rules/` are immutable and strictly enforced
 
 ---
 
-## 3. The 5 Specialized Agent Skills
+## 3. The 8 Canonical Agent Skills
 
-Agent skills reside in `.agents/skills/` and provide specialized, automated toolchains for complex MLOps execution:
+Agent skills reside in `.agents/skills/` and provide specialized, deterministic toolchains for complex MLOps execution:
 
 1. **`audit-license-compliance`:** Evaluates raw iNaturalist manifests against the `OpenLicense` StrEnum, verifies photographer attribution strings, and writes compliant dataset manifests and compliance audit reports.
-2. **`run-pareto-benchmarks`:** Profiles candidate backbones (`dinov3_vits14`, `bioclip-2`, `dinov2_vits14`, `mobilenetv4_conv_small`, `efficientnet_b0`) across accuracy, p50/p95 latency, memory footprint, and serving cost.
-3. **`validate-okf`:** Audits all repository markdown files against the OKF v0.2 frontmatter schema and validates cross-document markdown filesystem links.
-4. **`verify-conformal-coverage`:** Executes holdout evaluation over `test_embeddings.pt`, asserting empirical coverage meets or exceeds nominal $1 - \alpha$ bounds.
-5. **`visualize-okf`:** Parses compliant OKF markdown files and generates the interactive Cytoscape.js knowledge graph visualizer at `docs/viz.html`.
-
----
-
-## 4. The 6 Canonical Automated Workflows
-
-Repository workflows in `.agents/workflows/` coordinate multi-step operational tasks:
-
-* **`/active-learning-cycle`:** Executes sample query ranking via margin sampling, simulates human annotation ingestion from Label Studio, and triggers DVC retraining.
-* **`/conformal-uncertainty-audit`:** Audits statistical coverage guarantees, non-conformity quantiles $\hat{q}_\alpha$, Helmholtz OOD thresholds $\tau_{\text{OOD}}$, and human triage referral rates.
-* **`/doc-synchronization-pipeline`:** Re-indexes codebase changes, verifies OKF v0.2 frontmatter compliance, formats Markdown under Rule 04, and executes strict Zensical builds.
-* **`/full-pipeline-validation`:** End-to-end quality gate executing `ruff`, `mypy`, `complexipy`, unit tests, coverage verification, and the 7-stage DVC pipeline.
-* **`/jules-session-triage`:** Triages and reviews asynchronous background cloud sandbox sessions created by GitHub Jules agents.
-* **`/model-benchmark-pareto`:** Evaluates and updates the multi-objective Pareto frontier across candidate vision foundation backbones.
+2. **`conformal-uncertainty-audit` (`/audit-conformal`):** Audits statistical coverage guarantees, non-conformity quantiles $\hat{q}_\alpha$, Helmholtz OOD thresholds $\tau_{\text{OOD}}$, and human triage referral rates.
+3. **`run-pareto-benchmarks` (`/benchmark-pareto`):** Profiles candidate backbones across accuracy, p50/p95 latency, memory footprint, and serving cost.
+4. **`active-learning-cycle` (`/active-learning-step`):** Executes sample query ranking via margin sampling, simulates human annotation ingestion from Label Studio, and triggers DVC retraining.
+5. **`doc-synchronization-pipeline` (`/doc-synchronization-pipeline`):** Re-indexes codebase changes, verifies OKF v0.2 frontmatter compliance, formats Markdown under Rule 04, and executes strict Zensical builds.
+6. **`full-pipeline-validation` (`/validate-full-stack`):** End-to-end quality gate executing `ruff`, `mypy`, `complexipy`, unit tests, coverage verification, and the 7-stage DVC pipeline.
+7. **`validate-okf`:** Audits all repository markdown files against the OKF v0.2 frontmatter schema and validates cross-document markdown filesystem links.
+8. **`visualize-okf`:** Parses compliant OKF markdown files and generates the interactive Cytoscape.js knowledge graph visualizer at `docs/viz.html`.
 
 ---
 

@@ -118,28 +118,39 @@ Orchestrates batch workflows invoked via `dvc repro`.
 
 ### Subpackage 2: Service (`taxon_vision.service`)
 
-Powers online HTTP inference and HTMX triage UI.
+Powers online HTTP inference, Class Activation Mapping, and HTMX triage UI.
 
 | Module File | Key Classes / Functions | Primary Method Signatures | Description |
 | :--- | :--- | :--- | :--- |
-| `api.py` | `create_app` | `create_app() -> FastAPI` | Instantiates and configures the production FastAPI web application. |
-| `inference.py` | `InferenceService` | `predict_image(image_bytes: bytes) -> PredictionResponse` | Zero-allocation inference pipeline coordinating ONNX session, conformal sets, and CAM. |
-| `storage.py` | `ObservationStorage` | `save_flagged_observation(image_bytes: bytes, metadata: dict) -> str` | Persists flagged or ambiguous observations to disk for active learning triage. |
-| `routes/predict.py` | `router` | `POST /predict(file: UploadFile) -> PredictionResponse` | REST API endpoint returning predictions, conformal sets, and OOD scores. |
-| `routes/dashboard.py` | `router` | `GET /dashboard() -> HTMLResponse` | Server-rendered Jinja2/HTMX operator interface. |
+| `api.py` | `app`, `lifespan` | `lifespan(_app: FastAPI) -> AsyncIterator[None]` | ASGI composition root pre-warming models and managing clean shutdown. |
+| `inference.py` | `predict_species`, `load_taxa_catalog` | `predict_species(image_bytes: bytes, ...) -> PredictionResult` | Zero-allocation inference pipeline coordinating ONNX session, conformal sets, and CAM. |
+| `storage.py` | `ImageCacheProtocol`, `RedisImageCache`, `MemoryImageCache`, `persist_flagged_observation` | `store(image_bytes: bytes) -> str`, `get(image_hash: str) -> bytes \| None` | Distributed Redis ephemeral upload cache (with memory fallback) and disk triage persistence. |
+| `presentation.py` | `build_prediction_view_model`, `render_prediction_card` | `build_prediction_view_model(prediction, image_hash, ...) -> dict` | Formats conformal prediction sets and telemetry for server-rendered Jinja2/HTMX templates. |
+| `routes/predict.py` | `router` | `POST /api/v1/predict(file: UploadFile) -> JSONResponse` | Machine REST API returning classification logits, conformal set members, and OOD scores. |
+| `routes/explain.py` | `router` | `POST /api/v1/explain(image_hash: str, ...) -> ExplainResponse \| HTMLResponse` | On-demand Class Activation Mapping supporting JSON attribution or server-rendered drawer fragments. |
+| `routes/views.py` | `router` | `GET /`, `POST /ui/predict-htmx` | Interactive operator dashboard view and HTMX partial upload drawer handler. |
+| `routes/train.py` | `router` | `POST /api/v1/train(background_tasks: BackgroundTasks) -> JSONResponse` | Asynchronous training trigger endpoint dispatching background training runs. |
+| `routes/health.py` | `router` | `GET /health`, `GET /health/ready`, `GET /metrics` | Kubernetes liveness probe, model readiness probe, and Prometheus exposition scraper. |
 
 ### Subpackage 3: Models (`taxon_vision.models`)
 
-Neural network architectures, probe heads, and loss functions.
+Neural network architectures, probe heads, loss functions, and modular training coordinators.
 
 | Module File | Key Classes / Functions | Primary Method Signatures | Description |
 | :--- | :--- | :--- | :--- |
-| `factory.py` | `BackboneFactory` | `create_backbone(model_name: str, pretrained: bool = True) -> tuple[nn.Module, int]` | Trunk factory initializing ViT, DINOv3, BioCLIP-2, or MobileNetV4. |
+| `factory.py` | `create_backbone`, `create_feature_extractor` | `create_backbone(model_name: str, pretrained: bool = True) -> tuple[nn.Module, int]` | Foundation trunk factory initializing DINOv3, BioCLIP-2, MobileNetV4, or DINOv2. |
 | `head.py` | `TaxonClassifier` | `forward(x: torch.Tensor) -> torch.Tensor` | PyTorch linear probe classification head with dropout regularization. |
 | `loss.py` | `ClassBalancedLoss` | `forward(logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor` | Effective-number class-balanced cross-entropy and focal loss. |
-| `training/runner.py` | `TrainingRunner` | `execute(params: TrainingParams) -> TrainingResult` | Orchestrates batch training loop, learning rate scheduling, and early stopping. |
-| `training/tracking.py` | `MLflowTracker` | `log_metrics(metrics: dict[str, float], step: int) -> None` | Tracks loss, accuracy, and gradient norms across training epochs. |
-| `training/tuning.py` | `OptunaTuner` | `optimize(n_trials: int, timeout: int) -> optuna.Study` | Executes Bayesian hyperparameter optimization over learning rate and weight decay. |
+| `training/runner.py` | `run_training_pipeline` | `run_training_pipeline(extractor: str, epochs: int, tune: bool, ...) -> dict` | Top-level training orchestrator coordinating tensor hydration, Optuna, and promotion. |
+| `training/dataset.py` | `load_or_create_training_split`, `get_dvc_dataset_hash` | `load_or_create_training_split(train_path: Path, val_path: Path, ...) -> EmbeddingSplit` | Loads stratified embedding tensors and extracts DVC lock hashes without git dependencies. |
+| `training/loops.py` | `train_head_epoch`, `evaluate_head` | `train_head_epoch(model, loader, optimizer, criterion) -> float` | Isolated single-epoch mini-batch SGD passes returning typed `HeadEvaluationResult`. |
+| `training/embeddings.py` | `train_head_on_cached_embeddings` | `train_head_on_cached_embeddings(head, data, optimizer, criterion, config) -> tuple` | Multi-epoch training loop coordinating early stopping and learning rate scheduling. |
+| `training/promotion.py` | `_promote_model_if_better`, `_determine_promotion_alias` | `_promote_model_if_better(head, val_pr_auc, metrics, ...) -> None` | Evaluates Macro PR-AUC against incumbent models and tags MLflow aliases (`Production`/`Challenger`). |
+| `training/tracking.py` | `mlflow_run_scope`, `MLflowTracker` | `mlflow_run_scope(run_name: str, params: dict) -> Generator` | RAII context manager guaranteeing deterministic MLflow session lifecycle and fail-fast logging. |
+| `training/tuning.py` | `tune_hyperparameters`, `HyperparameterObjective` | `tune_hyperparameters(data: EmbeddingSplit, ...) -> TuningResult` | Bayesian hyperparameter optimization study orchestration with TPE sampling and ASHA pruning. |
+| `training/visualizations.py` | `log_training_visualizations` | `log_training_visualizations(tracker, history, ...) -> None` | Diagnostic plot rendering (confusion matrices, PR curves, and energy distributions). |
+| `training/checkpoint.py` | `save_checkpoint` | `save_checkpoint(model: nn.Module, path: Path) -> Path` | Checkpoint serialization and PyTorch state dictionary export. |
+| `training/types.py` | `ResolvedTrainingParameters`, `EmbeddingSplit` | Pydantic Models & Frozen Dataclasses | Parameter containers enforcing Rule 08 parameter encapsulation and zero tuple blindness. |
 
 ### Subpackage 4: Inference (`taxon_vision.inference`)
 
@@ -148,10 +159,10 @@ ONNX Runtime execution, static quantization, and explainability.
 | Module File | Key Classes / Functions | Primary Method Signatures | Description |
 | :--- | :--- | :--- | :--- |
 | `onnx_engine.py` | `ONNXInferenceEngine` | `predict(image_tensor: np.ndarray) -> np.ndarray` | High-throughput zero-allocation ONNX Runtime inference session. |
-| `cam.py` | `EigenCAMExplainer` | `generate_cam(image: torch.Tensor, target_layer: str) -> np.ndarray` | Class-agnostic principal component visual saliency heatmaps. |
+| `cam.py` | `generate_heatmap`, `generate_cam_overlay` | `generate_heatmap(model, image_tensor, target_class) -> np.ndarray` | Class Activation Mapping projecting ViT patch tokens and CNN activations. |
 | `calibration.py` | `TaxonCalibrationDataReader` | `get_next() -> dict[str, np.ndarray] \| None` | ONNX Runtime calibration reader streaming unlabelled representative images. |
-| `onnx_exporter.py` | `ONNXExporter` | `export(model: nn.Module, dummy_input: torch.Tensor, path: Path) -> Path` | Exports PyTorch model graphs to ONNX Opset 17 with dynamic batch axes. |
-| `quantizer.py` | `ModelQuantizer` | `quantize_static(input_path: Path, output_path: Path, reader: Any) -> Path` | Performs static INT8 post-training quantization with MinMax calibrator. |
+| `onnx_exporter.py` | `export_to_onnx` | `export_to_onnx(model: nn.Module, dummy_input: torch.Tensor, path: Path) -> Path` | Exports PyTorch model graphs to ONNX Opset 17 with dynamic batch axes. |
+| `quantizer.py` | `quantize_onnx_model`, `quantize_onnx_static` | `quantize_onnx_model(input_path: Path, output_path: Path, ...) -> Path` | Performs static/dynamic INT8 post-training quantization via ONNX Runtime quantization API. |
 
 ### Subpackage 5: Uncertainty & Safety (`taxon_vision.uncertainty`)
 

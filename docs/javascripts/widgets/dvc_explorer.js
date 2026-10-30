@@ -134,11 +134,11 @@ function initDVCExplorer() {
             ],
             metrics: "reports/train_metrics.json: Train Loss: 0.7524, Val Loss: 0.7694, Val Accuracy: 82.84%, Duration: 1.58s",
             algorithm: [
-                "Loads pre-extracted train_embeddings.pt and val_embeddings.pt into memory.",
+                "Loads pre-extracted train_embeddings.pt and val_embeddings.pt via models.training.dataset.",
                 "Calculates Class-Balanced effective number weights: E_n = (1 - beta) / (1 - beta^n) with beta=0.9999.",
-                "Optimizes linear probe head (TaxonClassifier) using AdamW with weight decay 1e-4 for 5 epochs.",
-                "Tracks cross-entropy loss and validation accuracy per epoch, logging to MLflow.",
-                "Exports champion probe weights to models/checkpoints/head.pt."
+                "Executes mini-batch SGD passes via models.training.loops and models.training.embeddings with AdamW.",
+                "Tracks loss, Macro PR-AUC, and validation accuracy per epoch via RAII mlflow_run_scope().",
+                "Evaluates candidate PR-AUC against baseline via models.training.promotion and exports head to models/checkpoints/head.pt."
             ],
             triggers: "Triggered when training hyperparameters (lr, epochs, cb_beta), training embeddings, or loss code changes.",
             downstreamRadius: "Invalidates: Stage 5 (export), Stage 6 (calibrate), and Stage 7 (eval). Does NOT invalidate Stage 3 feature extraction!"
@@ -148,7 +148,7 @@ function initDVCExplorer() {
             number: "5",
             title: "5. Graph Fusion & INT8 PTQ (ONNX Runtime)",
             dvcStage: "export",
-            cmd: "pixi run -e dev python -m taxon_vision.pipelines.export_onnx --extractor dinov3 --image-size 224 --checkpoint models/checkpoints/head.pt --quantize-int8 --quantize-mode dynamic --quantized-output models/checkpoints/model_int8.onnx",
+            cmd: "pixi run -e dev python -m taxon_vision.pipelines.export_onnx --extractor dinov3 --image-size 224 --checkpoint models/checkpoints/head.pt --quantize-int8 --quantize-mode dynamic --quantized-output models/checkpoints/model_int8.onnx --export-head",
             deps: [
                 "models/checkpoints/head.pt",
                 "src/taxon_vision/inference/onnx_exporter.py",
@@ -161,12 +161,14 @@ function initDVCExplorer() {
                 "model.image_size = 224"
             ],
             outs: [
-                "models/checkpoints/model_int8.onnx (pushed to origin/DagsHub)"
+                "models/checkpoints/model_int8.onnx (fused backbone + head)",
+                "models/checkpoints/head.onnx & head_int8.onnx (dedicated linear probe head)"
             ],
             metrics: "N/A (Optimized INT8 runtime graph pushed to DagsHub remote)",
             algorithm: [
                 "Instantiates full computational graph fusing the DINOv3 backbone and trained linear probe head.",
                 "Exports unified PyTorch model to ONNX Opset 17 with dynamic batch axes.",
+                "Exports dedicated standalone linear probe head graph (head.onnx and dynamic INT8 head_int8.onnx) for sub-millisecond scoring.",
                 "Streams representative unlabelled images using TaxonCalibrationDataReader.",
                 "Applies MinMax Static Post-Training Quantization (PTQ) to convert FP32 weights and activations to INT8.",
                 "Validates numerical stability and exports models/checkpoints/model_int8.onnx."

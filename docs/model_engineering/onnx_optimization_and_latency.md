@@ -23,26 +23,38 @@ Operating an interactive biodiversity identification platform requires strict ad
 * **Bare-Metal GPU / INT8 Fast-Path Target:** Target p95 latency strictly **$\le 15.0\text{ ms}$** under quantized ONNX Runtime execution on bare-metal production nodes (`params.yaml`), verified for single-stream sequential execution (multi-client concurrent ingress stress-testing scheduled for Phase 2.5).
 * **General-Purpose CPU / CI Testbed Ceiling:** Hard ceiling p95 latency **$\le 25.0\text{ ms}$** enforced by project mandate `Rule 02` (`02-inference-latency-invariants.md`) and automated CI regression gates.
 
-This latency bound is achieved through Open Neural Network Exchange (ONNX) graph compilation, static Post-Training Quantization (PTQ), zero-allocation hot paths, and forward-hooked interpretability.
+This latency bound is achieved through Open Neural Network Exchange (ONNX) dual-graph compilation, static and dynamic Post-Training Quantization (PTQ), zero-allocation hot paths, and forward-hooked interpretability.
 
 ```mermaid
-flowchart LR
-    subgraph PyTorch["PyTorch Training Checkpoint"]
-        P1["FP32 Model Weights<br/>(Illustrative 400 MB Artifact)"]
+flowchart TD
+    subgraph PyTorchArtifacts["Trained PyTorch Artifacts"]
+        B_FP32["Frozen Vision Transformer Backbone<br/>(DINOv3 ViT-S/14: 384-D)"]
+        H_FP32["Trained Linear Probe Head<br/>(models/checkpoints/head.pt)"]
     end
 
-    subgraph Compilation["ONNX Export & Quantization Pipeline (pipelines.export_onnx)"]
-        C1["ONNX Graph Export<br/>Dynamic Batch Axes"] --> C2["Static INT8 PTQ<br/>Calibration Data Reader"]
-        C2 --> C3["Quantized Graph<br/>(models/checkpoints/model_int8.onnx)"]
+    subgraph ONNXCompilation["Stage 5: Dual-Graph Compilation (pipelines.export_onnx)"]
+        direction TB
+        E1["Export Backbone Graph<br/>(Input: [B, 3, 224, 224] -> Output: [B, 384])"]
+        E2["Export Linear Head Graph<br/>(Input: [B, 384] -> Output: [B, NumClasses])"]
+        Q1["Static INT8 PTQ Quantization<br/>(models/checkpoints/model_int8.onnx)"]
+        Q2["Dynamic INT8 PTQ Quantization<br/>(models/checkpoints/head_int8.onnx)"]
+        E1 --> Q1
+        E2 --> Q2
     end
 
-    subgraph Serving["Production Inference Engine (FastAPI)"]
-        S1["Pre-allocated C Buffers<br/>Zero Dynamic Allocation"] --> S2["ONNX Runtime VNNI / AVX-512<br/>Execution on CPU P-Cores"]
-        S2 --> S3["Forward-Hooked CAM<br/>Spatial Heatmap Overhead (<5ms Budget)"]
-        S3 --> S4["Dual SLA: &le;15ms GPU / &le;25ms CPU"]
+    subgraph ServingRuntime["Zero-Allocation Serving Engine"]
+        direction TB
+        S_B["Backbone Session (VNNI P-Cores)<br/>Computes dense patch tokens & embeddings"]
+        S_H["Head Session (ONNX Runtime INT8)<br/>Direct matrix-vector multiply (latency < 0.2ms)"]
+        S_CAM["Forward-Hooked Attribution<br/>Projects ViT patch tokens with head weights"]
+        S_B --> S_H
+        S_B --> S_CAM
     end
 
-    PyTorch --> Compilation --> Serving
+    B_FP32 --> E1
+    H_FP32 --> E2
+    Q1 --> S_B
+    Q2 --> S_H
 ```
 
 ---
@@ -69,9 +81,14 @@ $$S = \frac{x_{\max} - x_{\min}}{255}$$
 
 Static Post-Training Quantization (PTQ) is mathematically required for the convolutional and vision transformer backbones. Because convolution activations vary spatially, calculating activation scales dynamically at runtime introduces severe computational overhead. Instead, static PTQ passes a subset of representative data (a calibration dataset) through the model offline to precompute static $S$ and $Z$ values for every layer, guaranteeing zero runtime allocation overhead.
 
-### Dynamic Quantization (Linear Projections)
+### Dynamic Quantization & Dedicated Head Export (`head_int8.onnx`)
 
-Dynamic quantization evaluates $S$ and $Z$ on-the-fly for every forward pass based on observed activation distributions. This is reserved exclusively for Vision-Language Models (VLMs) or standalone linear heads where variations between tokens are massive and matrix multiplications dominate.
+Dynamic quantization evaluates $S$ and $Z$ on-the-fly for every forward pass based on observed activation distributions. In Stage 5 (`pipelines.export_onnx`), the `--export-head` flag exports the linear probe classification head into standalone ONNX artifacts:
+
+* `models/checkpoints/head.onnx` (FP32 linear probe graph: input `[Batch, FeatureDim]`, output `[Batch, NumClasses]`).
+* `models/checkpoints/head_int8.onnx` (Dynamic INT8 quantized linear probe graph).
+
+Decoupling the head into an independent ONNX execution session enables sub-millisecond evaluation (< 0.2 ms) over cached feature embeddings and allows rapid retraining cycles without requiring backbone recompilation.
 
 ### Silicon Acceleration via SIMD & VNNI
 

@@ -23,10 +23,10 @@ The system enforces strict operational separation between two physical machines:
 
 * **Workstation (`flagship`):** Local developer machine used exclusively as an authoring, code review, and orchestration plane. It possesses zero dedicated GPU compute allocations for PyTorch model training or feature extraction.
 * **Bare-Metal Compute Node (`hive-mind`):** Remote production server running Ubuntu 26.04.1 LTS (codename `resolute`):
-    * **Processor (CPU):** Intel Core i7-14700K (20 physical cores, 28 threads).
-    * **System Memory (RAM):** 128 GB DDR5.
-    * **Graphics Hardware (GPU):** NVIDIA GeForce RTX 5070 Ti (16 GB VRAM, Blackwell architecture, compute capability 12.0) with NVIDIA driver 615.71.09 (CUDA 13.4 user-mode driver).
-    * **Storage:** NVMe SSD storage with Full Disk Encryption (LUKS).
+    * **Processor (CPU):** Intel Core i7-14700K (20 physical cores, 28 threads: 8 Performance-cores, 12 Efficient-cores). Workloads are segregated via OS-level thread affinity (`taskset`): 16 Performance-core threads (`0-15`) are pinned to synchronous matrix math and tensor feature extraction; 12 Efficient-core threads (`16-27`) are allocated to asynchronous I/O, Arrow streaming, and Prometheus telemetry scrapes.
+    * **System Memory (RAM):** 128 GB DDR5, sized for high-throughput in-memory feature embedding caching (train, val, cal, test splits) and LanceDB vector index querying without swap thrashing.
+    * **Graphics Hardware (GPU):** NVIDIA GeForce RTX 5070 Ti (16 GB GDDR7 VRAM, Blackwell architecture, compute capability 12.0) with NVIDIA driver 615.71.09 (CUDA 13.4 user-mode driver). Under Kubernetes time-slicing, PyTorch per-process memory fraction is constrained to $f=0.7 \implies 11.2\text{ GB}$ for training runs, reserving an isolated $4.8\text{ GB}$ envelope for the live INT8 ONNX serving runtime and system overhead.
+    * **Storage:** 2 TB PCIe Gen4 NVMe SSD with Full Disk Encryption (LUKS) and BTRFS transparent `zstd:3` compression. Database and DVC storage directories (`seaweedfs/`, `mlflow.db`, `sqlite3/`, `prometheus/`) are initialized with the non-Copy-on-Write attribute (`chattr +C`) to eliminate block fragmentation across the NVMe bus.
 
 ### Remote Boot & Remote LUKS Decryption Setup
 
@@ -349,9 +349,42 @@ To guarantee operational autonomy without external telemetry egress or SaaS depe
     * **Port `30081`:** Optuna Bayesian hyperparameter search visualizer (`optuna-dashboard:8080`).
     * **Port `30090`:** Prometheus TSDB web UI and API (`prometheus:9090`), scraping targets every 10 seconds.
     * **Port `30300`:** Grafana visualizer (`grafana:3000`), authenticated with auto-provisioned Prometheus datasources.
+    * **Internal Port `6379`:** In-cluster Redis ephemeral upload cache (`redis-ephemeral:6379`), providing 64 MB bounded LRU memory for multipart specimen uploads and on-demand CAM attribution across replicas.
 * **Storage Persistence & BTRFS NOCOW Allocation:** Prometheus and Grafana persist time-series indices and dashboard state to `/var/lib/taxon-vision/prometheus` and `/var/lib/taxon-vision/grafana` on the NVMe drive. Subvolumes are marked with the `NOCOW` (`chattr +C`) attribute to eliminate filesystem block fragmentation from frequent write appends.
 * **Linux Process Isolation & Root initContainers:** Unprivileged containers (Prometheus UID `65534`, Grafana UID `472`) are paired with root `initContainers` (`docker.io/busybox:latest`) that enforce correct ownership (`chown -R 65534:65534 /prometheus`, `chown -R 472:472 /var/lib/grafana`) and mode `775` before the main processes spawn, preventing `permission denied` startup crashes on hostPath volumes.
 * **Declarative Datasource Auto-Provisioning:** Grafana boots with a pre-configured datasource ConfigMap (`grafana-datasources`) targeting `http://prometheus:9090` internally, enabling immediate out-of-the-box telemetry without manual UI setup.
+
+---
+
+## On-Demand Scale-to-Zero Architecture: Sablier & Traefik
+
+To optimize compute resources on dedicated bare-metal silicon during periods of zero external traffic, the cluster integrates **Sablier** (`deploy/k8s/sablier-scaler.yaml`) with the Traefik v3 reverse proxy (`deploy/k8s/traefik-sablier-config.yaml`):
+
+* **Dynamic Inactivity Idling:** When no incoming HTTP requests hit the dashboard for 15 minutes (`timeout: 15m`), the Sablier scaler automatically scales the `taxon-vision-serving` deployment to 0 replicas, freeing system RAM and GPU allocations.
+* **Transparent Scale-on-Demand:** Upon receiving a new inbound HTTP request, the Traefik Sablier middleware intercepts the connection, triggers a scale-up to 1 replica, and presents the user with an interactive waiting page (theme `dynamic` or `shuffle`) with automated 2-second polling.
+* **Readiness-Gated Reverse Proxying:** As soon as the pod passes its Kubernetes readiness probe (`GET /health/ready`), Sablier transparently proxies the user's browser directly to the loaded dashboard without dropping the connection.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Dormant: Pod scaled to 0 replicas (Idle > 15m)
+    Dormant --> RequestIntercepted: Inbound HTTP request hits Traefik Ingress
+    RequestIntercepted --> ScalingUp: Traefik Sablier Plugin triggers scale-up
+    ScalingUp --> WaitingPage: Sablier renders interactive waiting HTML (auto-refresh 2s)
+    WaitingPage --> ScalingUp: Poll pod readiness probe
+    ScalingUp --> ActiveServing: Pod readiness probe returns HTTP 200
+    ActiveServing --> ProxyConnection: Sablier transparently proxies browser to dashboard
+    ProxyConnection --> ActiveServing: Continuous user interaction
+    ActiveServing --> Dormant: Inactivity timer exceeds 15m (scaled to 0)
+```
+
+---
+
+## Cluster Pod Hygiene & Revision Limits
+
+Continuous CI/CD execution can accumulate stale ReplicaSets and completed/failed pods in etcd. To ensure deterministic cluster hygiene:
+
+* **Revision History Truncation:** All workload manifests declare `revisionHistoryLimit: 3`, preventing historical ReplicaSet proliferation during automated Jenkins continuous deployments.
+* **Automated Dead Pod Pruning:** Jenkins pipeline post-actions execute automated pruning of non-running pods across the `taxon-vision` namespace via `kubectl delete pod --field-selector=status.phase==Failed` and `status.phase==Succeeded`.
 
 ---
 

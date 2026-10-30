@@ -45,22 +45,20 @@ tracks all experiments with MLflow, and automatically promotes the best model us
 
 ## Module Map
 
-| Module | Key Symbol | Responsibility |
+Following the Rule 08 single-responsibility sibling topology refactoring, the training subsystem in `src/taxon_vision/models/training/` is partitioned into focused, non-monolithic modules (all maintaining cognitive complexity $< 15$):
+
+| Module | Key Symbols | Architectural Responsibility |
 | --- | --- | --- |
-| `types.py` | `EmbeddingSplit` | Validated data container: train/val tensors + class counts |
-| `types.py` | `HeadTrainingConfig` | Epoch budget, batch size, callbacks, and Optuna pruner callback |
-| `types.py` | `TuningConfig` | Optuna trial budget, seed, and MLflow coordinates |
-| `embeddings.py` | `train_head_on_cached_embeddings()` | Inner training loop with best model tracking, early stopping, and LR plateau scheduling |
-| `embeddings.py` | `_compute_additional_metrics()` | Macro F1 and Macro PR-AUC from logits |
-| `tuning.py` | `HyperparameterObjective` | Optuna callable wrapping the inner training loop |
-| `tuning.py` | `tune_hyperparameters()` | Orchestrates Optuna study with TPE sampling and ASHA pruning |
-| `runner.py` | `run_training_pipeline()` | Top-level orchestrator supporting `--tune` and standard training |
-| `tracking.py` | `_get_dvc_dataset_hash()` | Parses `dvc.lock` for reproducible dataset provenance |
-| `tracking.py` | `mlflow_run_scope()` | RAII context manager that opens parent MLflow run and logs training parameters |
-| `tracking.py` | `_promote_model_if_better()` | Compares PR-AUC and assigns Production / Challenger alias |
-| `extract_features.py` | `FeatureExtractionConfig` | S3 image streaming, ViT embedding extraction, and index mapping |
-| `extract_features.py` | `extract_features_cli()` | CLI extracting representations into stratified partition splits |
-| `train.py` | `main()` | Production training pipeline CLI supporting `--cache-path` |
+| `runner.py` | `run_training_pipeline()`, `build_training_components()`, `configure_cuda_memory_budget()` | Top-level CLI training coordinator supporting standard runs and `--tune` Optuna sweeps. |
+| `dataset.py` | `load_or_create_training_split()`, `get_dvc_dataset_hash()`, `resolve_feature_dim()` | Tensors hydration, DVC lock hash verification, and synthetic tensor fallbacks. |
+| `loops.py` | `train_head_epoch()`, `evaluate_head()`, `HeadEvaluationResult` | Isolated single-epoch mini-batch training and validation passes. |
+| `embeddings.py` | `train_head_on_cached_embeddings()` | Multi-epoch training loop coordinating early stopping and learning rate plateau scheduling. |
+| `promotion.py` | `_promote_model_if_better()`, `_determine_promotion_alias()` | Evaluates candidate Macro PR-AUC against incumbent and tags MLflow aliases (`Production`, `Challenger`, `Archived`). |
+| `tracking.py` | `mlflow_run_scope()`, `MLflowTracker`, `log_stage_metrics_to_parent_run()` | RAII context manager managing MLflow run lifecycle, Git lineage tags, and parameter logging. |
+| `tuning.py` | `tune_hyperparameters()`, `HyperparameterObjective`, `TuningResult` | Bayesian hyperparameter optimization study orchestration with TPE sampling and ASHA pruning. |
+| `visualizations.py` | `log_training_visualizations()`, `log_optuna_diagnostic_plots()` | Diagnostic figure rendering for confusion matrices, PR curves, and energy distributions. |
+| `checkpoint.py` | `save_checkpoint()` | PyTorch model serialization and local checkpoint file export. |
+| `types.py` | `ResolvedTrainingParameters`, `EmbeddingSplit`, `HeadTrainingConfig`, `TrainingPipelineResult` | Validated Pydantic models and frozen dataclasses enforcing zero tuple blindness. |
 
 ## Pipeline Lifecycle & MLflow RAII Strategy
 
@@ -70,48 +68,48 @@ The MLflow run lifecycle is strictly managed via a custom `@contextmanager` name
 **Why we chose it (Semantic Validation):**
 A common anti-pattern is tracking state via detached boolean flags (e.g., `is_active: bool`) across multiple methods. If an unhandled exception occurs in a deep submodule, the top-level script crashes without closing the MLflow run. This leaves orphaned, zombie runs stuck in a perpetual `RUNNING` state in the MLflow UI, requiring manual DB cleanup and breaking downstream automation that polls for run completion. The RAII context manager semantically links the scope of the Python execution block directly to the MLflow lifecycle, ensuring perfect state consistency.
 
-## Full Pipeline Sequence
+## Full Pipeline Architecture & Sibling Collaboration
+
+The diagram below illustrates how `runner.py` coordinates tensor hydration, epoch optimization, Optuna sweeps, and MLflow model registry promotion across sibling modules:
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    participant EP as FastAPI /training
-    participant Runner as runner.py
-    participant DVC as dvc.lock (filesystem)
-    participant MLflow as MLflow Tracking Server
-    participant Emb as embeddings.py
-    participant Optuna as tuning.py / Optuna
-
-    EP->>Runner: run_training_pipeline(extractor, epochs, ...)
-    Runner->>Runner: _resolve_feature_dim(extractor)
-    Runner->>Runner: _prepare_embedding_split(dim, num_classes)
-    Runner->>Runner: _init_mlflow_run(...)
-    Runner->>DVC: open dvc.lock
-    DVC-->>Runner: YAML with stages.ingestion.outs[*].md5
-    Runner->>MLflow: log_param("dvc_dataset_hash", md5)
-    MLflow-->>Runner: run_id
-
-    Runner->>Emb: train_head_on_cached_embeddings(head, data, optimizer, criterion, config)
-    loop epoch in range(epochs)
-        Emb->>Emb: mini-batch SGD on train_emb
-        Emb->>Emb: _compute_additional_metrics(val_logits, val_lbl)
-        Emb-->>Runner: history[val_pr_auc, val_f1, val_accuracy, ...]
+flowchart TD
+    subgraph Coordination["Top-Level Orchestration"]
+        R["models.training.runner<br/><b>run_training_pipeline()</b><br/>• build_training_components()<br/>• configure_cuda_memory_budget()"]
     end
 
-    Runner->>Runner: _finalize_mlflow_run(history, duration)
-    Runner->>Runner: _promote_model_if_better(head, val_pr_auc)
-    Runner->>MLflow: pytorch.log_model(head, registered_model_name)
-    MLflow-->>Runner: model_version
-
-    alt val_pr_auc > production_score
-        Runner->>MLflow: set_alias("Challenger", version)
-    else no production exists
-        Runner->>MLflow: set_alias("Production", version)
-    else val_pr_auc <= production_score
-        Runner->>MLflow: set_alias("Archived", version)
+    subgraph DataAndState["State & Tensor Hydration"]
+        DS["models.training.dataset<br/><b>load_or_create_training_split()</b><br/>• get_dvc_dataset_hash()<br/>• resolve_feature_dim()"]
+        CK["models.training.checkpoint<br/><b>save_checkpoint()</b>"]
     end
 
-    Runner-->>EP: dict{status, metrics, checkpoint_path}
+    subgraph Optimization["Epoch Training & Hyperparameter Tuning"]
+        LP["models.training.loops<br/><b>train_head_epoch()</b><br/><b>evaluate_head()</b><br/>• returns HeadEvaluationResult"]
+        EM["models.training.embeddings<br/><b>train_head_on_cached_embeddings()</b><br/>• best model tracking & early stopping"]
+        TN["models.training.tuning<br/><b>tune_hyperparameters()</b><br/>• Optuna TPE & ASHA pruner<br/>• HyperparameterObjective"]
+    end
+
+    subgraph GovernanceAndTracking["Lineage, Promotion & Observability"]
+        TR["models.training.tracking<br/><b>mlflow_run_scope()</b> (RAII Context)<br/>• MLflowTracker<br/>• log_dataset_lineage()"]
+        PR["models.training.promotion<br/><b>_promote_model_if_better()</b><br/>• evaluate against baseline PR-AUC<br/>• assigns Production/Challenger alias"]
+        VZ["models.training.visualizations<br/><b>log_training_visualizations()</b><br/>• PR curves, confusion matrix, energy dist"]
+    end
+
+    subgraph TypeContracts["Typed Contracts (types.py)"]
+        TC["• ResolvedTrainingParameters<br/>• EmbeddingSplit<br/>• HeadTrainingConfig<br/>• TrainingPipelineResult"]
+    end
+
+    R -->|Hydrates Tensors| DS
+    R -->|Scopes Session RAII| TR
+    R -->|Dispatches Optuna Sweeps| TN
+    R -->|Executes Training Loop| EM
+    EM -->|Delegates Mini-Batches| LP
+    R -->|Persists Best State| CK
+    R -->|Gates Production Release| PR
+    R -->|Renders Diagnostics| VZ
+    TypeContracts -.->|Type Safety Protocol| Coordination
+    TypeContracts -.->|Type Safety Protocol| Optimization
+    TypeContracts -.->|Type Safety Protocol| GovernanceAndTracking
 ```
 
 ## Inner Training Loop & Execution Callbacks

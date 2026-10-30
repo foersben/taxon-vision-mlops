@@ -65,7 +65,9 @@ The packet flow visualizes the path from client to backend:
 flowchart LR
     A["Client"] --> B["Cloudflare Edge PoP<br/>(WAF & Access Filter)"]
     B --> C["Cloudflare Tunnel<br/>(cloudflared)"]
-    C --> D["FastAPI ASGI /<br/>ONNX Runtime Service"]
+    C --> D["Traefik v3 Ingress<br/>(Canary & Sablier)"]
+    D --> E["FastAPI ASGI /<br/>ONNX Serving (2 Replicas)"]
+    E <--> F["Redis Ephemeral Cache<br/>(Uploads & CAM State)"]
 ```
 
 ## Section 4: Restricted Private Access Control Topology
@@ -106,6 +108,8 @@ The deployment infrastructure separates Day-0 cluster prerequisites from Day-2 c
         * [deploy/k8s/mlops-storage-and-optuna.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/mlops-storage-and-optuna.yaml): Provisions the in-cluster SeaweedFS object store (ports 8333 S3, 8888 Filer, 9333 Master, 8080 Volume) and the persistent Optuna SQLite telemetry dashboard (`NodePort 30081`).
         * [deploy/k8s/monitoring-prometheus-grafana.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/monitoring-prometheus-grafana.yaml): Provisions in-cluster Prometheus TSDB (`NodePort 30090`) and Grafana visualizer (`NodePort 30300`) with BTRFS NOCOW persistent storage.
         * [deploy/k8s/traefik-ingress.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/traefik-ingress.yaml): Provisions Traefik v3.1 `IngressRoute` and 80/20 weighted `TraefikService` for canary deployment.
+        * [deploy/k8s/redis-ephemeral.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/redis-ephemeral.yaml): Provisions in-cluster Redis ephemeral image cache (64 MB memory ceiling, LRU eviction) resolving multi-pod split-brain for visual attribution CAM queries.
+        * [deploy/k8s/sablier-scaler.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/sablier-scaler.yaml) & [deploy/k8s/traefik-sablier-config.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/traefik-sablier-config.yaml): Deploys the Sablier scale-to-zero daemon and Traefik middleware plugin, idling dashboard pods after 15 minutes of inactivity and reviving them on demand.
     * Storing these manifests in Git provides Infrastructure as Code (IaC) without requiring repetitive manual execution.
 * **Day-2 Continuous Delivery (Automated via Jenkins):**
     * Operates entirely within the CI/CD pipeline triggered by Git commits and PR events.
@@ -180,10 +184,16 @@ When commits are pushed to `main` or release tags, the declarative pipeline in [
     * Executes classification head training with Optuna tuning: `pixi run -e dev python -m taxon_vision.pipelines.train --extractor dinov3 --epochs 15 --train-embeddings data/embeddings/train_embeddings.pt --val-embeddings data/embeddings/val_embeddings.pt`.
     * Re-exports and quantizes the ONNX graph (`taxon_vision.pipelines.export_onnx`) and pushes `models/checkpoints/head.pt` and `models/checkpoints/model_int8.onnx` to the DagsHub DVC remote.
     * Logs metrics and registry aliases to DagsHub MLflow.
-* **Step 4 (Deployment Rollout):**
-    * Applies [deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) and [deploy/k8s/monitoring-prometheus-grafana.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/monitoring-prometheus-grafana.yaml) using `jenkins-deployer-role` permissions. `imagePullPolicy: Always` ensures the pod pulls the fresh container published by GitHub Actions.
-    * Triggers zero-downtime rolling update: `kubectl rollout restart deployment/taxon-vision-api -n taxon-vision`.
-    * Awaits readiness probe verification: `kubectl rollout status deployment/taxon-vision-api -n taxon-vision --timeout=120s`.
+* **Step 4 (Deployment Rollout & Hygiene):**
+    * Applies [deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml), [deploy/k8s/redis-ephemeral.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/redis-ephemeral.yaml), and [deploy/k8s/monitoring-prometheus-grafana.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/monitoring-prometheus-grafana.yaml) using `jenkins-deployer-role` permissions. `imagePullPolicy: Always` ensures the pod pulls the fresh container published by GitHub Actions.
+    * Triggers zero-downtime rolling update: `kubectl rollout restart deployment/taxon-vision-serving -n taxon-vision`.
+    * Awaits readiness probe verification: `kubectl rollout status deployment/taxon-vision-serving -n taxon-vision --timeout=120s`.
+    * **Automated Pod Hygiene & Pruning:** To prevent etcd bloat and pod accumulation from completed/failed batch runs, deployments configure `revisionHistoryLimit: 3`. Furthermore, the pipeline triggers automated pruning of orphaned or completed pods:
+
+        ```bash
+        kubectl delete pod -n taxon-vision --field-selector=status.phase==Failed --ignore-not-found
+        kubectl delete pod -n taxon-vision --field-selector=status.phase==Succeeded --ignore-not-found
+        ```
 
 ## Section 9: Container Packaging & GitHub Container Registry (GHCR)
 

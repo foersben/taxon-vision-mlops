@@ -80,6 +80,8 @@ flowchart TD
         E --> H["FastAPI Engine<br/>(service.inference)"]
         F --> H
         H --> I["HTMX Operator Dashboard<br/>(service.routes)"]
+        I <--> R["Redis Ephemeral Cache<br/>(service.storage)"]
+        R -.-> H
     end
 
     click A "mlops_pipeline/ingestion_and_versioning/" "Read Ingestion Pipeline Docs"
@@ -91,6 +93,7 @@ flowchart TD
     click G "model_engineering/backbone_benchmarking_pareto/" "Read Pareto Evaluation Docs"
     click H "operations/api_reference/" "Read FastAPI Reference"
     click I "operations/deployment_runbook/" "Read Deployment Runbook"
+    click R "mlops_pipeline/storage_and_databases/" "Read Storage & Cache Docs"
 ```
 
 ---
