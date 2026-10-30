@@ -292,7 +292,9 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         help="Path to calibrated conformal configuration YAML.",
     )
     parser.add_argument(
+        "--latency-slo-ms",
         "--latency-sla-ms",
+        dest="latency_sla_ms",
         type=float,
         default=25.0,
         help="Fast-path latency SLO threshold in milliseconds (default: 25.0).",

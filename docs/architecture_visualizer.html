@@ -869,7 +869,7 @@
         color: var(--accent-amber);
         border: 1px solid rgba(245, 158, 11, 0.3);
       }
-      .badge.sla-badge {
+      .badge.slo-badge {
         background: rgba(16, 185, 129, 0.12);
         color: var(--layer-telemetry);
         border: 1px solid rgba(16, 185, 129, 0.3);
@@ -1264,7 +1264,7 @@
                 ></i>
                 Pareto Frontier: Accuracy vs. Latency
               </div>
-              <span class="badge sla-badge">Dual SLO: &le;15ms GPU / &le;25ms CPU</span>
+              <span class="badge slo-badge">Dual SLO: &le;15ms GPU / &le;25ms CPU</span>
             </div>
             <div id="plotly-pareto-main" class="chart-canvas"></div>
           </div>
@@ -1323,7 +1323,7 @@
                 ></i>
                 Conformal &amp; Energy Parameters</span
               >
-              <span class="badge sla-badge">k_max = 3 Invariant</span>
+              <span class="badge slo-badge">k_max = 3 Invariant</span>
             </div>
 
             <div class="sim-slider-row">
@@ -1866,7 +1866,7 @@
           {
             data: {
               id: "grafana_dashboard",
-              label: "Observability Cockpit\nSLA & Drift Alerts",
+              label: "Observability Cockpit\nSLO & Drift Alerts",
               subtitle: "Grafana / PromQL Monitoring",
               layer: "telemetry",
               col: 2,
@@ -1988,7 +1988,7 @@
           {
             data: {
               id: "dvc_train",
-              label: "DVC Stage: train\nmodels/training/{runner,loops,dataset,promotion}.py",
+              label: "DVC Stage: train\nmodels/training/{runner,loops,embeddings,tracking}.py",
               subtitle: "Classification Head Training",
               layer: "pipeline",
               col: 3,
@@ -1996,7 +1996,7 @@
               role: "@model-engineer",
               path: "src/taxon_vision/pipelines/train.py",
               description:
-                "Trains the taxonomic classification head with Class-Balanced Loss via decomposed sibling modules (dataset, loops, embeddings, promotion), deterministic seeding, and early stopping.",
+                "Trains the taxonomic classification head with Class-Balanced Loss via decomposed sibling modules (runner, loops, embeddings, tracking, checkpoint, types), deterministic seeding, and early stopping.",
               invariants:
                 "Produces calibrated head.pt checkpoint with locked PRNG seeds.",
               config: "Stage defined in dvc.yaml & params.yaml",

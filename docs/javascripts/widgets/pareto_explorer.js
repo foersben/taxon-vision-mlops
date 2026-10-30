@@ -117,7 +117,7 @@ function initParetoExplorer() {
             <div class="pareto-header-row">
                 <div class="pareto-chart-title">
                     <span>Multi-Objective Pareto Frontier (p95 Latency vs. Accuracy)</span>
-                    <span class="pareto-sla-badge">15 ms Production SLO Gate</span>
+                    <span class="pareto-slo-badge">15 ms Production SLO Gate</span>
                 </div>
                 <div class="pareto-filter-group">
                     <button class="pareto-filter-btn active" data-family="all">All Models</button>
@@ -291,7 +291,7 @@ function initParetoExplorer() {
                     <td>${d.throughput_fps.toFixed(0)} FPS</td>
                     <td>${d.parameters_m.toFixed(1)}M</td>
                     <td>${d.vram_peak_mb.toFixed(0)} MB</td>
-                    <td><span class="sla-pass-badge">${d.badge}</span></td>
+                    <td><span class="slo-pass-badge">${d.badge}</span></td>
                 </tr>
             `;
         }).join("");

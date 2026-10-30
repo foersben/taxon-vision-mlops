@@ -24,6 +24,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Required to compare against OpenWiki's previous documented commit.
+          ref: develop
           fetch-depth: 0
 
       - name: Set up Node.js
@@ -67,6 +68,8 @@ jobs:
           paths="openwiki"
 
           if [ -e AGENTS.md ]; then
+            # Normalise OpenWiki list bullets to asterisks per repository Rule 04
+            sed -i '/<!-- OPENWIKI:START -->/,/<!-- OPENWIKI:END -->/ s/^- /* /' AGENTS.md
             paths="$paths,AGENTS.md"
           fi
 
@@ -78,6 +81,7 @@ jobs:
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           add-paths: ${{ steps.paths.outputs.list }}
+          base: develop
           branch: openwiki/update
           commit-message: "docs: update OpenWiki"
           title: "docs: update OpenWiki"

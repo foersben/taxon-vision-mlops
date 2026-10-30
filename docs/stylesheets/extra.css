@@ -1032,6 +1032,7 @@
     gap: 0.6rem;
 }
 
+.pareto-slo-badge,
 .pareto-sla-badge {
     font-size: 0.72rem;
     padding: 0.2rem 0.5rem;
@@ -1138,6 +1139,7 @@
     font-weight: 700;
 }
 
+.slo-pass-badge,
 .sla-pass-badge {
     padding: 0.15rem 0.45rem;
     border-radius: 4px;
