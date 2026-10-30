@@ -21,7 +21,15 @@ from typing import Any
 
 import yaml
 
-from scripts.governance.validate_okf import resolve_ast_node_lines as _resolve_ast_node_lines
+# Ensure repository root is in sys.path when invoked directly as a script
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+try:
+    from scripts.governance.validate_okf import resolve_ast_node_lines as _resolve_ast_node_lines
+except ModuleNotFoundError:
+    from validate_okf import resolve_ast_node_lines as _resolve_ast_node_lines  # type: ignore[no-redef]
 
 # Claim files whose claims are shown on a doc node regardless of evidence files.
 DOC_CLAIMS_MAPPING: dict[str, list[str]] = {

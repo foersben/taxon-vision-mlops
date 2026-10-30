@@ -7,8 +7,8 @@ stale_after: "2027-01-01T00:00:00Z"
 version: 1.0
 description: Attested computation seal verifying full repository static analysis and test gates.
 tags: [attestation, verification, pre-commit, seal]
-generated: {by: "process:attest-seal", at: "2026-10-30T00:15:55Z"}
-verified: {by: "process:attest-seal", at: "2026-10-30T00:15:55Z"}
+generated: {by: "process:attest-seal", at: "2026-10-30T00:43:15Z"}
+verified: {by: "process:attest-seal", at: "2026-10-30T00:43:15Z"}
 sources:
   - id: toolchain_spec
     resource: .agents/toolchain.yaml
@@ -16,7 +16,7 @@ sources:
 
 # System Health Attestation Seal
 
-* **Timestamp:** `2026-10-30T00:15:55Z`
+* **Timestamp:** `2026-10-30T00:43:15Z`
 * **Overall Status:** `PASSED`
 * **Runtime Environment:** Pixi `dev` (GPU/CUDA 12.8) and `ci-dev` (CPU)
 
