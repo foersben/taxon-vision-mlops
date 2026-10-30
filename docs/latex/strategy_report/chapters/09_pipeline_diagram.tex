@@ -49,18 +49,18 @@
 %%  Left: DagsHub (-4.7) | Right: CI/CD (+4.7), width = 6.9cm
 %% ======================================================================
 \node[hubbox={6.9cm}] (dagshub) at (-4.7, 12.4) {%
-    \textbf{\footnotesize\color{mblueborder} DagsHub \& SeaweedFS MLOps Hub}\\[0.8mm]
+    \textbf{\footnotesize\color{mblueborder} DagsHub, SeaweedFS \& Redis MLOps Hub}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
-    \textbullet\ \textbf{Data Version Control (DVC):} Remote storage, Parquet \& Lance manifests\\
-    \textbullet\ \textbf{Experiment Tracking:} MLflow metrics, hyperparameters \& Registry\\
-    \textbullet\ \textbf{Annotation Backend:} Integrated Label Studio human triage workspace
+    \textbullet\ \textbf{Data Version Control (DVC):} Remote storage, Parquet manifests\\
+    \textbullet\ \textbf{In-Cluster Object \& Cache:} SeaweedFS (Local S3) \& Redis (Uploads)\\
+    \textbullet\ \textbf{Tracking \& Registry:} MLflow SQLite WAL, Registry \& Label Studio
 };
 
 \node[hubbox={6.9cm}] (cicd) at (4.7, 12.4) {%
     \textbf{\footnotesize\color{mblueborder} GitHub Actions \& Jenkins CI/CD}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
-    \textbullet\ \textbf{Deployment Target:} k3s Pods with GPU Time-Slicing (4 slots)\\
-    \textbullet\ \textbf{Quality Gates:} Ruff linting, MyPy static typing, CC open-licence audit\\
+    \textbullet\ \textbf{Two-Pod CI Agent:} Ephemeral CPU runner (gates) + GPU pod (training)\\
+    \textbullet\ \textbf{Quality Gates:} 203 pytest tests, 70 MyPy files, CC audit, OKF v0.2\\
     \textbullet\ \textbf{Epistemic Safety Gate:} Empirical coverage $\ge 95\%$ on calibration holdout
 };
 
@@ -102,8 +102,8 @@
 \node[classbox={6.9cm}] (pipe1) at (-4.7, 3.3) {%
     \textbf{\footnotesize\color{mgrayborder} Epistemic Diamond: Train, Export, Calibrate \& Eval}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
-    \textbullet\ \textbf{Stage 4: \texttt{train}:} Class-Balanced Loss on train/val $\to$ \nolinkurl{head.pt}\\
-    \textbullet\ \textbf{Stage 5: \texttt{export\_onnx}:} Dual logits/embeds $\to$ \nolinkurl{model_int8.onnx}\\
+    \textbullet\ \textbf{Stage 4: \texttt{train}:} Modular sibling training $\to$ \nolinkurl{head.pt} (CB-Loss)\\
+    \textbullet\ \textbf{Stage 5: \texttt{export\_onnx}:} \nolinkurl{model_int8.onnx} \& \nolinkurl{head_int8.onnx} (PTQ)\\
     \textbullet\ \textbf{Stage 6: \texttt{calibrate}:} $\hat{q}_\alpha$, $\tau_{\text{energy}}$ on cal $\to$ \nolinkurl{conformal_config.yaml}\\
     \textbullet\ \textbf{Stage 7: \texttt{evaluate}:} $1-\alpha$ bound check on test $\to$ \nolinkurl{pareto_evaluation.json}\\
     \textbullet\ \textbf{Fast-Path CAM:} Forward-only Class Activation Mapping (${<}2$\,ms)
@@ -114,7 +114,7 @@
     \rule{\linewidth}{0.4pt}\\[0.6mm]
     \textbullet\ \textbf{Vector Indexing:} Async I/O streaming writes to LanceDB (HNSW)\\
     \textbullet\ \textbf{Metadata Filter:} Haversine distance + seasonal month $\pmod{12}$\\
-    \textbullet\ \textbf{Taxonomic Engine:} DuckDB taxon lump/split synchronisation\\
+    \textbullet\ \textbf{Taxonomic Engine:} DuckDB 2.0.0 LTS lump/split synchronisation\\
     \textbullet\ \textbf{Multimodal Diagnosis:} Qwen2-VL-2B VLM for ambiguous candidates\\
     \textbullet\ \textbf{Zero Retraining:} Exemplars inserted dynamically without weight updates
 };
@@ -148,12 +148,13 @@
     \begin{tabular}{|p{2.2cm}|p{2.2cm}|}
     \hline
     \textbf{\tiny taxon-vision-serving} & \textbf{\tiny taxon-vision-vlm} \\
-    \tiny ONNX + Conformal & \tiny LanceDB + Qwen2-VL \\
-    \tiny VRAM: $<1.5$\,GB & \tiny VRAM: $>2.2$\,GB \\
-    \tiny Scaling: CPU / GPU & \tiny Dedicated GPU RAM \\
+    \tiny 2 Pods + Redis Cache & \tiny LanceDB + Qwen2-VL \\
+    \tiny VRAM: $<1.5$\,GB (Shared) & \tiny VRAM: $>2.2$\,GB (Dedicated) \\
+    \tiny Scaling: CPU / GPU & \tiny On-Demand / Sablier \\
     \hline
-    \end{tabular}}\\[1.2mm]
-    \textbullet\ Low-latency Envoy Ingress routing\\
+    \end{tabular}}\\[1.0mm]
+    \textbullet\ Traefik v3.1 Ingress (80/20 Canary)\\[0.2mm]
+    \textbullet\ Redis upload cache (\texttt{redis-ephemeral})\\[0.2mm]
     \textbullet\ Autonomous self-healing health probes
 };
 
@@ -210,7 +211,7 @@
 
 %%  (6) Pipeline 1 -> Serving Gateway (Vertical, left axis X = -4.7)
 \draw[arrow] (pipe1.south) -- (pipe1.south |- serving.north)
-    node[lbl, midway] {INT8 ONNX Model ($<25$\,ms)};
+    node[lbl, midway] {INT8 ONNX \& Head Models ($<25$\,ms)};
 
 %%  (7) Pipeline 2 -> K8s Microservices (Vertical, right axis X = +4.7)
 \draw[arrow] (pipe2.south) -- (pipe2.south |- k8s.north)

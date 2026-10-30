@@ -18,45 +18,318 @@ Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely be
 \section{Automated CI/CD Orchestration \& Registry Promotion}
 \label{sec:ci_cd_binding}
 
-\begin{figure}[htbp]
+\begin{figure*}[htbp]
 \centering
+\resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
-    node distance=1.5cm and 2cm,
-    box/.style={draw, rectangle, rounded corners, minimum width=2.5cm, minimum height=1cm, align=center, font=\small},
-    arrow/.style={-{Stealth[scale=1.2]}, thick},
-    dashed_arrow/.style={-{Stealth[scale=1.2]}, dashed, thick},
-    cloud/.style={draw, ellipse, minimum height=1cm, align=center, font=\small, fill=gray!10},
-    db/.style={draw, cylinder, shape border rotate=90, aspect=0.25, minimum height=1.2cm, minimum width=1.5cm, align=center, font=\small}
+    >=Stealth,
+    font=\sffamily,
+    % ----------------- Self-Contained Node Styles -----------------
+    baseCard/.style={
+        thick,
+        rounded corners=3pt,
+        text width=3.2cm,
+        minimum height=1.05cm,
+        align=center,
+        inner sep=4pt,
+        text=black!90
+    },
+    ciCard/.style={baseCard, draw=cyan!75!black, fill=cyan!8},
+    execCard/.style={baseCard, draw=teal!80!black, fill=teal!8},
+    dagCard/.style={baseCard, draw=orange!85!black, fill=orange!8},
+    p2Card/.style={baseCard, draw=violet!80!black, fill=violet!10},
+    regCard/.style={baseCard, draw=purple!75!black, fill=purple!8},
+    obsCard/.style={baseCard, draw=red!75!black, fill=red!8},
+    cacheCard/.style={baseCard, draw=red!70!black, fill=red!10},
+    storeCylinder/.style={
+        draw=gray!75!black,
+        fill=gray!12,
+        thick,
+        cylinder,
+        shape border rotate=90,
+        aspect=0.22,
+        text width=2.9cm,
+        minimum height=1.10cm,
+        align=center,
+        inner sep=3pt,
+        text=black!90
+    },
+    % ----------------- Typography & Badge Styles -----------------
+    pillLabel/.style={
+        font=\scriptsize\bfseries,
+        fill=white,
+        text=black!85,
+        inner sep=2.2pt,
+        rounded corners=2pt,
+        draw=gray!45,
+        thin
+    },
+    zoneHeader/.style={
+        font=\footnotesize\bfseries,
+        fill=white,
+        inner xsep=6pt,
+        inner ysep=2.5pt,
+        rounded corners=2pt,
+        draw=#1!70!black,
+        text=#1!80!black,
+        thick
+    },
+    % ----------------- Strict Orthogonal Arrow Styles -----------------
+    solidFlow/.style={->, very thick, draw=black!75, rounded corners=4pt},
+    syncFlow/.style={<->, thick, dashed, draw=cyan!75!black, rounded corners=4pt},
+    p2Flow/.style={->, very thick, draw=violet!80!black, rounded corners=4pt},
+    deployFlow/.style={->, very thick, draw=teal!80!black, rounded corners=4pt},
+    alertFlow/.style={->, very thick, dashed, draw=red!75!black, rounded corners=4pt},
+    loopFlow/.style={->, very thick, dashdotdotted, draw=purple!80!black, rounded corners=4pt}
 ]
 
-% Nodes
-\node[box] (git) {Git Push\\(Codebase)};
-\node[box, right=of git] (gh_actions) {GitHub\\(Gates \& Webhook)};
-\node[box, right=of gh_actions] (runner) {Jenkins Agent Pod\\(k3s, RTX 5070 Ti)};
-\node[db, below=of runner] (dvc) {DVC S3 Remote\\(DagsHub)};
-\node[box, below=of gh_actions] (training) {Training \& ONNX\\Quantisation};
-\node[box, left=of training] (mlflow) {MLflow Registry\\(Safety Gate)};
-\node[cloud, below=of mlflow] (k8s) {Kubernetes Ingress\\(Serving \& RAG)};
-\node[box, right=of k8s] (prom) {Prometheus\\(Drift Alert)};
+    % =========================================================================
+    % BACKGROUND ZONE CONTAINERS
+    % =========================================================================
+    \begin{scope}[on background layer, xshift=1pt]
+        % Column 1: Control Plane Zone
+        \draw[draw=cyan!60!black, fill=cyan!3, dashed, thick, rounded corners=6pt]
+            (-2.1, -22.5) rectangle (2.1, 1.4);
+        \node[zoneHeader=cyan] at (0.0, 1.4) {1. CI/CD Control Plane};
 
-% Edges
-\draw[arrow] (git) -- node[above, font=\footnotesize] {Trigger} (gh_actions);
-\draw[arrow] (gh_actions) -- node[above, font=\footnotesize] {Webhook} (runner);
-\draw[arrow] (runner) -- node[right, font=\footnotesize] {Pull Data} (dvc);
-\draw[arrow] (runner) -- (training);
-\draw[arrow] (training) -- node[above, font=\footnotesize, align=left] {Log \&\\Register} (mlflow);
-\draw[arrow] (mlflow) -- node[left, font=\footnotesize] {Deploy} (k8s);
-\draw[arrow] (k8s) -- node[above, font=\footnotesize] {Telemetry} (prom);
-\draw[dashed_arrow] (prom) to[out=30, in=230] node[left, font=\footnotesize, align=left] {Retrain\\Trigger} (runner);
+        % Column 2: Storage & Pipeline 2
+        \draw[draw=violet!60!black, fill=violet!3, dashed, thick, rounded corners=6pt]
+            (2.9, -22.5) rectangle (7.1, 1.4);
+        \node[zoneHeader=violet] at (5.0, 1.4) {2. Pipeline 2 \& Storage Tier};
+
+        % Column 3: Pipeline 1 (Diamond DAG)
+        \draw[draw=orange!80!black, fill=orange!3, dashed, thick, rounded corners=6pt]
+            (9.3, -22.5) rectangle (13.5, 1.4);
+        \node[zoneHeader=orange] at (11.4, 1.4) {3. Pipeline 1 (Diamond DAG)};
+
+        % Column 4: Production Serving & Observability
+        \draw[draw=teal!75!black, fill=teal!3, dashed, thick, rounded corners=6pt]
+            (15.1, -22.5) rectangle (19.3, 1.4);
+        \node[zoneHeader=teal] at (17.2, 1.4) {4. Serving \& Observability};
+    \end{scope}
+
+    % =========================================================================
+    % COLUMN 1: CI/CD CONTROL PLANE (X = 0.0)
+    % =========================================================================
+    \node[ciCard] (git) at (0.0, 0.0) {
+        \textbf{Git Push / PR}\\[-1pt]
+        {\scriptsize\color{black!70} Signed Commits (\texttt{-S})}
+    };
+
+    \node[ciCard] (gha) at (0.0, -4.8) {
+        \textbf{GitHub Actions}\\[-1pt]
+        {\scriptsize\color{black!70} Ruff, MyPy, Tests, OKF}
+    };
+
+    \node[ciCard] (ghcr) at (0.0, -9.6) {
+        \textbf{GHCR Registry}\\[-1pt]
+        {\scriptsize\color{black!70} \texttt{taxon-vision:latest}}
+    };
+
+    \node[execCard] (jenkins_cpu) at (0.0, -14.4) {
+        \textbf{Jenkins CPU Runner}\\[-1pt]
+        {\scriptsize\color{black!70} Ephemeral Pod / \texttt{cleanWs}}
+    };
+
+    \node[execCard] (jenkins_gpu) at (0.0, -19.2) {
+        \textbf{Jenkins GPU Agent}\\[-1pt]
+        {\scriptsize\color{black!70} Dedicated RTX 5070 Ti Pod}
+    };
+
+    % =========================================================================
+    % COLUMN 2: STORAGE & PIPELINE 2 (X = 5.0)
+    % =========================================================================
+    \node[storeCylinder] (dagshub) at (5.0, -0.30) {
+        \textbf{DagsHub DVC}\\[-1pt]
+        {\scriptsize\color{black!70} \texttt{s3://dvc} (Parquet)}
+    };
+
+    \node[storeCylinder] (seaweed) at (5.0, -4.2) {
+        \textbf{SeaweedFS Store}\\[-1pt]
+        {\scriptsize\color{black!70} S3 Embeddings / Triage}
+    };
+
+    \node[cacheCard] (redis_cache) at (5.0, -8.4) {
+        \textbf{Redis Ephemeral Cache}\\[-1pt]
+        {\scriptsize\color{black!70} \texttt{redis:6379} (64MB LRU)}
+    };
+
+    \node[storeCylinder] (lance_db) at (5.0, -12.6) {
+        \textbf{LanceDB Vector DB}\\[-1pt]
+        {\scriptsize\color{black!70} HNSW Index \& Triage Queue}
+    };
+
+    \node[p2Card] (p2_duckdb) at (5.0, -16.8) {
+        \textbf{DuckDB 2.0.0 Engine}\\[-1pt]
+        {\scriptsize\color{black!70} $\mathcal{O}(1)$ Lump / Split Mutations}
+    };
+
+    \node[storeCylinder] (sqlite_wal) at (5.0, -21.0) {
+        \textbf{SQLite WAL Telemetry}\\[-1pt]
+        {\scriptsize\color{black!70} MLflow Registry \& Optuna DB}
+    };
+
+    % =========================================================================
+    % COLUMN 3: 7-STAGE EPISTEMIC DIAMOND DAG (X = 11.4)
+    % =========================================================================
+    \node[dagCard] (dvc_ingest) at (11.4, 0.0) {
+        \textbf{1--2. Ingest \& Audit}\\[-1pt]
+        {\scriptsize\color{black!70} DarwinCore / Open License}
+    };
+
+    \node[dagCard] (dvc_extract) at (11.4, -4.2) {
+        \textbf{3. Feature Extraction}\\[-1pt]
+        {\scriptsize\color{black!70} DINOv3 (4-Way Split)}
+    };
+
+    \node[dagCard] (dvc_train) at (11.4, -8.4) {
+        \textbf{4. Modular Head Train}\\[-1pt]
+        {\scriptsize\color{black!70} CB-Loss + Sibling Topology}
+    };
+
+    \node[dagCard] (dvc_export) at (11.4, -12.6) {
+        \textbf{5. ONNX Export}\\[-1pt]
+        {\scriptsize\color{black!70} \texttt{model\_int8} \& \texttt{head\_int8}}
+    };
+
+    \node[dagCard] (dvc_calib) at (11.4, -16.8) {
+        \textbf{6. Conformal Calib.}\\[-1pt]
+        {\scriptsize\color{black!70} $\hat{q}_\alpha$ \& $\tau_{\text{energy}}$ Cutoffs}
+    };
+
+    \node[dagCard] (dvc_eval) at (11.4, -21.0) {
+        \textbf{7. Pareto Evaluation}\\[-1pt]
+        {\scriptsize\color{black!70} $1-\alpha$ Coverage Gate}
+    };
+
+    % =========================================================================
+    % COLUMN 4: PRODUCTION SERVING, OBSERVABILITY & AL (X = 17.2)
+    % =========================================================================
+    \node[execCard] (traefik) at (17.2, 0.0) {
+        \textbf{Traefik v3.1 Ingress}\\[-1pt]
+        {\scriptsize\color{black!70} 80/20 Canary + Sablier}
+    };
+
+    \node[execCard] (serving) at (17.2, -4.2) {
+        \textbf{FastAPI Serving}\\[-1pt]
+        {\scriptsize\color{black!70} 2 Pods $\cdot$ Fast / CAM}
+    };
+
+    \node[obsCard] (prom) at (17.2, -8.4) {
+        \textbf{Prometheus TSDB}\\[-1pt]
+        {\scriptsize\color{black!70} Latency, RPS, $W_1$ Drift}
+    };
+
+    \node[obsCard] (grafana) at (17.2, -12.6) {
+        \textbf{Grafana Dashboard}\\[-1pt]
+        {\scriptsize\color{black!70} Live SLOs \& Drift UI}
+    };
+
+    \node[obsCard] (evidently) at (17.2, -16.8) {
+        \textbf{Evidently AI Engine}\\[-1pt]
+        {\scriptsize\color{black!70} Batch $\text{MMD}^2$ Promotion Gate}
+    };
+
+    \node[regCard] (al_triage) at (17.2, -21.0) {
+        \textbf{Active Learning}\\[-1pt]
+        {\scriptsize\color{black!70} BADGE + VLM + Label Studio}
+    };
+
+    % =========================================================================
+    % ORTHOGONAL ROUTING & DATA FLOWS
+    % =========================================================================
+
+    % --- 1. Control Plane Internal Edges (Column 1) ---
+    \draw[solidFlow] (git.south) -- node[pillLabel, pos=0.5] {Code Push / PR} (gha.north);
+    \draw[solidFlow] (gha.south) -- node[pillLabel, pos=0.5] {Merge to \texttt{main}} (ghcr.north);
+    \draw[solidFlow] (gha.west) -- (-2.35, -4.8) -- node[pillLabel, pos=0.5, rotate=90] {Cloudflare Webhook} (-2.35, -14.4) -- (jenkins_cpu.west);
+    \draw[solidFlow] (jenkins_cpu.south) -- node[pillLabel, pos=0.5] {Trigger GPU Job} (jenkins_gpu.north);
+
+    % --- 2. Jenkins GPU Agent Triggering Diamond DAG (Track 3 at Y = -25.50) ---
+    \draw[solidFlow] (jenkins_gpu.south) -- (0.0, -25.50) -- (7.4, -25.50) -- (7.4, 0.40) -- ([yshift=0.4cm]dvc_ingest.west);
+    \node[pillLabel] at (3.7, -25.50) {Dispatch Pipeline 1 DAG};
+
+    % --- 3. Storage Synchronisation (Strictly Horizontal Connectors) ---
+    \draw[syncFlow] (dagshub.east) -- node[pillLabel, pos=0.55] {Parquet Hash} ([yshift=-0.30cm]dvc_ingest.west);
+    \draw[syncFlow] (seaweed.east) -- node[pillLabel, pos=0.5] {Zero-Egress Splits} (dvc_extract.west);
+
+    % Training -> SQLite WAL Telemetry (Parallel Corridor Tracks at X=8.1 and X=8.6)
+    \draw[syncFlow] (dvc_train.west) -- (8.1, -8.4) -- node[pillLabel, pos=0.5, rotate=90] {Optuna HPO Trials} (8.1, -20.65) -- ([yshift=0.35cm]sqlite_wal.east);
+    \draw[syncFlow] (dvc_export.west) -- (8.6, -12.6) -- node[pillLabel, pos=0.55, rotate=90] {Exported Graphs} (8.6, -21.35) -- ([yshift=-0.35cm]sqlite_wal.east);
+
+    % --- 4. Pipeline 1 Waterfall (Column 3) ---
+    \draw[solidFlow] (dvc_ingest.south) -- (dvc_extract.north);
+    \draw[solidFlow] (dvc_extract.south) -- (dvc_train.north);
+    \draw[solidFlow] (dvc_train.south) -- (dvc_export.north);
+    \draw[solidFlow] (dvc_export.south) -- (dvc_calib.north);
+    \draw[solidFlow] (dvc_calib.south) -- (dvc_eval.north);
+
+    % --- 5. Pipeline 2 (MMKG & Storage) Internal Dataflow (Column 2) ---
+    \draw[p2Flow] (seaweed.south) -- node[pillLabel, pos=0.5] {Exemplars} (redis_cache.north);
+    \draw[p2Flow] (redis_cache.south) -- node[pillLabel, pos=0.5] {Vector Indexing} (lance_db.north);
+    \draw[p2Flow] (lance_db.south) -- node[pillLabel, pos=0.5] {HNSW Index} (p2_duckdb.north);
+    \draw[p2Flow] (p2_duckdb.south) -- node[pillLabel, pos=0.5] {Taxon Metadata} (sqlite_wal.north);
+
+    % --- 6. Pipeline 1 Evaluation Gate -> SQLite WAL MLflow Registry ---
+    \draw[solidFlow] (dvc_eval.west) -- (sqlite_wal.east);
+    \node[pillLabel] at (8.30, -21.0) {Pass $\ge 1-\alpha$};
+
+    % --- 7. Ingress & Dual-Pipeline Convergence ---
+    \draw[deployFlow] (traefik.south) -- node[pillLabel, pos=0.5] {HTTP Ingress} (serving.north);
+
+    % P2 Mount: LanceDB -> West Corridor X=2.50 -> Track 2 at Y=-24.80 -> Corridor 3-4 X=13.85 -> Serving
+    \draw[p2Flow] (lance_db.west) -- (2.50, -12.6) -- (2.50, -24.80) -- (13.85, -24.80) -- (13.85, -4.55) -- ([yshift=-0.35cm]serving.west);
+    \node[pillLabel, rotate=90] at (13.85, -8.0) {P2: Mount LanceDB Index};
+
+    % P1 Deploy: SQLite WAL MLflow Weights -> Track 1 at Y=-24.10 -> Corridor 3-4 X=14.35 -> Serving
+    \draw[deployFlow] ([xshift=-0.6cm]sqlite_wal.south) -- (4.40, -24.10) -- (14.35, -24.10) -- (14.35, -3.85) -- ([yshift=0.35cm]serving.west);
+    \node[pillLabel, rotate=90] at (14.35, -13.5) {P1: Production Models};
+
+    % Redis Multi-Pod Coordination Edge (Corridor Gap at Y=-6.30, Track X=14.75, enters serving center at Y=-4.20)
+    \draw[syncFlow] (redis_cache.east) -- (7.75, -8.4) -- (7.75, -6.30) -- (14.75, -6.30) -- (14.75, -4.20) -- (serving.west);
+    \node[pillLabel] at (9.40, -6.30) {Shared Upload Cache};
+
+    % GHCR Rolling Container Deployment (Top Route at Y=1.75)
+    \draw[deployFlow] (ghcr.east) -- (2.30, -9.6) -- (2.30, 1.90) -- (19.65, 1.90) -- (19.65, 0.0) -- (traefik.east);
+    \node[pillLabel] at (11.4, 1.90) {K8s Rolling Deploy (\texttt{imagePullPolicy: Always})};
+
+    % --- 8. Production Serving, Telemetry & Observability Spine (Column 4) ---
+    \draw[solidFlow] (serving.south) -- node[pillLabel, pos=0.5] {Scrape \texttt{/metrics}} (prom.north);
+    \draw[solidFlow] (prom.south) -- node[pillLabel, pos=0.5] {PromQL Queries} (grafana.north);
+    \draw[solidFlow] (grafana.south) -- node[pillLabel, pos=0.5] {Tier-2 Trigger} (evidently.north);
+    \draw[solidFlow] (evidently.south) -- node[pillLabel, pos=0.5] {Flagged Batches} (al_triage.north);
+
+    % Triage Escalation from Serving to Active Learning (Far Right Track X=19.65)
+    \draw[solidFlow] ([yshift=-0.25cm]serving.east) -- (19.65, -4.45) -- (19.65, -20.75) -- ([yshift=0.25cm]al_triage.east);
+    \node[pillLabel, rotate=-90] at (19.65, -12.5) {Triage ($|\hat{C}| > 3$ or $|\hat{C}| = 0$)};
+
+    % Evidently AI Offline Promotion Gate to SQLite WAL (Track 0 at Y = -23.40, completely below containers)
+    \draw[alertFlow] (evidently.west) -- (14.95, -16.8) -- (14.95, -23.40) -- (5.60, -23.40) -- ([xshift=0.6cm]sqlite_wal.south);
+    \node[pillLabel] at (10.50, -23.40) {Tier-2 Promotion Gate ($\text{MMD}^2 \le \tau_{\text{MMD}}$)};
+
+    % --- 9. Closed-Loop Feedback Channels ---
+    % Path A: Prometheus Drift -> Jenkins Retrain (Track 4 at Y = -26.20)
+    \draw[alertFlow] (prom.west) -- (15.35, -8.4) -- (15.35, -26.20) -- (-0.50, -26.20) -- ([xshift=-0.5cm]jenkins_gpu.south);
+    \node[pillLabel] at (7.0, -26.20) {Path A: Alertmanager Webhook ($W_1 > \tau_{\text{drift}}$ or Set Size Spike)};
+
+    % Path B: Active Learning -> DagsHub Manifest Update (Top Route at Y=2.35)
+    \draw[loopFlow] ([yshift=-0.25cm]al_triage.east) -- (20.15, -21.25) -- (20.15, 2.35) -- (2.40, 2.35) -- (2.40, -0.30) -- (dagshub.west);
+    \node[pillLabel] at (11.4, 2.35) {Path B: Curated Label Studio Annotations $\rightarrow$ DVC Manifest Update};
 
 \end{tikzpicture}
-\caption{Dual-Pipeline CI/CD Architecture Flow mapping code and data states to production Kubernetes deployments.}
+}
+\caption{Decoupled Dual-Pipeline Architecture Flow: Pipeline 1 executes the 7-Stage Epistemic Diamond DAG for neural classification head training, while Pipeline 2 manages asynchronous vector indexing in LanceDB and DuckDB 2.0.0 taxonomic mutations. Persistent telemetry and trial history are anchored in SQLite WAL (MLflow Model Registry and Optuna studies). Both pipelines converge at the FastAPI serving gateway (2 replicas) behind Traefik v3.1 ingress and an in-cluster Redis ephemeral upload cache. Full-stack observability integrates Prometheus TSDB streaming metrics ($W_1$ drift), Grafana operational dashboards, Evidently AI offline $\text{MMD}^2$ promotion gating, and closed-loop Active Learning feedback.}
 \label{fig:cicd_flow}
-\end{figure}
+\end{figure*}
 
 In order to transition from manual experimentation to a Level 3 MLOps deployment, the independent pipelines must be strictly governed by Continuous Integration and Continuous Deployment (CI/CD) triggers.
 
-Two cooperating layers implement these triggers. When engineers push codebase modifications to the central repository, GitHub Actions executes lightweight static analysis (Ruff, MyPy), open-licence auditing, Open Knowledge Format (OKF) validation, unit and conformal test suites, and cognitive complexity scanning via \texttt{complexipy}. To validate serving endpoints during pull request review, the runner hydrates DVC model checkpoints directly from DagsHub. Upon merge to \texttt{main}, GitHub Actions automatically packages the production container image, hydrates promoted model checkpoints from DagsHub DVC, and publishes multi-tagged images to GitHub Container Registry (\texttt{ghcr.io/foersben/taxon-vision-mlops:latest}). In parallel, a signed GitHub webhook reaches a self-hosted Jenkins controller through an outbound-only Cloudflare Tunnel. The controller owns no executors of its own: it schedules each build as an ephemeral agent pod inside the k3s cluster of the bare-metal host and removes the pod on completion. Credentials for the tracking infrastructure, in particular the DagsHub access token, are held in the Jenkins credential store and are exposed to the build as environment variables for the duration of the run only.
+Two cooperating layers implement these triggers. When engineers push codebase modifications to the central repository, GitHub Actions executes lightweight static analysis (Ruff, MyPy), open-licence auditing, Open Knowledge Format (OKF) validation, unit and conformal test suites, and cognitive complexity scanning via \texttt{complexipy}. To validate serving endpoints during pull request review, the runner hydrates DVC model checkpoints directly from DagsHub. Upon merge to \texttt{main}, GitHub Actions automatically packages the production container image, hydrates promoted model checkpoints from DagsHub DVC, and publishes multi-tagged images to GitHub Container Registry (\texttt{ghcr.io/foersben/taxon-vision-mlops:latest}). In parallel, a signed GitHub webhook reaches a self-hosted Jenkins controller through an outbound-only Cloudflare Tunnel. The controller owns no persistent executors of its own: it schedules each build across a bifurcated, two-pod hybrid execution topology inside the k3s cluster of the bare-metal host:
+\begin{enumerate}
+    \item \textbf{\texttt{jenkins-cpu-runner} (Lightweight Quality Gate):} Ephemeral CPU-only pod (1 core, 2~GB RAM) executing fast static verification: Ruff linting, MyPy strict typing across all 70 source files, 203 automated pytest tests, OKF frontmatter validation, and license audits. Pod execution employs a defensive \texttt{cleanWs} workspace guard to guarantee zero state leakage across builds.
+    \item \textbf{\texttt{jenkins-gpu-runner} (Heavy Compute Workload):} Dedicated GPU pod requesting an isolated NVIDIA GeForce RTX 5070 Ti allocation (16~GB VRAM) under \texttt{imagePullPolicy: IfNotPresent} to eliminate redundant multi-gigabyte container pulls over the WAN. This pod executes CUDA feature extraction, Optuna Bayesian hyperparameter sweeps, and INT8 post-training quantization.
+\end{enumerate}
+Credentials for the tracking infrastructure, in particular the DagsHub access token, are held in the Jenkins credential store and are exposed to the build as environment variables for the duration of the run only. Production traffic is routed via Traefik v3.1 Ingress, supporting dynamic 80/20 canary traffic splits between \texttt{Production} and \texttt{Challenger} deployments, coupled with Sablier middleware for automated scale-to-zero resource management during idle operational intervals.
 
 \subsection{Two-Stage Distribution and Provenance Attestation}
 \label{subsec:release_distribution}
@@ -92,7 +365,11 @@ On the main branch, the CI/CD pipeline continues beyond the quality gates and ex
     \item \textbf{Stage 2: Licence Audit (\texttt{src/taxon\_vision/pipelines/audit\_license.py}):} Validates observation records against Rule 05 Open License constraints, filtering non-compliant items and saving verified entries with full photographer attribution to \nolinkurl{data/manifests/dataset_manifest.parquet} and \nolinkurl{reports/license_audit.json}.
     \item \textbf{Stage 3: Feature Extraction (\texttt{src/taxon\_vision/pipelines/extract\_features.py}):} Lazily streams observation imagery from AWS S3, passing images through the frozen foundation backbone (e.g., DINOv3 with $d=384$, or BioCLIP-2 with $d=512$). It partitions representations into four discrete, stratified tensor files under \nolinkurl{data/embeddings/}: \nolinkurl{train_embeddings.pt} (70\%), \nolinkurl{val_embeddings.pt} (10\%), \nolinkurl{cal_embeddings.pt} (10\%), and \nolinkurl{test_embeddings.pt} (10\%). This diamond fan-out eliminates data leakage between training, calibration, and final holdout benchmarking.
     \item \textbf{Stage 4: Head Training (\texttt{src/taxon\_vision/pipelines/train.py}):} Trains a lightweight linear classification head on \nolinkurl{train_embeddings.pt} and \nolinkurl{val_embeddings.pt} using Class-Balanced Loss ($E_n = \frac{1-\beta^n}{1-\beta}$) and Bayesian hyperparameter sweeps via Optuna, outputting \nolinkurl{models/checkpoints/head.pt} and \nolinkurl{reports/train_metrics.json}.
-    \item \textbf{Stage 5: ONNX Export \& PTQ (\texttt{src/taxon\_vision/pipelines/export\_onnx.py}):} Compiles the PyTorch classifier into an ONNX graph with dual output heads (unnormalised logits $f(x) \in \mathbb{R}^K$ and penultimate embeddings $z(x) \in \mathbb{R}^D$), followed by INT8 post-training quantisation (static QDQ mode with representative calibration images, with dynamic quantisation fallback for data-free smoke tests), serialising the fast-path runtime to \nolinkurl{models/checkpoints/model_int8.onnx}.
+    \item \textbf{Stage 5: ONNX Export \& PTQ (\texttt{src/taxon\_vision/pipelines/export\_onnx.py}):} Compiles the PyTorch classifier into two specialised ONNX execution graphs:
+    \begin{enumerate}[label=(\alph*)]
+        \item \textbf{End-to-End Dual-Output Graph (\nolinkurl{models/checkpoints/model_int8.onnx}):} Ingests raw normalised image tensors ($\mathbb{R}^{3 \times 224 \times 224}$) and emits both unnormalised logits $f(x) \in \mathbb{R}^K$ and penultimate feature embeddings $z(x) \in \mathbb{R}^D$ in a single forward pass, quantised via INT8 Post-Training Quantisation (PTQ).
+        \item \textbf{Dedicated Linear Head Graph (\nolinkurl{models/checkpoints/head_int8.onnx}):} Ingests pre-computed embedding vectors ($z \in \mathbb{R}^D$) directly and emits logits $f(z) \in \mathbb{R}^K$. This enables sub-millisecond evaluation ($t_{\text{head}} < 0.2\text{ ms}$) during active learning query loops and vector triage without invoking the heavy Vision Transformer backbone.
+    \end{enumerate}
     \item \textbf{Stage 6: Split Conformal Calibration (\texttt{src/taxon\_vision/pipelines/calibrate.py}):} Evaluates the holdout calibration partition \nolinkurl{data/embeddings/cal_embeddings.pt} through \nolinkurl{model_int8.onnx}. It calculates the empirical non-conformity quantile $\hat{q}_\alpha$ and Helmholtz free energy OOD threshold $\tau_{\text{energy}}$, serialising runtime parameters to \nolinkurl{config/conformal_config.yaml} and \nolinkurl{reports/conformal_metrics.json}.
     \item \textbf{Stage 7: Pareto Evaluation (\texttt{src/taxon\_vision/pipelines/evaluate.py}):} Evaluates candidate backbones against the pristine holdout test partition \nolinkurl{data/embeddings/test_embeddings.pt} using \nolinkurl{model_int8.onnx} and \nolinkurl{config/conformal_config.yaml}. It mathematically verifies the empirical marginal coverage bound ($\ge 1 - \alpha$), calculates p95 latency, throughput, and hardware efficiency profiles (parameter counts, MACs/FLOPs, and peak memory footprint), and writes \nolinkurl{reports/pareto_evaluation.json} and \nolinkurl{docs/assets/pareto_results.json}.
 \end{enumerate}
@@ -147,10 +424,11 @@ If feature extraction or spatial projection fails due to unsupported backbone po
 
 Computing CAM saliency synchronously on every prediction request would unnecessarily consume CPU cycles and bloat response payloads for automated clients that only require categorical predictions. Conversely, forcing the client to re-upload raw multi-megabyte image payloads whenever an operator requests visual explanation incurs substantial network latency and memory overhead.
 
-To resolve this trade-off, the serving layer implements an in-memory, thread-safe ephemeral image cache (\nolinkurl{EphemeralImageCache} in \nolinkurl{src/taxon_vision/service/storage.py}):
+To resolve this trade-off, the serving layer implements a content-addressed ephemeral image cache governed by \nolinkurl{ImageCacheProtocol} in \nolinkurl{src/taxon_vision/service/storage.py}, backed by an in-cluster Redis ephemeral instance (\nolinkurl{RedisImageCache}) with in-memory fallback (\nolinkurl{MemoryImageCache}):
 \begin{enumerate}
     \item \textbf{Content Addressing via SHA-256:} Uploaded raw image bytes are hashed using SHA-256 to generate an immutable content digest (\texttt{image\_hash}).
-    \item \textbf{Thread-Safe LRU and TTL Eviction:} The cache stores image payloads in memory protected by reentrant locks, bounded by a maximum capacity (\texttt{image\_cache\_max\_items = 100}) and monotonic time-to-live eviction (\texttt{image\_cache\_ttl\_seconds = 900.0}, or 15 minutes), configured via \nolinkurl{config/default_config.yaml}.
+    \item \textbf{Multi-Pod Split-Brain Mitigation:} Rather than isolating cached payloads within a single pod's heap, images are stored in a shared cluster Redis instance (\texttt{redis-ephemeral:6379}), ensuring that subsequent CAM attribution requests routed round-robin across replicas resolve the image payload seamlessly.
+    \item \textbf{Bounded LRU and Rolling TTL Eviction:} The cache enforces a strict memory ceiling (\texttt{maxmemory 64mb} with \texttt{allkeys-lru}) and monotonic rolling time-to-live eviction (\texttt{image\_cache\_ttl\_seconds = 900.0}, or 15 minutes, refreshed upon access), configured via \nolinkurl{config/default_config.yaml}.
     \item \textbf{Zero Fast-Path Disk I/O:} Temporary images are never written to disk during the standard prediction path, avoiding unbuffered file I/O latency on high-throughput serving nodes.
 \end{enumerate}
 
@@ -159,8 +437,8 @@ To resolve this trade-off, the serving layer implements an in-memory, thread-saf
 
 The FastAPI serving runtime and HTMX dashboard operationalise this decoupled architecture through progressive disclosure:
 \begin{enumerate}
-    \item \textbf{Fast-Path Inference ($<15\text{ ms}$):} The synchronous prediction endpoints (\texttt{POST /htmx/predict} and \texttt{POST /api/v1/predict}) execute the dual-output ONNX model, evaluate conformal prediction sets $\hat{C}(X)$, and compute epistemic telemetry (Shannon entropy and Helmholtz free energy compared against thresholds $\tau_{\text{OOD}}$ and $\tau_{\text{entropy}}$). The dashboard immediately renders the prediction card containing candidate probability bars and epistemic telemetry badges without waiting for saliency synthesis.
-    \item \textbf{On-Demand Lazy Heatmap Synthesis (\texttt{/api/v1/explain}):} The CAM interface is embedded in a collapsible HTML5 \texttt{<details>} drawer. The client browser triggers an asynchronous HTMX request (\nolinkurl{hx-get="/api/v1/explain?image_hash=...&target_class_index=..."}) with the trigger condition \texttt{hx-trigger="toggle once"}, synthesising the heatmap overlay only when the operator actively opens the drawer.
+    \item \textbf{Fast-Path Inference ($<15\text{ ms}$):} The synchronous prediction endpoints (\texttt{POST /ui/predict-htmx} and \texttt{POST /api/v1/predict}) execute the dual-output ONNX model, evaluate conformal prediction sets $\hat{C}(X)$, and compute epistemic telemetry (Shannon entropy and Helmholtz free energy compared against thresholds $\tau_{\text{OOD}}$ and $\tau_{\text{entropy}}$). The dashboard immediately renders the prediction card containing candidate probability bars and epistemic telemetry badges without waiting for saliency synthesis.
+    \item \textbf{On-Demand Lazy Heatmap Synthesis (\texttt{/api/v1/explain}):} The CAM interface is embedded in a collapsible HTML5 \texttt{<details>} drawer. The client browser triggers an asynchronous HTMX request (\nolinkurl{hx-post="/api/v1/explain?image_hash=...&target_class_index=..."}) with the trigger condition \texttt{hx-trigger="toggle once"}, synthesising the heatmap overlay only when the operator actively opens the drawer.
     \item \textbf{Differential Multi-Candidate Inspection:} When an observation yields a non-singleton conformal prediction set (e.g., $|\hat{C}(X)| \in \{2, 3\}$), the drawer provides interactive candidate toggles. Operators can click individual competing taxa to dynamically inspect class-specific activation maps for contrasting hypotheses on the identical cached image. This allows taxonomists to verify whether the model attended to genuine diagnostic morphology (e.g., wing venation patterns or floral stamen structures) or spurious background correlation.
     \item \textbf{Fault-Tolerant Rendering:} If an expired hash or unsupported architecture triggers an exception during explanation, the endpoint returns an inline warning fragment (\nolinkurl{partials/cam_error.html}) at HTTP 200 for HTMX clients (and typed HTTP 422 for machine API consumers), ensuring that the operator dashboard remains fully functional and responsive.
 \end{enumerate}

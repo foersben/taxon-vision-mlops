@@ -12,6 +12,8 @@ The system safely circumvents this limitation by utilising Data Version Control 
 
 This pointer file is subsequently committed to Git. When a deployment runner or data scientist executes a checkout command for a specific historical commit, the DVC client reads the hash from the pointer file, resolves the asset location in the remote cache, and constructs near-instantaneous filesystem reflinks (or hardlinks) into the local workspace. This dual-layered approach reliably decouples the heavy binary storage from the codebase, whilst guaranteeing mathematically verifiable, bit-for-bit data reproducibility.
 
+To ensure non-blocking, rate-compliant upstream data acquisition from public biological APIs (such as iNaturalist and GBIF), ingestion workers enforce strict concurrency controls. API queries are mediated by an asynchronous token-bucket rate limiter (\texttt{aiolimiter.AsyncLimiter(1.0, 1.0)}), guaranteeing compliance with upstream throughput ceilings (maximum 1 request per second). Concurrent disk writes and manifest mutations across parallel workers are protected by POSIX advisory file locking via \texttt{filelock}, completely eliminating race conditions and corrupted Parquet manifests during multi-threaded data ingestion.
+
 \section{Unified Management Plane}
 \label{sec:dagshub}
 
@@ -94,5 +96,19 @@ Because the backbone is frozen and its embeddings are cached, a training epoch o
 \end{enumerate}
 
 As design defaults, the baseline epoch budget is set to 30 epochs and the mini-batch size is 32 for training on cached embeddings (\texttt{epochs: 30}, \texttt{batch\_size: 32} in \nolinkurl{params.yaml}). Where embeddings are extracted from images by a Vision Transformer on the GPU, a batch size of 32 images keeps the activation memory comfortably inside the budget of Section~\ref{sec:gpu_partitioning}. The feature extraction pipeline (\texttt{taxon\_vision.pipelines.extract\_features}) extracts these representations directly from AWS S3, caching them to disk for subsequent head convergence (see Section~\ref{sec:impl_status}).
+
+\subsection{Modular Sibling Topology and Clean Code Governance}
+\label{sec:sibling_training_topology}
+
+To eliminate monolithic software decay and satisfy Rule~08 clean-code invariants, the training engine is decomposed into single-responsibility sibling modules within \nolinkurl{src/taxon_vision/models/training/}, strictly banning nested package circularities and maintaining cognitive complexity under the threshold $\mathcal{C} < 15$:
+\begin{itemize}
+    \item \textbf{\texttt{runner.py}:} Orchestrates the overarching training execution lifecycle, learning rate plateau scheduling, and early stopping assertions.
+    \item \textbf{\texttt{loops.py}:} Implements the tight inner forward and backward training loops operating over pre-cached GPU embedding tensors without dynamic allocation overhead.
+    \item \textbf{\texttt{embeddings.py}:} Manages PyTorch TensorDataset abstractions, stratified minibatch creation, and tensor shape validation.
+    \item \textbf{\texttt{tuning.py}:} Encapsulates Bayesian hyperparameter objective functions, trial scoping, and ASHA pruning logic.
+    \item \textbf{\texttt{tracking.py}:} Provides RAII-scoped context managers for atomic MLflow run lifecycle management, guaranteeing clean teardown upon runtime exceptions.
+    \item \textbf{\texttt{checkpoint.py}:} Manages best-weight restoration and deterministic PyTorch state-dict serialisation.
+    \item \textbf{\texttt{types.py}:} Enforces parameter encapsulation via frozen dataclasses (\texttt{TrainingConfig}, \texttt{TrainingMetrics}, \texttt{OptunaTrialResult}), completely eliminating untyped tuple blindness.
+\end{itemize}
 
 Data augmentation applied during embedding extraction must respect biological invariants. Horizontal reflection yields physically plausible specimens, because most organisms are bilaterally or radially symmetric about a vertical axis. Vertical reflection is prohibited: gravity and phototropism impose a canonical orientation, so that an inverted specimen would never occur in field imagery and would merely bias the learned spatial priors.

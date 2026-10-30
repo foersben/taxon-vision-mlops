@@ -100,10 +100,38 @@ wget -q -O - --post-data="" "http://127.0.0.1:8888/buckets/triage-queue/?op=mkdi
 \end{minted}
 
 \subsubsection{Filesystem Invariants and Multi-Remote Routing}
-To prevent physical block fragmentation across the NVMe bus, the underlying persistent directory (\texttt{/var/lib/taxon-vision/seaweedfs}) is mounted onto a dedicated BTRFS subvolume configured with the \texttt{NOCOW} (\texttt{chattr +C}) attribute. Automatic volume compaction runs in the background whenever deleted needle space exceeds 30\%, reclaiming disk space without interrupting live inference loops.
+To prevent physical block fragmentation across the NVMe bus, the underlying persistent directory (\texttt{/var/lib/taxon-vision/seaweedfs}) is mounted onto a dedicated BTRFS subvolume configured with the \texttt{NOCOW} (\texttt{chattr +C}) attribute. Furthermore, because SeaweedFS volume daemons lock underlying volume data files (\texttt{.dat}), the Kubernetes Deployment enforces \texttt{strategy.type: Recreate}. This prevents multi-attach volume lock collisions on single-node NVMe persistent volumes during rolling updates by guaranteeing that the terminating pod releases file locks before the replacement pod initialises. Automatic volume compaction runs in the background whenever deleted needle space exceeds 30\%, reclaiming disk space without interrupting live inference loops.
 
 DVC synchronisation is partitioned strictly across two distinct remotes:
 \begin{itemize}
     \item \textbf{The In-Cluster High-Throughput Remote (\texttt{local-seaweedfs}):} Targeting \texttt{s3://taxon-dvc-cache} at \texttt{http://seaweedfs.taxon-vision.svc.cluster.local:8333}. Dedicated to multi-gigabyte embedding caches (\texttt{train\_embeddings.pt}, \texttt{val\_embeddings.pt}, \texttt{cal\_embeddings.pt}, \texttt{test\_embeddings.pt}), enabling zero-egress, wire-speed caching for Bayesian hyperparameter optimisation sweeps.
     \item \textbf{The Public Lineage Remote (\texttt{origin}):} Targeting \texttt{s3://dvc} at DagsHub. Dedicated to release model checkpoints (\texttt{head.pt}) and INT8 quantised runtimes (\texttt{model\_int8.onnx}).
+\end{itemize}
+
+\subsection{In-Cluster Ephemeral Upload Cache: Redis Architecture and Split-Brain Elimination}
+\label{sec:redis_upload_cache}
+
+While static assets and multi-gigabyte training tensors reside in SeaweedFS and DagsHub, the production serving layer introduces an ephemeral data plane requirement: holding raw uploaded image bytes across multi-step user interaction workflows.
+
+\subsubsection{Multi-Pod Split-Brain in Interactive Explainability}
+In the TaxonVision dashboard, an operator uploads an unlabelled organism crop to obtain conformal prediction sets via \texttt{POST /predict}. If the classification result exhibits epistemic ambiguity (e.g. $|\hat{C}| > 1$), the operator clicks ``Explain CAM'' in the web UI, which triggers a secondary request to \texttt{POST /explain} supplying the SHA-256 image hash.
+
+In a horizontally scaled serving topology with two or more FastAPI pods behind Traefik ingress, an in-memory image cache (\texttt{OrderedDict} with threading locks) causes a catastrophic \textit{multi-pod split-brain}:
+\begin{enumerate}
+    \item \textbf{Pod 1} processes the initial \texttt{/predict} upload, storing the decompressed image array in its private process heap memory.
+    \item Traefik's round-robin or least-connections load-balancing algorithm routes the subsequent \texttt{/explain} call to \textbf{Pod 2}.
+    \item \textbf{Pod 2} inspects its local process RAM, fails to locate the hash, and returns HTTP 422 Unprocessable Entity (``Image not found or expired'').
+\end{enumerate}
+
+\subsubsection{Redis Ephemeral Cache Implementation}
+To resolve this split-brain without imposing sticky sessions or heavy cloud object store latency, the cluster provisions an in-cluster \textbf{Redis Ephemeral Cache} (\texttt{redis-ephemeral:6379}). The cache architecture enforces strict resource and lifecycle bounds:
+\begin{itemize}
+    \item \textbf{Memory Envelope and Eviction:} Memory is capped at 64~MB with \texttt{maxmemory-policy allkeys-lru}. Because each raw JPEG/WebP crop averages 45--60~KB, a 64~MB envelope comfortably buffers over 1,000 concurrent active operator sessions.
+    \item \textbf{Deterministic Expiration:} Raw image bytes are written via atomic \texttt{SETEX} with a 900-second (15-minute) time-to-live:
+    \[
+    \texttt{redis.setex(f"img:\{image\_hash\}", 900, raw\_bytes)}
+    \]
+    This guarantees zero memory leak accumulation without requiring background thread garbage-collection loops in Python.
+    \item \textbf{Sub-Millisecond Retrieval:} Any serving pod can retrieve the cached image payload in sub-millisecond latency ($t_{\text{redis}} < 0.5\text{ ms}$ over localhost loopback/cluster SDN), enabling Pod~2 to compute Grad-CAM overlays seamlessly.
+    \item \textbf{Graceful Degradation:} If the Redis service becomes temporarily unreachable, the \texttt{UploadCache} component automatically falls back to local in-memory caching and logs a structured warning, ensuring service resilience during cache restarts.
 \end{itemize}
