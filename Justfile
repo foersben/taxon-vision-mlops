@@ -86,6 +86,11 @@ lint-markdown:
 validate-okf:
 	pixi run --frozen -e dev python scripts/governance/validate_okf.py
 
+# Verify AST code invariants (dynamic reflection, arity <= 4, eager imports)
+[group("quality")]
+check-invariants:
+	pixi run --frozen -e dev python scripts/governance/verify_code_invariants.py
+
 # Verify and fix Markdown Rule 04 formatting invariants
 [group("quality")]
 lint-md:

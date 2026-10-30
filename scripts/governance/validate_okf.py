@@ -40,6 +40,17 @@ LOG_DATE_HEADING_PATTERN = re.compile(r"^##\s+(\d{4}-\d{2}-\d{2})\b")
 ALLOWED_STATUSES = {"draft", "stable", "deprecated", "verified"}
 
 
+def _find_ast_child_node(scope: ast.AST, wanted_kind: str, name: str) -> ast.AST | None:
+    """Find a child AST node of a given kind and name within a scope."""
+    if not isinstance(scope, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
+        return None
+    for child in scope.body:
+        if isinstance(child, ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
+            if type(child).__name__ == wanted_kind and child.name == name:
+                return child
+    return None
+
+
 def resolve_ast_node_lines(file_path: Path, ast_target: str) -> tuple[int, int] | None:
     """Resolve an ast_target such as FunctionDef:load_config to current source line bounds.
 
@@ -60,30 +71,19 @@ def resolve_ast_node_lines(file_path: Path, ast_target: str) -> tuple[int, int] 
         tree = ast.parse(file_path.read_text(encoding="utf-8"))
     except (OSError, SyntaxError):
         return None
+
     scope: ast.AST = tree
-    node: ast.AST | None = None
     parts = dotted.split(".")
     for idx, name in enumerate(parts):
         wanted_kind = kind if idx == len(parts) - 1 else "ClassDef"
-        body = (
-            scope.body if isinstance(scope, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef) else []
-        )
-        node = next(
-            (
-                child
-                for child in body
-                if isinstance(child, ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef)
-                and type(child).__name__ == wanted_kind
-                and child.name == name
-            ),
-            None,
-        )
-        if node is None:
+        matched = _find_ast_child_node(scope, wanted_kind, name)
+        if matched is None:
             return None
-        scope = node
-    if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+        scope = matched
+
+    if not isinstance(scope, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
         return None
-    return node.lineno, node.end_lineno or node.lineno
+    return scope.lineno, scope.end_lineno or scope.lineno
 
 
 def validate_claim_ast_targets(root_path: Path) -> list[str]:
@@ -802,54 +802,40 @@ def scan_bundle(
     return total_errors, stats
 
 
-def main() -> None:
-    """CLI entry point for OKF v0.2 validation engine."""
-    parser = argparse.ArgumentParser(description="Google Open Knowledge Format (OKF v0.2) Conformance Validator")
-    parser.add_argument(
-        "files",
-        nargs="*",
-        help="Specific markdown files or directories to validate (defaults to docs/, .agents/, and openwiki/)",
-    )
-    parser.add_argument("--fix", action="store_true", help="Auto-fix date-only timestamps to strict ISO 8601 UTC")
-    parser.add_argument("--root", default=".", help="Root workspace directory")
-    args = parser.parse_args()
+def _is_candidate_md(p: Path) -> bool:
+    """Check if markdown file should be included in audit."""
+    return ".archive" not in p.parts and p.name != "INSTRUCTIONS.md"
 
-    root_path = Path(args.root).resolve()
-    base_dirs = [root_path / "docs", root_path / ".agents", root_path / "openwiki"]
-    base_paths = [d for d in base_dirs if d.exists()]
 
-    if args.files:
-        target_files: list[Path] = []
-        for f in args.files:
-            p = Path(f).resolve()
-            if p.is_dir():
-                target_files.extend(
-                    child
-                    for child in p.rglob("*.md")
-                    if ".archive" not in str(child) and child.name != "INSTRUCTIONS.md"
-                )
-                if p not in base_paths and p.is_relative_to(root_path):
-                    base_paths.append(p)
-            elif p.is_file():
-                if ".archive" not in str(p) and p.name != "INSTRUCTIONS.md":
-                    target_files.append(p)
-    else:
-        target_files = []
+def _collect_from_dir(directory: Path, target_files: list[Path]) -> None:
+    """Recursively collect candidate markdown files from a directory."""
+    for child in directory.rglob("*.md"):
+        if _is_candidate_md(child):
+            target_files.append(child)
+
+
+def _collect_target_files(args_files: list[str], base_paths: list[Path], root_path: Path) -> list[Path]:
+    """Collect markdown target files from arguments or default base paths."""
+    target_files: list[Path] = []
+    if not args_files:
         for base in base_paths:
-            target_files.extend(
-                f for f in base.rglob("*.md") if ".archive" not in str(f) and f.name != "INSTRUCTIONS.md"
-            )
+            _collect_from_dir(base, target_files)
+        return target_files
 
-    if args.fix:
-        fixed_count = auto_fix_timestamps(target_files)
-        print(f"🛠️  Auto-fixed {fixed_count} files with normalized ISO 8601 UTC timestamps.")
+    for f in args_files:
+        p = Path(f).resolve()
+        if p.is_dir():
+            _collect_from_dir(p, target_files)
+            if p not in base_paths and p.is_relative_to(root_path):
+                base_paths.append(p)
+        elif p.is_file() and _is_candidate_md(p):
+            target_files.append(p)
 
-    total_errors, stats = scan_bundle(target_files, root_path, base_paths)
-    claim_errors = validate_claim_ast_targets(root_path)
-    for err in claim_errors:
-        print(f"❌ claims: {err}")
-    total_errors += len(claim_errors)
+    return target_files
 
+
+def _print_audit_summary(stats: OKFAuditStats, total_errors: int) -> None:
+    """Print formatted OKF audit summary table and exit process."""
     print("\n" + "=" * 65)
     print("📊 OKF v0.2 Knowledge Bundle Audit Summary")
     print("=" * 65)
@@ -872,6 +858,37 @@ def main() -> None:
 
     print("\n✅ OKF Conformance Check: All documentation paths and knowledge invariants are pristine.\n")
     sys.exit(0)
+
+
+def main() -> None:
+    """CLI entry point for OKF v0.2 validation engine."""
+    parser = argparse.ArgumentParser(description="Google Open Knowledge Format (OKF v0.2) Conformance Validator")
+    parser.add_argument(
+        "files",
+        nargs="*",
+        help="Specific markdown files or directories to validate (defaults to docs/, .agents/, and openwiki/)",
+    )
+    parser.add_argument("--fix", action="store_true", help="Auto-fix date-only timestamps to strict ISO 8601 UTC")
+    parser.add_argument("--root", default=".", help="Root workspace directory")
+    args = parser.parse_args()
+
+    root_path = Path(args.root).resolve()
+    base_dirs = [root_path / "docs", root_path / ".agents", root_path / "openwiki"]
+    base_paths = [d for d in base_dirs if d.exists()]
+
+    target_files = _collect_target_files(args.files, base_paths, root_path)
+
+    if args.fix:
+        fixed_count = auto_fix_timestamps(target_files)
+        print(f"🛠️  Auto-fixed {fixed_count} files with normalized ISO 8601 UTC timestamps.")
+
+    total_errors, stats = scan_bundle(target_files, root_path, base_paths)
+    claim_errors = validate_claim_ast_targets(root_path)
+    for err in claim_errors:
+        print(f"❌ claims: {err}")
+    total_errors += len(claim_errors)
+
+    _print_audit_summary(stats, total_errors)
 
 
 if __name__ == "__main__":

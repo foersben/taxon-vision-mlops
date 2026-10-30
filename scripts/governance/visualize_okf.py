@@ -13,7 +13,6 @@ semantic incoming/outgoing link navigation, and verified code claim inspection.
 from __future__ import annotations
 
 import argparse
-import ast
 import json
 import re
 import sys
@@ -21,6 +20,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+from scripts.governance.validate_okf import resolve_ast_node_lines as _resolve_ast_node_lines
 
 # Claim files whose claims are shown on a doc node regardless of evidence files.
 DOC_CLAIMS_MAPPING: dict[str, list[str]] = {
@@ -240,41 +241,6 @@ def _parse_claim_evidence(resource: str) -> tuple[str, str]:
     return clean, ""
 
 
-def _resolve_ast_node_lines(file_path: Path, ast_target: str) -> tuple[int, int] | None:
-    """Resolve <NodeKind>:<dotted.name> (FunctionDef / AsyncFunctionDef / ClassDef) to line bounds."""
-    kind, sep, dotted = ast_target.partition(":")
-    if not sep or not dotted:
-        return None
-    try:
-        tree = ast.parse(file_path.read_text(encoding="utf-8"))
-    except (OSError, SyntaxError):
-        return None
-    scope: ast.AST = tree
-    node: ast.AST | None = None
-    parts = dotted.split(".")
-    for idx, name in enumerate(parts):
-        wanted_kind = kind if idx == len(parts) - 1 else "ClassDef"
-        body = (
-            scope.body if isinstance(scope, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef) else []
-        )
-        node = next(
-            (
-                child
-                for child in body
-                if isinstance(child, ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef)
-                and type(child).__name__ == wanted_kind
-                and child.name == name
-            ),
-            None,
-        )
-        if node is None:
-            return None
-        scope = node
-    if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
-        return None
-    return node.lineno, node.end_lineno or node.lineno
-
-
 def _parse_claim_entry(c: dict[str, Any], root_path: Path) -> dict[str, Any]:
     """Convert raw claim dict into structured claim object, resolving ast_target to live lines."""
     stmt = c.get("statement", "").strip()
@@ -300,6 +266,26 @@ def _matches_coverage(file: str, prefixes: list[str]) -> bool:
     return any(file == pre or (pre.endswith("/") and file.startswith(pre)) for pre in prefixes)
 
 
+def _map_claims_to_nodes(
+    rel_key: str,
+    parsed_items: list[dict[str, Any]],
+    node_claims: dict[str, list[dict[str, Any]]],
+) -> None:
+    """Map parsed claim items to openwiki and docs nodes."""
+    openwiki_target = f"openwiki/{rel_key[:-5]}.md"
+    node_claims.setdefault(openwiki_target, []).extend(parsed_items)
+
+    for doc_target in DOC_CLAIMS_MAPPING.get(rel_key, []):
+        node_claims.setdefault(doc_target, []).extend(parsed_items)
+
+    if rel_key in OPENWIKI_ONLY_CLAIM_FILES:
+        return
+
+    for doc_target, prefixes in DOC_FILE_COVERAGE.items():
+        matched = [item for item in parsed_items if _matches_coverage(item["file"], prefixes)]
+        node_claims.setdefault(doc_target, []).extend(matched)
+
+
 def _load_claims_data(root_path: Path) -> dict[str, list[dict[str, Any]]]:
     """Parse openwiki/.claims/**/*.json and map claims to openwiki and docs nodes by file coverage."""
     claims_dir = root_path / "openwiki" / ".claims"
@@ -317,17 +303,8 @@ def _load_claims_data(root_path: Path) -> dict[str, list[dict[str, Any]]]:
             continue
 
         rel_key = json_file.relative_to(claims_dir).as_posix()
-        openwiki_target = f"openwiki/{rel_key[:-5]}.md"
         parsed_items = [_parse_claim_entry(c, root_path) for c in claims_list]
-
-        node_claims.setdefault(openwiki_target, []).extend(parsed_items)
-        for doc_target in DOC_CLAIMS_MAPPING.get(rel_key, []):
-            node_claims.setdefault(doc_target, []).extend(parsed_items)
-        if rel_key in OPENWIKI_ONLY_CLAIM_FILES:
-            continue
-        for doc_target, prefixes in DOC_FILE_COVERAGE.items():
-            matched = [item for item in parsed_items if _matches_coverage(item["file"], prefixes)]
-            node_claims.setdefault(doc_target, []).extend(matched)
+        _map_claims_to_nodes(rel_key, parsed_items, node_claims)
 
     return {k: v for k, v in node_claims.items() if v}
 
