@@ -1,6 +1,19 @@
+---
+okf_version: "0.2"
+type: Index
+title: TaxonVision Agent Ecosystem - Algorithmic Decision Matrix
+status: stable
+stale_after: "2027-01-01T00:00:00Z"
+version: 1.0
+description: Primary decision matrix and skill dispatch index for AI agents in TaxonVision.
+tags: [agents, index, decision-matrix, router]
+generated: {by: process:okf-updater, at: "2026-10-30T00:00:00Z"}
+verified: {by: process:okf-updater, at: "2026-10-30T00:00:00Z"}
+---
+
 # TaxonVision Agent Ecosystem - Algorithmic Decision Matrix
 
-* **For MCP agents (Jules):** Use the decision matrix to select your role.
+* **For AI agents:** Use the decision matrix to select your role.
 * **For human readers:** Full annotated directory index follows the matrix.
 
 ---
@@ -24,13 +37,12 @@
 
 ---
 
-## Workflow Dispatch
+## Skill Dispatch
 
-| Slash Command | Workflow File | Pre-load roles |
+| Slash Command | Skill | Pre-load roles |
 | --- | --- | --- |
-| `/validate-full-stack` | [full-pipeline-validation.md](workflows/full-pipeline-validation.md) | all |
-| `/benchmark-pareto` | [model-benchmark-pareto.md](workflows/model-benchmark-pareto.md) | `04`, `05`, `08` |
-| `/audit-conformal` | [conformal-uncertainty-audit.md](workflows/conformal-uncertainty-audit.md) | `06`, `10` |
-| `/active-learning-step` | [active-learning-cycle.md](workflows/active-learning-cycle.md) | `03`, `06`, `07` |
-| `/doc-synchronization-pipeline` | [doc-synchronization-pipeline.md](workflows/doc-synchronization-pipeline.md) | `01`, `11` |
-| `/jules-session-triage` | [jules-session-triage.md](workflows/jules-session-triage.md) | `01`, `10`, `12` |
+| `/validate-full-stack` | [full-pipeline-validation.md](skills/full-pipeline-validation/SKILL.md) | all |
+| `/benchmark-pareto` | [run-pareto-benchmarks.md](skills/run-pareto-benchmarks/SKILL.md) | `04`, `05`, `08` |
+| `/audit-conformal` | [conformal-uncertainty-audit.md](skills/conformal-uncertainty-audit/SKILL.md) | `06`, `10` |
+| `/active-learning-step` | [active-learning-cycle.md](skills/active-learning-cycle/SKILL.md) | `03`, `06`, `07` |
+| `/doc-synchronization-pipeline` | [doc-synchronization-pipeline.md](skills/doc-synchronization-pipeline/SKILL.md) | `01`, `11` |

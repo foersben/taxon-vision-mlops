@@ -1,0 +1,12 @@
+# Toolchain Abstraction Layer (TAL) Configuration
+repository: "taxon-vision-mlops"
+toolchain: "pixi"
+package_manager: "pixi"
+task_runner: "just"
+environment_dev: "dev"
+environment_ci_dev: "ci-dev"
+TOOLCHAIN_RUN: "pixi run -e dev"
+TOOLCHAIN_FAST_TEST: "pixi run -e ci-dev pytest -q -o addopts="
+TASK_RUNNER: "just"
+python_version: "3.12.*"
+cuda_support: true

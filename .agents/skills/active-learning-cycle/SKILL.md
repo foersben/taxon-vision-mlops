@@ -1,16 +1,17 @@
 ---
-type: Workflow
+type: Agent Skill
+name: active-learning-cycle
 title: Active Learning Cycle
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
 version: 1.0
 description: Executes sample query ranking, human annotation ingestion, and retraining trigger.
-tags: [workflow, active-learning, triage, retraining]
+tags: [skill, active-learning, triage, retraining]
 generated: {by: process:okf-updater, at: "2026-10-17T22:30:00Z"}
 verified: {by: process:okf-updater, at: "2026-10-17T22:30:00Z"}
 ---
 
-# Active Learning Cycle (/active-learning-cycle)
+# Active Learning Cycle
 
 * **Description:** Continuous epistemic triage and model adaptation cycle that routes high-uncertainty observations (empty conformal sets or high OOD energy) to expert review, admits verified open-licensed labels, and triggers pipeline retraining.
 * **Invocation:** Triggered via `/active-learning-cycle` or `/active-learning-step` in the AI IDE.

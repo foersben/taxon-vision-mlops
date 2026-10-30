@@ -1,0 +1,56 @@
+{
+  "timestamp_utc": "2026-10-30T00:15:55Z",
+  "overall_status": "PASSED",
+  "gate_count": 8,
+  "passed_count": 8,
+  "gates": [
+    {
+      "name": "Ruff Linter",
+      "command": "pixi run -e dev ruff check .",
+      "exit_code": 0,
+      "passed": true
+    },
+    {
+      "name": "MyPy Strict Types",
+      "command": "pixi run -e dev mypy src scripts",
+      "exit_code": 0,
+      "passed": true
+    },
+    {
+      "name": "Complexipy Invariants",
+      "command": "pixi run -e dev complexipy src scripts --max-complexity-allowed 15 --check-script --no-ignore",
+      "exit_code": 0,
+      "passed": true
+    },
+    {
+      "name": "OKF v0.2 Governance",
+      "command": "pixi run -e dev python scripts/governance/validate_okf.py",
+      "exit_code": 0,
+      "passed": true
+    },
+    {
+      "name": "Hardware Invariants",
+      "command": "pixi run -e dev python scripts/governance/verify_hardware_invariants.py",
+      "exit_code": 0,
+      "passed": true
+    },
+    {
+      "name": "License Compliance",
+      "command": "pixi run -e dev python -m taxon_vision.pipelines.audit_license",
+      "exit_code": 0,
+      "passed": true
+    },
+    {
+      "name": "Code Invariants Engine",
+      "command": "pixi run -e dev python scripts/governance/verify_code_invariants.py",
+      "exit_code": 0,
+      "passed": true
+    },
+    {
+      "name": "Fast Targeted Tests",
+      "command": "pixi run -e ci-dev pytest tests/unit/test_config.py tests/unit/test_pipelines.py tests/unit/test_data_components.py tests/unit/test_ood_energy.py tests/unit/test_conformal_bounds.py -q -o addopts=",
+      "exit_code": 0,
+      "passed": true
+    }
+  ]
+}

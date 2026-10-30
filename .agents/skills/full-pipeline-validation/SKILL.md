@@ -1,16 +1,17 @@
 ---
-type: Workflow
+type: Agent Skill
+name: full-pipeline-validation
 title: Full Pipeline Validation
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
 version: 1.0
 description: Coordinated pipeline executing lint, type checks, unit tests, coverage, and 7-stage DVC pipeline.
-tags: [workflow, automation, mlops, pipelines]
+tags: [skill, automation, mlops, pipelines]
 generated: {by: process:okf-updater, at: "2026-10-17T22:30:00Z"}
 verified: {by: process:okf-updater, at: "2026-10-17T22:30:00Z"}
 ---
 
-# Full Pipeline Validation (/validate-full-stack)
+# Full Pipeline Validation
 
 * **Description:** Coordinated quality assurance and DVC execution pipeline verifying code standards, static typing, test coverage, and complete 7-stage pipeline reproducibility under root `params.yaml`.
 * **Invocation:** Triggered via `/validate-full-stack` or `/full-pipeline-validation` in the AI IDE.

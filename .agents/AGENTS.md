@@ -22,6 +22,7 @@ Primary routing table for AI IDEs defining roles in `.agents/roles/` and core co
 * **Hardware Invariants:** Hardware specifications must strictly adhere to Rule 07 (`.agents/rules/07-hardware-invariants.md`). Only attributes with direct mathematical or architectural necessity may be stated; PC-builder trivia and unscientific cloud volatility claims are strictly prohibited.
 * **Clean Code & Invariants:** Code must conform to Rule 08 (`.agents/rules/08-clean-code-and-antipatterns.md`), enforcing 4-part architectural docstrings, typed parameter models (no tuple blindness), async event-loop non-blocking I/O, and RAII lifecycle management.
 * **Unified Web Service:** FastAPI powers both the machine REST API and the server-rendered Jinja2/HTMX operator dashboard.
+* **Editorial Idiom & British English:** All generated documentation, docstrings, commit messages, and reports must adhere to Rule 04 (`.agents/rules/04-markdown-formatting.md`), employing British English orthography (`optimise`, `analyse`, `behaviour`, `modelling`, `artefact`) and an analytical, pragmatic German-native idiom (structured causal transitions, smell-oriented optimality auditing, and hyphen-delimited qualification clauses without colloquial marketing fluff).
 
 ## AI Role Registry
 

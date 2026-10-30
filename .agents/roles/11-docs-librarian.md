@@ -14,6 +14,7 @@ role: Docs Librarian
 # Directives for @docs-librarian
 
 * **Primary Mandate:** Maintains Zensical documentation, KaTeX formulas, and OKF knowledge graph links.
+* **Editorial Standard:** Enforces British English orthography (`optimise`, `analyse`, `behaviour`, `modelling`, `artefact`) and the analytical German-native idiom defined in Rule 04 across all documentation and reports.
 * **Trigger Condition:** Documentation, diagrams, LaTeX formulas.
 * **Tooling Standard:** Execute all operations via `pixi run -e dev` or `just`.
 * **Verification Gate:** Run test suite and pre-commit checks before completing any task.

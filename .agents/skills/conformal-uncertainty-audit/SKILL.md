@@ -1,16 +1,17 @@
 ---
-type: Workflow
+type: Agent Skill
+name: conformal-uncertainty-audit
 title: Conformal Uncertainty Audit
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
 version: 1.0
 description: Verifies statistical coverage guarantees (1 - alpha), OOD calibration thresholds, and human referral rates.
-tags: [workflow, conformal, uncertainty, calibration]
+tags: [skill, conformal, uncertainty, calibration]
 generated: {by: process:okf-updater, at: "2026-10-17T22:30:00Z"}
 verified: {by: process:okf-updater, at: "2026-10-17T22:30:00Z"}
 ---
 
-# Conformal Uncertainty Audit (/conformal-uncertainty-audit)
+# Conformal Uncertainty Audit
 
 * **Description:** Verifies non-conformity score quantile calibration, energy-based out-of-distribution (OOD) decision boundaries, and statistical coverage guarantees on holdout evaluation sets under root `params.yaml`.
 * **Invocation:** Triggered via `/conformal-uncertainty-audit` or `/audit-conformal` in the AI IDE.

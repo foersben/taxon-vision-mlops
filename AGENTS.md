@@ -1,12 +1,10 @@
 # TaxonVision-MLOps Master Agent Router
 
-<!-- UNIVERSAL RULES: apply to all AI agents (Antigravity, Jules, Copilot, etc.) -->
+<!-- UNIVERSAL RULES: apply to all AI agents -->
 
 * All Python commands MUST use `pixi run -e dev` or `just`. Never bare `python`, `pip`, `uv`, `uvx`, or `poetry`. Never create or rely on `.venv/`.
 * Never run `act` in agent sandboxes; `act` is for local workstation Docker runs only.
-* Commit signing:
-    * **Local agents (Antigravity) & human developers:** Commits MUST be GPG/SSH signed (`git commit -S`). Stop and escalate if signing fails.
-    * **Cloud sandbox agents (Jules):** Creates PR feature branches without `-S`. Commits are signed upon PR merge via GitHub Web-Flow.
+* Commit signing: Commits MUST be GPG/SSH signed (`git commit -S`). Stop and escalate if signing fails.
 * Pre-commit gates (run before ANY commit to `src/taxon_vision/` or `config/`):
 
 ```bash
@@ -15,6 +13,18 @@ pixi run -e dev python -m taxon_vision.pipelines.audit_license
 pixi run -e dev python scripts/governance/validate_okf.py
 pixi run -e dev python scripts/governance/verify_hardware_invariants.py
 ```
+
+## Core Architecture Constraints
+
+* **Dual-Target Toolchain:** All development and testing execute via `pixi run -e dev` or `just`. CI runs on CPU via `ci-dev`.
+* **Zero-Allocation Inference:** ONNX Runtime inference hot paths must avoid dynamic memory allocation and Python object boxing.
+* **Strict Open Licensing:** Only observations under open licenses (CC0, CC-BY, CC-BY-NC) are admitted into training datasets. Attribution metadata must be retained.
+* **Conformal Coverage Guarantee:** Split Conformal Prediction must mathematically guarantee user-specified coverage ($1 - \alpha$). Observations exceeding uncertainty bounds or empty prediction sets route to human triage.
+* **Epistemic Diamond DAG:** 7 canonical pipeline stages in `src/taxon_vision/pipelines/` governed by root `params.yaml`: `raw_manifest.parquet` -> `dataset_manifest.parquet` -> 4 split tensors (`train_embeddings.pt`, `val_embeddings.pt`, `cal_embeddings.pt`, `test_embeddings.pt`) -> `head.pt` -> `model_int8.onnx` -> `calibrate` & `eval`.
+* **Hardware Invariants:** Hardware specifications must strictly adhere to Rule 07 (`.agents/rules/07-hardware-invariants.md`). State only verified parameters (Intel i7-14700K, RTX 5070 Ti 16GB, 128GB DDR5, 2TB NVMe BTRFS zstd:3 non-CoW).
+* **Clean Code & Invariants:** Code must conform to Rule 08 (`.agents/rules/08-clean-code-and-antipatterns.md`), enforcing 4-part architectural docstrings, typed parameter models (no tuple blindness), async event-loop non-blocking I/O, and RAII lifecycle management.
+* **Unified Web Service:** FastAPI powers both the machine REST API and the server-rendered Jinja2/HTMX operator dashboard.
+* **Editorial Idiom & British English:** All generated documentation, docstrings, commit messages, and reports must adhere to Rule 04 (`.agents/rules/04-markdown-formatting.md`), employing British English orthography (`optimise`, `analyse`, `behaviour`, `modelling`, `artefact`) and an analytical, pragmatic German-native idiom (structured causal transitions, smell-oriented optimality auditing, and hyphen-delimited qualification clauses without colloquial marketing fluff).
 
 ## Fast Module & Test Routing Map
 
@@ -41,21 +51,6 @@ Read ONLY the files in your active task row:
     `pixi run -e ci-dev pytest <targeted_test_file> -q -o "addopts="`
 * **Full Quality Gate:** Run the comprehensive test suite and gates once upon completing code changes:
     `pixi run -e ci-dev ruff check . && pixi run -e ci-dev mypy src scripts && pixi run -e ci-dev python scripts/governance/validate_okf.py && pixi run -e ci-dev python -m taxon_vision.pipelines.audit_license`
-
-<!-- JULES-SPECIFIC: session routing and token guardrail instructions. -->
-
-## Jules: Mandatory First Step
-
-Open `.agents/index.md` and follow its decision matrix before touching any file.
-Stop loading additional files once you have a role assignment.
-
-## Jules: Hard Routing Rules
-
-1. **Route first.** Read `.agents/index.md` decision matrix before any action.
-2. **Path-scoped roles.** Load only the role file for the paths you are modifying.
-3. **Commit protocol.** Push PR feature branch directly without `git commit -S`.
-4. **Restricted directories.** Do NOT open `.agents/memory/` unless the user prompt uses the words `historical` or `canon`.
-5. **Do NOT crawl `.agents/` blindly** or pre-load all role files.
 
 <!-- OPENWIKI:START -->
 
