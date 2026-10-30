@@ -117,7 +117,7 @@ The TaxonVision platform relies on specialized, purpose-built storage technologi
 | **Redis Ephemeral Cache** | In-Cluster Pod (`redis-ephemeral:6379`) | Raw specimen image uploads for CAM | In-memory key-value cache with 15-minute rolling TTL (`SETEX 900`) and 64 MB LRU ceiling, eliminating multi-pod serving split-brain. |
 | **DagsHub DVC S3** | `s3://dvc` (`origin`) | Content-Addressed Hash | Cryptographically hashed DVC remote repository storing canonical cloud mirror for all 8 pipeline artifacts (~25 MB total). |
 | **MLflow Model Registry** | Remote DagsHub Registry | Artifacts + Schema Metadata | Centralized experiment tracking server storing training loss curves, Macro PR-AUC scores, and model versions with input/output `TensorSpec` contracts. |
-| **Prometheus / Evidently** | `/metrics` endpoint | Time-Series Metrics & JSON | Real-time monitoring of p95 latency SLAs, HTTP status distributions, prediction set cardinality, and feature representation drift. |
+| **Prometheus / Evidently** | `/metrics` endpoint | Time-Series Metrics & JSON | Real-time monitoring of p95 latency SLOs, HTTP status distributions, prediction set cardinality, and feature representation drift. |
 
 ## 3. Exhaustive System Parameter Reference
 
@@ -145,7 +145,7 @@ Root `/params.yaml` serves as the authoritative single source of truth for all p
 | `conformal` | `alpha` | `float` | `0.05` | Maximum allowable marginal error rate ($1 - \alpha = 0.95$). |
 | `conformal` | `min_confidence` | `float` | `0.60` | Minimum top-1 probability to bypass human triage. |
 | `conformal` | `ood_tpr` | `float` | `0.95` | True positive rate on calibration data for OOD energy threshold. |
-| `evaluation` | `latency_sla_ms` | `float` | `25.0` | Production p95 latency SLA threshold in milliseconds. |
+| `evaluation` | `latency_sla_ms` | `float` | `25.0` | Production p95 latency SLO threshold in milliseconds. |
 
 ### 3.2 System Runtime Defaults (`config/default_config.yaml`)
 

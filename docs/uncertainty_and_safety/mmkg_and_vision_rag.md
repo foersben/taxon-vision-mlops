@@ -25,7 +25,7 @@ flowchart TD
     subgraph S1["Conformal Decision Gate"]
         X["Observation Photograph x"] --> ENGINE["ONNX Runtime Inference Engine"]
         ENGINE --> CONF["Split Conformal Admission<br/>C(x) = {k : pi_k >= 1 - q_hat_alpha}"]
-        CONF -->|"|C| = 1"| FAST["Zero-Allocation Fast-Path<br/>(< 15 ms Latency SLA)"]
+        CONF -->|"|C| = 1"| FAST["Zero-Allocation Fast-Path<br/>(< 15 ms Latency SLO)"]
         CONF -->|"|C| in [2, 3]"| RAG["Lazy Vision-RAG Trigger"]
         CONF -->|"|C| >= 4"| HUMAN["Human Taxonomic Triage Queue"]
     end
@@ -63,7 +63,7 @@ TaxonVision-MLOps enforces a **lazy invocation trigger** governed strictly by Sp
 * **Singleton Prediction Set ($|\mathcal{C}(x)| = 1$):**
     * *Traffic Volume:* Approximately $82\%$ of production traffic.
     * *Execution Path:* The predicted taxon satisfies the finite-sample coverage guarantee ($1 - \alpha = 95\%$). The system immediately returns the top-1 result via the pinned zero-allocation ONNX Runtime path without touching vector indices or external models.
-    * *Latency Profile:* Mean latency $\approx 9.5\text{ ms}$, strictly meeting the $15\text{ ms}$ production SLA.
+    * *Latency Profile:* Mean latency $\approx 9.5\text{ ms}$, strictly meeting the $15\text{ ms}$ production SLO.
 
 * **Sister-Taxa Ambiguity Set ($|\mathcal{C}(x)| \in [2, 3]$):**
     * *Traffic Volume:* Approximately $12\%$ to $15\%$ of production traffic.

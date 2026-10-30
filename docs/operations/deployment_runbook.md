@@ -314,7 +314,7 @@ The Traefik ingress controller on `hive-mind` manages weighted traffic distribut
     kubectl apply -f deploy/k8s/traefik-ingress.yaml
     ```
 
-* **Canary Promotion Step 2 (Full Cutover 100/0):** If Prometheus metrics confirm the challenger meets latency SLA (p95 $\le 15.0\text{ ms}$) and conformal error guarantees ($1 - \alpha \ge 0.90$), update the primary deployment image tag to the challenger release and reset weights to 100/0.
+* **Canary Promotion Step 2 (Full Cutover 100/0):** If Prometheus metrics confirm the challenger meets latency SLO (p95 $\le 15.0\text{ ms}$) and conformal error guarantees ($1 - \alpha \ge 0.90$), update the primary deployment image tag to the challenger release and reset weights to 100/0.
 * **Instant Emergency Rollback:** If the challenger experiences elevated error rates, instantly route 100% of traffic back to the stable baseline:
 
     ```bash

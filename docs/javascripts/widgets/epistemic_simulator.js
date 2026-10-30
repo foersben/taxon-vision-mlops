@@ -153,7 +153,7 @@ function initEpistemicSimulator() {
                 <div class="banner-body">
                     <div class="banner-title" id="sim-decision-title">Zero-Allocation Fast-Path Inference</div>
                     <div class="banner-desc" id="sim-decision-desc">
-                        Singleton set satisfies 95% conformal coverage. Direct serving within 15 ms SLA.
+                        Singleton set satisfies 95% conformal coverage. Direct serving within 15 ms SLO.
                     </div>
                 </div>
             </div>
@@ -355,7 +355,7 @@ function initEpistemicSimulator() {
             icon.textContent = "⚡";
             title.textContent = "Route: Zero-Allocation Fast-Path Inference";
             const candidate = species[admittedIndices[0]].name;
-            desc.innerHTML = `Singleton prediction set admitted: <em>${candidate}</em> (&pi;&#770; = ${(probs[admittedIndices[0]] * 100).toFixed(1)}%). Mathematical ${( (1 - currentAlpha) * 100).toFixed(0)}% coverage guarantee verified. Direct ONNX Runtime serving within sub-15ms SLA.`;
+            desc.innerHTML = `Singleton prediction set admitted: <em>${candidate}</em> (&pi;&#770; = ${(probs[admittedIndices[0]] * 100).toFixed(1)}%). Mathematical ${( (1 - currentAlpha) * 100).toFixed(0)}% coverage guarantee verified. Direct ONNX Runtime serving within sub-15ms SLO.`;
         } else if (admittedIndices.length <= 3) {
             banner.classList.add("route-rag");
             icon.textContent = "🔍";

@@ -14,7 +14,7 @@ verified: {by: "process:docs-librarian", at: "2026-10-18T18:00:00Z"}
 
 This section is a comprehensive guide to deploying, operating, and monitoring the TaxonVision-MLOps ecosystem in production.
 
-This section covers physical hardware realities, including bare-metal GPU provisioning and scheduling constraints. It provides the deployment runbook for containerizing services and orchestrating them via CI/CD pipelines (integrating GitHub Actions and Jenkins). Furthermore, it details API contracts for the FastAPI serving layer and the Prometheus telemetry stack required to continuously monitor concept drift and maintain Service Level Agreements (SLAs).
+This section covers physical hardware realities, including bare-metal GPU provisioning and scheduling constraints. It provides the deployment runbook for containerizing services and orchestrating them via CI/CD pipelines (integrating GitHub Actions and Jenkins). Furthermore, it details API contracts for the FastAPI serving layer and the Prometheus telemetry stack required to continuously monitor concept drift and maintain Service Level Objectives (SLOs).
 
 ## Thematic Sections
 

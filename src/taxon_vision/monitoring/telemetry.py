@@ -8,7 +8,7 @@ Prometheus collects metrics via HTTP scrapes from a dedicated `/metrics` endpoin
 
 Exposed metrics:
     - `taxon_predictions_total[status]`: Counter tracking total prediction calls grouped by status (e.g., 'auto_assigned', 'rejected', 'needs_review'). Supports debugging routing logic and measuring automation rates.
-    - `taxon_inference_latency_seconds`: Histogram measuring end-to-end inference duration (preprocessing to final decision), aiding latency optimization and SLA compliance monitoring.
+    - `taxon_inference_latency_seconds`: Histogram measuring end-to-end inference duration (preprocessing to final decision), aiding latency optimization and SLO compliance monitoring.
     - `taxon_human_referrals_active`: Gauge reporting current count of observations deferred to human experts, serving as a proxy for automation boundary and fallback load.
 
 Metrics are automatically registered with the global Prometheus registry on import, enabling immediate scraping without manual registration steps. No background threads or server processes are started by this module; Prometheus relies on external scraping agents to poll the metrics endpoint.

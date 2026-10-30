@@ -295,7 +295,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         "--latency-sla-ms",
         type=float,
         default=25.0,
-        help="Fast-path latency SLA threshold in milliseconds (default: 25.0).",
+        help="Fast-path latency SLO threshold in milliseconds (default: 25.0).",
     )
     parser.add_argument("--out", type=Path, default=Path("docs/assets/pareto_results.json"))
     parser.add_argument(
@@ -351,9 +351,9 @@ def evaluate_cli(argv: list[str] | None = None) -> int:
 
     p50, p95, fps = _profile_onnx_inference(args.onnx_model)
     sla_met = p95 <= args.latency_sla_ms
-    print(f"\nONNX RUNTIME LATENCY PROFILING (Target SLA: {args.latency_sla_ms} ms):")
+    print(f"\nONNX RUNTIME LATENCY PROFILING (Target SLO: {args.latency_sla_ms} ms):")
     print(f"  p50 Latency:        {p50:.2f} ms")
-    print(f"  p95 Latency:        {p95:.2f} ms (SLA Satisfied: {sla_met})")
+    print(f"  p95 Latency:        {p95:.2f} ms (SLO Satisfied: {sla_met})")
     print(f"  Throughput:         {fps:.1f} FPS")
 
     if args.metrics_out is not None:

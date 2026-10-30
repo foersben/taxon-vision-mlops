@@ -41,7 +41,7 @@
 \node[fill=black!4, draw=black!25, rounded corners=2pt, inner sep=2.5pt, font=\footnotesize\bfseries, align=center] at (0, 14.7) {
     \textbf{Target:} Bare-Metal Host (RTX 5070 Ti, i7-14700K) $\cdot$ Remote-Only Training\\ % \quad$\vert$\quad
     \textbf{Epistemic Guarantee:} Conformal Coverage $1-\alpha \ge 0.95$\\
-    \textbf{Inference SLA:} Fast Path $<25$\,ms p95
+    \textbf{Inference SLO:} Fast Path $<25$\,ms p95
 };
 
 %% ======================================================================
@@ -131,7 +131,7 @@
     \textbf{\footnotesize\color{mgreenborder} FastAPI Serving Gateway \& Conformal Routing}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
     \textbf{Split Conformal Prediction (SCP) Gating ($\alpha=0.05$, $95\%$ Coverage):}\\
-    \textbullet\ \textbf{Tier 1 (Decisive):} $|\hat{C}|=1 \land \hat{\pi}_{\max} \ge \tau_{\text{conf}} \implies$ Decisive INT8 ONNX (${<}25$\,ms SLA)\\
+    \textbullet\ \textbf{Tier 1 (Decisive):} $|\hat{C}|=1 \land \hat{\pi}_{\max} \ge \tau_{\text{conf}} \implies$ Decisive INT8 ONNX (${<}25$\,ms SLO)\\
     \textbullet\ \textbf{Tier 2 (Moderate):} $1 < |\hat{C}| \le k_{\max} \implies$ LanceDB HNSW + RRF rank fusion (${<}6$\,ms)\\
     \textbullet\ \textbf{Tier 3 (Ambiguous):} $|\hat{C}| > k_{\max} \lor (|\hat{C}|=1 \land \hat{\pi}_{\max} < \tau_{\text{conf}}) \implies$ Async VLM triage\\
     \textbullet\ \textbf{Tier 4 (Abstention):} $|\hat{C}|=0 \implies$ Global nearest-neighbour search + urgent audit\\[0.8mm]

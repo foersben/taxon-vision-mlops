@@ -85,7 +85,7 @@ Every parameter declared in `params.yaml` is mapped to its consuming DVC pipelin
 | `conformal.alpha` | `float: 0.05` | `calibrate` | Significance level $\alpha$ bounding error rate to at most $5\%$ (mathematical coverage $1 - \alpha = 95\%$). |
 | `conformal.min_confidence` | `float: 0.60` | `calibrate` | Minimum probability score required to bypass human review if the conformal set contains multiple candidates. |
 | `conformal.ood_tpr` | `float: 0.95` | `calibrate` | True Positive Rate ($95\%$) anchor used to compute the Helmholtz Free Energy threshold $\tau_{\text{ood}}$. |
-| `evaluation.latency_sla_ms` | `float: 25.0` | `evaluate` | Maximum permissible p95 inference latency in milliseconds; exceeding this SLA fails evaluation. |
+| `evaluation.latency_sla_ms` | `float: 25.0` | `evaluate` | Maximum permissible p95 inference latency in milliseconds; exceeding this SLO fails evaluation. |
 
 ---
 

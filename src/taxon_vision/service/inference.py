@@ -304,7 +304,7 @@ def get_image_transform() -> T.Compose:
     """Construct and cache the deterministic image preprocessing transform pipeline.
 
     Why:
-        In high-throughput biological inference, re-instantiating torchvision transform pipelines on every request introduces significant memory allocation overhead, triggering garbage collection cycles on the hot inference path. Pre-instantiating and caching an immutable composition preserves the zero-allocation hot-path invariant required for sub-25ms p95 latency SLAs.
+        In high-throughput biological inference, re-instantiating torchvision transform pipelines on every request introduces significant memory allocation overhead, triggering garbage collection cycles on the hot inference path. Pre-instantiating and caching an immutable composition preserves the zero-allocation hot-path invariant required for sub-25ms p95 latency SLOs.
 
     How:
         Retrieves global model configurations (target spatial resolution, per-channel normalization mean and standard deviation) and bundles Resize (shorter edge to 256/224 of the target), CenterCrop, ToTensor, and Normalize into a single cached torchvision.transforms.Compose instance. This is the same geometry as the feature-extraction transform used to produce the head's training embeddings, so training and serving see identical inputs.

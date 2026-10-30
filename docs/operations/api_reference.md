@@ -28,7 +28,7 @@ FastAPI uses a single-threaded `asyncio` event loop. A common anti-pattern in ML
 Image preprocessing transforms (`torchvision.transforms.Compose`) are pre-allocated and cached using the `@lru_cache` decorator on the `get_image_transform()` method.
 
 **Why we chose it (Semantic Validation):**
-Re-instantiating transform pipelines on every incoming request triggers repeated memory allocations on the heap and forces the Python Garbage Collector into constant churn. For a service bound by strict sub-25ms inference SLAs, dynamic allocations on the hot path are unacceptable. Caching the immutable transform pipeline ensures zero-allocation routing, eliminating GC pauses and maintaining constant p95 latency percentiles.
+Re-instantiating transform pipelines on every incoming request triggers repeated memory allocations on the heap and forces the Python Garbage Collector into constant churn. For a service bound by strict sub-25ms inference SLOs, dynamic allocations on the hot path are unacceptable. Caching the immutable transform pipeline ensures zero-allocation routing, eliminating GC pauses and maintaining constant p95 latency percentiles.
 
 ## 3. OpenAPI REST & HTMX Endpoints Reference
 
@@ -38,7 +38,7 @@ The FastAPI service exposes machine REST API endpoints alongside server-rendered
     * **Description:** High-throughput species classification endpoint. Preprocesses image, runs ONNX Runtime inference, evaluates non-conformity scores against calibrated $\hat{q}$, evaluates Helmholtz free energy against $\tau_{\text{ood}}$, and optionally renders visual attribution CAM overlays.
     * **Request:** `multipart/form-data` containing `file: UploadFile` and optional query flag `explain: bool = false`.
     * **Response Schema:** JSON object containing `predictions: list[TaxonPrediction]`, `conformal_set: list[int]`, `ood_score: float`, `is_ood: bool`, `routing_tier: str`, and optional `cam_overlay_base64: str | None`.
-    * **Latency SLA:** < 25.0 ms p95 on GPU / < 50.0 ms p95 on CPU.
+    * **Latency SLO:** < 25.0 ms p95 on GPU / < 50.0 ms p95 on CPU.
     * **Error Status Codes:**
         * `400 Bad Request` (Corrupted image format or unparsable payload)
         * `422 Unprocessable Entity` (File upload missing or empty)
@@ -59,19 +59,19 @@ The FastAPI service exposes machine REST API endpoints alongside server-rendered
     * **Description:** Asynchronous training trigger endpoint. Dispatches model classification head training onto the AnyIO background worker pool, preventing blocking of the web service.
     * **Request:** Query parameters `epochs: int = 15`, `tune: bool = false`, `extractor: str = "dinov3"`.
     * **Response Schema:** JSON object `{"status": "training_dispatched", "task": "background_task", "params": {...}}`.
-    * **Latency SLA:** Immediate HTTP 200/202 dispatch response (< 10 ms).
+    * **Latency SLO:** Immediate HTTP 200/202 dispatch response (< 10 ms).
 * **`GET /health`**
     * **Description:** Basic Kubernetes liveness probe endpoint.
     * **Request Schema:** None.
     * **Response Schema:** JSON object `{"status": "healthy", "service": "taxon-vision"}`.
-    * **Latency SLA:** < 2 ms.
+    * **Latency SLO:** < 2 ms.
 * **`GET /health/ready`**
     * **Description:** Kubernetes readiness probe verifying model checkpoint availability, taxa catalog integrity, and runtime engine pre-warming.
     * **Request Schema:** None.
     * **Response Schema:** JSON object `{"status": "ready", "model_loaded": true, "taxa_count": 10}`.
-    * **Latency SLA:** < 5 ms.
+    * **Latency SLO:** < 5 ms.
 * **`GET /metrics`**
     * **Description:** Prometheus exposition scrape target exposing latency histograms, conformal set cardinality counters, and HTTP error metrics.
     * **Request Schema:** None.
     * **Response Schema:** Prometheus exposition text format.
-    * **Latency SLA:** < 10 ms.
+    * **Latency SLO:** < 10 ms.

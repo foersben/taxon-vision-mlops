@@ -98,7 +98,7 @@ function initCodebaseExplorer() {
             badgeClass: "tier-badge-1",
             complexity: 10,
             dvcStage: "evaluate",
-            responsibilities: "Validates statistical coverage 1 - alpha, accuracy, and p95 latency SLA on test split.",
+            responsibilities: "Validates statistical coverage 1 - alpha, accuracy, and p95 latency SLO on test split.",
             classes: "run_evaluation(config_path: Path | None = None) -> None",
             methods: "run_evaluation(): Asserts coverage bound and writes reports/evaluation_metrics.json.",
             github: "https://github.com/foersben/taxon-vision-mlops/blob/develop/src/taxon_vision/pipelines/evaluate.py"

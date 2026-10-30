@@ -165,7 +165,7 @@ Quantization techniques are divided based on operator support and graph topology
 | **Target Operators** | `STATIC_OP_TYPES = ("Conv", "MatMul", "Gemm")` | `DYNAMIC_OP_TYPES = ("MatMul", "Gemm")` |
 | **Data Requirements** | Requires representative calibration images | Zero calibration data required (data-free) |
 | **Target Architectures** | Conv2D & ViT Backbones (`MobileNetV4`, `EfficientNet`, `BioCLIP`, `DINOv3`) | Pure linear graphs (standalone classification head, VLM projections) |
-| **Operational Role** | Production deployment for latency SLA compliance | Offline CI smoke testing and rapid head validation |
+| **Operational Role** | Production deployment for latency SLO compliance | Offline CI smoke testing and rapid head validation |
 
 #### Why Static QDQ PTQ is Mandatory for Convolutions and ViTs
 

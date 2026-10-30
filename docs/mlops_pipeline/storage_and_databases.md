@@ -35,7 +35,7 @@ flowchart TD
         TrainT["train_embeddings.pt (70%)<br/>Class-Balanced Head Optimization"]
         ValT["val_embeddings.pt (10%)<br/>Early Stopping & Loss Monitoring"]
         CalT["cal_embeddings.pt (10%)<br/>Split Conformal & OOD Calibration"]
-        TestT["test_embeddings.pt (10%)<br/>Pareto Evaluation & SLA Gate"]
+        TestT["test_embeddings.pt (10%)<br/>Pareto Evaluation & SLO Gate"]
     end
 
     subgraph EphemeralTier["Ephemeral State Tier"]
@@ -57,7 +57,7 @@ flowchart TD
 
 The system avoids monolithic databases by deploying specialized engines for each data modality and access pattern:
 
-| Storage Technology | Architectural Tier & Location | Primary Data Assets | Access Pattern & Protocols | Invalidation & Lifecycle SLA |
+| Storage Technology | Architectural Tier & Location | Primary Data Assets | Access Pattern & Protocols | Invalidation & Lifecycle SLO |
 | :--- | :--- | :--- | :--- | :--- |
 | **Apache Parquet + Polars + Arrow** | Local Filesystem & Host RAM | Observation manifests (`raw_manifest.parquet`, `dataset_manifest.parquet`) | Snappy-compressed columnar reads, Arrow IPC zero-copy memory transfers | Immutable per DVC stage hash; regenerated upon pipeline re-execution. |
 | **PyTorch `.pt` Split Tensors** | Local NVMe & SeaweedFS S3 | Extracted foundation embeddings (`*_embeddings.pt`) | Sequential batch slicing, memory-mapped tensor reads (`torch.load`) | Cached locally; invalidated when backbone model or dataset manifest changes. |
@@ -118,7 +118,7 @@ flowchart TD
     T --> T_PT["train_embeddings.pt<br/>(Probe Training)"]
     V --> V_PT["val_embeddings.pt<br/>(Early Stopping)"]
     C --> C_PT["cal_embeddings.pt<br/>(Conformal Quantile & OOD)"]
-    E --> E_PT["test_embeddings.pt<br/>(Pareto SLA Evaluation)"]
+    E --> E_PT["test_embeddings.pt<br/>(Pareto SLO Evaluation)"]
 
     style T_PT fill:#004d40,stroke:#26a69a,stroke-width:2px,color:#ffffff;
     style V_PT fill:#01579b,stroke:#29b6f6,stroke-width:2px,color:#ffffff;

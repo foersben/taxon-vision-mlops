@@ -213,7 +213,7 @@ function initDVCExplorer() {
         {
             id: "eval",
             number: "7",
-            title: "7. Pareto Evaluation & Latency SLA (Deployment Gate)",
+            title: "7. Pareto Evaluation & Latency SLO (Deployment Gate)",
             dvcStage: "eval",
             cmd: "pixi run -e dev python -m taxon_vision.pipelines.evaluate --onnx-model models/checkpoints/model_int8.onnx --embeddings data/embeddings/test_embeddings.pt --conformal-config config/conformal_config.yaml --out docs/assets/pareto_results.json --metrics-out reports/pareto_evaluation.json --latency-sla-ms 25.0",
             deps: [
@@ -238,11 +238,11 @@ function initDVCExplorer() {
                 "Forms prediction sets C(X) = {y : f(x)_y >= 1 - q_hat}.",
                 "Asserts empirical test coverage satisfies 1 - alpha bound (96.45% >= 95.0%).",
                 "Executes 100 warm-up cycles and 500 timed inference loops to benchmark p50 and p95 latency.",
-                "Asserts p95 latency SLA <= 25.0 ms (flags deployment violation if SLA breached).",
+                "Asserts p95 latency SLO <= 25.0 ms (flags deployment violation if SLO breached).",
                 "Writes reports/pareto_evaluation.json and exports Pareto frontier results for documentation portal."
             ],
             triggers: "Triggered when test_embeddings.pt, model_int8.onnx, conformal_config.yaml, or latency_sla_ms changes.",
-            downstreamRadius: "Terminal stage. Exits with code 1 upon statistical coverage failure or SLA breach, preventing release."
+            downstreamRadius: "Terminal stage. Exits with code 1 upon statistical coverage failure or SLO breach, preventing release."
         }
     ];
 

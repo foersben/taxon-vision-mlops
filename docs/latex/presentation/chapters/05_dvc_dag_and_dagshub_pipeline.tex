@@ -222,7 +222,7 @@
         }
     \end{center}
     \vspace{-0.1cm}
-    \script{This downstream lineage view covers Stages 4 through 7. The linear head trains on cached embeddings in under two seconds. Stage 5 fuses and quantizes the model to INT8 ONNX. Stage 6 uses the untouched calibration split to compute conformal quantile thresholds. Finally, Stage 7 validates empirical coverage and enforces the sub-15ms latency SLA on holdout test data.}
+    \script{This downstream lineage view covers Stages 4 through 7. The linear head trains on cached embeddings in under two seconds. Stage 5 fuses and quantizes the model to INT8 ONNX. Stage 6 uses the untouched calibration split to compute conformal quantile thresholds. Finally, Stage 7 validates empirical coverage and enforces the sub-15ms latency SLO on holdout test data.}
     \qa{How does the downstream DAG enforce mathematical isolation against data leakage?}{The calibration split cal\_embeddings.pt is strictly inaccessible to Stage 4 and Stage 5. It is consumed solely by Stage 6 to calculate distribution-free conformal bounds, guaranteeing that the model has never adapted to calibration samples.}
 \end{frame}
 
@@ -691,7 +691,7 @@
 \end{frame}
 
 % ---------------------------------------------------------------------
-% Slide 13: Stage 7 Deep-Dive: Pareto Evaluation & Latency SLA
+% Slide 13: Stage 7 Deep-Dive: Pareto Evaluation & Latency SLO
 % ---------------------------------------------------------------------
 \begin{frame}{Stage 7 Deep-Dive}{\texttt{eval}: Holdout Verification \& Production Latency Gating}
     \vspace{-0.2cm}

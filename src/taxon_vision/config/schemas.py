@@ -252,10 +252,10 @@ class OptunaConfig(BaseModel):
 
 
 class EvaluationConfig(BaseModel):
-    """Configuration schema for model evaluation and latency SLAs.
+    """Configuration schema for model evaluation and latency SLOs.
 
     Attributes:
-        latency_sla_ms (float): Latency service level agreement threshold in milliseconds (default: 25.0).
+        latency_sla_ms (float): Latency service level objective threshold in milliseconds (default: 25.0).
     """
 
     latency_sla_ms: float = Field(default=25.0, gt=0.0)

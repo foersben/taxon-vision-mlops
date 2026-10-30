@@ -22,13 +22,13 @@ Inference execution paths must enforce deterministic p95 latency bounds and zero
 * Input tensors and output prediction buffers must be pre-allocated as contiguous C-order NumPy arrays (`np.ascontiguousarray(..., dtype=np.float32)`).
 * In-place buffer reuse must be preferred over repeated array cloning inside high-frequency evaluation loops.
 
-## 2. Strict Latency Budgets & SLA Compliance
+## 2. Strict Latency Budgets & SLO Compliance
 
 All production models must satisfy physical p95 latency ceilings evaluated under steady-state execution:
 
 * **CPU Execution Budget (INT8 Quantized):** End-to-end inference latency (preprocessing + ONNX forward pass) must not exceed $15\,\text{ms}$ p95 on the Intel Core i7-14700K Performance cores.
 * **GPU Execution Budget (FP16 CUDA EP):** End-to-end inference latency must not exceed $10\,\text{ms}$ p95 on the NVIDIA GeForce RTX 5070 Ti.
-* **Microservice SLA Ceiling:** The complete FastAPI HTTP `/predict` endpoint round-trip (including JSON serialization and telemetry observation) must remain $< 25\,\text{ms}$ p95.
+* **Microservice SLO Ceiling:** The complete FastAPI HTTP `/predict` endpoint round-trip (including JSON serialization and telemetry observation) must remain $< 25\,\text{ms}$ p95.
 
 ## 3. Dual-Output ONNX Export Standard
 

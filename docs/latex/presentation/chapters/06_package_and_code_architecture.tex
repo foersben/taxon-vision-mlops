@@ -318,7 +318,7 @@
                         \begin{itemize}\tiny
                             \item Encapsulates active \texttt{onnxruntime.InferenceSession}.
                             \item \texttt{predict()}: Zero-allocation hot path converting pre-processed numpy arrays directly into softmax probabilities.
-                            \item \texttt{benchmark\_latency()}: Profiles p50, p95, and p99 inference timing over 100 warm iterations against production SLA.
+                            \item \texttt{benchmark\_latency()}: Profiles p50, p95, and p99 inference timing over 100 warm iterations against production SLO.
                         \end{itemize}
                     \item \textbf{\texttt{cli.py} (CLI Benchmark Profiler):}
                         \begin{itemize}\tiny

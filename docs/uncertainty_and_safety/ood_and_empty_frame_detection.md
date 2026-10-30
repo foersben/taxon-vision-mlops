@@ -146,7 +146,7 @@ $$M(x) = \hat{\pi}_{(1)}(x) - \hat{\pi}_{(2)}(x)$$
 
 TaxonVision-MLOps combines Helmholtz Free Energy $E(x; T)$, Normalized Shannon Entropy $\bar{H}(\hat{\pi})$, and Conformal Prediction Set Size $|\mathcal{C}(x)|$ into an operational routing matrix:
 
-| Quadrant | Epistemic Condition | Conformal Set Size $\vert\mathcal{C}(x)\vert$ | Operational Routing Decision | System Latency & Handling SLA |
+| Quadrant | Epistemic Condition | Conformal Set Size $\vert\mathcal{C}(x)\vert$ | Operational Routing Decision | System Latency & Handling SLO |
 | :--- | :--- | :--- | :--- | :--- |
 | **Quadrant 1** | Inlier Specimen: $E \le \tau_{\text{OOD}}$, $\bar{H} < 0.40$ | $\vert\mathcal{C}(x)\vert = 1$ | **Fast-Path Automated Acceptance** | Single-species resolution returned in $< 15\text{ ms}$. |
 | **Quadrant 2** | Sister-Taxa Mimicry: $E \le \tau_{\text{OOD}}$, $0.25 \le \bar{H} \le 0.70$ | $\vert\mathcal{C}(x)\vert \in [2, 3]$ | **Sister-Taxa Vision-RAG Engine** | Multimodal knowledge retrieval card emitted in $< 45\text{ ms}$. |

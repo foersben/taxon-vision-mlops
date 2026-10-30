@@ -50,7 +50,7 @@ The platform exposes real-time Prometheus metrics at `GET /metrics` via `prometh
 
 | Metric Identifier | Metric Type | Labels / Dimensions | Architectural Description & Alert Thresholds |
 | :--- | :--- | :--- | :--- |
-| **`inference_latency_seconds_bucket`** | Histogram | `model_name`, `quantization_mode`, `le` | Tracks execution duration across feature extraction and head projection. Evaluates p50, p95, and p99 latency SLA ($\le 15.0\text{ ms}$). |
+| **`inference_latency_seconds_bucket`** | Histogram | `model_name`, `quantization_mode`, `le` | Tracks execution duration across feature extraction and head projection. Evaluates p50, p95, and p99 latency SLO ($\le 15.0\text{ ms}$). |
 | **`conformal_prediction_set_size_distribution`** | Histogram | `model_name`, `alpha_target`, `le` | Measures the cardinality $\vert{}\mathcal{C}(x)\vert{}$ of admissible prediction sets. An elevated mean set size ($> 3.0$) indicates rising epistemic ambiguity. |
 | **`conformal_empty_set_total`** | Counter | `model_name`, `alpha_target` | Increments whenever $\mathcal{C}(x) = \emptyset$. Indicates total lack of confidence at nominal $1 - \alpha$; triggers human triage. |
 | **`ood_energy_score_distribution`** | Histogram | `model_name`, `le` | Tracks Helmholtz Free Energy $E(x; T)$ scores. Activations exceeding $\tau_{\text{OOD}}$ trigger semantic outlier isolation. |

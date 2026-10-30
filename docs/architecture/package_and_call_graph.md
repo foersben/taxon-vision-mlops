@@ -114,7 +114,7 @@ Orchestrates batch workflows invoked via `dvc repro`.
 | `train.py` | `run_training` | `run_training(config_path: Path \| None = None) -> None` | Trains linear probe classifier head using Class-Balanced Loss. |
 | `export_onnx.py` | `run_export` | `run_export(config_path: Path \| None = None) -> None` | Exports classifier to ONNX format and executes static INT8 quantization. |
 | `calibrate.py` | `run_calibration` | `run_calibration(config_path: Path \| None = None) -> None` | Calculates conformal quantile $\hat{q}$ and energy threshold $\tau_{\text{ood}}$. |
-| `evaluate.py` | `run_evaluation` | `run_evaluation(config_path: Path \| None = None) -> None` | Validates empirical test coverage ($1 - \alpha$) and p95 latency SLA. |
+| `evaluate.py` | `run_evaluation` | `run_evaluation(config_path: Path \| None = None) -> None` | Validates empirical test coverage ($1 - \alpha$) and p95 latency SLO. |
 
 ### Subpackage 2: Service (`taxon_vision.service`)
 

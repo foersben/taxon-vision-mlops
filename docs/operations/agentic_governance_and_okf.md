@@ -68,7 +68,7 @@ To prevent token waste and cognitive thrashing, AI agents do not scan the entire
 | **`@02-taxonomic-architect`** | Taxonomic Domain Architect | `src/taxon_vision/domain/`, `config/taxa_catalog.yaml` | DarwinCore taxonomic schemas, GBIF / iNaturalist taxon identifier mapping, and synonymy tables. | Taxonomy, GBIF, biological classifications, DarwinCore |
 | **`@03-mlops-data-engineer`** | MLOps Data & Storage Engineer | `src/taxon_vision/data/`, `dvc.yaml`, `params.yaml` | AWS S3 streaming, DVC dataset tracking, SeaweedFS caching, and Creative Commons license filtering. | Data ingestion, S3 streaming, DVC remotes, license audits |
 | **`@04-model-engineer`** | Backbone & Head Engineer | `src/taxon_vision/models/`, `pipelines/train.py` | PyTorch feature extraction trunks (timm), Class-Balanced Loss optimization, and Optuna HPO tuning. | Model architecture, loss functions, PyTorch training, ASHA |
-| **`@05-inference-optimizer`** | ONNX Runtime Latency Optimizer | `src/taxon_vision/inference/`, `pipelines/export_onnx.py` | Zero-allocation ONNX Runtime inference, static INT8 PTQ quantization, and EigenCAM attribution. | ONNX export, INT8 quantization, p95 latency SLA, Grad-CAM |
+| **`@05-inference-optimizer`** | ONNX Runtime Latency Optimizer | `src/taxon_vision/inference/`, `pipelines/export_onnx.py` | Zero-allocation ONNX Runtime inference, static INT8 PTQ quantization, and EigenCAM attribution. | ONNX export, INT8 quantization, p95 latency SLO, Grad-CAM |
 | **`@06-uncertainty-safety-engineer`** | Epistemic Uncertainty Engineer | `src/taxon_vision/uncertainty/`, `pipelines/calibrate.py` | Split Conformal Prediction ($1 - \alpha$), finite-sample quantile inflation, and Helmholtz Free Energy OOD gating. | Conformal prediction, coverage guarantees, OOD detection |
 | **`@07-active-learning-engineer`** | Active Learning & HITL Engineer | `src/taxon_vision/active_learning/`, `service/storage.py` | Margin sampling, BADGE gradient embeddings, binary max-heap `TriageQueue`, and Label Studio ingestion. | Active learning, triage ranking, human review queue |
 | **`@08-observability-engineer`** | Telemetry & Observability Engineer | `src/taxon_vision/monitoring/`, `deploy/k8s/` | Prometheus latency histograms, Wasserstein-1 embedding drift, and MMD distribution monitors. | Telemetry, Prometheus metrics, concept drift, Grafana |
@@ -214,7 +214,7 @@ flowchart TD
 
     subgraph T3["Tier 3: Invariant Tests (tests/invariants/)"]
         N1["Conformal Coverage Guarantee (P(Y in C) >= 1 - alpha)"]
-        N2["Inference Latency SLA Budget (p95 <= 15 ms)"]
+        N2["Inference Latency SLO Budget (p95 <= 15 ms)"]
         N3["Creative Commons Open License Compliance"]
     end
 

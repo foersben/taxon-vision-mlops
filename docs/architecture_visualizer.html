@@ -1197,7 +1197,7 @@
       <div id="pareto-view" class="view-container">
         <div class="kpi-strip">
           <div class="kpi-card">
-            <span class="kpi-label">Dual Latency SLA</span>
+            <span class="kpi-label">Dual Latency SLO</span>
             <span class="kpi-val" style="color: var(--accent-cyan)"
               >&le; 15.0 ms</span
             >
@@ -1264,7 +1264,7 @@
                 ></i>
                 Pareto Frontier: Accuracy vs. Latency
               </div>
-              <span class="badge sla-badge">Dual SLA: &le;15ms GPU / &le;25ms CPU</span>
+              <span class="badge sla-badge">Dual SLO: &le;15ms GPU / &le;25ms CPU</span>
             </div>
             <div id="plotly-pareto-main" class="chart-canvas"></div>
           </div>
@@ -1589,7 +1589,7 @@
               description:
                 "High-throughput endpoint receiving observation image uploads. Executes zero-copy preprocessing, cached TaxonClassifier forward pass, Helmholtz energy OOD scoring, Split Conformal Prediction sets, and optional on-demand forward CAM saliency map generation (?explain=true).",
               invariants:
-                "Dual SLA: <= 15.0ms bare-metal GPU target, <= 25.0ms CPU/CI ceiling (Rule 02). Zero dynamic memory allocation.",
+                "Dual SLO: <= 15.0ms bare-metal GPU target, <= 25.0ms CPU/CI ceiling (Rule 02). Zero dynamic memory allocation.",
               formula:
                 "\\text{Card}(C(x)) \\le k_{\\max} \\implies \\text{Auto-Assign}, \\quad \\text{else} \\implies \\text{Refer}",
               config:
@@ -1800,7 +1800,7 @@
             data: {
               id: "metric_latency",
               label: "taxon_inference_latency\nPrometheus Histogram",
-              subtitle: "p50 / p95 / p99 SLA Tracking",
+              subtitle: "p50 / p95 / p99 SLO Tracking",
               layer: "telemetry",
               col: 2,
               row: 2.2,
@@ -1809,7 +1809,7 @@
               description:
                 "High-resolution latency histogram measuring hot-path execution time against the 25ms p95 invariant.",
               invariants:
-                "Tracks SLA compliance across ONNX and PyTorch runtimes.",
+                "Tracks SLO compliance across ONNX and PyTorch runtimes.",
               config: "LATENCY_HISTOGRAM.observe(elapsed_sec)",
             },
           },
@@ -2058,14 +2058,14 @@
             data: {
               id: "dvc_evaluate",
               label: "DVC Stage: evaluate\nreports/pareto_evaluation.json",
-              subtitle: "Holdout Metrics & Latency SLA Audit",
+              subtitle: "Holdout Metrics & Latency SLO Audit",
               layer: "pipeline",
               col: 3,
               row: 10,
               role: "@qa-automator",
               path: "src/taxon_vision/pipelines/evaluate.py",
               description:
-                "Evaluates Top-1/Top-3 accuracy, macro PR-AUC, empirical conformal coverage, and validates p95 latency against SLA gate.",
+                "Evaluates Top-1/Top-3 accuracy, macro PR-AUC, empirical conformal coverage, and validates p95 latency against SLO gate.",
               invariants:
                 "Guarantees empirical coverage >= 1 - alpha and p95 latency <= 25.0ms on test holdout.",
               config: "Pipeline: src/taxon_vision/pipelines/evaluate.py",
@@ -2083,7 +2083,7 @@
               path: "src/taxon_vision/inference/onnx_engine.py",
               description:
                 "Production C++ ONNX Runtime session delivering <= 15ms p95 latency on GPU (<= 25ms p95 on CPU) back to the FastAPI serving layer.",
-              invariants: "Dual SLA: <= 15.0ms p95 bare-metal GPU target, <= 25.0ms CPU CI ceiling.",
+              invariants: "Dual SLO: <= 15.0ms p95 bare-metal GPU target, <= 25.0ms CPU CI ceiling.",
               config: "Consumed by: src/taxon_vision/service/inference.py",
             },
           },

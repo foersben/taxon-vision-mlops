@@ -192,7 +192,7 @@
         The evaluate stage verifies that the quantized INT8 model satisfies both the $95\%$ coverage guarantee and the $15\text{ ms}$ latency budget before marking the pipeline as green.
     \end{block}
 
-    \script{Here we see the parameters governing the terminal stages of the pipeline: dynamic INT8 quantization, conformal error budgets, and our strict 15 millisecond latency SLA.}
+    \script{Here we see the parameters governing the terminal stages of the pipeline: dynamic INT8 quantization, conformal error budgets, and our strict 15 millisecond latency SLO.}
     \qa{How does the evaluate stage enforce production gates?}{It compares empirical coverage against 1 minus alpha and p95 latency against the 15 millisecond budget, exiting with code 1 if either mathematical bound is violated.}
 \end{frame}
 

@@ -60,7 +60,7 @@ Universal academic benchmarks (e.g., ImageNet-1K or Tree-of-Life zero-shot evalu
 
 ---
 
-## 3. The 15 ms Production Latency SLA Gate
+## 3. The 15 ms Production Latency SLO Gate
 
 In Stage 7 of the DVC pipeline ([`evaluate.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/pipelines/evaluate.py)), candidate backbones must pass a strict **15.0 ms p95 latency deployment gate**:
 
@@ -68,7 +68,7 @@ $$\text{p95 Latency} \le 15.0\text{ ms}$$
 
 ```mermaid
 flowchart LR
-    subgraph Gate["Stage 7: Production Deployment SLA Gate"]
+    subgraph Gate["Stage 7: Production Deployment SLO Gate"]
         M1["DINOv3 ViT-S/14<br/>(Empirical Production Model)"] -->|89.35% Test Acc / INT8 PTQ| DEPLOY["Production Registry (DagsHub)"]
         M2["Candidate Backbone Projections<br/>(MobileNetV4, BioCLIP-2, DINOv2)"] -.->|Literature Calibrated| EVAL["Architectural Evaluation Plane"]
         M3["Hypothetical ViT-Base (> 35 ms)"] -->|REJECTED| FAIL["Automated CI/CD Abort"]

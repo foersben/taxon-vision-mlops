@@ -392,7 +392,7 @@ Continuous CI/CD execution can accumulate stale ReplicaSets and completed/failed
 
 To monitor ecological representation drift across non-stationary visual environments, the platform implements a dual-layer drift detection strategy:
 
-* **Online Real-Time Gate (1D Wasserstein-1):** In [`src/taxon_vision/monitoring/drift.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/monitoring/drift.py), the service evaluates the Earth Mover's Distance across unnormalized $L_2$ activation norms ($W_1(P_{\text{ref}}, P_{\text{curr}})$) in $< 1\text{ ms}$ on CPU, immediately catching sensor degradation and feature collapse without violating the 15 ms inference SLA.
+* **Online Real-Time Gate (1D Wasserstein-1):** In [`src/taxon_vision/monitoring/drift.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/monitoring/drift.py), the service evaluates the Earth Mover's Distance across unnormalized $L_2$ activation norms ($W_1(P_{\text{ref}}, P_{\text{curr}})$) in $< 1\text{ ms}$ on CPU, immediately catching sensor degradation and feature collapse without violating the 15 ms inference SLO.
 * **Offline Scheduled Batch Audit (Multivariate RKHS MMD via Evidently AI):** For deep semantic manifold drift, scheduled Jenkins pipeline stages execute Evidently AI test suites (`EmbeddingsDriftMetric(drift_method=mmd())` and `ColumnDriftMetric("embedding_norm", stattest="wasserstein")`). If the non-parametric permutation test rejects the null hypothesis ($p < 0.01$), the pipeline exports a structured drift flag and triggers DVC feature extraction and retraining stages.
 
 ---

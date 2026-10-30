@@ -260,7 +260,7 @@ All metrics are automatically registered in the global Prometheus registry upon 
 | Metric Identifier | Prometheus Type | Labels | Description & Operational Purpose |
 |---|---|---|---|
 | `taxon_predictions_total` | `Counter` | `status` | Total prediction calls evaluated. Tracks throughput and routing outcomes: `success` (valid prediction), `invalid_input` (empty or corrupted upload), `unavailable` (missing model artifact/503), or `error` (unhandled exception). |
-| `taxon_inference_latency_seconds` | `Histogram` | None | End-to-end inference execution duration in seconds. Measures preprocessing, neural network forward pass, and conformal evaluation to verify SLA compliance. |
+| `taxon_inference_latency_seconds` | `Histogram` | None | End-to-end inference execution duration in seconds. Measures preprocessing, neural network forward pass, and conformal evaluation to verify SLO compliance. |
 | `taxon_human_referrals_active` | `Gauge` | None | Count of active observations deferred to human taxonomic experts. Monitors epistemic uncertainty triage load and active learning staging backlog. |
 
 ### Metric Implementation Details

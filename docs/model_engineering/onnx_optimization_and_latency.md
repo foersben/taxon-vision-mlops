@@ -18,7 +18,7 @@ sources:
 
 # ONNX Runtime Optimization & Latency Invariants
 
-Operating an interactive biodiversity identification platform requires strict adherence to latency Service Level Agreements (SLAs). While unoptimized PyTorch forward passes on general-purpose CPUs often exceed 100 to 200 ms depending on batch size and architecture, TaxonVision enforces a dual-target latency SLA:
+Operating an interactive biodiversity identification platform requires strict adherence to latency Service Level Objectives (SLOs). While unoptimized PyTorch forward passes on general-purpose CPUs often exceed 100 to 200 ms depending on batch size and architecture, TaxonVision enforces a dual-target latency SLO:
 
 * **Bare-Metal GPU / INT8 Fast-Path Target:** Target p95 latency strictly **$\le 15.0\text{ ms}$** under quantized ONNX Runtime execution on bare-metal production nodes (`params.yaml`), verified for single-stream sequential execution (multi-client concurrent ingress stress-testing scheduled for Phase 2.5).
 * **General-Purpose CPU / CI Testbed Ceiling:** Hard ceiling p95 latency **$\le 25.0\text{ ms}$** enforced by project mandate `Rule 02` (`02-inference-latency-invariants.md`) and automated CI regression gates.

@@ -402,7 +402,7 @@ $$g_x = \nabla_{\theta_{\text{last}}} \mathcal{L}(f(x; \theta), \hat{y})$$
 ##### TaxonVision Architecture: Unified FastAPI + HTMX & Forward-Hooked CAM
 
 * **Unified FastAPI + Jinja2 + HTMX:** Eliminates the architectural friction of running a secondary Streamlit container. Server-rendered HTMX provides instantaneous DOM swapping with low latency and native concurrency.
-* **Forward-Hooked Class Activation Mapping (CAM):** While modern extensions like Grad-CAM are popular, they require a backward pass (backpropagation) during inference, which violates low-latency SLAs (<25 ms) and is incompatible with forward-only INT8 ONNX runtimes. TaxonVision intercepts the spatial feature maps $A^k$ and static classification weights $w_k^c$ during the forward pass:
+* **Forward-Hooked Class Activation Mapping (CAM):** While modern extensions like Grad-CAM are popular, they require a backward pass (backpropagation) during inference, which violates low-latency SLOs (<25 ms) and is incompatible with forward-only INT8 ONNX runtimes. TaxonVision intercepts the spatial feature maps $A^k$ and static classification weights $w_k^c$ during the forward pass:
 
 $$L_{\text{CAM}}^c = \text{ReLU}\left(\sum_k w_k^c A^k\right)$$
 
@@ -421,6 +421,6 @@ Synthesizes high-fidelity anatomical heatmaps with minimal forward-pass overhead
 * **Storage Independence:** Resolves the 50 TB citizen-science data challenge through zero-copy Arrow streaming and DVC Parquet manifests (<11 KB local footprint vs. database bloat).
 * **Mathematical Epistemic Safety:** Replaces uncalibrated softmax point guesses with distribution-free Split Conformal Prediction ($1 - \alpha$ coverage guarantee).
 * **Decoupled Dual-Pipeline:** Isolates compute-heavy GPU weight updates from high-velocity taxonomic schema realignments, achieving $O(1)$ taxonomy updates.
-* **Sub-25ms Latency SLA:** Combines INT8 static ONNX PTQ, zero-allocation memory paths, and forward-hooked visual CAM.
+* **Sub-25ms Latency SLO:** Combines INT8 static ONNX PTQ, zero-allocation memory paths, and forward-hooked visual CAM.
 * **Intelligent Active Learning:** Deploys BADGE gradient embeddings to maximize taxonomic model improvement per unit of human verification effort.
 * **Robust Toolchain:** Replaces brittle virtual environments with Pixi, Justfile recipes, and cryptographic commit signing.

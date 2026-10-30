@@ -117,7 +117,7 @@ function initParetoExplorer() {
             <div class="pareto-header-row">
                 <div class="pareto-chart-title">
                     <span>Multi-Objective Pareto Frontier (p95 Latency vs. Accuracy)</span>
-                    <span class="pareto-sla-badge">15 ms Production SLA Gate</span>
+                    <span class="pareto-sla-badge">15 ms Production SLO Gate</span>
                 </div>
                 <div class="pareto-filter-group">
                     <button class="pareto-filter-btn active" data-family="all">All Models</button>
@@ -140,7 +140,7 @@ function initParetoExplorer() {
                             <th data-sort="throughput_fps">Throughput</th>
                             <th data-sort="parameters_m">Params</th>
                             <th data-sort="vram_peak_mb">Peak VRAM</th>
-                            <th>SLA Gate</th>
+                            <th>SLO Gate</th>
                         </tr>
                     </thead>
                     <tbody id="pareto-table-body"></tbody>
@@ -199,7 +199,7 @@ function initParetoExplorer() {
                     </linearGradient>
                 </defs>
 
-                <!-- SLA zones -->
+                <!-- SLO zones -->
                 <rect x="${padding.left}" y="${padding.top}" width="${slaX - padding.left}" height="${plotH}" fill="url(#sla-pass-grad)" />
                 <rect x="${slaX}" y="${padding.top}" width="${padding.left + plotW - slaX}" height="${plotH}" fill="url(#sla-breach-grad)" />
 
@@ -220,7 +220,7 @@ function initParetoExplorer() {
                     `;
                 }).join("")}
 
-                <!-- 15ms SLA Gate Line -->
+                <!-- 15ms SLO Gate Line -->
                 <line x1="${slaX}" y1="${padding.top}" x2="${slaX}" y2="${padding.top + plotH}" stroke="#ff5722" stroke-width="2" stroke-dasharray="5,4" />
                 <text x="${slaX - 6}" y="${padding.top + 14}" fill="#ff5722" font-size="10" font-weight="700" text-anchor="end">15 ms Production Gate</text>
 

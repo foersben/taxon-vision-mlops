@@ -49,7 +49,7 @@ flowchart TD
 
 ## 2. Formal Stage Specification Matrix
 
-| Stage | Python Entrypoint | Primary Input Artefacts & Schemas | Output Artefacts & Schemas | Invariant & SLA Guarantee |
+| Stage | Python Entrypoint | Primary Input Artefacts & Schemas | Output Artefacts & Schemas | Invariant & SLO Guarantee |
 | :--- | :--- | :--- | :--- | :--- |
 | **Stage 1: Ingest** | `taxon_vision.pipelines.ingest` | S3 Open Data bucket (`s3://inaturalist-open-data/photos/`), `params.yaml:ingest` | `data/raw/raw_manifest.parquet` (Apache Arrow / Polars DataFrame) | Rate-limited chunk streaming (`aiolimiter`), transient retry with exponential backoff. |
 | **Stage 2: Audit License** | `taxon_vision.pipelines.audit_license` | `data/raw/raw_manifest.parquet` | `data/processed/dataset_manifest.parquet` (Strict schema: `photo_id`, `taxon_id`, `license_code`, `attribution`) | Rejects non-compliant static domains; allows CC0, CC-BY, CC-BY-NC only (Rule 05). |

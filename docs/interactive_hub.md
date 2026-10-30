@@ -36,7 +36,7 @@ Welcome to the **TaxonVision-MLOps Interactive Hub**. This portal provides real-
 
 ## 1. System Architecture & Epistemic Diamond Visualizer
 
-The interactive canvas below models the complete TaxonVision-MLOps ecosystem. You can pan, zoom, click nodes to inspect tensor dimensions and execution SLAs, and filter across the four operational tiers: **Ingestion & S3**, **Training & DVC**, **ONNX Runtime Serving**, and **Epistemic Safety Gates**.
+The interactive canvas below models the complete TaxonVision-MLOps ecosystem. You can pan, zoom, click nodes to inspect tensor dimensions and execution SLOs, and filter across the four operational tiers: **Ingestion & S3**, **Training & DVC**, **ONNX Runtime Serving**, and **Epistemic Safety Gates**.
 
 <div class="visualizer-wrapper" id="vis-arch-wrapper">
     <div class="visualizer-header">
@@ -53,7 +53,7 @@ The interactive canvas below models the complete TaxonVision-MLOps ecosystem. Yo
 
 ### Visualizer Features & Navigation
 
-* **Interactive Node Inspection:** Click any architectural block (e.g., `FastAPI /metrics`, `ONNX Engine`, `Split Conformal Gate`) to open its parameter card, tensor shape signature, and latency SLA.
+* **Interactive Node Inspection:** Click any architectural block (e.g., `FastAPI /metrics`, `ONNX Engine`, `Split Conformal Gate`) to open its parameter card, tensor shape signature, and latency SLO.
 * **Physics & Layout Controls:** Use the top control bar within the visualizer to toggle between hierarchical DAG view, circular layout, and force-directed clustering.
 * **Invariant Badges:** Trace cryptographic SHA-256 validation bounds and distribution-free coverage thresholds across the inference path.
 

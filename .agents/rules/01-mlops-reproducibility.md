@@ -42,5 +42,5 @@ All training, data processing, and evaluation pipelines must enforce strict math
     * **Train Split:** 70% of compliant observations (used solely for cosine head parameter updates).
     * **Validation Split:** 10% of compliant observations (used for Optuna HPO early stopping).
     * **Calibration Split:** 10% of compliant observations (reserved exclusively for Split Conformal Prediction non-conformity quantile and OOD calibration).
-    * **Test Split:** 10% of compliant observations (unbiased holdout for final SLA and accuracy reporting).
+    * **Test Split:** 10% of compliant observations (unbiased holdout for final SLO and accuracy reporting).
 * Split leakage (e.g. utilizing calibration observations during training or tuning) invalidates statistical coverage and constitutes a fatal pipeline error.

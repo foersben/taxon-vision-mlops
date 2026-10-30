@@ -213,7 +213,7 @@ If any of these conditions are met, `refer_to_human` is returned as `True`.
 
 ## Forward-Only Class Activation Mapping (CAM) Attribution
 
-In production ecological services operating under strict Service Level Agreements (SLAs)—such as TaxonVision's target sub-25ms p95 latency budget—diagnostic interpretability must not compromise throughput.
+In production ecological services operating under strict Service Level Objectives (SLOs)—such as TaxonVision's target sub-25ms p95 latency budget—diagnostic interpretability must not compromise throughput.
 
 ### The Latency Barrier of Grad-CAM
 
@@ -221,7 +221,7 @@ Conventional attribution techniques like Grad-CAM compute gradients of the targe
 
 $$\alpha_k^c = \frac{1}{Z} \sum_{i} \sum_{j} \frac{\partial y^c}{\partial A_{i, j}^k}$$
 
-This formulation requires a full backward autograd pass, retaining computation graphs, allocating backward activation buffers, and increasing inference latency by 15ms to 30ms. In high-throughput settings, backward passes exceed the entire SLA budget.
+This formulation requires a full backward autograd pass, retaining computation graphs, allocating backward activation buffers, and increasing inference latency by 15ms to 30ms. In high-throughput settings, backward passes exceed the entire SLO budget.
 
 ### Mathematical Formulation of Forward-Only CAM
 

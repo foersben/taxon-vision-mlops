@@ -10,7 +10,7 @@
 #     * training: epochs, batch_size, learning_rate, weight_decay, cb_beta, tune
 #     * export: quantize_int8
 #     * conformal: alpha (0.05 / 95% coverage), min_confidence, ood_tpr
-#     * evaluation: latency_sla_ms (25.0 ms fast-path SLA)
+#     * evaluation: latency_sla_ms (25.0 ms fast-path SLO)
 # - `config/default_config.yaml` (This File): Governs system runtime defaults,
 #   HTTP service parameters, paths, model registry mappings, telemetry, and
 #   external database infrastructure. Any overlapping keys defined in root `/params.yaml`
