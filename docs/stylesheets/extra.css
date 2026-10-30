@@ -1234,3 +1234,180 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* ==========================================================================
+   Mermaid.js Interactive Pan, Zoom & Fullscreen Styling
+   ========================================================================== */
+
+.mermaid-interactive-wrapper {
+    position: relative;
+    width: 100%;
+    margin: 1.5rem 0 2rem 0;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--tv-border-subtle);
+    background: var(--md-code-bg-color);
+    box-shadow: var(--tv-card-shadow);
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.mermaid-interactive-wrapper:hover {
+    border-color: var(--tv-primary);
+    box-shadow: 0 6px 24px rgba(0, 137, 123, 0.12);
+}
+
+.mermaid-viewport {
+    position: relative;
+    width: 100%;
+    min-height: 180px;
+    overflow: hidden;
+    cursor: grab;
+    user-select: none;
+    touch-action: pan-y;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    box-sizing: border-box;
+}
+
+.mermaid-viewport.is-dragging {
+    cursor: grabbing;
+}
+
+.mermaid-viewport .mermaid {
+    transition: transform 0.18s cubic-bezier(0.2, 0, 0, 1);
+    will-change: transform;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+.mermaid-viewport.is-dragging .mermaid,
+.mermaid-viewport.is-wheeling .mermaid {
+    transition: none !important;
+}
+
+/* Floating HUD Toolbar */
+.mermaid-toolbar {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    z-index: 25;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: 6px;
+    background: var(--md-default-bg-color);
+    border: 1px solid var(--tv-border-subtle);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+    opacity: 0.35;
+    backdrop-filter: blur(8px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.mermaid-interactive-wrapper:hover .mermaid-toolbar,
+.mermaid-interactive-wrapper.is-fullscreen .mermaid-toolbar,
+.mermaid-interactive-wrapper:fullscreen .mermaid-toolbar {
+    opacity: 1;
+}
+
+.mermaid-tool-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--md-typeset-color);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.mermaid-tool-btn:hover {
+    background: var(--tv-primary);
+    color: #ffffff;
+    border-color: var(--tv-primary);
+}
+
+.mermaid-tool-btn:focus-visible {
+    outline: 2px solid var(--tv-primary);
+    outline-offset: 1px;
+}
+
+/* Scroll Hint Overlay */
+.mermaid-scroll-hint {
+    position: absolute;
+    bottom: 0.75rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(8px);
+    background: rgba(15, 23, 42, 0.88);
+    color: #f8fafc;
+    padding: 0.35rem 0.85rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 20;
+    backdrop-filter: blur(4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.mermaid-scroll-hint.is-visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* Fullscreen Mode */
+.mermaid-interactive-wrapper.is-fullscreen,
+.mermaid-interactive-wrapper:fullscreen {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 999999 !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    border: none !important;
+    max-width: none !important;
+}
+
+[data-md-color-scheme="slate"] .mermaid-interactive-wrapper.is-fullscreen,
+[data-md-color-scheme="slate"] .mermaid-interactive-wrapper:fullscreen {
+    background: #060911 !important;
+}
+
+[data-md-color-scheme="default"] .mermaid-interactive-wrapper.is-fullscreen,
+[data-md-color-scheme="default"] .mermaid-interactive-wrapper:fullscreen {
+    background: #ffffff !important;
+}
+
+.mermaid-interactive-wrapper.is-fullscreen .mermaid-viewport,
+.mermaid-interactive-wrapper:fullscreen .mermaid-viewport {
+    height: 100vh !important;
+    width: 100vw !important;
+    padding: 2.5rem !important;
+    touch-action: none;
+}
+
+.mermaid-interactive-wrapper.is-fullscreen .mermaid-toolbar,
+.mermaid-interactive-wrapper:fullscreen .mermaid-toolbar {
+    top: 1.25rem;
+    right: 1.25rem;
+    padding: 0.35rem;
+}
+
+.mermaid-interactive-wrapper.is-fullscreen .mermaid-tool-btn,
+.mermaid-interactive-wrapper:fullscreen .mermaid-tool-btn {
+    width: 32px;
+    height: 32px;
+}
