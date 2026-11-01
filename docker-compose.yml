@@ -51,16 +51,20 @@ services:
     environment:
       - PORT=8000
       - HOST=0.0.0.0
-      - TAXON_OPTUNA_STORAGE_URI=sqlite:////optuna/optuna_studies.db
+      - TAXON_OPTUNA_STORAGE_URI=postgresql+psycopg://optuna:taxon_optuna_pass@postgres:5432/optuna
+      - TAXON_TELEMETRY__DATABASE_URL=postgresql+psycopg://telemetry:taxon_telemetry_pass@postgres:5432/telemetry
       - TAXON_ALLOW_UNTRAINED_FALLBACK=true
     volumes:
-      - ./data/optuna:/optuna
       - ./data/flagged_observations:/app/data/flagged_observations
       - ./models/checkpoints:/app/models/checkpoints
       - ./data/sample:/app/data/sample
     depends_on:
-      - seaweedfs
-      - prometheus
+      seaweedfs:
+        condition: service_started
+      prometheus:
+        condition: service_started
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "pixi", "run", "--frozen", "-e", "ci", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready')"]
       interval: 15s
@@ -86,9 +90,10 @@ services:
     container_name: taxon_optuna_dashboard
     ports:
       - "8080:8080"
-    command: ["sqlite:////optuna/optuna_studies.db", "--port", "8080", "--host", "0.0.0.0"]
-    volumes:
-      - ./data/optuna:/optuna
+    command: ["postgresql+psycopg2://optuna:taxon_optuna_pass@postgres:5432/optuna", "--port", "8080", "--host", "0.0.0.0"]
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   prometheus:
@@ -115,6 +120,28 @@ services:
       - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
     depends_on:
       - prometheus
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: taxon_postgres
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=128MB"
+      - "-c"
+      - "work_mem=4MB"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: taxon_super_secret
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./deploy/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
 volumes:

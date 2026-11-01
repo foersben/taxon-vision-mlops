@@ -45,6 +45,10 @@ spec:
           value: "0.0.0.0"
         - name: TAXON_SERVICE__REDIS_URL
           value: "redis://redis-ephemeral.taxon-vision.svc.cluster.local:6379/0"
+        - name: TAXON_OPTUNA__OPTUNA_STORAGE_URI
+          value: "postgresql+psycopg://optuna:taxon_optuna_pass@postgres.taxon-vision.svc.cluster.local:5432/optuna"
+        - name: TAXON_TELEMETRY__DATABASE_URL
+          value: "postgresql+psycopg://telemetry:taxon_telemetry_pass@postgres.taxon-vision.svc.cluster.local:5432/telemetry"
         resources:
           requests:
             cpu: "200m"

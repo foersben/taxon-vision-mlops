@@ -1,0 +1,21 @@
+
+# ==============================================================================
+# Traefik A/B Testing & Canary Service Specification
+# ==============================================================================
+apiVersion: traefik.io/v1alpha1
+kind: TraefikService
+metadata:
+  name: taxon-vision-ab-service
+  namespace: taxon-vision
+  labels:
+    app.kubernetes.io/name: taxon-vision-ab-service
+    app.kubernetes.io/part-of: taxon-vision-mlops
+spec:
+  weighted:
+    services:
+      - name: taxon-vision-serving
+        port: 8000
+        weight: 80
+      - name: taxon-vision-serving-challenger
+        port: 8000
+        weight: 20

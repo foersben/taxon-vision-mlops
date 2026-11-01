@@ -251,6 +251,25 @@ class OptunaConfig(BaseModel):
     reduction_factor: int = Field(default=2, gt=1)
 
 
+class TelemetryConfig(BaseModel):
+    """Configuration schema for prediction telemetry persistence and database connection pooling.
+
+    Why:
+        Centralizes the telemetry database DSN, connection pool limits, and query timeouts, preventing hardcoded connection strings on the prediction hot path.
+
+    Attributes:
+        database_url (str): SQLAlchemy/psycopg connection URI for the telemetry database.
+        pool_min_size (int): Minimum persistent connections maintained in the pool.
+        pool_max_size (int): Maximum allowable connections under peak traffic.
+        timeout_seconds (float): Connection checkout and execution timeout in seconds.
+    """
+
+    database_url: str = "postgresql+psycopg://telemetry:taxon_telemetry_pass@localhost:5432/telemetry"
+    pool_min_size: int = Field(default=2, ge=1)
+    pool_max_size: int = Field(default=10, ge=1)
+    timeout_seconds: float = Field(default=5.0, gt=0.0)
+
+
 class EvaluationConfig(BaseModel):
     """Configuration schema for model evaluation and latency SLOs.
 
@@ -282,6 +301,7 @@ class Settings(BaseSettings):
     ingestion: IngestionConfig = Field(default_factory=IngestionConfig)
     streaming: StreamingConfig = Field(default_factory=StreamingConfig)
     optuna: OptunaConfig = Field(default_factory=OptunaConfig)
+    telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
 
     @property

@@ -161,7 +161,7 @@ test-canary:
 	@echo ">>> Running offline micro-canary verification..."
 	TAXON_ALLOW_UNTRAINED_FALLBACK=true pixi run --frozen -e ci-dev pytest tests/integration/ tests/invariants/ -v -o "addopts="
 
-# ── MLOps & Pipelines ───────────────────────────────────────────────────────
+# MLOps & Pipelines ───────────────────────────────────────────────────────
 
 # Stream sample image batch from S3 into local cache for inspection
 [group("mlops")]
@@ -222,6 +222,18 @@ predict image="data/sample/406185885_taxon_47120.jpg":
 download-samples per_taxon="1":
 	pixi run --frozen -e dev python scripts/data/download_samples.py --per-taxon {{per_taxon}}
 
+# Compares the DVC workspace status to dvc.lock or remote (token req.)
+[group("mlops")]
+dvc-status cloud="":
+	@if [ "{{cloud}}" = "cloud" ]; then \
+		TOKEN="${DAGSHUB_TOKEN:-$(secret-tool lookup Title DagsHub 2>/dev/null || secret-tool lookup service dagshub 2>/dev/null || true)}"; \
+		[ -n "$TOKEN" ] || { echo "No DagsHub token found." >&2; exit 1; }; \
+		AWS_ACCESS_KEY_ID="$TOKEN" AWS_SECRET_ACCESS_KEY="$TOKEN" \
+		pixi run --frozen -e dev dvc status --cloud; \
+	else \
+		pixi run --frozen -e dev dvc status; \
+	fi
+
 # Push tracked datasets & models to DagsHub or local remote
 [group("mlops")]
 dvc-push remote="origin":
@@ -235,16 +247,21 @@ dvc-push remote="origin":
 
 # Pull tracked datasets & models from DagsHub or local remote
 [group("mlops")]
-dvc-pull remote="origin":
-	@TOKEN="${DAGSHUB_TOKEN:-$(secret-tool lookup Title DagsHub 2>/dev/null || secret-tool lookup service dagshub 2>/dev/null || true)}"; \
+dvc-pull remote="origin" force="":
+	@FORCE_FLAG=""; \
+	case "{{force}}" in \
+		"") ;; \
+		force|--force) FORCE_FLAG="--force" ;; \
+		*) echo "Unknown option '{{force}}' (use: force)" >&2; exit 2 ;; \
+	esac; \
+	TOKEN="${DAGSHUB_TOKEN:-$(secret-tool lookup Title DagsHub 2>/dev/null || secret-tool lookup service dagshub 2>/dev/null || true)}"; \
 	if [ -n "$TOKEN" ]; then \
 		AWS_ACCESS_KEY_ID="$TOKEN" AWS_SECRET_ACCESS_KEY="$TOKEN" \
-		pixi run --frozen -e dev dvc pull -r {{remote}}; \
+		pixi run --frozen -e dev dvc pull -r {{remote}} $FORCE_FLAG; \
 	else \
-		echo "ℹ️  No DagsHub token found in environment or Secret Service; attempting anonymous pull..."; \
-		if ! pixi run --frozen -e dev dvc pull -r {{remote}} 2>/dev/null; then \
-			echo "⚠️  Remote requires authentication. Provide DAGSHUB_TOKEN, or train a new model via: just train"; \
-		fi; \
+		echo "No DagsHub token found in environment or Secret Service; attempting anonymous pull..." >&2; \
+		pixi run --frozen -e dev dvc pull -r {{remote}} $FORCE_FLAG || { \
+			echo "Pull failed. Provide DAGSHUB_TOKEN or store the token in KeePassXC." >&2; exit 1; }; \
 	fi
 
 # Display DVC pipeline Directed Acyclic Graph

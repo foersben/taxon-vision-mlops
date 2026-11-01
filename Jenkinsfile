@@ -292,6 +292,7 @@ spec:
             fi
 
             # Apply API deployment and service manifests
+            kubectl apply -f deploy/k8s/postgres.yaml
             kubectl apply -f deploy/k8s/api-deployment.yaml
             kubectl apply -f deploy/k8s/monitoring-prometheus-grafana.yaml
 

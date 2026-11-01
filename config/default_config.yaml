@@ -125,5 +125,11 @@ optuna:
   min_resource: 3
   reduction_factor: 2
 
+telemetry:
+  database_url: "postgresql+psycopg://telemetry:taxon_telemetry_pass@localhost:5432/telemetry"
+  pool_min_size: 2
+  pool_max_size: 10
+  timeout_seconds: 5.0
+
 evaluation:
   latency_sla_ms: 25.0
