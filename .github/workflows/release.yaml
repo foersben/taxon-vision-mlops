@@ -73,7 +73,7 @@ jobs:
           pixi run --frozen -e ci-dev python -m zipfile -l dist/*.whl
 
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: python-distribution-package
           path: dist/
