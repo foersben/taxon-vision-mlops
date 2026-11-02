@@ -36,7 +36,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Pixi Environment (CPU ci-dev)
-        uses: prefix-dev/setup-pixi@v0.10.2
+        uses: prefix-dev/setup-pixi@v0.11.2
         with:
           environments: ci-dev
 
