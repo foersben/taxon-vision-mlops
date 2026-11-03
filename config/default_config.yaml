@@ -130,6 +130,18 @@ telemetry:
   pool_min_size: 2
   pool_max_size: 10
   timeout_seconds: 5.0
+  allow_in_memory_fallback: false
+  fallback_buffer_size: 500
+
+drift:
+  window_size: 500
+  min_samples: 50
+  tau_w1: 0.15
+  mmd_max_samples: 500
+  mmd_permutations: 200
+  alpha: 0.01
+  config_path: "config/drift_config.yaml"
+  reference_embeddings_path: "data/embeddings/cal_embeddings.pt"
 
 evaluation:
   latency_sla_ms: 25.0

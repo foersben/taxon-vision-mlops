@@ -4,7 +4,7 @@ title: Package Hierarchy & Master Call Graph
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
 version: 1.0
-description: Technical architecture of the 4-tier package hierarchy, master dependency call graph, and Rule 00 Python invariants.
+description: Technical architecture of the 4-tier package hierarchy, master dependency call graph, and modern Python language mandates.
 tags: [architecture, package-graph, dependencies, layers, modularity]
 generated: {by: "process:docs-librarian", at: "2026-10-18T12:00:00Z"}
 verified: {by: "process:docs-librarian", at: "2026-10-18T12:00:00Z"}
@@ -122,7 +122,7 @@ Powers online HTTP inference, Class Activation Mapping, and HTMX triage UI.
 
 | Module File | Key Classes / Functions | Primary Method Signatures | Description |
 | :--- | :--- | :--- | :--- |
-| `api.py` | `app`, `lifespan` | `lifespan(_app: FastAPI) -> AsyncIterator[None]` | ASGI composition root pre-warming models and managing clean shutdown. |
+| `api.py` | `app`, `lifespan` | `lifespan(_app: FastAPI) -> AsyncGenerator[None]` | ASGI composition root pre-warming models and managing clean shutdown. |
 | `inference.py` | `predict_species`, `load_taxa_catalog` | `predict_species(image_bytes: bytes, ...) -> PredictionResult` | Zero-allocation inference pipeline coordinating ONNX session, conformal sets, and CAM. |
 | `storage.py` | `ImageCacheProtocol`, `RedisImageCache`, `MemoryImageCache`, `persist_flagged_observation` | `store(image_bytes: bytes) -> str`, `get(image_hash: str) -> bytes \| None` | Distributed Redis ephemeral upload cache (with memory fallback) and disk triage persistence. |
 | `presentation.py` | `build_prediction_view_model`, `render_prediction_card` | `build_prediction_view_model(prediction, image_hash, ...) -> dict` | Formats conformal prediction sets and telemetry for server-rendered Jinja2/HTMX templates. |
@@ -150,7 +150,7 @@ Neural network architectures, probe heads, loss functions, and modular training 
 | `training/tuning.py` | `tune_hyperparameters`, `HyperparameterObjective` | `tune_hyperparameters(data: EmbeddingSplit, ...) -> TuningResult` | Bayesian hyperparameter optimization study orchestration with TPE sampling and ASHA pruning. |
 | `training/visualizations.py` | `log_training_visualizations` | `log_training_visualizations(tracker, history, ...) -> None` | Diagnostic plot rendering (confusion matrices, PR curves, and energy distributions). |
 | `training/checkpoint.py` | `save_checkpoint` | `save_checkpoint(model: nn.Module, path: Path) -> Path` | Checkpoint serialization and PyTorch state dictionary export. |
-| `training/types.py` | `ResolvedTrainingParameters`, `EmbeddingSplit` | Pydantic Models & Frozen Dataclasses | Parameter containers enforcing Rule 08 parameter encapsulation and zero tuple blindness. |
+| `training/types.py` | `ResolvedTrainingParameters`, `EmbeddingSplit` | Pydantic Models & Frozen Dataclasses | Parameter containers enforcing parameter encapsulation and zero tuple blindness (typed frozen dataclasses and models). |
 
 ### Subpackage 4: Inference (`taxon_vision.inference`)
 
@@ -228,7 +228,7 @@ Hierarchical configuration loader and typed Pydantic models.
 
 ---
 
-## 3. Rule 00 Python Modernization Mandates
+## 3. Python Language Mandates & Architectural Invariants
 
 To preserve long-term maintainability, all subpackages adhere to three strict architectural invariants:
 

@@ -42,7 +42,7 @@ flowchart TD
     subgraph Gates["Automated CI Verification Gates"]
         LINT["Static Analysis (Ruff, MyPy, complexipy)"]
         VOKF["validate_okf.py (OKF v0.2 Invariants)"]
-        MRULE["verify_markdown_rules.py (Rule 04)"]
+        MRULE["verify_markdown_rules.py (Markdown Invariants)"]
         TESTS["3-Tier Test Matrix (Unit, Integration, Invariants)"]
     end
 
@@ -79,33 +79,33 @@ To prevent token waste and cognitive thrashing, AI agents do not scan the entire
 
 ---
 
-## 2. The 7 Core Invariant Rules
+## 2. The 7 Core Architectural Invariants
 
-Repository rules defined in `.agents/rules/` are immutable and strictly enforced across both automated CI/CD pipelines and interactive pair programming sessions:
+Repository architectural standards defined in `.agents/rules/` are immutable and strictly enforced across automated CI/CD pipelines, pre-commit hooks, and pair programming sessions:
 
-* **Rule 00: Python Modernization (`00-python-modernization.md`):**
+* **Python Modernisation (`00-python-modernization.md`):**
     * Sole reliance on Pixi (`.pixi/`). Bare `pip`, `poetry`, `uv`, and virtual environment (`.venv`) creation are strictly banned.
     * Zero dynamic reflection workarounds: forbid `hasattr` and `getattr` in application code; use explicit static types or Pydantic models.
     * Zero hardcoded magic numbers: all timeouts, learning rates, and tolerances must reside in `config/default_config.yaml`.
     * Cognitive complexity invariant: every function and method must maintain a cognitive complexity score strictly $< 15$ (`complexipy`).
-* **Rule 01: MLOps Reproducibility (`01-mlops-reproducibility.md`):**
+* **MLOps Reproducibility (`01-mlops-reproducibility.md`):**
     * Deterministic PRNG seeding (`seed=42`) across PyTorch, NumPy, and Python random modules.
     * DVC dataset immutability verified via SHA256 manifest digests.
-* **Rule 02: Inference Latency Invariants (`02-inference-latency-invariants.md`):**
+* **Inference Latency Invariants (`02-inference-latency-invariants.md`):**
     * Zero dynamic memory allocations on hot inference paths.
     * Pinned ONNX Runtime I/O buffers pre-allocated during application warmup.
     * Strict p95 latency budget: $\le 15.0\text{ ms}$ on target GPU serving profiles.
-* **Rule 03: Git Security & Signing (`03-git-security-and-signing.md`):**
-    * Mandatory GPG/SSH commit signing (`git commit -S`) for local developers and Antigravity agents. Unsigned commits are rejected by Git pre-commit hooks.
-* **Rule 04: Markdown Formatting Rules (`04-markdown-formatting.md`):**
+* **Git Security & Signing (`03-git-security-and-signing.md`):**
+    * Mandatory GPG/SSH commit signing (`git commit -S`) for local developers and automated agents. Unsigned commits are rejected by Git pre-commit hooks.
+* **Markdown Formatting Rules (`04-markdown-formatting.md`):**
     * Exclusively use the standard ASCII hyphen (`-`) instead of en-dashes or em-dashes.
     * Use `*` for all unordered list items, indented in multiples of 4 spaces (`*`, ` * `).
     * Insert exactly 1 blank line before and after lists, code blocks, and headings.
     * Zero trailing whitespace at line ends.
-* **Rule 05: Open License Compliance (`05-open-license-compliance.md`):**
+* **Open License Compliance (`05-open-license-compliance.md`):**
     * Strict admission of Creative Commons open licenses only: `CC0-1.0`, `CC-BY-4.0`, and `CC-BY-NC-4.0`.
     * Observations under commercial-restricted or proprietary copyright licenses are automatically screened and discarded with photographer attribution retained.
-* **Rule 06: Conformal Coverage Invariants (`06-conformal-coverage-invariants.md`):**
+* **Conformal Coverage Invariants (`06-conformal-coverage-invariants.md`):**
     * Multi-class prediction sets $\mathcal{C}(x)$ must mathematically guarantee $\mathbb{P}(Y \in \mathcal{C}(X)) \ge 1 - \alpha$ on unseen holdout test splits.
     * Observations yielding empty prediction sets or exceeding uncertainty thresholds must divert to human review.
 
@@ -119,7 +119,7 @@ Agent skills reside in `.agents/skills/` and provide specialized, deterministic 
 2. **`conformal-uncertainty-audit` (`/audit-conformal`):** Audits statistical coverage guarantees, non-conformity quantiles $\hat{q}_\alpha$, Helmholtz OOD thresholds $\tau_{\text{OOD}}$, and human triage referral rates.
 3. **`run-pareto-benchmarks` (`/benchmark-pareto`):** Profiles candidate backbones across accuracy, p50/p95 latency, memory footprint, and serving cost.
 4. **`active-learning-cycle` (`/active-learning-step`):** Executes sample query ranking via margin sampling, simulates human annotation ingestion from Label Studio, and triggers DVC retraining.
-5. **`doc-synchronization-pipeline` (`/doc-synchronization-pipeline`):** Re-indexes codebase changes, verifies OKF v0.2 frontmatter compliance, formats Markdown under Rule 04, and executes strict Zensical builds.
+5. **`doc-synchronization-pipeline` (`/doc-synchronization-pipeline`):** Re-indexes codebase changes, verifies OKF v0.2 frontmatter compliance, formats Markdown under project typography invariants, and executes strict Zensical builds.
 6. **`full-pipeline-validation` (`/validate-full-stack`):** End-to-end quality gate executing `ruff`, `mypy`, `complexipy`, unit tests, coverage verification, and the 7-stage DVC pipeline.
 7. **`validate-okf`:** Audits all repository markdown files against the OKF v0.2 frontmatter schema and validates cross-document markdown filesystem links.
 8. **`visualize-okf`:** Parses compliant OKF markdown files and generates the interactive Cytoscape.js knowledge graph visualizer at `docs/viz.html`.

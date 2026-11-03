@@ -45,7 +45,7 @@ tracks all experiments with MLflow, and automatically promotes the best model us
 
 ## Module Map
 
-Following the Rule 08 single-responsibility sibling topology refactoring, the training subsystem in `src/taxon_vision/models/training/` is partitioned into focused, non-monolithic modules (all maintaining cognitive complexity $< 15$):
+Following a single-responsibility sibling topology pattern, the training subsystem in `src/taxon_vision/models/training/` is partitioned into focused, modular components (each maintaining cognitive complexity $< 15$ to avoid deeply nested branching):
 
 | Module | Key Symbols | Architectural Responsibility |
 | --- | --- | --- |

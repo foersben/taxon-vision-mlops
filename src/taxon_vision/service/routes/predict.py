@@ -10,7 +10,7 @@ from functools import partial
 from typing import Annotated, Any
 
 import anyio
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile, status
 from PIL import Image
 
 from taxon_vision.config import ConformalConfig, get_settings
@@ -25,6 +25,7 @@ from taxon_vision.service.inference import (
 )
 from taxon_vision.service.schemas import ConformalRoutingTier, PredictionResponse, TaxonPrediction
 from taxon_vision.service.storage import persist_flagged_observation
+from taxon_vision.service.telemetry_store import PredictionRecord, get_telemetry_store
 
 logger = logging.getLogger(__name__)
 
@@ -87,16 +88,10 @@ def _build_live_prediction(
     """Construct structured response from successful inference output.
 
     Why:
-        Transforms raw array-based and dictionary inference outputs into strongly-typed,
-        validated Pydantic schemas. Correlates top predictions and conformal set member
-        names against authoritative catalog metadata to provide clients with canonical
-        taxon IDs, scientific names, common names, and triage recommendations.
+        Transforms raw array-based and dictionary inference outputs into strongly-typed, validated Pydantic schemas. Correlates top predictions and conformal set member names against authoritative catalog metadata to provide clients with canonical taxon IDs, scientific names, common names, and triage recommendations.
 
     How:
-        Extracts top-1 predicted taxon, parses confidence score, scans candidate names
-        in the conformal set, distributes uniform candidate likelihood among secondary
-        conformal items, flags conformal ambiguity if the set size exceeds the threshold
-        (|C| > 3 or |C| == 0), and packages the latency measurement into a PredictionResponse.
+        Extracts top-1 predicted taxon, parses confidence score, scans candidate names in the conformal set, distributes uniform candidate likelihood among secondary conformal items, flags conformal ambiguity if the set size exceeds the threshold (|C| > 3 or |C| == 0), and packages the latency measurement into a PredictionResponse.
 
     Complexity:
         O(K) where K is the cardinality of the conformal candidate set.
@@ -166,19 +161,14 @@ def _build_live_prediction(
 @router.post("/api/v1/predict", response_model=PredictionResponse)
 async def predict_species(
     file: Annotated[UploadFile, File(...)],
+    background_tasks: BackgroundTasks,
     explain: bool = False,
 ) -> PredictionResponse:
     """Classify species from an uploaded image with conformal uncertainty guarantees.
 
     Why:
         Serving visual inference in production requires strict non-blocking concurrency.
-        Executing image decoding, tensor normalization, and PyTorch/ONNX matrix operations
-        directly on the asyncio loop thread blocks all concurrent requests. Furthermore,
-        silently catching execution exceptions and returning dummy predictions masks critical
-        failures (corrupt model weights, missing artefacts, GPU driver crashes, OOM errors).
-        This endpoint offloads synchronous inference to a threadpool worker, measures accurate
-        wall-clock latency, persists out-of-distribution or ambiguous records for subsequent
-        human review, and reports each failure class with its proper HTTP status.
+        Executing image decoding, tensor normalization, and PyTorch/ONNX matrix operations directly on the asyncio loop thread blocks all concurrent requests. Furthermore, silently catching execution exceptions and returning dummy predictions masks critical failures (corrupt model weights, missing artefacts, GPU driver crashes, OOM errors). This endpoint offloads synchronous inference to a threadpool worker, measures accurate wall-clock latency, persists out-of-distribution or ambiguous records for subsequent human review, and reports each failure class with its proper HTTP status.
 
     How:
         1. Reads raw bytes asynchronously from the multipart file upload.
@@ -195,6 +185,7 @@ async def predict_species(
 
     Args:
         file: Multipart uploaded image file.
+        background_tasks: FastAPI background task coordinator for non-blocking I/O dispatch.
         explain: Optional boolean flag to request forward-only CAM saliency visualization.
 
     Returns:
@@ -228,8 +219,8 @@ async def predict_species(
         latency = duration_sec * 1000.0
         LATENCY_HISTOGRAM.observe(duration_sec)
 
+        obs_id = str(uuid.uuid4())
         if pred.get("is_ood") or pred.get("requires_human_review"):
-            obs_id = str(uuid.uuid4())
             REFERRAL_RATE.inc()
             await anyio.to_thread.run_sync(
                 partial(
@@ -250,6 +241,20 @@ async def predict_species(
                 logger.warning("CAM overlay generation failed for %s: %s", file.filename, cam_err)
                 cam_base64 = None
 
+        rec = PredictionRecord(
+            observation_id=obs_id,
+            extractor=settings.model.default_extractor,
+            model_version=settings.service.version,
+            top1_taxon=str(pred.get("scientific_name")),
+            top1_confidence=float(pred.get("confidence", 0.0)),
+            conformal_set=[str(s) for s in pred.get("conformal_set", [])],
+            ood_energy=float(pred["ood_energy_score"]) if pred.get("ood_energy_score") is not None else None,
+            is_ood=bool(pred.get("is_ood", False)),
+            requires_review=bool(pred.get("requires_human_review", False)),
+            latency_ms=round(latency, 2),
+            embedding=pred.get("embedding"),
+        )
+        background_tasks.add_task(get_telemetry_store().record, rec)
         PREDICTION_COUNTER.labels(status="success").inc()
         return _build_live_prediction(pred, latency, cam_base64)
     except InvalidImageError as img_err:

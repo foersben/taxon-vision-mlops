@@ -91,12 +91,12 @@ validate-okf:
 check-invariants:
 	pixi run --frozen -e dev python scripts/governance/verify_code_invariants.py
 
-# Verify and fix Markdown Rule 04 formatting invariants
+# Verify and fix Markdown typography and layout formatting invariants
 [group("quality")]
 lint-md:
 	pixi run --frozen -e dev python scripts/governance/verify_markdown_rules.py --fix
 
-# Verify Rule 07 Hardware Invariants across documentation and LaTeX
+# Verify hardware specification invariants across documentation and LaTeX
 [group("quality")]
 check-hardware:
 	pixi run --frozen -e dev python scripts/governance/verify_hardware_invariants.py

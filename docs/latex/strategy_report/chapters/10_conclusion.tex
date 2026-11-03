@@ -49,7 +49,7 @@ Inference service \& HTMX dashboard & \textbf{implemented} & FastAPI service (\t
 \addlinespace
 Hybrid CI/CD \& K3s GPU execution & \textbf{implemented} & GitHub Actions quality/release/GHCR workflows (\texttt{ci.yml}, \texttt{release.yaml}), Traefik v3.1 canary ingress, and bare-metal Jenkins two-pod execution (\texttt{jenkins-cpu-runner} and dedicated RTX 5070 Ti \texttt{jenkins-gpu-runner}). \\
 \addlinespace
-Test harness \& code quality gates & \textbf{implemented} & 203 \texttt{pytest} tests, zero-warning Ruff, MyPy across 70 source files, 8-gate attestation seal (\nolinkurl{attest_seal.py}), AST code invariants engine (\nolinkurl{verify_code_invariants.py}), Rule 07 hardware verification, 100\% cognitive complexity $\le 15$ with zero snapshot exemptions, and OKF v0.2 schema validation. \\
+Test harness \& code quality gates & \textbf{implemented} & 203 \texttt{pytest} tests, zero-warning Ruff, MyPy across 70 source files, 8-gate attestation seal (\nolinkurl{attest_seal.py}), AST code invariants engine (\nolinkurl{verify_code_invariants.py}), automated hardware specification verification, 100\% cognitive complexity $\le 15$ with zero snapshot exemptions, and OKF v0.2 schema validation. \\
 \midrule
 Prometheus \& Grafana observability & \textbf{partial} & FastAPI exposes \texttt{/metrics} with 3 core collectors in \texttt{telemetry.py} and \texttt{config/prometheus.yaml} exists; in-cluster Prometheus server with native TSDB and BTRFS NOCOW specified in Section~\ref{sec:prometheus_tsdb_realisation}. \\
 \addlinespace

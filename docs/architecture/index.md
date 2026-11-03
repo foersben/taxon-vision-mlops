@@ -58,7 +58,7 @@ The repository is structured as an enterprise-grade MLOps monorepo engineered to
 Navigate through the core architectural pillars using the detailed guides below:
 
 * **[Repository & Config Encyclopedia](repository_and_config_encyclopedia.md):** Deep dive into the 3-Tier Configuration Precedence Pyramid (`default_config.yaml` -> `params.yaml` -> `TAXON__*` environment variables), complete `params.yaml` parameter encyclopedia, and live configuration snippets.
-* **[Package & Call Graph](package_and_call_graph.md):** Comprehensive reference for the 4-tier layered architecture, acyclic call graphs, Rule 00 Python invariants, and detailed class signatures across all 10 subpackages.
+* **[Package & Call Graph](package_and_call_graph.md):** Comprehensive reference for the 4-tier layered architecture, acyclic call graphs, modern Python language mandates (static typing, zero dynamic reflection, and cognitive complexity bounds), and detailed class signatures across all 10 subpackages.
 * **[Codebase Explorer](codebase_explorer.md):** Interactive client-side explorer widget allowing engineers and AI agents to filter, search, and inspect module responsibilities, complexity bounds, and targeted test suites.
 
 ---

@@ -268,6 +268,32 @@ class TelemetryConfig(BaseModel):
     pool_min_size: int = Field(default=2, ge=1)
     pool_max_size: int = Field(default=10, ge=1)
     timeout_seconds: float = Field(default=5.0, gt=0.0)
+    allow_in_memory_fallback: bool = Field(default=False)
+    fallback_buffer_size: int = Field(default=500, ge=10)
+
+
+class DriftConfig(BaseModel):
+    """Configuration schema for embedding and concept drift monitoring.
+
+    Attributes:
+        window_size (int): Number of recent production inference records evaluated in sliding window (default: 500).
+        min_samples (int): Minimum required records in window to compute drift (default: 50).
+        tau_w1 (float): Calibrated threshold for 1D Wasserstein-1 distance on embedding norms (default: 0.15).
+        mmd_max_samples (int): Maximum subsample size for MMD permutation testing (default: 500).
+        mmd_permutations (int): Number of permutations for MMD empirical p-value computation (default: 200).
+        alpha (float): Significance ceiling for MMD permutation hypothesis rejection (default: 0.01).
+        config_path (str): Relative or absolute path to calibrated drift configuration YAML (default: 'config/drift_config.yaml').
+        reference_embeddings_path (str): Path to baseline reference holdout embeddings (default: 'data/embeddings/cal_embeddings.pt').
+    """
+
+    window_size: int = Field(default=500, ge=10)
+    min_samples: int = Field(default=50, ge=5)
+    tau_w1: float = Field(default=0.15, gt=0.0)
+    mmd_max_samples: int = Field(default=500, ge=10)
+    mmd_permutations: int = Field(default=200, ge=50)
+    alpha: float = Field(default=0.01, gt=0.0, lt=1.0)
+    config_path: str = Field(default="config/drift_config.yaml")
+    reference_embeddings_path: str = Field(default="data/embeddings/cal_embeddings.pt")
 
 
 class EvaluationConfig(BaseModel):
@@ -302,6 +328,7 @@ class Settings(BaseSettings):
     streaming: StreamingConfig = Field(default_factory=StreamingConfig)
     optuna: OptunaConfig = Field(default_factory=OptunaConfig)
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
+    drift: DriftConfig = Field(default_factory=DriftConfig)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
 
     @property

@@ -43,3 +43,7 @@ from prometheus_client import Counter, Gauge, Histogram
 PREDICTION_COUNTER = Counter("taxon_predictions_total", "Total species predictions evaluated", ["status"])
 LATENCY_HISTOGRAM = Histogram("taxon_inference_latency_seconds", "Inference duration in seconds")
 REFERRAL_RATE = Gauge("taxon_human_referrals_active", "Number of observations routed to human review")
+TELEMETRY_WRITE_FAILURES = Counter(
+    "taxon_telemetry_write_failures_total",
+    "Total database write failures when persisting prediction telemetry",
+)

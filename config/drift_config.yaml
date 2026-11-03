@@ -1,0 +1,12 @@
+drift:
+  tau_w1: 0.12812
+  alpha: 0.01
+  window_size: 169
+  n_bootstraps: 1000
+  percentile: 99.0
+  null_median_w1: 0.071163
+  null_max_w1: 0.163083
+  reference_source: data/embeddings/cal_embeddings.pt
+  reference_sha256: 0a676f8ac95edb1a255906ed02b7f8bb1d143493056b3abd0de0659a2af1583f
+  test_source: data/embeddings/test_embeddings.pt
+  calibrated_at: '2026-11-02T12:16:47.473824+00:00'

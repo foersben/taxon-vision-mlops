@@ -284,7 +284,7 @@
                 \begin{itemize}\footnotesize
                     \item \textbf{System Pollution:} Dynamic \texttt{.venv/} directories diverge across machines, leading to ``works on my machine'' syndrome.
                     \item \textbf{Binary Incompatibility:} Raw pip installs struggle with compiled CUDA binaries, cuDNN, and ONNX Runtime backends.
-                    \item \textbf{Rule 00 Mandate:} The codebase strictly bans \texttt{pip}, \texttt{poetry}, \texttt{uv}, and the creation of \texttt{.venv/}.
+                    \item \textbf{Hermetic Toolchain Mandate:} The codebase strictly relies on Pixi, banning unmanaged \texttt{pip}, \texttt{poetry}, and ad-hoc \texttt{.venv/} creation.
                 \end{itemize}
             \end{block}
         \end{column}

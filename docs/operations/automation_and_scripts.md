@@ -18,7 +18,7 @@ The `scripts/` directory houses structured automation, continuous integration, g
 
 ## 1. Canonical Pipeline CLI Entrypoints
 
-All 7 stages of the Epistemic Diamond DAG are implemented as first-class CLI entrypoints within `src/taxon_vision/pipelines/`. Per Rule 00, all commands must execute via `pixi run -e dev`:
+All 7 stages of the Epistemic Diamond DAG are implemented as first-class CLI entrypoints within `src/taxon_vision/pipelines/`. To guarantee reproducible hermetic environments and avoid unmanaged host dependencies, all commands execute via `pixi run -e dev`:
 
 ```bash
 # Stage 1: Ingestion from iNaturalist
@@ -109,7 +109,7 @@ Local developer validation harness reproducing the GitHub Actions CI pipeline wi
 
 #### Workflow Targets
 
-* `quality`: Enforces the Pure Pixi environment invariant (asserts no `.venv` or `uv.lock` exist), executes Markdown Rule 04 verification, audits OKF frontmatter, and runs Ruff linting, formatting, and MyPy type checks.
+* `quality`: Enforces the Pure Pixi environment invariant (asserts no `.venv` or `uv.lock` exist), executes Markdown typography and formatting verification, audits OKF frontmatter, and runs Ruff linting, formatting, and MyPy type checks.
 * `tests`: Executes the complete pytest test suite with coverage assertions ($\ge 80\%$), integration and invariant checks, and license compliance audits.
 * `docs`: Audits OKF frontmatter and compiles documentation using Zensical in strict mode (`zensical build --strict`).
 * `all`: Executes all three passes sequentially (default).
@@ -185,7 +185,7 @@ pixi run -e dev python scripts/governance/visualize_okf.py
 
 ### `scripts/governance/verify_markdown_rules.py`
 
-Syntax and formatting linter enforcing project-wide Markdown Rule 04 invariants.
+Syntax and formatting linter enforcing consistent Markdown typography and layout invariants.
 
 #### Enforced Invariants
 
