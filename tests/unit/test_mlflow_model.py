@@ -17,14 +17,14 @@ import yaml
 from mlflow.pyfunc.model import PythonModelContext
 from PIL import Image
 
-from taxon_vision.inference.onnx_engine import InferenceOutputs
-from taxon_vision.inference.pyfunc import (
+from taxon_vision.inference.mlflow_model import (
     TaxonVisionPyFuncModel,
     _decode_image_payload,
     _load_catalog_entries,
     _load_conformal_parameters,
     _preprocess_input_batch,
 )
+from taxon_vision.inference.onnx_engine import InferenceOutputs
 from taxon_vision.service.inference import get_image_transform
 
 
@@ -167,7 +167,7 @@ def test_pyfunc_lifecycle_and_predict(monkeypatch: pytest.MonkeyPatch, tmp_path:
     )
     mock_engine.project_embeddings.return_value = np.array([[2.5, 0.5], [0.2, 3.1]], dtype=np.float32)
 
-    monkeypatch.setattr("taxon_vision.inference.pyfunc.ONNXInferenceEngine", lambda _p: mock_engine)
+    monkeypatch.setattr("taxon_vision.inference.mlflow_model.ONNXInferenceEngine", lambda _p: mock_engine)
 
     pyfunc_model = TaxonVisionPyFuncModel()
     with pytest.raises(RuntimeError, match="Model engines are uninitialised"):
@@ -223,7 +223,7 @@ def test_mlflow_pyfunc_save_and_load(monkeypatch: pytest.MonkeyPatch, tmp_path: 
         logits=np.array([[3.0, 0.1]], dtype=np.float32),
         embeddings=np.random.randn(1, 384).astype(np.float32),
     )
-    monkeypatch.setattr("taxon_vision.inference.pyfunc.ONNXInferenceEngine", lambda _p: mock_engine)
+    monkeypatch.setattr("taxon_vision.inference.mlflow_model.ONNXInferenceEngine", lambda _p: mock_engine)
 
     model_dir = tmp_path / "saved_model"
     mlflow.pyfunc.save_model(

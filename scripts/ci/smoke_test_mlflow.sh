@@ -20,7 +20,7 @@ echo "==> Step 1/3: Testing PyFunc PythonModel instantiation and predict in-proc
 pixi run -e dev python -c '
 import numpy as np
 import pandas as pd
-from taxon_vision.inference.pyfunc import TaxonVisionPyFuncModel
+from taxon_vision.inference.mlflow_model import TaxonVisionPyFuncModel
 from taxon_vision.inference.onnx_engine import ONNXInferenceEngine
 
 # Verify module import and signature
