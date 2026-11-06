@@ -1,6 +1,20 @@
 # SPDX-FileCopyrightText: 2026 Benjamin Förster
 # SPDX-License-Identifier: MIT
-"""Server-rendered Jinja2/HTMX web interface."""
+"""Server-rendered Jinja2 and HTMX operator cockpit views.
+
+Summary:
+    Provides server-rendered HTML views and interactive HTMX endpoints powering the human-in-the-loop taxonomic classification cockpit, model passport display, and diagnostic explainability workflows.
+
+Why (Architectural Rationale & Trade-offs):
+    Deploying a server-rendered hypermedia UI with HTMX avoids client-side Single-Page Application (SPA) bundle overhead, node build toolchains, and state synchronization drift between frontend TypeScript schemas and backend Pydantic models. Serving clean HTML fragments keeps client memory footprints negligible on field tablets and desktop browsers whilst maintaining sub-50ms interaction round-trips.
+
+How (Algorithmic Mechanism & Invariants):
+    1. The primary GET / dashboard route compiles and renders an active ModelPassport asynchronously via anyio.to_thread.run_sync, preventing blocking disk or database reads on the asyncio event loop.
+    2. The POST /ui/predict-htmx route accepts multipart image uploads, offloads ONNX inference and conformal prediction set generation to worker threads, caches raw image bytes in memory for follow-up explainability calls, and returns partial HTML cards for targeted DOM swapping.
+
+Standard Fields:
+    References: Fielding (2000) 'Architectural Styles and the Design of Network-based Software Architectures' (REST / HATEOAS).
+"""
 
 from pathlib import Path
 from typing import Annotated
@@ -17,6 +31,7 @@ from taxon_vision.service.inference import (
     load_taxa_catalog,
     run_prediction,
 )
+from taxon_vision.service.passport import load_model_passport
 from taxon_vision.service.presentation import build_top_candidates
 from taxon_vision.service.storage import get_image_cache
 
@@ -27,24 +42,30 @@ templates = Jinja2Templates(directory=str(templates_dir))
 
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request) -> HTMLResponse:
-    """Render the primary operator dashboard home view.
+    """Render the primary operator dashboard home view with active model governance strip.
 
-    Why:
-        Provides human taxonomists, field ecologists, and MLOps operators with a responsive, lightweight visual cockpit for testing model predictions, viewing conformal prediction bounds, and monitoring real-time inference latency without needing external Single-Page Application (SPA) client frameworks or complex build toolchains.
+    Summary:
+        Renders the server-side Jinja2 operator workbench, binding the active ModelPassport governance metadata and file upload form.
 
-    How:
-        Binds the incoming HTTP request context to the server-side Jinja2 environment, rendering `index.html` with HTMX attributes (`hx-post`, `hx-target`, `hx-swap`) that enable partial HTML swaps for seamless UI updates.
+    Why (Architectural Rationale & Trade-offs):
+        Provides human taxonomists, field ecologists, and MLOps operators with a responsive, lightweight visual cockpit for testing model predictions, inspecting conformal coverage guarantees, and monitoring inference latency without external Single-Page Application (SPA) client frameworks or complex build toolchains.
+
+    How (Algorithmic Mechanism & Invariants):
+        Compiles the active ModelPassport off the main event loop via anyio.to_thread.run_sync and binds the result to the server-side Jinja2 environment, rendering index.html with HTMX attributes (hx-post, hx-target, hx-swap) for partial DOM updates.
 
     Complexity:
-        O(1) template rendering.
+        O(1) memory lookup when passport cache is valid; O(1) file reads on cache miss.
 
     Args:
         request: FastAPI HTTP request context for Jinja2 template rendering.
 
     Returns:
-        Rendered HTML page with HTMX-enabled observation upload form.
+        Rendered HTML page with HTMX-enabled observation upload form and model passport strip.
     """
-    return templates.TemplateResponse(request=request, name="index.html", context={"title": "TaxonVision Dashboard"})
+    passport = await anyio.to_thread.run_sync(load_model_passport)
+    return templates.TemplateResponse(
+        request=request, name="index.html", context={"title": "TaxonVision Dashboard", "passport": passport}
+    )
 
 
 @router.post("/ui/predict-htmx", response_class=HTMLResponse)

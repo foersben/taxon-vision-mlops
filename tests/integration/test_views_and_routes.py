@@ -17,10 +17,15 @@ client = TestClient(app)
 
 
 def test_index_view() -> None:
-    """Verify primary dashboard index view renders HTML with title."""
+    """Verify primary dashboard index view renders HTML with title and active governance strip."""
     resp = client.get("/")
     assert resp.status_code == 200
     assert "TaxonVision" in resp.text
+    assert "governance-strip" in resp.text
+    assert "Active Model:" in resp.text
+    assert "Coverage:" in resp.text
+    assert "INT8 p95:" in resp.text
+    assert "MMD²:" in resp.text
 
 
 def _jpeg_buffer(color: str = "red", size: int = 10) -> io.BytesIO:
