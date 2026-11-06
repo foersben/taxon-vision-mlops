@@ -20,8 +20,10 @@ class INatAPIClient:
         Calculates minimum request delay (60.0 / max_requests_per_minute) and awaits an `asyncio.sleep` throttle before dispatching GET requests via `httpx.AsyncClient`. Filters query parameters to mandate research-grade community identifications and presence of photographic evidence, extracting licensing and attribution metadata.
 
     Attributes:
+        max_requests_per_minute: Maximum allowed requests per minute to prevent API throttling.
         delay_seconds: Precomputed delay between sequential requests in seconds.
         base_url: Canonical base URL for the iNaturalist REST API v1.
+        limiter: Asynchronous rate limiter instance.
     """
 
     def __init__(self, max_requests_per_minute: int = 60) -> None:

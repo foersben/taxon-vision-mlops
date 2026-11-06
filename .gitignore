@@ -24,6 +24,7 @@ share/python-wheels/
 MANIFEST
 
 # Unit test / coverage reports
+reports/*.html
 htmlcov/
 .tox/
 .nox/

@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import MagicMock
@@ -27,8 +28,10 @@ from taxon_vision.models.training.tracking import (
     _plot_confusion_matrix,
     _prepare_model_signature_and_example,
     _promote_model_if_better,
+    _resolve_reachable_tracking_uri,
     log_training_visualizations,
     mlflow_run_scope,
+    resume_parent_mlflow_run,
 )
 
 
@@ -570,19 +573,25 @@ def test_log_model_strict_signature_enforcement() -> None:
 def test_log_dataset_lineage(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify _log_dataset_lineage converts arrays via mlflow.data and calls mlflow.log_input."""
     from taxon_vision.models.training.tracking import _log_dataset_lineage
+    from taxon_vision.models.training.types import EmbeddingSplit
 
     mock_log_input = MagicMock()
     mock_from_numpy = MagicMock(return_value="mock_dataset")
     monkeypatch.setattr(mlflow, "active_run", MagicMock(return_value=MagicMock()))
     monkeypatch.setattr(mlflow, "log_input", mock_log_input)
     monkeypatch.setattr(mlflow.data, "from_numpy", mock_from_numpy)
-
-    emb = np.zeros((10, 16), dtype=np.float32)
-    lbl = np.ones((10,), dtype=int)
-    _log_dataset_lineage(emb, lbl)
-
-    mock_from_numpy.assert_called_once_with(features=emb, targets=lbl, name="train_embeddings")
-    mock_log_input.assert_called_once_with("mock_dataset", context="training")
+    emb = torch.zeros((10, 16), dtype=torch.float32)
+    lbl = torch.ones((10,), dtype=torch.long)
+    split = EmbeddingSplit(
+        train_embeddings=emb,
+        train_labels=lbl,
+        val_embeddings=emb,
+        val_labels=lbl,
+    )
+    result = _log_dataset_lineage(data=split, manifest_path=None)
+    assert result.train == "mock_dataset"
+    assert result.val == "mock_dataset"
+    assert mock_log_input.call_count >= 2
 
 
 def test_log_onnx_model_from_file_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -607,3 +616,143 @@ def test_log_onnx_model_from_file_path(tmp_path: Path, monkeypatch: pytest.Monke
     mock_onnx_load.assert_called_once_with(str(dummy_onnx_path))
     mock_log_onnx.assert_called_once()
     assert mock_log_onnx.call_args.kwargs["onnx_model"] == "mock_proto"
+
+
+def test_resolve_reachable_tracking_uri_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify MLFLOW_TRACKING_URI environment variable takes precedence unconditionally."""
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://custom-runner:5000")
+    assert _resolve_reachable_tracking_uri() == "http://custom-runner:5000"
+
+
+def test_resolve_reachable_tracking_uri_health_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify HTTP tracking URI is returned when /health responds with HTTP 200."""
+    import urllib.request
+
+    from taxon_vision.config import get_settings
+
+    monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
+    monkeypatch.delenv("TAXON_MLFLOW_TRACKING_URI", raising=False)
+    settings = get_settings()
+    monkeypatch.setattr(settings.mlflow, "tracking_uri", "http://127.0.0.1:5000")
+
+    mock_resp = MagicMock()
+    mock_resp.status = 200
+    mock_resp.__enter__.return_value = mock_resp
+
+    mock_urlopen = MagicMock(return_value=mock_resp)
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+
+    resolved = _resolve_reachable_tracking_uri(settings)
+    assert resolved == "http://127.0.0.1:5000"
+    mock_urlopen.assert_called_once()
+
+
+def test_resolve_reachable_tracking_uri_fallback_sqlite(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify unreachable HTTP tracking server triggers fallback to local SQLite backend."""
+    import urllib.request
+
+    from taxon_vision.config import get_settings
+
+    monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
+    monkeypatch.delenv("TAXON_MLFLOW_TRACKING_URI", raising=False)
+    settings = get_settings()
+    monkeypatch.setattr(settings.mlflow, "tracking_uri", "http://127.0.0.1:5000")
+    monkeypatch.setattr(urllib.request, "urlopen", MagicMock(side_effect=OSError("Connection refused")))
+
+    custom_fallback = f"sqlite:///{tmp_path}/mlflow_fallback.db"
+    monkeypatch.setattr(settings.mlflow, "fallback_sqlite_uri", custom_fallback)
+
+    resolved = _resolve_reachable_tracking_uri(settings)
+    assert resolved == custom_fallback
+    assert (tmp_path / "artifacts").exists()
+
+
+def test_mlflow_run_scope_custom_experiment_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify mlflow_run_scope applies explicit experiment_name override when supplied."""
+    mock_set_experiment = MagicMock()
+    monkeypatch.setattr(mlflow, "set_tracking_uri", MagicMock())
+    monkeypatch.setattr(mlflow, "set_experiment", mock_set_experiment)
+    monkeypatch.setattr(mlflow, "start_run", MagicMock(return_value=MagicMock()))
+    monkeypatch.setattr(mlflow, "end_run", MagicMock())
+    monkeypatch.setattr(mlflow, "set_tag", MagicMock())
+    with mlflow_run_scope("drift_eval_run", experiment_name="taxon-vision-drift"):
+        pass
+    mock_set_experiment.assert_called_once_with("taxon-vision-drift")
+
+
+def test_resume_parent_mlflow_run_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify resume_parent_mlflow_run parses metrics JSON, sets tracking URI, and re-enters run."""
+
+    metrics_file = tmp_path / "train_metrics.json"
+    metrics_file.write_text(
+        json.dumps(
+            {
+                "status": "completed",
+                "extractor": "dinov3",
+                "mlflow_run_id": "parent_run_12345",
+                "mlflow_model_id": "model_uuid_67890",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    mock_start_run = MagicMock()
+    mock_end_run = MagicMock()
+    monkeypatch.setattr(mlflow, "set_tracking_uri", MagicMock())
+    monkeypatch.setattr(mlflow, "start_run", mock_start_run)
+    monkeypatch.setattr(mlflow, "end_run", mock_end_run)
+    monkeypatch.setattr(
+        "taxon_vision.models.training.tracking._resolve_reachable_tracking_uri",
+        lambda _settings=None: "http://mlflow-server:5000",
+    )
+
+    with resume_parent_mlflow_run(metrics_file) as ctx:
+        assert ctx is not None
+        assert ctx.run_id == "parent_run_12345"
+        assert ctx.model_id == "model_uuid_67890"
+        assert ctx.extractor == "dinov3"
+
+    mock_start_run.assert_called_once_with(run_id="parent_run_12345")
+    mock_end_run.assert_called_once_with(status="FINISHED")
+
+
+def test_resume_parent_mlflow_run_missing_or_corrupt_file(tmp_path: Path) -> None:
+    """Verify resume_parent_mlflow_run yields None when file does not exist or lacks run_id."""
+    # Scenario 1: Non-existent file
+    with resume_parent_mlflow_run(tmp_path / "non_existent.json") as ctx:
+        assert ctx is None
+
+    # Scenario 2: Corrupted JSON
+    corrupt_file = tmp_path / "corrupt.json"
+    corrupt_file.write_text("{malformed: json", encoding="utf-8")
+    with resume_parent_mlflow_run(corrupt_file) as ctx:
+        assert ctx is None
+
+    # Scenario 3: Missing mlflow_run_id key
+    missing_key_file = tmp_path / "no_run_id.json"
+    missing_key_file.write_text(json.dumps({"status": "completed"}), encoding="utf-8")
+    with resume_parent_mlflow_run(missing_key_file) as ctx:
+        assert ctx is None
+
+
+def test_resume_parent_mlflow_run_connection_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify resume_parent_mlflow_run yields None gracefully when tracking server rejects connection."""
+    metrics_file = tmp_path / "train_metrics.json"
+    metrics_file.write_text(
+        json.dumps({"mlflow_run_id": "parent_run_unreachable"}),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(mlflow, "set_tracking_uri", MagicMock())
+    monkeypatch.setattr(
+        mlflow,
+        "start_run",
+        MagicMock(side_effect=ConnectionError("Server unreachable")),
+    )
+    monkeypatch.setattr(
+        "taxon_vision.models.training.tracking._resolve_reachable_tracking_uri",
+        lambda _settings=None: "http://down:5000",
+    )
+
+    with resume_parent_mlflow_run(metrics_file) as ctx:
+        assert ctx is None

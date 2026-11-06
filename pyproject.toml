@@ -34,6 +34,7 @@ dependencies = [
     "redis>=5.0.0",
     "psycopg[binary]>=3.2",
     "psycopg-pool>=3.2",
+    "evidently>=0.7,<0.8",
 ]
 
 [dependency-groups]

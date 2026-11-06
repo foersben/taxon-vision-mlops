@@ -370,8 +370,22 @@ class ResolvedTrainingParameters:
 class TrainingPipelineResult(TypedDict):
     """Structured result dictionary returned by run_training_pipeline.
 
-    Guarantees strict static type safety while remaining transparently compatible
-    with dict-based access patterns across REST API endpoints, CLI, and test assertions.
+    Guarantees strict static type safety while remaining transparently compatible with dict-based access patterns across REST API endpoints, CLI, and test assertions.
+
+    Attributes:
+        status: Run status (e.g., "success", "failed").
+        extractor: Identifier for the feature extractor backbone.
+        epochs_trained: Actual number of epochs completed.
+        final_train_loss: Final training loss value.
+        final_val_loss: Final validation loss value.
+        final_val_accuracy: Final validation accuracy.
+        checkpoint_path: File path to the trained model checkpoint.
+        duration_seconds: Total execution time in seconds.
+        promotion_status: MLflow model promotion status (if applicable).
+        hyperparameter_source: Source of hyperparameters (e.g., "grid", "bayesian").
+        mlflow_run_id: MLflow run identifier.
+        mlflow_model_id: MLflow model version identifier.
+        history: Dictionary containing epoch-wise metrics.
     """
 
     status: str
@@ -385,4 +399,5 @@ class TrainingPipelineResult(TypedDict):
     promotion_status: str | None
     hyperparameter_source: str
     mlflow_run_id: str | None
+    mlflow_model_id: str | None
     history: dict[str, list[float]]

@@ -1,0 +1,30 @@
+name: taxon-vision-mlops
+
+entry_points:
+  data_drift:
+    parameters:
+      current_embeddings: {type: path, default: "data/embeddings/train_embeddings.pt"}
+      reference_embeddings: {type: path, default: "data/reference/reference_train_embeddings.pt"}
+      out: {type: path, default: "reports/data_drift.json"}
+    command: "pixi run --frozen -e dev python -m taxon_vision.pipelines.data_drift --current-embeddings {current_embeddings} --reference-embeddings {reference_embeddings} --metrics-out {out}"
+
+  train:
+    parameters:
+      epochs: {type: int, default: 50}
+    command: "pixi run --frozen -e dev python -m taxon_vision.pipelines.train --epochs {epochs}"
+
+  export:
+    parameters:
+      quantize_int8: {type: bool, default: true}
+    command: "pixi run --frozen -e dev python -m taxon_vision.pipelines.export_onnx --quantize-int8 {quantize_int8}"
+
+  calibrate:
+    parameters:
+      alpha: {type: float, default: 0.05}
+    command: "pixi run --frozen -e dev python -m taxon_vision.pipelines.calibrate --alpha {alpha}"
+
+  evaluate:
+    command: "pixi run --frozen -e dev python -m taxon_vision.pipelines.evaluate"
+
+  workflow:
+    command: "pixi run --frozen -e dev dvc repro"

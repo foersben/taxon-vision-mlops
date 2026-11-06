@@ -221,6 +221,7 @@ def _save_metrics_json(metrics_out: str | None, result: Mapping[str, Any]) -> No
         "promotion_status": result.get("promotion_status"),
         "hyperparameter_source": result.get("hyperparameter_source"),
         "mlflow_run_id": result.get("mlflow_run_id"),
+        "mlflow_model_id": result.get("mlflow_model_id"),
     }
     with metrics_file.open("w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)

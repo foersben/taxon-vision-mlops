@@ -4,24 +4,30 @@
 
 from __future__ import annotations
 
+import contextlib
 import copy
+import hashlib
 import json
 import logging
 import os
 import subprocess
+import urllib.request
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import mlflow
 import numpy as np
 import onnx
+import pandas as pd
 from mlflow.models import ModelSignature
+from mlflow.models.model import ModelInfo
 from mlflow.types.schema import Schema, TensorSpec
 from torch import nn
 
-from taxon_vision.config import get_settings
+from taxon_vision.config import Settings, get_settings
 from taxon_vision.models.training.dataset import get_dvc_dataset_hash
 from taxon_vision.models.training.promotion import (
     ModelDimensions,
@@ -34,7 +40,7 @@ from taxon_vision.models.training.promotion import (
     _prepare_model_signature_and_example as _prepare_model_signature_and_example,
     _promote_model_if_better as _promote_model_if_better,
 )
-from taxon_vision.models.training.types import PromotionAlias as PromotionAlias
+from taxon_vision.models.training.types import EmbeddingSplit
 from taxon_vision.models.training.visualizations import (
     _plot_confusion_matrix as _plot_confusion_matrix,
     _plot_energy_distribution as _vis_plot_energy_distribution,
@@ -43,6 +49,56 @@ from taxon_vision.models.training.visualizations import (
 )
 
 logger = logging.getLogger(__name__)
+
+__all__ = [
+    "LoggedDatasets",
+    "MLflowTracker",
+    "ParentRunContext",
+    "mlflow_run_scope",
+    "resume_parent_mlflow_run",
+]
+
+
+@dataclass(frozen=True)
+class ParentRunContext:
+    """Immutable context bundle extracted from reports/train_metrics.json for cross-stage MLflow run resumption.
+
+    Why:
+        Encapsulates the parent MLflow run and model version identifiers to prevent tuple blindness when downstream DVC pipeline stages (ONNX export, conformal calibration, evaluation) re-enter the parent training run context.
+
+    How:
+        Provides typed fields for run_id, model_id, extractor name, and status read directly from Stage 4 serialized JSON metrics.
+
+    Attributes:
+        run_id: The MLflow run ID of the parent training stage.
+        model_id: The MLflow model version ID.
+        extractor: The extractor name.
+        status: The status of the training stage.
+    """
+
+    run_id: str
+    model_id: str | None
+    extractor: str
+    status: str
+
+
+@dataclass(frozen=True)
+class LoggedDatasets:
+    """Container of datasets registered with MLflow during training lineage logging.
+
+    Attributes:
+        train: Logged MLflow dataset instance for the training partition.
+        val: Logged MLflow dataset instance for the validation partition.
+        manifest: Logged MLflow dataset instance for the open manifest, or None.
+        cal: Optional logged MLflow dataset instance for calibration partition.
+        test: Optional logged MLflow dataset instance for holdout test partition.
+    """
+
+    train: Any | None
+    val: Any | None
+    manifest: Any | None = None
+    cal: Any | None = None
+    test: Any | None = None
 
 
 def _plot_energy_distribution(
@@ -120,12 +176,67 @@ def _inject_lineage_tags() -> None:
         logger.debug("Could not resolve git lineage tags: %s", git_err)
 
 
+def _resolve_reachable_tracking_uri(settings: Settings | None = None) -> str:
+    """Resolve the reachable MLflow tracking URI across explicit, network, and offline tiers.
+
+    Summary:
+        Determines the optimal MLflow tracking URI by evaluating environment overrides, probing the primary HTTP/S tracking server for reachability, and falling back to a local SQLite database when offline.
+
+    Why:
+        Hardcoded remote URIs or silent tracking dropouts compromise experiment reproducibility. While production CI runs and cluster pods communicate directly with a dedicated MLflow 3.x tracking server, offline developer workstations or air-gapped environments must continue tracking experiments without dropping runs or polluting stdout with network timeout tracebacks.
+
+    How:
+        1. Tier 1: Checks for an explicit MLFLOW_TRACKING_URI environment variable and returns it immediately if present.
+        2. Tier 2: If the configured tracking URI begins with 'http://' or 'https://', performs a rapid HTTP health check against the server's /health endpoint bounded by health_check_timeout_seconds.
+        3. Tier 3: If Tier 2 fails or is unreachable, ensures local directories exist for SQLite storage (data/mlflow/artifacts) and returns the fallback SQLite URI whilst logging an operational warning.
+
+    Args:
+        settings: Application settings instance. If None, resolved via get_settings().
+
+    Returns:
+        Reachable MLflow tracking URI string (HTTP URL or SQLite URI).
+    """
+    env_uri = os.getenv("MLFLOW_TRACKING_URI")
+    if env_uri:
+        return env_uri
+
+    cfg = settings or get_settings()
+    configured_uri = cfg.mlflow.tracking_uri
+
+    if configured_uri.startswith(("http://", "https://")):
+        health_url = f"{configured_uri.rstrip('/')}/health"
+        timeout = cfg.mlflow.health_check_timeout_seconds
+        try:
+            req = urllib.request.Request(health_url, headers={"User-Agent": "TaxonVision-HealthProbe/1.0"})
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                if 200 <= resp.status < 300:
+                    return configured_uri
+        except Exception as probe_err:
+            logger.debug("MLflow tracking health probe failed for %s: %s", health_url, probe_err)
+
+    # Tier 3: Fallback to local SQLite backend
+    fallback_uri = cfg.mlflow.fallback_sqlite_uri
+    db_path_str = fallback_uri.replace("sqlite:///", "")
+    db_dir = Path(db_path_str).parent if db_path_str else Path("data/mlflow")
+    artifacts_dir = db_dir / "artifacts"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+    logger.warning(
+        "Primary MLflow tracking server '%s' is unreachable. Falling back to local SQLite backend '%s'.",
+        configured_uri,
+        fallback_uri,
+    )
+    return fallback_uri
+
+
 @contextmanager
 def mlflow_run_scope(
     run_name: str,
     params: dict[str, Any] | None = None,
+    *,
     log_file: Path | str | None = None,
     nested: bool = False,
+    experiment_name: str | None = None,
 ) -> Generator[mlflow.ActiveRun | None, None, None]:
     """Provide RAII (Resource Acquisition Is Initialization) lifecycle management for MLflow experiment tracking.
 
@@ -135,7 +246,7 @@ def mlflow_run_scope(
         Orphaned experiment runs left in 'RUNNING' status pollute MLOps registries when training processes abort, crash, or hit out-of-memory errors. Passing boolean flags (`is_active: bool`) across subroutines causes tramp data code smells and fragile error handling. A context manager guarantees deterministic lifecycle boundaries: setting up tracking, logging hyperparameter metadata, persisting run artifacts, and safely closing the run - marking failures as FAILED and successful completions as FINISHED - even during unhandled exceptions.
 
     How:
-        1. Configures MLflow tracking URI and experiment name from project settings.
+        1. Configures MLflow tracking URI via 3-tier reachable resolution and experiment name from project settings or caller argument.
         2. Starts an active MLflow run with the given `run_name` (optionally nested).
         3. Logs initial training parameters and DVC dataset manifest hashes.
         4. Injects cryptographic Git lineage tags and CI/CD orchestration tags (Jenkins/GitHub Actions).
@@ -149,6 +260,7 @@ def mlflow_run_scope(
         params: Optional dictionary of hyperparameter key-value pairs to log.
         log_file: Optional path to an execution log file to attach as an MLflow artifact.
         nested: Whether to start a nested child run within an existing active run scope.
+        experiment_name: Optional target experiment name. If None, uses settings.mlflow.experiment_name.
 
     Yields:
         Active MLflow run instance if tracking succeeded, or None if unavailable.
@@ -156,11 +268,13 @@ def mlflow_run_scope(
     active_run = None
     try:
         settings = get_settings()
-        tracking_uri = os.getenv("MLFLOW_TRACKING_URI") or settings.mlflow.tracking_uri
+        tracking_uri = _resolve_reachable_tracking_uri(settings)
         if tracking_uri:
             mlflow.set_tracking_uri(tracking_uri)
-        if settings.mlflow.experiment_name:
-            mlflow.set_experiment(settings.mlflow.experiment_name)
+
+        target_exp = experiment_name or settings.mlflow.experiment_name
+        if target_exp:
+            mlflow.set_experiment(target_exp)
 
         active_run = mlflow.start_run(run_name=run_name, nested=True) if nested else mlflow.start_run(run_name=run_name)
 
@@ -188,56 +302,260 @@ def mlflow_run_scope(
             _end_mlflow_run_safely("FINISHED")
 
 
-def _log_mlflow_metrics(history: dict[str, list[float]], duration: float) -> None:
+@contextmanager
+def resume_parent_mlflow_run(
+    train_metrics_path: Path | str = "reports/train_metrics.json",
+) -> Generator[ParentRunContext | None, None, None]:
+    """Provide RAII lifecycle context manager to re-enter a parent MLflow run across multi-process DVC stages.
+
+    Why:
+        DVC executes each pipeline stage in dvc.yaml as an isolated operating system process. When Stage 4 (head training) finishes, its Python interpreter exits and its MLflow run is closed. Downstream stages (Stage 5 export_onnx, Stage 6 calibrate, Stage 7 evaluate) need to attach artifacts (INT8 ONNX model, conformal parameters, holdout metrics) to the exact same parent MLflow run and LoggedModel card without scattering disconnected runs across the experiment tracker.
+
+    How:
+        1. Reads reports/train_metrics.json to recover mlflow_run_id and mlflow_model_id.
+        2. Resolves the reachable tracking URI across remote HTTP and local SQLite fallback tiers.
+        3. Invokes mlflow.start_run(run_id=run_id) to reopen the parent run.
+        4. Yields a typed ParentRunContext dataclass to the caller.
+        5. Automatically closes the reopened run on block exit without altering its terminal FINISHED status.
+        6. Safely yields None if train_metrics.json is missing, unparsable, or contains no run_id (allowing dry-runs and offline operations to continue).
+
+    Args:
+        train_metrics_path: File path to reports/train_metrics.json holding the parent run ID.
+
+    Yields:
+        ParentRunContext instance if run was successfully resumed, or None otherwise.
+    """
+    metrics_file = Path(train_metrics_path)
+    if not metrics_file.exists():
+        logger.debug("Parent metrics file %s does not exist; skipping MLflow run resumption.", metrics_file)
+        yield None
+        return
+
+    try:
+        data = json.loads(metrics_file.read_text(encoding="utf-8"))
+    except Exception as read_err:
+        logger.warning("Could not parse %s for MLflow run resumption: %s", metrics_file, read_err)
+        yield None
+        return
+
+    run_id = data.get("mlflow_run_id")
+    if not run_id:
+        logger.debug("No mlflow_run_id found in %s; skipping run resumption.", metrics_file)
+        yield None
+        return
+
+    ctx = ParentRunContext(
+        run_id=str(run_id),
+        model_id=data.get("mlflow_model_id"),
+        extractor=data.get("extractor", "unknown"),
+        status=data.get("status", "unknown"),
+    )
+
+    settings = get_settings()
+    tracking_uri = _resolve_reachable_tracking_uri(settings)
+    if tracking_uri:
+        mlflow.set_tracking_uri(tracking_uri)
+
+    active_run = None
+    try:
+        active_run = mlflow.start_run(run_id=ctx.run_id)
+        logger.info("Resumed parent MLflow run %s for stage continuity", ctx.run_id)
+    except Exception as start_err:
+        logger.warning("Failed to resume parent MLflow run %s: %s", ctx.run_id, start_err)
+        yield None
+        return
+
+    try:
+        yield ctx
+    finally:
+        if active_run is not None:
+            _end_mlflow_run_safely("FINISHED")
+
+
+def _log_epoch_trajectory(history: dict[str, list[float]]) -> int:
+    """Log per-epoch training metrics to active MLflow run and return total completed epochs.
+
+    Args:
+        history: Metric history dictionary.
+
+    Returns:
+        Total number of epochs completed.
+    """
+    epochs = max((len(vals) for vals in history.values()), default=0)
+    for epoch in range(epochs):
+        step_metrics = {k: v[epoch] for k, v in history.items() if epoch < len(v)}
+        mlflow.log_metrics(step_metrics, step=epoch + 1)
+    return epochs
+
+
+def _log_bound_evaluation_metrics(
+    history: dict[str, list[float]],
+    epochs: int,
+    model_id: str | None,
+    dataset: Any | None,
+) -> None:
+    """Log final summary metrics bound to MLflow 3 model_id and dataset evaluation split.
+
+    Args:
+        history: Metric history dictionary.
+        epochs: Total completed epochs.
+        model_id: Optional model version ID string.
+        dataset: Optional evaluation dataset split.
+    """
+    if not model_id and not dataset:
+        return
+    final_metrics = {f"final_{k}": v[-1] for k, v in history.items() if v}
+    extra_kwargs: dict[str, Any] = {}
+    if model_id:
+        extra_kwargs["model_id"] = model_id
+    if dataset:
+        extra_kwargs["dataset"] = dataset
+    with contextlib.suppress(Exception):
+        mlflow.log_metrics(final_metrics, step=epochs, **extra_kwargs)
+
+
+def _log_mlflow_metrics(
+    history: dict[str, list[float]],
+    duration: float,
+    *,
+    model_id: str | None = None,
+    dataset: Any | None = None,
+) -> None:
     """Log training metric trajectories and duration to the active MLflow run.
 
     Why:
         Tracking per-epoch convergence curves (training loss, validation loss, validation accuracy, F1, and PR-AUC) in MLflow enables visualization of overfitting, learning rate decay effectiveness, and historical comparisons across training runs.
 
     How:
-        Iterates over recorded epochs in the history dictionary, emitting `mlflow.log_metrics` at each step index, followed by the total wall-clock training duration.
+        Emits per-epoch trajectory metrics via _log_epoch_trajectory, logs total wall-clock duration, and binds final epoch metrics to the LoggedModel and validation dataset lineage.
 
     Args:
-        history: Metric history dictionary containing epoch evaluation metrics.
-        duration: Total elapsed training duration in seconds.
+        history: Training history mapping metric keys to per-epoch scalar floats.
+        duration: Total head training time in seconds.
+        model_id: Optional MLflow 3 LoggedModel ID to bind metrics directly to the model card.
+        dataset: Optional MLflow Dataset evaluation split to bind metrics to dataset lineage.
     """
-    try:
-        n_epochs = len(history.get("train_loss", []))
-        for i in range(n_epochs):
-            metrics = {
-                "train_loss": history.get("train_loss", [0.0])[i],
-                "val_loss": history.get("val_loss", [0.0])[i],
-                "val_accuracy": history.get("val_accuracy", [0.0])[i],
-                "val_f1": history.get("val_f1", [0.0])[i],
-                "val_pr_auc": history.get("val_pr_auc", [0.0])[i],
-            }
-            if "learning_rate" in history and i < len(history["learning_rate"]):
-                metrics["learning_rate"] = history["learning_rate"][i]
-            mlflow.log_metrics(metrics, step=i + 1)
+
+    def _action() -> None:
+        epochs = _log_epoch_trajectory(history)
         mlflow.log_metric("duration_seconds", duration)
-    except Exception as err:
-        logger.debug("Failed to log MLflow metrics: %s", err)
+        _log_bound_evaluation_metrics(history, epochs, model_id, dataset)
+
+    _safe_mlflow_call("log_mlflow_metrics", _action)
 
 
-def _log_dataset_lineage(train_emb: np.ndarray, train_lbl: np.ndarray) -> None:
-    """Log dataset input lineage metadata into the active MLflow run.
+def _compute_file_sha256(path: Path) -> str:
+    """Compute the cryptographic SHA256 hex digest of a file on disk.
 
     Args:
-        train_emb: Training embeddings feature array.
-        train_lbl: Training integer targets array.
+        path: Path to the file to compute the digest for.
+
+    Returns:
+        SHA256 hex digest of the file.
+    """
+    hasher = hashlib.sha256()
+    with path.open("rb") as f:
+        while chunk := f.read(65536):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def _log_dataset_lineage(
+    data: EmbeddingSplit,
+    manifest_path: Path | str | None = Path("data/manifests/dataset_manifest.parquet"),
+) -> LoggedDatasets:
+    """Log dataset input lineage metadata (Parquet manifest and split tensors) into the active MLflow run.
+
+    Why:
+        Preserves cryptographic data lineage and legal license attribution (Rule 05) on the MLflow Model Card, while returning dataset references for MLflow 3 metric binding.
+
+    How:
+        1. Reads dataset_manifest.parquet and registers it via mlflow.data.from_pandas with SHA256 digest tag.
+        2. Registers train_embeddings and val_embeddings via mlflow.data.from_numpy.
+        3. Registers optional calibration and test splits if available.
+        4. Returns an immutable LoggedDatasets container.
+
+    Args:
+        data: Pre-loaded EmbeddingSplit containing training and validation tensors.
+        manifest_path: Optional path to dataset_manifest.parquet.
+
+    Returns:
+        LoggedDatasets container holding registered MLflow dataset objects.
     """
     if not mlflow.active_run():
-        return
+        return LoggedDatasets(train=None, val=None)
 
-    def _log() -> None:
-        dataset = mlflow.data.from_numpy(  # type: ignore[attr-defined]
-            features=train_emb,
-            targets=train_lbl,
+    manifest_ds = None
+    if manifest_path is not None:
+        p = Path(manifest_path)
+        if p.is_file():
+            try:
+                df = pd.read_parquet(p)
+                sha256 = _compute_file_sha256(p)
+                target_col = "taxon_id" if "taxon_id" in df.columns else None
+                manifest_ds = mlflow.data.from_pandas(  # type: ignore[attr-defined]
+                    df,
+                    source=str(p),
+                    name="inaturalist_open_manifest",
+                    targets=target_col,
+                )
+                mlflow.log_input(
+                    manifest_ds,
+                    context="manifest",
+                    tags={
+                        "sha256": sha256,
+                        "license.policy": "CC0,CC-BY,CC-BY-NC",
+                        "records_count": str(len(df)),
+                    },
+                )
+            except Exception as err:
+                logger.debug("Failed to log manifest lineage to MLflow: %s", err)
+
+    train_ds = None
+    val_ds = None
+    cal_ds = None
+    test_ds = None
+
+    try:
+        train_ds = mlflow.data.from_numpy(  # type: ignore[attr-defined]
+            features=data.train_embeddings.detach().cpu().numpy(),
+            targets=data.train_labels.detach().cpu().numpy(),
             name="train_embeddings",
         )
-        mlflow.log_input(dataset, context="training")
+        mlflow.log_input(train_ds, context="training")
 
-    _safe_mlflow_call("log_dataset_lineage", _log)
+        val_ds = mlflow.data.from_numpy(  # type: ignore[attr-defined]
+            features=data.val_embeddings.detach().cpu().numpy(),
+            targets=data.val_labels.detach().cpu().numpy(),
+            name="val_embeddings",
+        )
+        mlflow.log_input(val_ds, context="validation")
+
+        if data.cal_embeddings is not None and data.cal_labels is not None:
+            cal_ds = mlflow.data.from_numpy(  # type: ignore[attr-defined]
+                features=data.cal_embeddings.detach().cpu().numpy(),
+                targets=data.cal_labels.detach().cpu().numpy(),
+                name="cal_embeddings",
+            )
+            mlflow.log_input(cal_ds, context="calibration")
+
+        if data.test_embeddings is not None and data.test_labels is not None:
+            test_ds = mlflow.data.from_numpy(  # type: ignore[attr-defined]
+                features=data.test_embeddings.detach().cpu().numpy(),
+                targets=data.test_labels.detach().cpu().numpy(),
+                name="test_embeddings",
+            )
+            mlflow.log_input(test_ds, context="test")
+    except Exception as err:
+        logger.debug("Failed to log tensor split lineage to MLflow: %s", err)
+
+    return LoggedDatasets(
+        train=train_ds,
+        val=val_ds,
+        manifest=manifest_ds,
+        cal=cal_ds,
+        test=test_ds,
+    )
 
 
 def _log_training_hyperparameters(params: dict[str, Any]) -> None:
@@ -300,8 +618,19 @@ def _log_pytorch_model_with_fallback(
     signature: ModelSignature,
     input_example: np.ndarray,
     pip_reqs: list[str],
-) -> Any:
+    *,
+    params: dict[str, Any] | None = None,
+    model_type: str = "classifier",
+) -> ModelInfo | None:
     """Attempt default logging with fallback to pickle serialization.
+
+    Why:
+        MLflow 3 introduces `extra_kwargs` (passed via `**kwargs`) to `log_model` for binding metadata to model artifacts and datasets. This function implements a fallback strategy to accommodate legacy MLflow versions that reject unknown keyword arguments, ensuring robust model registration across environments.
+
+    How:
+        - Attempts default `mlflow.pytorch.log_model` with `extra_kwargs`.
+        - On `TypeError` (unknown keyword arguments), falls back to `log_model` without `extra_kwargs`.
+        - On other exceptions, logs debug message and retries with `serialization_format="pickle"` and `extra_kwargs`.
 
     Args:
         model: PyTorch model module on CPU.
@@ -309,6 +638,8 @@ def _log_pytorch_model_with_fallback(
         signature: ModelSignature instance.
         input_example: Input array example.
         pip_reqs: Required pip dependencies.
+        params: Optional MLflow params dictionary.
+        model_type: Optional model type string.
 
     Returns:
         ModelInfo instance on success, or None on failure.
@@ -317,7 +648,11 @@ def _log_pytorch_model_with_fallback(
         raise ValueError(
             f"Strict contract violation: signature must be an instance of ModelSignature, got {type(signature).__name__}"
         )
-
+    extra_kwargs: dict[str, Any] = {}
+    if params:
+        extra_kwargs["params"] = params
+    if model_type:
+        extra_kwargs["model_type"] = model_type
     try:
         return mlflow.pytorch.log_model(
             model,
@@ -326,10 +661,23 @@ def _log_pytorch_model_with_fallback(
             signature=signature,
             input_example=input_example,
             pip_requirements=pip_reqs,
+            **extra_kwargs,
         )
+    except TypeError:
+        # Fallback if older MLflow mock does not accept MLflow 3 extra_kwargs
+        try:
+            return mlflow.pytorch.log_model(
+                model,
+                name="model",
+                registered_model_name=reg_name,
+                signature=signature,
+                input_example=input_example,
+                pip_requirements=pip_reqs,
+            )
+        except Exception:
+            pass
     except Exception as default_err:
         logger.debug("Default MLflow PyTorch model serialization failed; retrying with pickle: %s", default_err)
-
     try:
         return mlflow.pytorch.log_model(
             model,
@@ -339,6 +687,7 @@ def _log_pytorch_model_with_fallback(
             input_example=input_example,
             serialization_format="pickle",
             pip_requirements=pip_reqs,
+            **extra_kwargs,
         )
     except Exception as err:
         logger.warning("Failed to log model to registry: %s", err)
@@ -399,6 +748,8 @@ class MLflowTracker:
         input_example: np.ndarray | None = None,
         registered_model_name: str | None = None,
         pip_requirements: list[str] | None = None,
+        params: dict[str, Any] | None = None,
+        model_type: str = "classifier",
     ) -> Any:
         """Log PyTorch classifier to MLflow registry with strongly-typed signature and input example.
 
@@ -411,6 +762,8 @@ class MLflowTracker:
             input_example: Optional real or zero-padded input tensor.
             registered_model_name: Optional explicit registry model name.
             pip_requirements: Optional list of package dependencies.
+            params: Optional dictionary of hyperparameter metadata to attach to the LoggedModel.
+            model_type: Model classification type string (default: "classifier").
 
         Returns:
             ModelInfo instance on success, or None on failure.
@@ -431,7 +784,15 @@ class MLflowTracker:
 
         reg_name = registered_model_name or model_name
         pip_reqs = pip_requirements or ["torch", "numpy", "cloudpickle"]
-        return _log_pytorch_model_with_fallback(cpu_model, reg_name, signature, input_example, pip_reqs)
+        return _log_pytorch_model_with_fallback(
+            cpu_model,
+            reg_name,
+            signature,
+            input_example,
+            pip_reqs,
+            params=params,
+            model_type=model_type,
+        )
 
     @classmethod
     def log_onnx_model(

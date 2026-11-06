@@ -37,14 +37,24 @@ def test_environment_isolation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("MLFLOW_TRACKING_URI", sqlite_uri)
     monkeypatch.setenv("TAXON_MLFLOW_TRACKING_URI", sqlite_uri)
     monkeypatch.setenv("TAXON_VISION_TESTING", "1")
+    monkeypatch.setenv("TAXON_TELEMETRY__ALLOW_IN_MEMORY_FALLBACK", "true")
 
     from taxon_vision.config import get_settings
     from taxon_vision.service.inference import reset_model_caches
     from taxon_vision.service.storage import get_image_cache
+    from taxon_vision.service.telemetry_store import (
+        BoundedInMemoryTelemetryStore,
+        close_telemetry_store,
+        set_telemetry_store,
+    )
 
     get_settings.cache_clear()
     get_image_cache.cache_clear()
+    set_telemetry_store(None)
+    close_telemetry_store()
     reset_model_caches()
+    close_telemetry_store()
+    set_telemetry_store(BoundedInMemoryTelemetryStore(maxlen=500))
 
     try:
         import mlflow
@@ -65,6 +75,8 @@ def test_environment_isolation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 
     get_settings.cache_clear()
     get_image_cache.cache_clear()
+    set_telemetry_store(None)
+    close_telemetry_store()
     reset_model_caches()
 
 
