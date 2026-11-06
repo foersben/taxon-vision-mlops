@@ -58,6 +58,11 @@ TELEMETRY_WRITE_FAILURES = Counter(
     "taxon_telemetry_write_failures_total",
     "Total database write failures when persisting prediction telemetry",
 )
+RETRAIN_TRIGGERS_TOTAL = Counter(
+    "taxon_retrain_triggers_total",
+    "Total model retraining triggers evaluated by the relay",
+    ["source", "outcome"],
+)
 
 
 class DriftMetricsCollector:

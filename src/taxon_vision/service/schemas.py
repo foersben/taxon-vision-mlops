@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ConformalRoutingTier(StrEnum):
@@ -187,3 +187,79 @@ class DriftRunSummary(BaseModel):
     mmd2_p_value: float | None = None
     drift_detected: bool
     mlflow_run_id: str | None = None
+
+
+class GrafanaAlertItem(BaseModel):
+    """Individual alert item in a Grafana webhook notification.
+
+    Why:
+        Encapsulates individual alert state, classification labels, and diagnostic annotations delivered within a multi-alert notification batch without leaking mixed-case serialization formats into Python domain models.
+
+    How:
+        Extracts status, label mappings, and optional annotations with lenient defaults for optional attributes, mapping incoming camelCase keys to idiomatic snake_case fields via Pydantic aliases.
+
+    Attributes:
+        status: Alert state string (e.g. 'firing' or 'resolved').
+        labels: Dimension labels associated with the alert rule.
+        annotations: Diagnostic descriptions and runbooks attached to the alert rule.
+        starts_at: UTC timestamp when the alert commenced firing.
+        ends_at: UTC timestamp when the alert resolved.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    status: str
+    labels: dict[str, str] = Field(default_factory=dict)
+    annotations: dict[str, str] = Field(default_factory=dict)
+    starts_at: str | None = Field(default=None, alias="startsAt")
+    ends_at: str | None = Field(default=None, alias="endsAt")
+
+
+class GrafanaWebhookPayload(BaseModel):
+    """Payload received from Grafana unified alerting webhook receiver.
+
+    Why:
+        Provides structured, type-safe validation for Grafana Alertmanager webhook notifications dispatched upon rule state transitions.
+
+    How:
+        Parses notification metadata including receiver identifier, overall status ('firing' or 'resolved'), and the collection of active alert items, using field aliases for non-Pythonic wire keys.
+
+    Attributes:
+        receiver: Target contact point identifier in Grafana Alertmanager.
+        status: Aggregated state string across all alerts in the notification payload.
+        alerts: Collection of individual alert records contained in the batch.
+        group_labels: Label dimensions by which alerts were aggregated.
+        common_labels: Labels shared across every alert in the notification batch.
+        common_annotations: Annotations shared across every alert in the notification batch.
+        external_url: URL to the Grafana instance dispatching the notification.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    receiver: str | None = None
+    status: str
+    alerts: list[GrafanaAlertItem] = Field(default_factory=list)
+    group_labels: dict[str, str] = Field(default_factory=dict, alias="groupLabels")
+    common_labels: dict[str, str] = Field(default_factory=dict, alias="commonLabels")
+    common_annotations: dict[str, str] = Field(default_factory=dict, alias="commonAnnotations")
+    external_url: str | None = Field(default=None, alias="externalURL")
+
+
+class RetrainWebhookResponse(BaseModel):
+    """Outcome of processing an automated retraining webhook trigger.
+
+    Why:
+        Communicates the dispatch status back to the Grafana webhook engine and operational logs with explicit causal reasoning.
+
+    How:
+        Returns status ('triggered', 'suppressed', or 'ignored'), human-readable detail, and optional Airflow DAG run identifier.
+
+    Attributes:
+        status: High-level action verdict ('triggered', 'suppressed', or 'ignored').
+        detail: Analytical rationale explaining why the action was taken or omitted.
+        dag_run_id: Airflow DAG execution run identifier if a pipeline run was dispatched.
+    """
+
+    status: str
+    detail: str
+    dag_run_id: str | None = None
