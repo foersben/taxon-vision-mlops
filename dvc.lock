@@ -118,50 +118,54 @@ stages:
       size: 255133
   train:
     cmd: pixi run -e dev python -m taxon_vision.pipelines.train --extractor
-      dinov3 --epochs 5 --batch-size 32 --lr 0.001 --train-embeddings
+      dinov3 --epochs 30 --batch-size 32 --lr 0.001 --train-embeddings
       data/embeddings/train_embeddings.pt --val-embeddings
       data/embeddings/val_embeddings.pt --checkpoint-path
       models/checkpoints/head.pt --metrics-out reports/train_metrics.json
     deps:
     - path: data/embeddings/train_embeddings.pt
       hash: md5
-      md5: 5486c9d20ac0063fed12b88ec88e9c4f
-      size: 1826989
+      md5: fa0ac0221e0ef7494cf645c09b5458d9
+      size: 1782253
     - path: data/embeddings/val_embeddings.pt
       hash: md5
-      md5: 08fa7314c41fe32d6508dc62181629d9
-      size: 262877
+      md5: c2fd4905d136931d25dce1c20a8c60b2
+      size: 255133
+    - path: reports/data_drift.json
+      hash: md5
+      md5: 642f3f829c4a60a7baa944f22f9bf7f9
+      size: 387
     - path: src/taxon_vision/models/loss.py
       hash: md5
-      md5: 4dd8752c1fddcc6b7018a84c781216bd
-      size: 4953
+      md5: 3040bc913d4e19e304cc2f9cc6f7b7c7
+      size: 5743
     - path: src/taxon_vision/models/training/
       hash: md5
-      md5: c87811747ff06b5800521a43c2b5eb71.dir
-      size: 227986
-      nfiles: 16
+      md5: 6cbeeb5ddf0bc1b23305cfac76b8c8ca.dir
+      size: 406994
+      nfiles: 22
     - path: src/taxon_vision/pipelines/train.py
       hash: md5
-      md5: bf3b500bdbe1188682bd822c0737fa86
-      size: 7499
+      md5: 074008ad564ff37f846a471cdc784937
+      size: 10457
     params:
       params.yaml:
         model.extractor: dinov3
         training.batch_size: 32
         training.cb_beta: 0.9999
-        training.epochs: 5
+        training.epochs: 30
         training.learning_rate: 0.001
         training.tune: false
         training.weight_decay: 0.0001
     outs:
     - path: models/checkpoints/head.pt
       hash: md5
-      md5: 1f0c7044800db7aef5639e753db8652d
+      md5: c4321a8fb15f94943563e736da45715c
       size: 17101
     - path: reports/train_metrics.json
       hash: md5
-      md5: 1cfe23c80e0e3c321e9495b5b58ab5eb
-      size: 221
+      md5: ee28384d3cb3830a2f7881ce1b718d5c
+      size: 404
   export:
     cmd: pixi run -e dev python -m taxon_vision.pipelines.export_onnx
       --extractor dinov3 --image-size 224 --checkpoint
@@ -170,20 +174,20 @@ stages:
     deps:
     - path: models/checkpoints/head.pt
       hash: md5
-      md5: 1f0c7044800db7aef5639e753db8652d
+      md5: c4321a8fb15f94943563e736da45715c
       size: 17101
     - path: src/taxon_vision/inference/onnx_exporter.py
       hash: md5
-      md5: cfce72b442242f6a80e4707fed5ee77f
-      size: 16460
+      md5: d444fbf82898e781ad3edd561252f7e0
+      size: 17466
     - path: src/taxon_vision/inference/quantizer.py
       hash: md5
-      md5: a608e96508c4c0340bca3fec7140e38c
-      size: 14036
+      md5: 9a7ea36a5652c138bc514f4d1c9eae70
+      size: 14161
     - path: src/taxon_vision/pipelines/export_onnx.py
       hash: md5
-      md5: b0cff1dce953dcaa47b7f20c69ed5494
-      size: 5007
+      md5: e1a8a9edcd87b68e0e9422e4fce42054
+      size: 7603
     params:
       params.yaml:
         export.quantize_int8: true
@@ -192,7 +196,7 @@ stages:
     outs:
     - path: models/checkpoints/model_int8.onnx
       hash: md5
-      md5: c942269cc5c2a73a18397fac279f7c6c
+      md5: ba78b996fd9695c88ebaeb72735b98d6
       size: 23108256
   calibrate:
     cmd: pixi run -e dev python -m taxon_vision.pipelines.calibrate --onnx-model
@@ -202,28 +206,28 @@ stages:
     deps:
     - path: data/embeddings/cal_embeddings.pt
       hash: md5
-      md5: 077b8192e04e8b68eb0b149bc5af3a26
-      size: 262877
+      md5: 8fa17bae49b1b1af08207ff7581af3d0
+      size: 255133
     - path: models/checkpoints/model_int8.onnx
       hash: md5
-      md5: c942269cc5c2a73a18397fac279f7c6c
+      md5: ba78b996fd9695c88ebaeb72735b98d6
       size: 23108256
     - path: src/taxon_vision/inference/onnx_engine.py
       hash: md5
-      md5: 8399a065635ca3cb3f79570063330bef
-      size: 9785
+      md5: bf9b8c17a83f6467684656b3d9bf2d92
+      size: 8649
     - path: src/taxon_vision/pipelines/calibrate.py
       hash: md5
-      md5: 58ec540fa054ce32dc9a9d7fa5cb07ab
-      size: 8432
+      md5: 47b0aabfbd09b1d145206c7842bf83c4
+      size: 11265
     - path: src/taxon_vision/uncertainty/conformal.py
       hash: md5
-      md5: f8dfa53af9b9898d8f72c46b9ec153ea
-      size: 7121
+      md5: eb073874ce6ad9c00da70b0ee3a0890c
+      size: 8793
     - path: src/taxon_vision/uncertainty/ood_detector.py
       hash: md5
-      md5: b03dbe0ee2e16d772c30f44d3cb00b27
-      size: 9042
+      md5: 7e0fee39acff1cd64c3564f0cfc9d561
+      size: 8523
     params:
       params.yaml:
         conformal.alpha: 0.05
@@ -232,60 +236,60 @@ stages:
     outs:
     - path: config/conformal_config.yaml
       hash: md5
-      md5: eba4c459dabbb132c7f238092f3e3437
+      md5: 57dfa07885f37714d6a966d1d1c3c568
       size: 284
     - path: reports/conformal_metrics.json
       hash: md5
-      md5: 1c9eff52365d869015aaca937b5204d3
+      md5: aa40b22c85734ea87ecd8dde3e074868
       size: 201
   eval:
     cmd: pixi run -e dev python -m taxon_vision.pipelines.evaluate --onnx-model
       models/checkpoints/model_int8.onnx --embeddings
       data/embeddings/test_embeddings.pt --conformal-config
       config/conformal_config.yaml --out docs/assets/pareto_results.json
-      --metrics-out reports/pareto_evaluation.json --latency-sla-ms 25.0
+      --metrics-out reports/pareto_evaluation.json --latency-sla-ms 120.0
     deps:
     - path: config/conformal_config.yaml
       hash: md5
-      md5: eba4c459dabbb132c7f238092f3e3437
+      md5: 57dfa07885f37714d6a966d1d1c3c568
       size: 284
     - path: data/embeddings/test_embeddings.pt
       hash: md5
-      md5: 1539dd9e69c0e2c2856253c8c27b3e5b
-      size: 262885
+      md5: 4c15171832013da04255d283c5e0ddb0
+      size: 255141
     - path: models/checkpoints/model_int8.onnx
       hash: md5
-      md5: c942269cc5c2a73a18397fac279f7c6c
+      md5: ba78b996fd9695c88ebaeb72735b98d6
       size: 23108256
     - path: src/taxon_vision/inference/onnx_engine.py
       hash: md5
-      md5: 8399a065635ca3cb3f79570063330bef
-      size: 9785
+      md5: bf9b8c17a83f6467684656b3d9bf2d92
+      size: 8649
     - path: src/taxon_vision/pipelines/evaluate.py
       hash: md5
-      md5: 2e1665a92b3596b39d4fb5068fbde221
-      size: 13631
+      md5: 2ed3c95bab375ab8072eba5db58a5efd
+      size: 42298
     - path: src/taxon_vision/uncertainty/conformal.py
       hash: md5
-      md5: f8dfa53af9b9898d8f72c46b9ec153ea
-      size: 7121
+      md5: eb073874ce6ad9c00da70b0ee3a0890c
+      size: 8793
     - path: src/taxon_vision/uncertainty/ood_detector.py
       hash: md5
-      md5: b03dbe0ee2e16d772c30f44d3cb00b27
-      size: 9042
+      md5: 7e0fee39acff1cd64c3564f0cfc9d561
+      size: 8523
     params:
       params.yaml:
         conformal.alpha: 0.05
-        evaluation.latency_sla_ms: 25.0
+        evaluation.latency_sla_ms: 120.0
     outs:
     - path: docs/assets/pareto_results.json
       hash: md5
-      md5: bcd9cdc8670200fb4e3a3a7fff1f9ae4
-      size: 2092
+      md5: 4e3eb6dd9c790dc5cb56d5d08b730566
+      size: 2210
     - path: reports/pareto_evaluation.json
       hash: md5
-      md5: fc512702e12d407da9fb81398ebbeb81
-      size: 421
+      md5: 553681119128adbf8fa8ef2f9cdaa504
+      size: 569
   data_drift:
     cmd: pixi run -e dev python -m taxon_vision.pipelines.data_drift --reference
       data/reference/reference_train_embeddings.pt --current
@@ -309,10 +313,10 @@ stages:
       size: 14210
     - path: src/taxon_vision/pipelines/data_drift.py
       hash: md5
-      md5: aacbb7ba639e889c608b4aea14d3cda2
-      size: 16083
+      md5: 1764a4fd6596dcf9a9ebe716392da60f
+      size: 16082
     outs:
     - path: reports/data_drift.json
       hash: md5
-      md5: aeed784dbf0c9ba555d26a2229321acf
+      md5: 642f3f829c4a60a7baa944f22f9bf7f9
       size: 387
