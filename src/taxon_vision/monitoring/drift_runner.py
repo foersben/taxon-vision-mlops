@@ -1,0 +1,343 @@
+# SPDX-FileCopyrightText: 2026 Benjamin Förster
+# SPDX-License-Identifier: MIT
+"""Unified statistical drift evaluation runner.
+
+Summary:
+    Orchestrates continuous distribution drift evaluations across live production embeddings against holdout calibration baselines, logging statistical metrics to MLflow and persisting verdicts for telemetry scraping.
+
+Why (Architecture Decisions & Trade-offs):
+    Periodic drift evaluation must decouple heavy statistical matrix math (MMD permutation tests, PCA dimensionality reduction) and reporting generation from the request-serving hot path. Encapsulating this orchestration within a single runner enables synchronous execution by offline CLI tools, asynchronous offloading via FastAPI background workers (`anyio.to_thread.run_sync`), and scheduled execution by Airflow DAGs without code duplication.
+
+How (Algorithmic Mechanism & Invariants):
+    1. Loads and caches baseline calibration embeddings (`cal_embeddings.pt`) in system memory to eliminate repeated disk deserialisation.
+    2. Queries the latest N prediction embeddings from TelemetryStore; aborts gracefully with a typed 'insufficient_data' verdict if sample count is below `min_samples`.
+    3. Evaluates Tier 1 1D Wasserstein-1 distance on pre-normalised L2 norms against calibrated threshold tau_w1.
+    4. Evaluates Tier 2 multivariate RBF MMD² with Monte Carlo permutation testing against significance ceiling alpha.
+    5. Fits an 8-component PCA projection on reference embeddings, compiles a compact tabular projection, and renders a standalone HTML report via Evidently 0.7 Snapshot API.
+    6. Logs metrics and the HTML report into MLflow experiment `taxon-vision-drift` using RAII run scoping.
+    7. Persists a DriftRunRecord to the telemetry repository and returns a frozen DriftVerdict dataclass.
+
+Standard Fields:
+    References: Gretton et al. (2012) 'A Kernel Two-Sample Test'; Evidently AI Documentation (0.7+).
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+import mlflow
+import numpy as np
+import numpy.typing as npt
+import pandas as pd
+import torch
+from evidently import Report
+from evidently.presets import DataDriftPreset
+from sklearn.decomposition import PCA
+
+from taxon_vision.config import Settings, get_settings
+from taxon_vision.models.training.tracking import mlflow_run_scope
+from taxon_vision.monitoring.drift import compute_mmd2_permutation, compute_wasserstein_drift
+from taxon_vision.service.telemetry_store import (
+    DriftRunRecord,
+    TelemetryStore,
+    get_telemetry_store,
+)
+
+logger = logging.getLogger(__name__)
+
+_REFERENCE_CACHE: npt.NDArray[np.float32] | None = None
+
+
+@dataclass(frozen=True)
+class DriftVerdict:
+    """Immutable outcome of an end-to-end drift evaluation cycle.
+
+    Attributes:
+        drift_detected: Boolean flag indicating if Tier 1 or Tier 2 threshold was exceeded.
+        status: Evaluation status string ('evaluated', 'insufficient_data', 'reference_missing').
+        w1_distance: Observed Wasserstein-1 distance on embedding norms.
+        w1_threshold: Calibrated Wasserstein-1 alert threshold.
+        mmd2: Observed Maximum Mean Discrepancy squared, or None if skipped.
+        mmd2_p_value: Finite-sample permutation test p-value, or None if skipped.
+        window_size: Number of live observation vectors evaluated in this cycle.
+        n_reference: Number of baseline calibration observations evaluated.
+        mlflow_run_id: MLflow run identifier if successfully logged, or None.
+        report_path: Path to rendered Evidently HTML report on disk, or None.
+    """
+
+    drift_detected: bool
+    status: str
+    w1_distance: float
+    w1_threshold: float
+    mmd2: float | None
+    mmd2_p_value: float | None
+    window_size: int
+    n_reference: int
+    mlflow_run_id: str | None
+    report_path: str | None
+
+
+def load_embeddings_array(path: Path | str) -> npt.NDArray[np.float32]:
+    """Load pre-computed embeddings from a PyTorch checkpoint into a contiguous float32 NumPy array.
+
+    Why:
+        Provides an allocation-disciplined loader for offline pipeline stages and drift runners without polluting module-level caches.
+
+    How:
+        Deserialises the PyTorch dictionary or tensor checkpoint, extracts the 'embeddings' key if present, detaches to CPU, converts to float32, and returns a contiguous C-order array.
+
+    Args:
+        path: Relative or absolute file path to the PyTorch checkpoint (.pt).
+
+    Returns:
+        Contiguous float32 NumPy array of shape (N, D).
+
+    Raises:
+        FileNotFoundError: If the specified checkpoint does not exist on disk.
+        ValueError: If the checkpoint payload is neither a Tensor nor a dictionary with an 'embeddings' key.
+    """
+    p = Path(path)
+    if not p.is_file():
+        raise FileNotFoundError(f"Embeddings file not found: {p}")
+
+    checkpoint: Any = torch.load(p, map_location="cpu", weights_only=False)
+    if isinstance(checkpoint, dict) and "embeddings" in checkpoint:
+        tensor = checkpoint["embeddings"]
+    elif isinstance(checkpoint, torch.Tensor):
+        tensor = checkpoint
+    else:
+        raise ValueError(f"Unrecognised checkpoint format in {p}")
+
+    arr = tensor.detach().cpu().numpy().astype(np.float32)
+    return np.ascontiguousarray(arr)
+
+
+def load_reference_embeddings(path_str: str) -> npt.NDArray[np.float32]:
+    """Load and cache pre-normalised reference embeddings from a PyTorch tensor checkpoint.
+
+    Why:
+        Eliminates repeated disk I/O and unpickling overhead during frequent drift monitoring sweeps.
+
+    How:
+        Checks module-level cache; if absent, deserialises the PyTorch dictionary checkpoint via load_embeddings_array and caches in system memory.
+
+    Args:
+        path_str: Relative or absolute file path to the reference PyTorch checkpoint.
+
+    Returns:
+        Contiguous float32 NumPy array of shape (N, D).
+
+    Raises:
+        FileNotFoundError: If the specified reference checkpoint does not exist on disk.
+    """
+    global _REFERENCE_CACHE
+    if _REFERENCE_CACHE is not None:
+        return _REFERENCE_CACHE
+
+    path = Path(path_str)
+    if not path.is_file():
+        raise FileNotFoundError(f"Reference embeddings file not found: {path}")
+
+    _REFERENCE_CACHE = load_embeddings_array(path)
+    return _REFERENCE_CACHE
+
+
+def generate_evidently_drift_report(
+    reference: npt.NDArray[np.float32],
+    current: npt.NDArray[np.float32],
+    output_path: Path,
+) -> Path:
+    """Generate and save an Evidently DataDriftPreset report using PCA projection.
+
+    Why:
+        High-dimensional embedding tables (384 to 1280 columns) result in slow report generation and visually illegible drift matrices. Projecting vectors down to Euclidean norms plus the top 8 principal components yields an interpretable, fast tabular snapshot.
+
+    How:
+        Fits an 8-component PCA model on reference vectors, projects both reference and current matrices, computes L2 vector norms, builds pandas DataFrames, runs Evidently's Report snapshot, and saves the standalone HTML file.
+
+    Args:
+        reference: Reference embedding matrix of shape (M, D).
+        current: Current observation embedding matrix of shape (N, D).
+        output_path: Destination file path for the standalone HTML report.
+
+    Returns:
+        Destination path of the rendered HTML report.
+    """
+    n_components = min(8, reference.shape[1], reference.shape[0])
+    pca = PCA(n_components=n_components, random_state=42)
+    ref_pca = pca.fit_transform(reference)
+    curr_pca = pca.transform(current)
+
+    ref_norms = np.linalg.norm(reference, axis=-1, keepdims=True)
+    curr_norms = np.linalg.norm(current, axis=-1, keepdims=True)
+
+    pca_cols = [f"pca_{i}" for i in range(n_components)]
+    columns = ["norm", *pca_cols]
+
+    ref_df = pd.DataFrame(np.hstack([ref_norms, ref_pca]), columns=columns)
+    curr_df = pd.DataFrame(np.hstack([curr_norms, curr_pca]), columns=columns)
+
+    report = Report(metrics=[DataDriftPreset()])
+    snapshot = report.run(reference_data=ref_df, current_data=curr_df)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    snapshot.save_html(str(output_path))
+    return output_path
+
+
+def evaluate_recent_drift(
+    store: TelemetryStore | None = None,
+    settings: Settings | None = None,
+    extractor: str | None = None,
+    reference_embeddings: npt.NDArray[np.float32] | None = None,
+) -> DriftVerdict:
+    """Execute end-to-end drift evaluation cycle over the latest prediction window.
+
+    Why:
+        Enforces statistical exchangeability auditing on live service embeddings, guaranteeing that marginal conformal coverage assumptions hold in active production serving.
+
+    How:
+        1. Obtains reference embeddings via cache or injected array.
+        2. Retrieves the most recent N observation vectors from TelemetryStore.
+        3. Checks sample threshold against min_samples; returns insufficient_data if below.
+        4. Calculates Tier 1 Wasserstein-1 distance on embedding norms.
+        5. Calculates Tier 2 multivariate RBF MMD² with permutation testing.
+        6. Renders Evidently PCA drift report to `reports/drift_report.html`.
+        7. Logs metrics, tags, and HTML artefact to MLflow `taxon-vision-drift`.
+        8. Records DriftRunRecord in TelemetryStore and returns typed DriftVerdict.
+
+    Args:
+        store: Telemetry store instance to query, or None to use default singleton.
+        settings: Application settings, or None to load from environment.
+        extractor: Optional model extractor name to filter live embeddings.
+        reference_embeddings: Optional pre-loaded reference array for test isolation.
+
+    Returns:
+        Immutable DriftVerdict dataclass detailing statistical outcomes and run metadata.
+    """
+    resolved_settings = settings or get_settings()
+    resolved_store = store or get_telemetry_store()
+
+    # 1. Resolve Reference Embeddings
+    ref = reference_embeddings
+    if ref is None:
+        try:
+            ref = load_reference_embeddings(resolved_settings.drift.reference_embeddings_path)
+        except Exception:
+            logger.exception("Failed to load reference embeddings for drift detection")
+            return DriftVerdict(
+                drift_detected=False,
+                status="reference_missing",
+                w1_distance=0.0,
+                w1_threshold=resolved_settings.drift.tau_w1,
+                mmd2=None,
+                mmd2_p_value=None,
+                window_size=0,
+                n_reference=0,
+                mlflow_run_id=None,
+                report_path=None,
+            )
+
+    # 2. Query Live Window
+    current = resolved_store.recent_embeddings(
+        limit=resolved_settings.drift.window_size,
+        extractor=extractor,
+    )
+
+    if current.shape[0] < resolved_settings.drift.min_samples:
+        logger.info(
+            "Insufficient live predictions for drift detection: %d < %d",
+            current.shape[0],
+            resolved_settings.drift.min_samples,
+        )
+        return DriftVerdict(
+            drift_detected=False,
+            status="insufficient_data",
+            w1_distance=0.0,
+            w1_threshold=resolved_settings.drift.tau_w1,
+            mmd2=None,
+            mmd2_p_value=None,
+            window_size=current.shape[0],
+            n_reference=ref.shape[0],
+            mlflow_run_id=None,
+            report_path=None,
+        )
+
+    # 3. Tier 1: 1D Wasserstein-1 on Embedding Norms
+    tau_w1 = resolved_settings.drift.tau_w1
+    w1_distance = compute_wasserstein_drift(ref, current)
+
+    # 4. Tier 2: Multivariate RBF MMD² Permutation Test
+    mmd_res = compute_mmd2_permutation(
+        ref,
+        current,
+        max_samples=resolved_settings.drift.mmd_max_samples,
+        n_permutations=resolved_settings.drift.mmd_permutations,
+        seed=42,
+    )
+    mmd2 = mmd_res.mmd2
+    p_val = mmd_res.p_value
+
+    # 5. Composite Drift Verdict
+    drift_detected = bool(w1_distance > tau_w1 or p_val < resolved_settings.drift.alpha)
+
+    # 6. Render Evidently Compact Projection Report
+    report_file = Path("reports/drift_report.html")
+    try:
+        generate_evidently_drift_report(ref, current, report_file)
+        report_path_str: str | None = str(report_file)
+    except Exception:
+        logger.exception("Failed to render Evidently drift report")
+        report_path_str = None
+
+    # 7. Log to MLflow Run Scope
+    mlflow_run_id: str | None = None
+    experiment_name = resolved_settings.mlflow.drift_experiment_name
+    try:
+        with mlflow_run_scope(run_name="drift_evaluation", experiment_name=experiment_name) as run:
+            if run is not None:
+                mlflow_run_id = run.info.run_id
+                mlflow.log_metrics(
+                    {
+                        "drift_w1": float(w1_distance),
+                        "drift_w1_threshold": float(tau_w1),
+                        "drift_mmd2": float(mmd2),
+                        "drift_mmd2_p_value": float(p_val),
+                        "window_size": float(current.shape[0]),
+                    }
+                )
+                mlflow.set_tag("drift_detected", str(drift_detected).lower())
+                if report_path_str and Path(report_path_str).is_file():
+                    mlflow.log_artifact(report_path_str)
+    except Exception:
+        logger.exception("Failed to log drift evaluation metrics to MLflow")
+
+    # 8. Record in Telemetry Store
+    record = DriftRunRecord(
+        id=None,
+        created_at=datetime.now(UTC),
+        window_size=current.shape[0],
+        w1_distance=w1_distance,
+        w1_threshold=tau_w1,
+        mmd2=mmd2,
+        mmd2_p_value=p_val,
+        drift_detected=drift_detected,
+        mlflow_run_id=mlflow_run_id,
+    )
+    resolved_store.record_drift_run(record)
+
+    return DriftVerdict(
+        drift_detected=drift_detected,
+        status="evaluated",
+        w1_distance=w1_distance,
+        w1_threshold=tau_w1,
+        mmd2=mmd2,
+        mmd2_p_value=p_val,
+        window_size=current.shape[0],
+        n_reference=ref.shape[0],
+        mlflow_run_id=mlflow_run_id,
+        report_path=report_path_str,
+    )

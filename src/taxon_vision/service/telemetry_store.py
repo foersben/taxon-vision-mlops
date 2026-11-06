@@ -15,6 +15,7 @@ import logging
 import threading
 from collections import deque
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Protocol
 
 import numpy as np
@@ -22,7 +23,6 @@ import numpy.typing as npt
 from psycopg_pool import ConnectionPool
 
 from taxon_vision.config import get_settings
-from taxon_vision.monitoring.telemetry import TELEMETRY_WRITE_FAILURES
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +64,36 @@ class PredictionRecord:
     embedding: npt.NDArray[np.float32] | None
 
 
+@dataclass(frozen=True)
+class DriftRunRecord:
+    """Immutable data container representing an evaluated drift detection run.
+
+    Summary:
+        Stores the statistical outputs and metadata from a two-tier drift analysis window.
+
+    Attributes:
+        window_size: Number of production samples evaluated in the sliding window.
+        w1_distance: Computed 1D Wasserstein-1 distance on embedding norms.
+        w1_threshold: Calibrated baseline threshold tau_W1.
+        mmd2: Computed unbiased sample estimate of Maximum Mean Discrepancy squared.
+        mmd2_p_value: Empirical p-value from Monte Carlo permutation testing.
+        drift_detected: Boolean flag indicating if either tier breached its decision boundary.
+        mlflow_run_id: Associated MLflow experiment run ID, if tracking was active.
+        created_at: Timestamp when the evaluation was executed.
+        id: Relational database primary key identifier, if persisted.
+    """
+
+    window_size: int
+    w1_distance: float
+    w1_threshold: float
+    mmd2: float
+    mmd2_p_value: float
+    drift_detected: bool
+    mlflow_run_id: str | None = None
+    created_at: datetime | None = None
+    id: int | None = None
+
+
 class TelemetryStore(Protocol):
     """Protocol interface defining telemetry persistence and embedding retrieval operations.
 
@@ -88,7 +118,7 @@ class TelemetryStore(Protocol):
         """
         ...
 
-    def recent_embeddings(self, limit: int) -> npt.NDArray[np.float32]:
+    def recent_embeddings(self, limit: int, extractor: str | None = None) -> npt.NDArray[np.float32]:
         """Retrieve recent pre-normalised feature embeddings for drift detection.
 
         Why:
@@ -99,6 +129,35 @@ class TelemetryStore(Protocol):
 
         Args:
             limit: Maximum number of recent embedding vectors to retrieve (N).
+            extractor: Model extractor name to filter by, or None for all.
+
+        Returns:
+            Contiguous float32 NumPy array of shape (N, D), or shape (0, 0) if empty.
+        """
+        ...
+
+    def record_drift_run(self, run: DriftRunRecord) -> None:
+        """Persist an evaluated drift analysis record.
+
+        Why:
+            Provides durable audit trails for model outputs, out-of-distribution flags, and photographer-associated prediction sets necessary for governance and compliance.
+
+        How:
+            Dispatches structured attributes of the given record to the underlying storage backend. Implementations must handle database connection timeouts and serialisation errors gracefully without terminating the serving worker.
+
+        Args:
+            run: Immutable drift run record containing statistical outputs and metadata.
+        """
+        ...
+
+    def latest_drift_run(self) -> DriftRunRecord | None:
+        """Retrieve the most recent drift evaluation record.
+
+        Why:
+            Provides the most recent drift detection results for monitoring and alerting purposes.
+
+        How:
+            Queries the underlying repository for the most recent drift evaluation record, returning a contiguous two-dimensional matrix of shape (N, D).
 
         Returns:
             Contiguous float32 NumPy array of shape (N, D), or shape (0, 0) if empty.
@@ -112,6 +171,19 @@ INSERT INTO predictions (
     conformal_set, set_size, ood_energy, is_ood, requires_review, latency_ms, embedding
 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 ON CONFLICT (observation_id) DO NOTHING
+"""
+
+_INSERT_DRIFT_RUN_SQL = """
+INSERT INTO drift_runs (
+    window_size, w1_distance, w1_threshold, mmd2, mmd2_p_value, drift_detected, mlflow_run_id
+) VALUES (%s, %s, %s, %s, %s, %s, %s)
+"""
+
+_SELECT_LATEST_DRIFT_RUN_SQL = """
+SELECT id, created_at, window_size, w1_distance, w1_threshold, mmd2, mmd2_p_value, drift_detected, mlflow_run_id
+FROM drift_runs
+ORDER BY created_at DESC
+LIMIT 1
 """
 
 
@@ -176,10 +248,15 @@ class PostgresTelemetryStore:
                     ),
                 )
         except Exception:
-            TELEMETRY_WRITE_FAILURES.inc()
+            try:
+                from taxon_vision.monitoring.telemetry import TELEMETRY_WRITE_FAILURES
+
+                TELEMETRY_WRITE_FAILURES.inc()
+            except Exception:
+                pass
             logger.exception("Failed to write prediction telemetry for observation %s", rec.observation_id)
 
-    def recent_embeddings(self, limit: int) -> npt.NDArray[np.float32]:
+    def recent_embeddings(self, limit: int, extractor: str | None = None) -> npt.NDArray[np.float32]:
         """Fetch the most recent pre-normalised embeddings ordered by timestamp descending.
 
         Why:
@@ -193,6 +270,7 @@ class PostgresTelemetryStore:
 
         Args:
             limit: Maximum count of recent observation embeddings to fetch.
+            extractor: Model extractor name to filter by, or None for all.
 
         Returns:
             NumPy array of shape (N, D) containing float32 vectors, or shape (0, 0) if absent.
@@ -202,16 +280,84 @@ class PostgresTelemetryStore:
         """
         try:
             with self._pool.connection() as conn:
-                rows = conn.execute(
-                    "SELECT embedding FROM predictions WHERE embedding IS NOT NULL ORDER BY created_at DESC LIMIT %s",
-                    (limit,),
-                ).fetchall()
+                if extractor:
+                    query = (
+                        "SELECT embedding FROM predictions "
+                        "WHERE extractor = %s AND embedding IS NOT NULL "
+                        "ORDER BY created_at DESC LIMIT %s"
+                    )
+                    rows = conn.execute(query, (extractor, limit)).fetchall()
+                else:
+                    query = (
+                        "SELECT embedding FROM predictions "
+                        "WHERE embedding IS NOT NULL "
+                        "ORDER BY created_at DESC LIMIT %s"
+                    )
+                    rows = conn.execute(query, (limit,)).fetchall()
             if not rows:
                 return np.empty((0, 0), dtype=np.float32)
             return np.ascontiguousarray([r[0] for r in rows], dtype=np.float32)
         except Exception as exc:
             logger.exception("Failed to fetch recent embeddings from telemetry store")
             raise RuntimeError("Failed to retrieve recent embeddings from telemetry store") from exc
+
+    def record_drift_run(self, run: DriftRunRecord) -> None:
+        """Persist a drift detection run record into the relational drift_runs table.
+
+        Why:
+            Enables forensic analysis of detection events, performance comparison across runs via Wasserstein-1 and MMD², and integration with MLflow experiment tracking for model quality governance.
+
+        Args:
+            run: Drift run record containing detection metrics, configuration, and MLflow run metadata.
+        """
+        try:
+            with self._pool.connection() as conn:
+                conn.execute(
+                    _INSERT_DRIFT_RUN_SQL,
+                    (
+                        run.window_size,
+                        run.w1_distance,
+                        run.w1_threshold,
+                        run.mmd2,
+                        run.mmd2_p_value,
+                        run.drift_detected,
+                        run.mlflow_run_id,
+                    ),
+                )
+        except Exception:
+            logger.exception("Failed to persist drift run record to PostgreSQL")
+
+    def latest_drift_run(self) -> DriftRunRecord | None:
+        """Retrieve the most recent drift detection run record from the database.
+
+        Why:
+            Enables CI/CD validation gate queries, API status endpoints, and drift health dashboards to query the last computed statistical signature.
+
+        Returns:
+            DriftRunRecord instance if available, otherwise None.
+
+        Raises:
+            RuntimeError: On query execution failure or pool checkout issues.
+        """
+        try:
+            with self._pool.connection() as conn:
+                row = conn.execute(_SELECT_LATEST_DRIFT_RUN_SQL).fetchone()
+            if not row:
+                return None
+            return DriftRunRecord(
+                id=row[0],
+                created_at=row[1],
+                window_size=row[2],
+                w1_distance=row[3],
+                w1_threshold=row[4],
+                mmd2=row[5],
+                mmd2_p_value=row[6],
+                drift_detected=row[7],
+                mlflow_run_id=row[8],
+            )
+        except Exception:
+            logger.exception("Failed to fetch latest drift run from PostgreSQL")
+            return None
 
 
 class BoundedInMemoryTelemetryStore:
@@ -225,6 +371,10 @@ class BoundedInMemoryTelemetryStore:
 
     Complexity:
         Write operations: O(1) amortised insertion and eviction time complexity. Read operations: O(min(limit, maxlen) * D) time complexity for matrix reconstruction.
+
+    Attributes:
+        records: Bounded deque of PredictionRecord instances.
+        drift_runs: Bounded deque of DriftRunRecord instances.
     """
 
     def __init__(self, maxlen: int = 500) -> None:
@@ -240,6 +390,7 @@ class BoundedInMemoryTelemetryStore:
             maxlen: Maximum number of recent prediction records retained in memory.
         """
         self.records: deque[PredictionRecord] = deque(maxlen=maxlen)
+        self.drift_runs: deque[DriftRunRecord] = deque(maxlen=100)
 
     def record(self, rec: PredictionRecord) -> None:
         """Append a prediction record to the ring buffer, evicting the oldest entry on overflow.
@@ -255,7 +406,7 @@ class BoundedInMemoryTelemetryStore:
         """
         self.records.append(rec)
 
-    def recent_embeddings(self, limit: int) -> npt.NDArray[np.float32]:
+    def recent_embeddings(self, limit: int, extractor: str | None = None) -> npt.NDArray[np.float32]:
         """Fetch the most recent pre-normalised embeddings ordered by timestamp descending.
 
         Why:
@@ -269,14 +420,54 @@ class BoundedInMemoryTelemetryStore:
 
         Args:
             limit: Maximum count of recent observation embeddings to fetch.
+            extractor: Model extractor name to filter by, or None for all.
 
         Returns:
             Contiguous float32 NumPy array of shape (N, D), or shape (0, 0) if absent.
         """
-        embs = [r.embedding.flatten() for r in reversed(self.records) if r.embedding is not None]
+        embs = [
+            r.embedding.flatten()
+            for r in reversed(self.records)
+            if r.embedding is not None and (extractor is None or r.extractor == extractor)
+        ]
         if not embs:
             return np.empty((0, 0), dtype=np.float32)
         return np.ascontiguousarray(embs[:limit], dtype=np.float32)
+
+    def record_drift_run(self, run: DriftRunRecord) -> None:
+        """Append a drift detection run record to the ring buffer, evicting the oldest entry on overflow.
+
+        Why:
+            Captures statistical signature evaluation results synchronously in volatile memory without blocking the request thread or risking out-of-memory container terminations.
+
+        Args:
+            run: Drift run record containing statistical signature evaluation results.
+        """
+        if run.created_at is None:
+            run = DriftRunRecord(
+                id=len(self.drift_runs) + 1,
+                created_at=datetime.now(UTC),
+                window_size=run.window_size,
+                w1_distance=run.w1_distance,
+                w1_threshold=run.w1_threshold,
+                mmd2=run.mmd2,
+                mmd2_p_value=run.mmd2_p_value,
+                drift_detected=run.drift_detected,
+                mlflow_run_id=run.mlflow_run_id,
+            )
+        self.drift_runs.append(run)
+
+    def latest_drift_run(self) -> DriftRunRecord | None:
+        """Retrieve the most recent drift detection run record from the bounded in-memory buffer.
+
+        Why: Enables CI/CD validation gate queries, API status endpoints, and drift health dashboards to query the last computed statistical signature without an active database connection.
+
+        How: Inspects the most recent entry in the bounded deque of drift run records.
+
+        Returns:
+            The most recent drift detection run record, or None if the buffer is empty.
+        """
+        return self.drift_runs[-1] if self.drift_runs else None
 
 
 _STORE_INSTANCE: TelemetryStore | None = None

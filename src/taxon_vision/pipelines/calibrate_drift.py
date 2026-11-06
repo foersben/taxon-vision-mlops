@@ -44,7 +44,14 @@ logger = logging.getLogger(__name__)
 
 
 def _compute_file_sha256(path: Path) -> str:
-    """Calculate the cryptographic SHA256 hex digest of a file on disk."""
+    """Calculate the cryptographic SHA256 hex digest of a file on disk.
+
+    Args:
+        path: Path to the file to compute the SHA256 hex digest of.
+
+    Returns:
+        SHA256 hex digest of the file.
+    """
     hasher = hashlib.sha256()
     with path.open("rb") as f:
         while chunk := f.read(65536):
@@ -53,7 +60,14 @@ def _compute_file_sha256(path: Path) -> str:
 
 
 def _load_embedding_norms(path: Path) -> np.ndarray:
-    """Load an embedding partition from disk and extract 1D Euclidean activation norms."""
+    """Load an embedding partition from disk and extract 1D Euclidean activation norms.
+
+    Args:
+        path: Path to the embedding partition file.
+
+    Returns:
+        1D array of embedding norms.
+    """
     if not path.exists():
         raise FileNotFoundError(f"Embedding partition file not found: {path}")
 
@@ -84,7 +98,18 @@ def _bootstrap_null_w1_distribution(
     n_bootstraps: int,
     rng: np.random.Generator,
 ) -> np.ndarray:
-    """Simulate null-hypothesis W1 distances between reference and random in-distribution subsets."""
+    """Simulate null-hypothesis W1 distances between reference and random in-distribution subsets.
+
+    Args:
+        ref_norms: 1D array of reference embedding norms.
+        test_norms: 1D array of test embedding norms.
+        window_size: Nominal sample count of production sliding window.
+        n_bootstraps: Number of bootstrap iterations for empirical null distribution simulation.
+        rng: Random number generator.
+
+    Returns:
+        1D array of W1 distances between reference and bootstrapped test samples.
+    """
     sample_size = min(window_size, test_norms.shape[0])
     replace = test_norms.shape[0] < window_size
 
@@ -143,8 +168,8 @@ def calibrate_drift_threshold(
         "drift": {
             "tau_w1": round(tau_w1, 6),
             "alpha": float(alpha),
-            "window_size": int(effective_window),
-            "n_bootstraps": int(n_bootstraps),
+            "window_size": effective_window,
+            "n_bootstraps": n_bootstraps,
             "percentile": float(percentile),
             "null_median_w1": round(null_median, 6),
             "null_max_w1": round(null_max, 6),
@@ -157,7 +182,25 @@ def calibrate_drift_threshold(
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI entrypoint for drift threshold calibration pipeline."""
+    """CLI entrypoint for drift threshold calibration pipeline.
+
+    Examples:
+        >>> python -m taxon_vision.pipelines.calibrate_drift \
+        ...     --cal-path data/embeddings/cal_embeddings.pt \
+        ...     --test-path data/embeddings/test_embeddings.pt \
+        ...     --output-yaml config/drift_config.yaml \
+        ...     --window-size 500 \
+        ...     --n-bootstraps 1000 \
+        ...     --percentile 99.0 \
+        ...     --alpha 0.01 \
+        ...     --seed 42
+
+    Args:
+        argv: List of command-line arguments.
+
+    Returns:
+        Exit code (0 on success, non-zero on failure).
+    """
     parser = argparse.ArgumentParser(description="Calibrate Tier 1 Wasserstein-1 drift threshold.")
     parser.add_argument(
         "--cal-path",

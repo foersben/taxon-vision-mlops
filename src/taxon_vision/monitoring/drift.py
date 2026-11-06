@@ -76,14 +76,31 @@ def compute_wasserstein_drift(reference_embeddings: np.ndarray, current_embeddin
 
 
 def _subsample(x: npt.NDArray[np.float64], max_samples: int, rng: np.random.Generator) -> npt.NDArray[np.float64]:
-    """Subsample an embedding matrix to at most max_samples without replacement."""
+    """Subsample an embedding matrix to at most max_samples without replacement.
+
+    Args:
+        x: Embedding matrix of shape (N, D).
+        max_samples: Maximum number of samples to subsample to.
+        rng: Random number generator.
+
+    Returns:
+        Subsampled embedding matrix of shape (M, D) where M <= max_samples.
+    """
     if x.shape[0] <= max_samples:
         return x
     return x[rng.choice(x.shape[0], size=max_samples, replace=False)]
 
 
 def _mmd2_unbiased(kernel: npt.NDArray[np.float64], n_ref: int) -> float:
-    """Compute the unbiased sample estimate of MMD squared from a precomputed Gram kernel matrix."""
+    """Compute the unbiased sample estimate of MMD squared from a precomputed Gram kernel matrix.
+
+    Args:
+        kernel: Gram kernel matrix of shape (N_ref + N_curr, N_ref + N_curr).
+        n_ref: Number of reference samples.
+
+    Returns:
+        Unbiased estimate of MMD squared.
+    """
     k_xx = kernel[:n_ref, :n_ref]
     k_yy = kernel[n_ref:, n_ref:]
     k_xy = kernel[:n_ref, n_ref:]

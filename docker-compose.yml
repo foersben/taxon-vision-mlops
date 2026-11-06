@@ -54,6 +54,7 @@ services:
       - TAXON_OPTUNA_STORAGE_URI=postgresql+psycopg://optuna:taxon_optuna_pass@postgres:5432/optuna
       - TAXON_TELEMETRY__DATABASE_URL=postgresql+psycopg://telemetry:taxon_telemetry_pass@postgres:5432/telemetry
       - TAXON_ALLOW_UNTRAINED_FALLBACK=true
+      - MLFLOW_TRACKING_URI=http://mlflow-server:5000
     volumes:
       - ./data/flagged_observations:/app/data/flagged_observations
       - ./models/checkpoints:/app/models/checkpoints
@@ -65,6 +66,8 @@ services:
         condition: service_started
       postgres:
         condition: service_healthy
+      mlflow-server:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "pixi", "run", "--frozen", "-e", "ci", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready')"]
       interval: 15s
@@ -72,6 +75,60 @@ services:
       start_period: 10s
       retries: 3
     restart: unless-stopped
+
+  mlflow-server:
+    image: ghcr.io/mlflow/mlflow:v3.16.0
+    container_name: taxon_mlflow_server
+    ports:
+      - "127.0.0.1:5000:5000"
+    environment:
+      - MLFLOW_S3_ENDPOINT_URL=http://seaweedfs:8333
+      - AWS_ACCESS_KEY_ID=taxonadmin
+      - AWS_SECRET_ACCESS_KEY=taxonadmin
+      - AWS_DEFAULT_REGION=us-east-1
+    command:
+      - /bin/sh
+      - -c
+      - |
+        pip install --no-cache-dir psycopg2-binary boto3 &&
+        python -c "import urllib.request; urllib.request.urlopen(urllib.request.Request('http://seaweedfs:8888/buckets/mlflow-artifacts/?op=mkdir', data=b''))" 2>/dev/null || true &&
+        mlflow server \
+          --backend-store-uri postgresql+psycopg2://mlflow:taxon_mlflow_pass@postgres:5432/mlflow \
+          --artifacts-destination s3://mlflow-artifacts \
+          --serve-artifacts \
+          --host 0.0.0.0 \
+          --port 5000
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health')\""]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_started
+    restart: unless-stopped
+
+  pipeline-runner:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile
+    container_name: taxon_pipeline_runner
+    profiles: ["pipeline"]
+    restart: "no"
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow-server:5000
+      - TAXON_TELEMETRY__DATABASE_URL=postgresql+psycopg://telemetry:taxon_telemetry_pass@postgres:5432/telemetry
+      - TAXON_OPTUNA_STORAGE_URI=postgresql+psycopg://optuna:taxon_optuna_pass@postgres:5432/optuna
+    command: ["pixi", "run", "--frozen", "-e", "dev", "dvc", "repro", "train", "export", "calibrate", "evaluate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mlflow-server:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_started
 
   seaweedfs:
     image: chrislusf/seaweedfs:latest

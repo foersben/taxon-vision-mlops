@@ -23,7 +23,7 @@ from fastapi.staticfiles import StaticFiles
 
 from taxon_vision.config import get_settings
 from taxon_vision.service.inference import get_image_transform, load_taxa_catalog, reset_model_caches
-from taxon_vision.service.routes import explain, health, predict, train, views
+from taxon_vision.service.routes import drift, explain, health, predict, train, views
 from taxon_vision.service.storage import MemoryImageCache, get_image_cache
 from taxon_vision.service.telemetry_store import close_telemetry_store, get_telemetry_store
 
@@ -67,3 +67,4 @@ app.include_router(predict.router)
 app.include_router(train.router)
 app.include_router(explain.router)
 app.include_router(views.router)
+app.include_router(drift.router)
