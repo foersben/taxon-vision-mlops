@@ -19,6 +19,12 @@ from mlflow.models import ModelSignature
 from mlflow.types.schema import Schema, TensorSpec
 
 from taxon_vision.models.training.dataset import get_dvc_dataset_hash
+from taxon_vision.models.training.promotion import (
+    ModelPromotionTarget,
+    PromotionCriteria,
+    evaluate_promotion_gates,
+    promote_candidate_model,
+)
 from taxon_vision.models.training.tracking import (
     MLflowTracker,
     _attach_mlflow_artifact_safely,
@@ -32,6 +38,11 @@ from taxon_vision.models.training.tracking import (
     log_training_visualizations,
     mlflow_run_scope,
     resume_parent_mlflow_run,
+)
+from taxon_vision.models.training.types import PromotionAlias
+from taxon_vision.models.training.visualizations import (
+    HoldoutVisualizationPayload,
+    log_holdout_visualizations,
 )
 
 
@@ -360,6 +371,53 @@ def test_log_training_visualizations(monkeypatch: pytest.MonkeyPatch) -> None:
     logged_metric_keys = [call.args[0] for call in mock_log_metric.call_args_list]
     assert "worst_class_ap" in logged_metric_keys
     assert "median_class_ap" in logged_metric_keys
+
+
+def test_log_holdout_visualizations(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify log_holdout_visualizations emits all publication-grade figures to MLflow."""
+    mock_log_figure = MagicMock()
+    monkeypatch.setattr(mlflow, "log_figure", mock_log_figure)
+    monkeypatch.setattr(mlflow, "active_run", lambda: True)
+
+    n_samples, n_classes = 30, 4
+    test_logits = np.random.randn(n_samples, n_classes).astype(np.float32)
+    shifted = test_logits - np.max(test_logits, axis=1, keepdims=True)
+    exp = np.exp(shifted)
+    test_probs = (exp / np.sum(exp, axis=1, keepdims=True)).astype(np.float32)
+    test_labels = np.random.randint(0, n_classes, size=n_samples)
+    set_sizes = np.random.randint(1, 4, size=n_samples)
+
+    class DummyParetoProfile:
+        extractor = "dinov3_vits14"
+        parameters_m = 22.0
+        p95_latency_ms = 13.5
+        throughput_fps = 105.0
+
+    payload = HoldoutVisualizationPayload(
+        test_labels=test_labels,
+        test_probs=test_probs,
+        test_logits=test_logits,
+        set_sizes=set_sizes,
+        q_hat=0.08,
+        nominal_coverage=0.95,
+        empirical_coverage=0.96,
+        calibrated_energy_threshold=-12.5,
+        k_max=5,
+        taxa_catalog=[{"common_name": f"Taxon {i}", "scientific_name": f"Species {i}"} for i in range(n_classes)],
+        pareto_profiles=[DummyParetoProfile()],
+        latency_slo_ms=25.0,
+    )
+
+    log_holdout_visualizations(payload)
+
+    assert mock_log_figure.call_count == 6
+    artifact_paths = [call.args[1] for call in mock_log_figure.call_args_list]
+    assert "visualizations/test_conformal_set_sizes.png" in artifact_paths
+    assert "visualizations/test_reliability_diagram.png" in artifact_paths
+    assert "visualizations/test_energy_distribution.png" in artifact_paths
+    assert "visualizations/test_confusion_matrix.png" in artifact_paths
+    assert "visualizations/test_precision_recall_curves.png" in artifact_paths
+    assert "visualizations/pareto_frontier.png" in artifact_paths
 
 
 def test_determine_promotion_alias_tie_break() -> None:
@@ -756,3 +814,184 @@ def test_resume_parent_mlflow_run_connection_error(tmp_path: Path, monkeypatch: 
 
     with resume_parent_mlflow_run(metrics_file) as ctx:
         assert ctx is None
+
+
+def test_evaluate_promotion_gates_initial_production_bootstrapping() -> None:
+    """Verify first candidate model bootstraps to @Production when no incumbent exists."""
+    criteria = PromotionCriteria(
+        candidate_pr_auc=0.88,
+        fp32_to_int8_drop=0.01,
+        empirical_coverage=0.96,
+        nominal_coverage=0.95,
+        p95_latency_ms=45.0,
+        exchangeability_p_value=None,
+        live_sample_count=0,
+    )
+    verdict = evaluate_promotion_gates(criteria, incumbent_pr_auc=None)
+    assert verdict.alias == PromotionAlias.PRODUCTION
+    assert verdict.gate == "initial_production"
+    assert "gate_1_predictive_viability" in verdict.passed_gates
+    assert "gate_2_conformal_coverage" in verdict.passed_gates
+    assert "gate_3_latency_slo" in verdict.passed_gates
+    assert "gate_4_bootstrap_production" in verdict.passed_gates
+    assert verdict.failed_gate is None
+
+
+def test_evaluate_promotion_gates_gate1_pr_auc_failure() -> None:
+    """Verify candidate is archived if PR-AUC is below incumbent."""
+    criteria = PromotionCriteria(
+        candidate_pr_auc=0.82,
+        fp32_to_int8_drop=0.01,
+        empirical_coverage=0.96,
+        nominal_coverage=0.95,
+        p95_latency_ms=40.0,
+    )
+    verdict = evaluate_promotion_gates(criteria, incumbent_pr_auc=0.85)
+    assert verdict.alias == PromotionAlias.ARCHIVED
+    assert verdict.gate == "below_incumbent"
+    assert verdict.failed_gate == "gate_1_predictive_viability"
+
+
+def test_evaluate_promotion_gates_gate1_quantization_drop_failure() -> None:
+    """Verify candidate is archived if INT8 accuracy drop exceeds tolerance."""
+    criteria = PromotionCriteria(
+        candidate_pr_auc=0.90,
+        fp32_to_int8_drop=0.045,
+        empirical_coverage=0.96,
+        nominal_coverage=0.95,
+        p95_latency_ms=40.0,
+        quantization_drop_tol=0.03,
+    )
+    verdict = evaluate_promotion_gates(criteria, incumbent_pr_auc=0.85)
+    assert verdict.alias == PromotionAlias.ARCHIVED
+    assert verdict.gate == "quantization_drop_exceeded"
+    assert verdict.failed_gate == "gate_1_quantization_fidelity"
+
+
+def test_evaluate_promotion_gates_gate2_conformal_coverage_failure() -> None:
+    """Verify candidate is archived if empirical coverage violates nominal guarantee minus margin."""
+    criteria = PromotionCriteria(
+        candidate_pr_auc=0.90,
+        fp32_to_int8_drop=0.01,
+        empirical_coverage=0.88,
+        nominal_coverage=0.95,
+        coverage_tolerance=0.05,
+        p95_latency_ms=40.0,
+    )
+    verdict = evaluate_promotion_gates(criteria, incumbent_pr_auc=0.85)
+    assert verdict.alias == PromotionAlias.ARCHIVED
+    assert verdict.gate == "conformal_coverage_violation"
+    assert verdict.failed_gate == "gate_2_conformal_coverage"
+
+
+def test_evaluate_promotion_gates_gate3_latency_slo_failure() -> None:
+    """Verify candidate is archived if quantized inference exceeds physical latency budget."""
+    criteria = PromotionCriteria(
+        candidate_pr_auc=0.90,
+        fp32_to_int8_drop=0.01,
+        empirical_coverage=0.95,
+        nominal_coverage=0.95,
+        p95_latency_ms=135.0,
+        latency_slo_ms=120.0,
+    )
+    verdict = evaluate_promotion_gates(criteria, incumbent_pr_auc=0.85)
+    assert verdict.alias == PromotionAlias.ARCHIVED
+    assert verdict.gate == "latency_slo_violation"
+    assert verdict.failed_gate == "gate_3_latency_slo"
+
+
+def test_evaluate_promotion_gates_gate4_insufficient_traffic() -> None:
+    """Verify candidate is staged as @Challenger when live production traffic is insufficient."""
+    criteria = PromotionCriteria(
+        candidate_pr_auc=0.90,
+        fp32_to_int8_drop=0.01,
+        empirical_coverage=0.96,
+        nominal_coverage=0.95,
+        p95_latency_ms=45.0,
+        live_sample_count=20,
+        min_telemetry_samples=50,
+    )
+    verdict = evaluate_promotion_gates(criteria, incumbent_pr_auc=0.85)
+    assert verdict.alias == PromotionAlias.CHALLENGER
+    assert verdict.gate == "insufficient_traffic"
+    assert verdict.failed_gate == "gate_4_traffic_volume"
+
+
+def test_evaluate_promotion_gates_gate4_drift_detected() -> None:
+    """Verify candidate is staged as @Challenger when MMD squared permutation test detects distribution drift."""
+    criteria = PromotionCriteria(
+        candidate_pr_auc=0.90,
+        fp32_to_int8_drop=0.01,
+        empirical_coverage=0.96,
+        nominal_coverage=0.95,
+        p95_latency_ms=45.0,
+        live_sample_count=100,
+        min_telemetry_samples=50,
+        exchangeability_p_value=0.002,
+        drift_alpha=0.01,
+    )
+    verdict = evaluate_promotion_gates(criteria, incumbent_pr_auc=0.85)
+    assert verdict.alias == PromotionAlias.CHALLENGER
+    assert verdict.gate == "calibration_not_exchangeable"
+    assert verdict.failed_gate == "gate_4_exchangeability_drift"
+
+
+def test_evaluate_promotion_gates_all_pass_production() -> None:
+    """Verify candidate is promoted to @Production when all 4 gates pass cleanly."""
+    criteria = PromotionCriteria(
+        candidate_pr_auc=0.90,
+        fp32_to_int8_drop=0.01,
+        empirical_coverage=0.96,
+        nominal_coverage=0.95,
+        p95_latency_ms=45.0,
+        live_sample_count=150,
+        min_telemetry_samples=50,
+        exchangeability_p_value=0.45,
+        drift_alpha=0.01,
+    )
+    verdict = evaluate_promotion_gates(criteria, incumbent_pr_auc=0.85)
+    assert verdict.alias == PromotionAlias.PRODUCTION
+    assert verdict.gate == "promoted_all_4_gates"
+    assert verdict.failed_gate is None
+    assert len(verdict.passed_gates) == 4
+
+
+def test_promote_candidate_model_e2e_with_incumbent_demotion(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify promote_candidate_model assigns @Production and demotes incumbent @Production to @Challenger."""
+    mock_client = MagicMock()
+    prod_version = MagicMock(version="1", run_id="run_prod_1")
+    prod_run = MagicMock()
+    prod_run.data.metrics = {"val_promotion_score": 0.82}
+
+    mock_client.get_model_version_by_alias.return_value = prod_version
+    mock_client.get_run.return_value = prod_run
+
+    monkeypatch.setattr(mlflow, "set_tag", MagicMock())
+    monkeypatch.setattr(mlflow, "log_metric", MagicMock())
+
+    target = ModelPromotionTarget(
+        model_name="taxon_vision_classifier",
+        version="2",
+        client=mock_client,
+        extractor="dinov3",
+        run_id="run_cand_2",
+    )
+    criteria = PromotionCriteria(
+        candidate_pr_auc=0.91,
+        fp32_to_int8_drop=0.01,
+        empirical_coverage=0.96,
+        nominal_coverage=0.95,
+        p95_latency_ms=50.0,
+        live_sample_count=100,
+        exchangeability_p_value=0.30,
+    )
+
+    verdict = promote_candidate_model(target, criteria)
+    assert verdict.alias == PromotionAlias.PRODUCTION
+    assert verdict.gate == "promoted_all_4_gates"
+
+    mock_client.set_registered_model_alias.assert_any_call("taxon_vision_classifier", "Challenger", "1")
+    mock_client.set_registered_model_alias.assert_any_call("taxon_vision_classifier", "Production", "2")
+    mock_client.set_model_version_tag.assert_any_call("taxon_vision_classifier", "2", "gate", "promoted_all_4_gates")
+    mock_client.set_model_version_tag.assert_any_call("taxon_vision_classifier", "2", "val_pr_auc", "0.9100")
+    mock_client.set_model_version_tag.assert_any_call("taxon_vision_classifier", "2", "extractor", "dinov3")

@@ -311,11 +311,38 @@ class DriftConfig(BaseModel):
 class EvaluationConfig(BaseModel):
     """Configuration schema for model evaluation and latency SLOs.
 
+    Summary:
+        Declares operational service-level objective execution ceilings for inference evaluation.
+
     Attributes:
-        latency_sla_ms (float): Latency service level objective threshold in milliseconds (default: 25.0).
+        latency_sla_ms (float): Latency service level objective threshold in milliseconds (default: 120.0).
     """
 
-    latency_sla_ms: float = Field(default=25.0, gt=0.0)
+    latency_sla_ms: float = Field(default=120.0, gt=0.0)
+
+
+class PromotionConfig(BaseModel):
+    """Configuration schema for four-gate model promotion and registry lifecycle.
+
+    Summary:
+        Governs the statistical, latency, and distribution exchangeability thresholds applied during model promotion.
+
+    Why (Architectural Rationale & Trade-offs):
+        Centralising promotion thresholds into a validated Pydantic model eliminates hardcoded magic numbers across pipeline execution stages and enables deterministic configuration overrides via environment variables or YAML files.
+
+    Attributes:
+        quantization_drop_tol (float): Maximum tolerable drop in accuracy between FP32 and INT8 (default: 0.03).
+        coverage_tolerance (float): Finite-sample binomial margin allowed below nominal conformal coverage (default: 0.05).
+        latency_slo_ms (float): Pragmatic p95 execution latency threshold in milliseconds (default: 120.0).
+        min_telemetry_samples (int): Minimum live inference records required before assessing exchangeability (default: 50).
+        drift_alpha (float): Permutation test significance level for calibration exchangeability (default: 0.01).
+    """
+
+    quantization_drop_tol: float = Field(default=0.03, ge=0.0, le=0.20)
+    coverage_tolerance: float = Field(default=0.05, ge=0.0, le=0.20)
+    latency_slo_ms: float = Field(default=120.0, gt=0.0)
+    min_telemetry_samples: int = Field(default=50, ge=5)
+    drift_alpha: float = Field(default=0.01, gt=0.0, lt=0.5)
 
 
 class Settings(BaseSettings):
@@ -342,6 +369,7 @@ class Settings(BaseSettings):
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
     drift: DriftConfig = Field(default_factory=DriftConfig)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
+    promotion: PromotionConfig = Field(default_factory=PromotionConfig)
 
     @property
     def data(self) -> StreamingConfig:

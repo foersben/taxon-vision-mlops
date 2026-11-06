@@ -1,6 +1,7 @@
 /manifests
 /embeddings
-/reference
+/reference/*.pt
 /optuna
 /seaweedfs
+/airflow
 *.pt

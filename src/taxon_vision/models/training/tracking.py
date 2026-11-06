@@ -467,7 +467,7 @@ def _log_dataset_lineage(
     """Log dataset input lineage metadata (Parquet manifest and split tensors) into the active MLflow run.
 
     Why:
-        Preserves cryptographic data lineage and legal license attribution (Rule 05) on the MLflow Model Card, while returning dataset references for MLflow 3 metric binding.
+        Preserves cryptographic data lineage and open-access license attribution metadata on the MLflow Model Card, while returning dataset references for MLflow 3 metric binding.
 
     How:
         1. Reads dataset_manifest.parquet and registers it via mlflow.data.from_pandas with SHA256 digest tag.
