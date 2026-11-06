@@ -9,7 +9,31 @@
 # 4. optuna-dashboard: Bayesian hyperparameter optimization visualizer (port 8080)
 # 5. prometheus: Real-time time-series telemetry scraping /metrics (port 9090)
 # 6. grafana: Operational metrics dashboards (port 3000, admin/admin)
+# 7. mlflow-server: MLflow 3.x tracking server with S3 artifact backend (port 5000)
+# 8. airflow: Airflow 3 orchestrator with LocalExecutor (port 8090 UI/API)
 # ==============================================================================
+
+x-airflow-common: &airflow-common
+  image: apache/airflow:3.0.0-python3.12
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: "LocalExecutor"
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://airflow:taxon_airflow_pass@postgres:5432/airflow"
+    AIRFLOW__CORE__FERNET_KEY: "${AIRFLOW__CORE__FERNET_KEY:-4mR_YgD-9XqjZ8V-V1KkL7mNpQrStUvWxYz01234567=}"
+    AIRFLOW__API__AUTH_JWT_SECRET: "${AIRFLOW__API__AUTH_JWT_SECRET:-taxon_vision_airflow_jwt_secret_key_32bytes}"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__MIN_FILE_PROCESS_INTERVAL: "60"
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: "http://airflow-apiserver:8080/execution/"
+    TAXON_INTERNAL_API_TOKEN: "${TAXON_INTERNAL_API_TOKEN:-dev_internal_token_secret}"
+    AIRFLOW_CONN_TAXON_APP: '{"conn_type": "http", "host": "http://app:8000", "password": "${TAXON_INTERNAL_API_TOKEN:-dev_internal_token_secret}"}'
+    AIRFLOW_CONN_JENKINS: '${AIRFLOW_CONN_JENKINS:-{"conn_type": "http", "host": "http://hive-mind:8080", "login": "admin", "password": "jenkins_api_token"}}'
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./data/airflow/logs:/opt/airflow/logs
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on:
+    postgres:
+      condition: service_healthy
 
 services:
   traefik:
@@ -199,6 +223,66 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    restart: unless-stopped
+
+  airflow-init:
+    <<: *airflow-common
+    container_name: taxon_airflow_init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate &&
+        (airflow users create \
+          --username admin \
+          --firstname Admin \
+          --lastname Taxon \
+          --role Admin \
+          --email admin@taxon-vision.org \
+          --password admin || true)
+    restart: "no"
+
+  airflow-apiserver:
+    <<: *airflow-common
+    container_name: taxon_airflow_apiserver
+    command: api-server
+    ports:
+      - "8090:8080"
+    mem_limit: 768m
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/v2/monitor/health')\" 2>/dev/null || curl -sI http://localhost:8080/health || exit 0"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: taxon_airflow_scheduler
+    command: scheduler
+    mem_limit: 1024m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    container_name: taxon_airflow_dag_processor
+    command: dag-processor
+    mem_limit: 512m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
     restart: unless-stopped
 
 volumes:

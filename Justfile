@@ -155,6 +155,11 @@ verify-contracts:
 visualize-dag:
 	pixi run --frozen -e ci-dev dvc dag --mermaid
 
+# Render visual Airflow DAG topology and task hierarchy (pass DAG ID or leave empty for all)
+[group("mlops")]
+airflow-dag dag="":
+	pixi run --frozen -e dev python scripts/maintenance/visualize_airflow_dag.py {{dag}}
+
 # Micro-canary end-to-end pipeline verification (tests ONNX export, INT8 quantization, and conformal calibration offline)
 [group("testing")]
 test-canary:

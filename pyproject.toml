@@ -106,7 +106,7 @@ disallow_any_generics = false
 check_untyped_defs = true
 ignore_missing_imports = true
 explicit_package_bases = true
-exclude = ["scratch/", "notebooks/", "site/"]
+exclude = ["scratch/", "notebooks/", "site/", "airflow/"]
 cache_dir = ".cache/mypy_cache"
 
 [tool.pytest.ini_options]
