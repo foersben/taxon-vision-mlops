@@ -19,7 +19,7 @@ To ensure non-blocking, rate-compliant upstream data acquisition from public bio
 
 Operating a distributed MLOps toolchain traditionally requires provisioning disparate enterprise infrastructure: an external PostgreSQL database cluster for experiment telemetry, dedicated S3 storage buckets, and complex Identity and Access Management (IAM) matrices to broker inter-service communication.
 
-For a single-host k3s deployment, running an enterprise-scale PostgreSQL server introduces an unjustifiable persistent memory footprint of 1.0 to 2.0~GB RAM. The architecture eliminates this overhead by deploying an embedded MLflow tracking backend powered by SQLite configured in Write-Ahead Logging (\texttt{WAL}) mode. Operating with an active memory footprint of approximately 15~MB, SQLite WAL guarantees full ACID transaction isolation and robust multi-process concurrency on NVMe storage. Heavy binary artefacts are offloaded directly to the in-cluster SeaweedFS object store (\texttt{s3://taxon-dvc-cache/}) or mirrored to DagsHub, establishing a zero-maintenance telemetry plane with zero public cloud egress charges.
+To eliminate cloud egress fees and maintain complete sovereign control over telemetry, the platform consolidates tracking and versioning into an in-cluster control plane. Telemetry and experiment metadata are anchored in the self-hosted \textbf{PostgreSQL 16} cluster within the dedicated \texttt{mlflow} database, operating with an active footprint of under 80~MB RAM. Heavy binary model checkpoints and evaluation artefacts are managed by a self-hosted MLflow 3.x tracking proxy server (\texttt{ghcr.io/mlflow/mlflow:v3.16.0}) executing with \texttt{--serve-artifacts} backed by the in-cluster SeaweedFS Apache 2.0 object store (\texttt{s3://mlflow-artifacts/}). DagsHub acts as an external Git and DVC synchronisation mirror and hosted Label Studio workspace, while SQLite WAL persistence is retained strictly as an automatic fallback for offline workstation iteration.
 
 \section{Bayesian Hyperparameter Optimisation and Telemetry}
 \label{sec:hyperparameter_opt}
@@ -44,7 +44,7 @@ The acquisition algorithm iteratively samples candidate configurations that maxi
 
 In order to conserve hardware cycles, Optuna applies the Asynchronous Successive Halving Algorithm (ASHA) with a minimum resource allocation of three epochs and a reduction factor of $\eta = 2$. A trial is first evaluated after three epochs; at each subsequent rung, only the superior half of the candidate configurations ($1/\eta$) is permitted to proceed, whilst inferior trajectories are terminated immediately.
 
-To guarantee continuity across iterative training cycles and prevent redundant evaluations, Optuna studies are backed by persistent SQLite storage (\nolinkurl{sqlite:///data/optuna/optuna_studies.db}) with study identifiers scoped deterministically by vision backbone (for example, \texttt{tuning\_dinov3} or \texttt{tuning\_bioclip2}) under \texttt{load\_if\_exists=True}. This persistence layer enables subsequent tuning invocations to warm-start from prior historical parameter trials, progressively refining the non-parametric Parzen density estimates without discarding previous evaluations.
+To guarantee continuity across iterative training cycles and prevent redundant evaluations, Optuna studies are backed by persistent PostgreSQL storage (\nolinkurl{postgresql+psycopg2://optuna:...@postgres:5432/optuna}) with study identifiers scoped deterministically by vision backbone (for example, \texttt{tuning\_dinov3} or \texttt{tuning\_bioclip2}) under \texttt{load\_if\_exists=True}. SQLite storage (\nolinkurl{sqlite:///data/optuna/optuna_studies.db}) is retained strictly as an automatic fallback for offline development. This persistence layer enables subsequent tuning invocations to warm-start from prior historical parameter trials, progressively refining the non-parametric Parzen density estimates without discarding previous evaluations.
 
 \subsection{Search Space and Optimiser}
 \label{sec:search_space}
@@ -69,13 +69,53 @@ Feature jitter $\sigma$ & uniform & $[0.0, 0.05]$; zero-mean Gaussian perturbati
 \end{tabularx}
 \end{table}
 
-\subsection{MLflow Interlock Architecture}
+\subsection{MLflow 3.x Interlock Architecture and Model Passports}
 
 Whilst Optuna orchestrates the search mathematics, it inherently lacks the infrastructure to permanently archive model provenance across a distributed engineering team. MLflow bridges this gap, operating as the continuous flight data recorder for our training pipeline.
 
-The integration is implemented directly within the objective function. The tuning session registers as an MLflow experiment on the tracking server, and each trial is executed within a nested child run. To avoid socket starvation and excessive network I/O during rapid hyperparameter sweeps, all epoch metrics -- training loss, validation loss, Top-1 accuracy, Macro F1-score, and validation Macro PR-AUC -- are aggregated in memory and submitted at trial completion or ASHA pruning using \texttt{MlflowClient().log\_batch()}. The lifecycle of the primary run is governed by a deterministic context manager, guaranteeing that unexpected execution exceptions transition the run to a \texttt{FAILED} state rather than hanging perpetually.
+The integration is implemented directly within the objective function and the overarching DVC pipeline. The tuning session registers as an MLflow experiment on the tracking server, and each trial is executed within a nested child run. To avoid socket starvation and excessive network I/O during rapid hyperparameter sweeps, all epoch metrics -- training loss, validation loss, Top-1 accuracy, Macro F1-score, and validation Macro PR-AUC -- are aggregated in memory and submitted at trial completion or ASHA pruning using \texttt{MlflowClient().log\_batch()}. The lifecycle of the primary run is governed by a deterministic context manager, guaranteeing that unexpected execution exceptions transition the run to a \texttt{FAILED} state rather than hanging perpetually.
 
-Model promotion evaluates candidate Macro PR-AUC against the incumbent holding the \texttt{Production} alias in the MLflow Model Registry. Qualified candidates receive the alias \texttt{Challenger} pending automated deployment verification. During registry registration, an explicit \texttt{ModelSignature} is inferred directly from genuine validation batch tensors (\texttt{val\_embeddings}) via \texttt{infer\_signature()}, completely eliminating synthetic tensor mocks and guaranteeing type-safe schema enforcement. The model version entry is enriched with immutable audit metadata, including the vision backbone tag, empirical validation Macro PR-AUC score, and human-readable architecture descriptions.
+\subsubsection{MLflow 3.x First-Class LoggedModels and Cross-Stage Continuity}
+\label{sec:mlflow3_logged_models}
+
+Modern MLOps practice in MLflow 3.x departs from legacy path-based model registries, elevating models to first-class \texttt{LoggedModel} entities identified by an immutable identifier (\texttt{m-...}). The architecture enforces four critical tracking invariants:
+\begin{enumerate}
+    \item \textbf{Cross-Stage DVC Run Continuity:} Stage~4 (\nolinkurl{train.py}) initialises the parent MLflow run and serialises its unique identifier to \nolinkurl{reports/train_metrics.json:mlflow_run_id}. Rather than scattering pipeline outputs across detached runs, subsequent stages (\nolinkurl{export_onnx.py}, \nolinkurl{calibrate.py}, and \nolinkurl{evaluate.py}) re-enter this active context using the RAII context manager \nolinkurl{resume_parent_mlflow_run()}. This unifies PyTorch weights, ONNX graphs, conformal thresholds, and evaluation reports into a single, cohesive lineage record.
+    \item \textbf{Four-Split Dataset Lineage (\texttt{mlflow.data}):} Every training run explicitly logs its four stratified tensor partitions (\texttt{train}, \texttt{val}, \texttt{cal}, \texttt{test}) alongside their DVC MD5 cryptographic content digests, instance counts, and DarwinCore schema tags using \nolinkurl{mlflow.log_input()}. This establishes cryptographically verifiable provenance between raw citizen-science images and deployed model weights.
+    \item \textbf{Dual-Output Tensor Signatures:} During model packaging, an explicit \texttt{ModelSignature} is inferred from genuine validation batch tensors via \nolinkurl{infer_signature()}. The signature enforces type-safe schemas across dual output nodes: unnormalised logits ($\mathbb{R}^{B \times K}$) and penultimate feature embeddings ($\mathbb{R}^{B \times D}$).
+    \item \textbf{Un-Gated Model Pollution Prevention:} To prevent cluttering the Model Registry with ephemeral experimental checkpoints, unit test runs and Optuna child trials are strictly forbidden from creating registered models. Model registration is restricted exclusively to the terminal evaluation stage of the canonical DVC pipeline.
+\end{enumerate}
+
+\subsubsection{The Model Passport Governance Standard}
+\label{sec:model_passport_spec}
+
+To establish cryptographic provenance and ensure zero-downtime serving attestation, the terminal evaluation stage compiles a structured \textbf{Model Passport} (\nolinkurl{reports/model_passport.json}). The passport acts as the cryptographic identity certificate for the candidate model, binding source code, dataset hashes, mathematical thresholds, and promotion verdicts into a single immutable document (Table~\ref{tab:model_passport}). Serving replicas load the passport on boot, exposing its parameters via \texttt{GET /api/v1/model/passport} and asserting hardware invariants before serving live traffic.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Model Passport Schema and Governance Fields (\nolinkurl{reports/model_passport.json})}
+\label{tab:model_passport}
+\begin{tabularx}{\textwidth}{@{}l l X@{}}
+\toprule
+\textbf{Field} & \textbf{Type} & \textbf{Description \& Audit Verification Role} \\
+\midrule
+\texttt{model\_id} & String & First-class MLflow 3.x model identifier (\texttt{m-...}) bound to the registered artifact. \\
+\texttt{mlflow\_run\_id} & String & UUID of the parent DVC pipeline MLflow tracking run. \\
+\texttt{git\_commit} & String & Verified Git commit SHA from which the candidate was compiled. \\
+\texttt{dvc\_data\_hash} & String & Cryptographic content hash of the training manifest (\texttt{dataset\_manifest.parquet}). \\
+\texttt{backbone} & String & Vision Foundation Model architecture identifier (e.g. \texttt{vit\_base\_patch14\_reg4\_dinov2}). \\
+\texttt{onnx\_md5} & String & MD5 checksum of the dual-output quantized runtime (\nolinkurl{model_int8.onnx}). \\
+\texttt{int8\_quantized} & Boolean & Flag indicating whether Integer-8 Post-Training Quantization was applied. \\
+\texttt{conformal\_alpha} & Float & Nominal significance error tolerance $\alpha \in (0, 1)$ (default $0.05 \implies 95\%$ coverage). \\
+\texttt{q\_hat} & Float & Finite-sample calibrated conformal non-conformity threshold. \\
+\texttt{tau\_ood} & Float & Dynamically calibrated Helmholtz free-energy out-of-distribution threshold. \\
+\texttt{eval\_macro\_pr\_auc} & Float & Empirical holdout Macro PR-AUC score achieved on \nolinkurl{test_embeddings.pt}. \\
+\texttt{p95\_latency\_ms} & Float & Measured steady-state p95 forward-pass latency on target CPU Performance cores. \\
+\texttt{four\_gate\_verdict} & Object & Structured boolean outcomes across Macro PR-AUC, INT8 fidelity, coverage, and live exchangeability. \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
 Crucially, every training execution renders and logs publication-grade evaluation artefacts directly into the MLflow run:
 \begin{enumerate}
