@@ -1,0 +1,13 @@
+{
+  "w1_distance": 0.010747988779787793,
+  "tau_w1": 0.12812,
+  "mmd2": -0.0003065585692837436,
+  "mmd2_p_value": 0.7412935323383084,
+  "drift_detected": false,
+  "n_reference": 1182,
+  "n_current": 1153,
+  "feature_dim": 384,
+  "mlflow_run_id": "028e6e8e4df44f819afa873aa8151062",
+  "report_path": "reports/data_drift_report.html",
+  "evaluated_at": "2026-11-05T20:30:42.385107+00:00"
+}

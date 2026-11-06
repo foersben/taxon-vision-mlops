@@ -46,25 +46,25 @@ stages:
       size: 62590
     - path: src/taxon_vision/data/license_filter.py
       hash: md5
-      md5: 339fc7d9ce1e1d28840723895fb024b5
-      size: 5400
+      md5: dd5702df5a46e348fb0693cecd441067
+      size: 5357
     - path: src/taxon_vision/domain/license.py
       hash: md5
-      md5: 15550e9c413c8969650d4f977e73127c
-      size: 3979
+      md5: 3b657aab08f4ed6efdb31fcc8dbb4175
+      size: 3678
     - path: src/taxon_vision/pipelines/audit_license.py
       hash: md5
-      md5: bf1046372a0d4bc19ba9ce69268a4296
-      size: 10990
+      md5: 83866dfe7af53dcffe0b141fab20a6bd
+      size: 12376
     outs:
     - path: data/manifests/dataset_manifest.parquet
       hash: md5
-      md5: e3d363cfb7e96844ac8d2cc4cf19012e
-      size: 34113
+      md5: cfe6bd66e95b83bd53aa93a08d2b9d81
+      size: 32603
     - path: reports/license_audit.json
       hash: md5
-      md5: cbee6e54c1ec41a12b5a2d7133c16cc3
-      size: 299
+      md5: 4a6dbe3cfaa2afd587b3d8a26fe6a0d4
+      size: 229
   extract_features:
     cmd: pixi run -e dev python -m taxon_vision.pipelines.extract_features
       --extractor dinov3 --image-size 224 --batch-size 32 --val-split 0.1
@@ -77,20 +77,20 @@ stages:
       size: 1956
     - path: data/manifests/dataset_manifest.parquet
       hash: md5
-      md5: e3d363cfb7e96844ac8d2cc4cf19012e
-      size: 34113
+      md5: cfe6bd66e95b83bd53aa93a08d2b9d81
+      size: 32603
     - path: src/taxon_vision/data/s3_streamer.py
       hash: md5
-      md5: d5f84e72df37b2e7175a486fd15986a4
-      size: 18659
+      md5: d3af5a91e4c6f8f479472cb51a7fca2a
+      size: 20035
     - path: src/taxon_vision/models/factory.py
       hash: md5
-      md5: b9dd9230b431003b9d1edd160693c598
-      size: 7982
+      md5: 4744810624e9b8eb86478440c3e3e874
+      size: 9138
     - path: src/taxon_vision/pipelines/extract_features.py
       hash: md5
-      md5: c5fd8b882ecab03c0f14ff1754365d4e
-      size: 34333
+      md5: 3b7952ab1b94862ff3e882f301e282e5
+      size: 35737
     params:
       params.yaml:
         feature_extraction.batch_size: 32
@@ -102,20 +102,20 @@ stages:
     outs:
     - path: data/embeddings/cal_embeddings.pt
       hash: md5
-      md5: 077b8192e04e8b68eb0b149bc5af3a26
-      size: 262877
+      md5: 8fa17bae49b1b1af08207ff7581af3d0
+      size: 255133
     - path: data/embeddings/test_embeddings.pt
       hash: md5
-      md5: 1539dd9e69c0e2c2856253c8c27b3e5b
-      size: 262885
+      md5: 4c15171832013da04255d283c5e0ddb0
+      size: 255141
     - path: data/embeddings/train_embeddings.pt
       hash: md5
-      md5: 5486c9d20ac0063fed12b88ec88e9c4f
-      size: 1826989
+      md5: fa0ac0221e0ef7494cf645c09b5458d9
+      size: 1782253
     - path: data/embeddings/val_embeddings.pt
       hash: md5
-      md5: 08fa7314c41fe32d6508dc62181629d9
-      size: 262877
+      md5: c2fd4905d136931d25dce1c20a8c60b2
+      size: 255133
   train:
     cmd: pixi run -e dev python -m taxon_vision.pipelines.train --extractor
       dinov3 --epochs 5 --batch-size 32 --lr 0.001 --train-embeddings
@@ -286,3 +286,33 @@ stages:
       hash: md5
       md5: fc512702e12d407da9fb81398ebbeb81
       size: 421
+  data_drift:
+    cmd: pixi run -e dev python -m taxon_vision.pipelines.data_drift --reference
+      data/reference/reference_train_embeddings.pt --current
+      data/embeddings/train_embeddings.pt --metrics-out reports/data_drift.json
+    deps:
+    - path: data/embeddings/train_embeddings.pt
+      hash: md5
+      md5: fa0ac0221e0ef7494cf645c09b5458d9
+      size: 1782253
+    - path: data/reference/reference_train_embeddings.pt
+      hash: md5
+      md5: 5486c9d20ac0063fed12b88ec88e9c4f
+      size: 1826989
+    - path: src/taxon_vision/monitoring/drift.py
+      hash: md5
+      md5: d76d2c0358751d9957d583aca88330f8
+      size: 10561
+    - path: src/taxon_vision/monitoring/drift_runner.py
+      hash: md5
+      md5: bd3a14563faa8b15afa2b4a2f5299941
+      size: 14210
+    - path: src/taxon_vision/pipelines/data_drift.py
+      hash: md5
+      md5: aacbb7ba639e889c608b4aea14d3cda2
+      size: 16083
+    outs:
+    - path: reports/data_drift.json
+      hash: md5
+      md5: aeed784dbf0c9ba555d26a2229321acf
+      size: 387
