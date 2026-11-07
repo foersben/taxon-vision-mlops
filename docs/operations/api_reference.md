@@ -75,3 +75,23 @@ The FastAPI service exposes machine REST API endpoints alongside server-rendered
     * **Request Schema:** None.
     * **Response Schema:** Prometheus exposition text format.
     * **Latency SLO:** < 10 ms.
+* **`POST /api/v1/drift/evaluate`**
+    * **Description:** On-demand statistical drift evaluation across the latest prediction window against canonical baseline embeddings. Offloads synchronous Wasserstein-1 and MMD² permutation matrix math to worker threads.
+    * **Request:** Protected by internal Bearer token (`TAXON_INTERNAL_API_TOKEN`).
+    * **Response Schema:** JSON object `DriftEvaluationResponse` (`drift_detected: bool`, `status: str`, `w1_distance: float`, `w1_threshold: float`, `mmd2: float | None`, `mmd2_p_value: float | None`, `window_size: int`, `n_reference: int`, `mlflow_run_id: str | None`, `report_path: str | None`).
+    * **Latency SLO:** < 500 ms (asynchronous offload).
+* **`GET /api/v1/drift/latest`**
+    * **Description:** Fast query retrieving the most recently recorded drift evaluation summary directly from the persistent telemetry repository.
+    * **Request Schema:** None.
+    * **Response Schema:** JSON object `DriftRunSummary | None`.
+    * **Latency SLO:** < 5 ms.
+* **`POST /api/v1/retrain/webhook`**
+    * **Description:** Authenticated Grafana Alertmanager webhook receiver acting as a relay bridge to Airflow 3 DAG orchestrator. Validates static Bearer token using constant-time comparison, filters for firing alerts with `action=retrain`, enforces a 6-hour sliding cooldown, and triggers the `model_retraining` Airflow DAG asynchronously.
+    * **Request:** JSON object `GrafanaWebhookPayload` accompanied by `Authorization: Bearer <TAXON_RETRAIN_WEBHOOK_SECRET>`.
+    * **Response Schema:** JSON object `RetrainWebhookResponse` (`status: str` ['triggered', 'suppressed', 'ignored'], `detail: str`, `dag_run_id: str | None`).
+    * **Latency SLO:** < 25 ms.
+* **`GET /ui/passport`**
+    * **Description:** HTMX partial rendering the active model governance passport pill strip on the operator dashboard. Displays active model name, MLflow run ID, validation accuracy, p95 CPU latency, INT8 quantization drop, and exchangeability verdict.
+    * **Request Schema:** None.
+    * **Response Schema:** HTML fragment (`partials/model_passport.html`).
+    * **Latency SLO:** < 5 ms (in-memory cached with 60s TTL).

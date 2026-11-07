@@ -56,6 +56,12 @@ The platform exposes real-time Prometheus metrics at `GET /metrics` via `prometh
 | **`ood_energy_score_distribution`** | Histogram | `model_name`, `le` | Tracks Helmholtz Free Energy $E(x; T)$ scores. Activations exceeding $\tau_{\text{OOD}}$ trigger semantic outlier isolation. |
 | **`taxonomic_triage_referred_total`** | Counter | `reason` (`empty_set`, `exceeds_kmax`, `low_confidence`, `ood`) | Tracks requests deferred to the human-in-the-loop expert review queue. |
 | **`inference_requests_total`** | Counter | `status` (`success`, `fallback`, `error`) | Total inference requests processed. Explicitly differentiates decode fallbacks from runtime system crashes. |
+| **`taxon_drift_w1_distance`** | Gauge | None | Observed 1D Wasserstein-1 distance on embedding norms from the latest drift evaluation run. |
+| **`taxon_drift_w1_threshold`** | Gauge | None | Calibrated 1D Wasserstein-1 decision threshold from the latest drift evaluation run. |
+| **`taxon_drift_mmd2_p_value`** | Gauge | None | Multivariate RBF MMD² permutation test p-value evaluating non-linear representation drift. |
+| **`taxon_drift_detected`** | Gauge | None | Binary indicator flag (1.0 = drift detected, 0.0 = nominal) triggering operational retraining alerts. |
+| **`taxon_drift_last_run_timestamp_seconds`** | Gauge | None | UTC UNIX timestamp in seconds of the most recent drift evaluation run execution. |
+| **`taxon_retrain_triggers_total`** | Counter | `source`, `outcome` | Total model retraining triggers evaluated by the relay (`source="grafana"`, `outcome` in `triggered`, `suppressed`, `ignored`, `error`). |
 
 ---
 
@@ -427,3 +433,61 @@ flowchart TD
     * **KEDA (Kubernetes Event-driven Autoscaling) HTTP Add-on:** Uses an external proxy (`keda-http-add-on`) to buffer requests and scale deployments from zero based on pending HTTP concurrency metrics.
     * **Knative Serving:** Scales pods to zero using the Knative Activator and Queue-Proxy sidecars, with revision management and traffic splitting.
     * **vCluster / DevSpace Hibernation:** Hibernates entire tenant namespaces when developer activity ceases, saving cluster-wide memory across multi-tenant teams.
+
+---
+
+## 11. Declarative Grafana Provisioning & Retraining Webhook Relay
+
+To eliminate manual dashboard configuration and ensure reproducible cluster deployments, the operational monitoring stack is provisioned as code within `deploy/grafana/provisioning/`.
+
+### 11.1 Overview Dashboard (`dashboards/json/taxon_overview.json`)
+
+The primary operator cockpit defines 6 high-density telemetry panels:
+
+1. **Request Rate (RPS):** Tracks throughput across serving pods using `sum(rate(taxon_predictions_total[1m]))`.
+2. **Error Ratio:** Monitors HTTP and inference failure fractions via `sum(rate(taxon_predictions_total{status=~"error|unavailable"}[5m])) / clamp_min(sum(rate(taxon_predictions_total[5m])), 1e-9)`.
+3. **p95 Latency:** Evaluates execution time percentiles against the 25 ms SLO ceiling using `1000 * histogram_quantile(0.95, sum by (le) (rate(taxon_inference_latency_seconds_bucket[5m])))`.
+4. **Wasserstein-1 Distance:** Displays observed embedding norm divergence against the calibrated threshold via `taxon_drift_w1_distance` and `taxon_drift_w1_threshold`.
+5. **MMD Squared Hypothesis Test:** Plots `taxon_drift_mmd2_p_value` on a logarithmic scale with a critical alpha significance threshold at $0.01$.
+6. **Active Drift Verdict:** Visualises a state timeline of `taxon_drift_detected` (0.0 = nominal, 1.0 = drift detected).
+
+### 11.2 Alerting Rules & Retraining Relay Bridge
+
+Grafana Alertmanager rules in `deploy/grafana/provisioning/alerting/rules.yaml` segregate operational platform alerts from epistemic retraining triggers:
+
+* **Platform Alerts (`tier=platform`):** Saturated latency (`PredictionLatencyP95High`) and elevated error ratios (`PredictionErrorRatioHigh`) route to standard administrator contact points; retraining vision models cannot resolve infrastructure bottlenecks.
+* **MLOps Retraining Alert (`tier=mlops`, `action=retrain`):** When `EmbeddingDriftDetected` fires (`taxon_drift_detected == 1.0`), Alertmanager dispatches a webhook to the FastAPI relay bridge at `POST /api/v1/retrain/webhook`.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Prom as Prometheus
+    participant Graf as Grafana Alertmanager
+    participant Relay as FastAPI Webhook Relay<br/>(/api/v1/retrain/webhook)
+    participant AF as Airflow 3 REST API<br/>(/api/v2/dags/model_retraining/dagRuns)
+    participant JNK as Jenkins CI/CD<br/>(GPU Retraining Pod)
+    participant MLF as MLflow 3.x<br/>(Four-Gate Promotion)
+
+    Prom->>Graf: Scrape taxon_drift_detected == 1.0
+    Graf->>Graf: Rule EmbeddingDriftDetected fires (action=retrain)
+    Graf->>Relay: POST /api/v1/retrain/webhook<br/>Bearer TAXON_RETRAIN_WEBHOOK_SECRET
+    Relay->>Relay: 1. hmac.compare_digest(secret) (Constant-Time)<br/>2. Filter status == "firing" & action == "retrain"<br/>3. Check 6-Hour Cooldown Window
+    alt Cooldown Active (< 6h)
+        Relay-->>Graf: 200 OK {"status": "suppressed", "detail": "Cooldown active"}
+    else Cooldown Expired (Slot Acquired)
+        Relay->>AF: POST /api/v2/dags/model_retraining/dagRuns<br/>{"conf": {"trigger_source": "grafana"}}
+        AF-->>Relay: 201 Created {"dag_run_id": "grafana__2026-11-06T..."}
+        Relay->>Relay: Increment taxon_retrain_triggers_total{outcome="triggered"}
+        Relay-->>Graf: 200 OK {"status": "triggered", "dag_run_id": "..."}
+        AF->>JNK: Trigger parameterised GPU build
+        JNK->>JNK: Train head on updated embeddings
+        JNK->>MLF: Evaluate 4-Gate Promotion (Accuracy, Latency, INT8 drop, MMD²)
+    end
+```
+
+### 11.3 Architectural Safety Invariants
+
+1. **Constant-Time Verification:** Bearer token authorization is validated via `hmac.compare_digest` in `verify_retrain_token`, eliminating timing-attack vulnerabilities.
+2. **Rate-Limiting Cooldown Window:** An atomic in-memory lock enforces `TAXON_RETRAIN_COOLDOWN_SECONDS` (default 6 hours), protecting cluster compute resources against alert storms during prolonged distribution shifts.
+3. **Strict Domain Typing:** The relay utilizes Pydantic v2 domain schemas (`GrafanaAlertItem`, `GrafanaWebhookPayload`) enforcing snake_case field identifiers whilst mapping incoming camelCase payload keys via field aliases.
+4. **Non-Blocking Asynchronous Dispatch:** HTTP requests to the Airflow 3 REST API are dispatched via `httpx.AsyncClient` with connection timeouts and backward-compatible endpoint fallback.

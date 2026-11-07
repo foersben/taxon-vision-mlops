@@ -147,6 +147,27 @@ pixi run -e dev python scripts/maintenance/cleanup_mlflow_registry.py --execute 
 
 ---
 
+### `scripts/maintenance/visualize_airflow_dag.py`
+
+Zero-dependency offline visualizer that statically inspects Airflow DAG files using Python's native `ast` module, rendering terminal dependency trees in $< 100\,\text{ms}$ without requiring active Docker containers or background daemon processes.
+
+#### Operational Capabilities
+
+* **Offline AST Parsing:** Statically scans `airflow/dags/*.py` to extract tasks, operators, and bitshift dependency chains (`>>`).
+* **Interactive Filtering:** Supports targeted inspection of individual DAGs (`prediction_drift_monitor`, `model_retraining`) or complete repository scans.
+* **Residue Prevention:** Provides immediate developer feedback on DAG topologies without allocating memory in Docker or leaving container processes behind.
+
+```bash
+# Inspect all DAGs
+just airflow-dag
+
+# Inspect specific DAG
+just airflow-dag prediction_drift_monitor
+just airflow-dag model_retraining
+```
+
+---
+
 ## 4. Governance & Quality Gates (`scripts/governance/`)
 
 ### `scripts/governance/validate_okf.py`

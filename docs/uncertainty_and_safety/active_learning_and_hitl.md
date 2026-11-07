@@ -48,7 +48,66 @@ In the active runtime serving path (`/api/v1/predict`), whenever `is_ood` or `re
 
 ---
 
-## 2. Phase 2.5 & Phase 3 Roadmap Specifications
+## 2. Three-Tier Legal & Licensing Security for User Uploads
+
+In real-world ecological deployments, observations flagged for human triage frequently originate from field biologists or public users uploading imagery through web interfaces or mobile REST endpoints. A common operational anti-pattern is relying on passive website disclaimers (e.g. *"By uploading images you grant us rights to train AI models"*).
+
+### 2.1 The Jurisprudential Failure of Passive Disclaimers
+
+Under European and German copyright doctrine (UrhG, BGB §§ 305 ff. on General Terms and Conditions), passive disclaimers fail to transfer valid copyright or exploitation rights:
+
+* **Inalienability of Authorship:** Under German law, authorship (*Urheberschaft*) cannot be waived; only specific, voluntary exploitation rights (*Nutzungsrechte*) can be granted.
+* **No Implicit Consent:** Mere upload for real-time inference does not constitute voluntary, informed consent to distribute photos to public third-party repositories or cloud annotation tools (DagsHub / Label Studio).
+* **Third-Party Infringement:** Users routinely upload third-party screenshots or field guide photos they do not own; an uploader cannot license rights they do not possess.
+* **TDM Limitations:** Statutory Text and Data Mining exceptions (EU DSM Directive Art. 4 / § 44b UrhG) cover internal model fitting, but **expressly forbid public redistribution** of photographic assets in open dataset releases or public Label Studio workspaces without a valid open license.
+
+### 2.2 Three-Tier Ingestion Architecture
+
+To achieve mathematical, reproducible, and legally watertight operation, TaxonVision enforces a three-tier lifecycle:
+
+```mermaid
+flowchart TD
+    Upload["User uploads image crop (UI / REST API)"] --> Check{"Did user explicitly select an open licence & attribution?"}
+
+    Check -- "NO (Default / Anonymous)" --> Ephemeral["Tier 1: Ephemeral Inference Only<br/>- In-memory prediction & CAM attribution<br/>- Zero disk persistence in training pool<br/>- Deleted upon cache TTL expiration (15 min)"]
+
+    Check -- "YES (Opt-in Checkbox + Name)" --> Staged["Tier 2: Flagged Observation Staging<br/>- Saved to data/flagged_observations/<br/>- Metadata stamped: CC-BY / CC0 + Photographer"]
+
+    Staged --> LS["Label Studio Triage Queue"]
+    LS --> Gate{"Feedback Gatekeeper (feedback.py & audit_license)"}
+
+    Gate -- "Unlicensed / Missing Credit" --> Drop["PURGE: Excluded from dataset_manifest.parquet"]
+    Gate -- "Valid CC0 / CC-BY / CC-BY-NC" --> Manifest["Appended to Training Set"]
+```
+
+1. **Tier 1 (Ephemeral Inference by Default):** Unverified uploads are processed strictly in RAM for forward-pass classification and CAM visualization. Images expire from memory after `image_cache_ttl_seconds` (15 minutes) and are **never** written to training manifests.
+2. **Tier 2 (Affirmative Opt-In Staging):** Only when a user explicitly checks an affirmative opt-in box (*"Contribute to open science under CC-BY 4.0"*) and provides an attribution name does `persist_flagged_observation` stage the crop to `data/flagged_observations/`.
+3. **Tier 3 (Automated Gatekeeper Invariant):** The feedback merger (`src/taxon_vision/active_learning/feedback.py`) and license auditor (`audit_license.py`) act as a hard barrier: any annotation export record missing a valid Creative Commons code (`CC0`, `CC-BY`, `CC-BY-NC`) or lacking a photographer attribution string is dropped immediately with an audit warning.
+
+---
+
+## 3. Label Studio Triage Interface (`deploy/label_studio/project_config.xml`)
+
+Human annotation tasks are declared declaratively via XML configuration in `deploy/label_studio/project_config.xml`:
+
+* **Visual Inspection:** High-resolution zoomable image crop viewer with rotation controls.
+* **Attribution Verification Pill:** Displays `$photographer_name`, `$license_code`, and `$observation_uuid` directly above the choices so domain experts can verify copyright credentials before tagging.
+* **Canonical Taxonomy Choices:** Single-choice selection mapping the 10 catalog taxa from `config/taxa_catalog.yaml` alongside an explicit `"Out of Distribution"` category.
+
+---
+
+## 4. Feedback Ingestion Engine (`src/taxon_vision/active_learning/feedback.py`)
+
+The feedback merger (`merge_feedback_to_manifest`) parses completed Label Studio JSON exports:
+
+1. Maps taxonomy choices to integer `taxon_id`s.
+2. Discards or isolates Out-of-Distribution classifications away from closed-set head updates.
+3. Validates open-license codes against `PERMITTED_LICENSES = {"cc0", "cc-by", "cc-by-nc"}` and verifies non-empty photographer attribution.
+4. Idempotently deduplicates against existing observation UUIDs in `data/manifests/dataset_manifest.parquet` before atomic rewrite.
+
+---
+
+## 5. Phase 2.5 & Phase 3 Roadmap Specifications
 
 The following capabilities represent planned architectural extensions detailed in the Technical Strategy Report (currently zero runtime code in `src/`):
 
