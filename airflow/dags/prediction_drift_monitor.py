@@ -23,6 +23,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
+from airflow.providers.http.hooks.http import HttpHook
+
 try:
     from airflow.providers.standard.operators.trigger_dagrun import TriggerDagRunOperator
 except ImportError:
@@ -56,8 +58,6 @@ def prediction_drift_monitor() -> None:
         Returns:
             Structured dictionary representation of `DriftEvaluationResponse`.
         """
-        from airflow.providers.http.hooks.http import HttpHook
-
         hook = HttpHook(method="POST", http_conn_id="taxon_app")
         conn = hook.get_connection("taxon_app")
         auth_token = conn.password or ""

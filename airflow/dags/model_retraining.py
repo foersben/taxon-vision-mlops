@@ -18,13 +18,19 @@ How:
 from __future__ import annotations
 
 import logging
+import os
 import time
+from pathlib import Path
 from typing import Any
+
+from airflow.providers.http.hooks.http import HttpHook
 
 try:
     from airflow.sdk import dag, task
 except ImportError:
     from airflow.decorators import dag, task  # type: ignore[no-redef]
+
+from taxon_vision.active_learning.feedback import merge_feedback_to_manifest
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +53,31 @@ def model_retraining() -> None:
             Dictionary indicating whether new annotations were merged into the training manifest.
         """
         logger.info("Checking for pending Label Studio triage exports to merge into training manifest...")
-        # Step 8 hook: In offline mode or prior to annotation exports, records clean passthrough
-        return {"new_annotations_merged": 0, "status": "skipped_no_pending_annotations"}
+        export_path = os.getenv(
+            "TAXON_LABEL_STUDIO_EXPORT_PATH",
+            "data/flagged_observations/label_studio_export.json",
+        )
+        if not Path(export_path).is_file():
+            logger.info("No pending Label Studio export found at %s; proceeding with existing manifest", export_path)
+            return {"new_annotations_merged": 0, "status": "skipped_no_pending_annotations"}
+
+        try:
+            res = merge_feedback_to_manifest(export_path)
+            logger.info(
+                "Merged %d human annotations into dataset manifest (status: %s, total: %d)",
+                res.new_records_added,
+                res.status,
+                res.total_manifest_records,
+            )
+            return {
+                "new_annotations_merged": res.new_records_added,
+                "ood_records_skipped": res.ood_records_skipped,
+                "total_manifest_records": res.total_manifest_records,
+                "status": res.status,
+            }
+        except Exception:
+            logger.exception("Failed to merge feedback annotations from %s", export_path)
+            return {"new_annotations_merged": 0, "status": "error_feedback_merge_failed"}
 
     @task
     def trigger_jenkins_build(feedback_status: dict[str, Any]) -> dict[str, Any]:
@@ -60,8 +89,6 @@ def model_retraining() -> None:
         Returns:
             Dictionary containing queue item URL and trigger parameters.
         """
-        from airflow.providers.http.hooks.http import HttpHook
-
         logger.info(
             "Triggering Jenkins GPU retraining job with feedback status: %s",
             feedback_status.get("status"),
@@ -70,7 +97,9 @@ def model_retraining() -> None:
             hook = HttpHook(method="POST", http_conn_id="jenkins")
             conn = hook.get_connection("jenkins")
             logger.info("Connecting to Jenkins host: %s as user: %s", conn.host, conn.login)
-            endpoint = "/job/taxon-vision-mlops/buildWithParameters?RETRAIN_MODEL=true"
+            new_annotations = feedback_status.get("new_annotations_merged", 0) > 0
+            ingest_param = "true" if new_annotations else "false"
+            endpoint = f"/job/taxon-vision-mlops/buildWithParameters?RETRAIN_MODEL=true&INGEST_DATA={ingest_param}"
             response = hook.run(
                 endpoint=endpoint,
                 headers={"Content-Type": "application/x-www-form-urlencoded"},

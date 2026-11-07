@@ -19,7 +19,7 @@ import logging
 import os
 import threading
 import time
-from typing import Annotated
+from typing import Annotated, NamedTuple
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Security, status
@@ -94,7 +94,19 @@ def extract_firing_retrain_alert(payload: GrafanaWebhookPayload) -> str | None:
     return None
 
 
-def acquire_retrain_cooldown(cooldown_seconds: float) -> tuple[bool, float]:
+class CooldownAcquisitionResult(NamedTuple):
+    """Structured outcome of checking and acquiring the retraining cooldown window.
+
+    Attributes:
+        acquired: Boolean indicator whether the retraining slot was acquired.
+        remaining_seconds: Remaining cooldown duration in seconds if suppressed, otherwise 0.0.
+    """
+
+    acquired: bool
+    remaining_seconds: float
+
+
+def acquire_retrain_cooldown(cooldown_seconds: float) -> CooldownAcquisitionResult:
     """Check and atomically acquire the retraining cooldown slot.
 
     Why:
@@ -107,16 +119,16 @@ def acquire_retrain_cooldown(cooldown_seconds: float) -> tuple[bool, float]:
         cooldown_seconds: Minimum seconds required between consecutive retraining runs.
 
     Returns:
-        Tuple of (acquired: bool, remaining_cooldown_seconds: float).
+        CooldownAcquisitionResult containing acquired flag and remaining cooldown seconds.
     """
     global _last_retrain_timestamp
     now = time.time()
     with _cooldown_lock:
         elapsed = now - _last_retrain_timestamp
         if elapsed < cooldown_seconds:
-            return False, cooldown_seconds - elapsed
+            return CooldownAcquisitionResult(acquired=False, remaining_seconds=cooldown_seconds - elapsed)
         _last_retrain_timestamp = now
-        return True, 0.0
+        return CooldownAcquisitionResult(acquired=True, remaining_seconds=0.0)
 
 
 async def dispatch_airflow_retraining(alert_name: str) -> str:
@@ -209,12 +221,12 @@ async def retrain_webhook_endpoint(
         )
 
     cooldown_seconds = float(os.getenv("TAXON_RETRAIN_COOLDOWN_SECONDS", "21600.0"))
-    acquired, remaining = acquire_retrain_cooldown(cooldown_seconds)
-    if not acquired:
+    cooldown = acquire_retrain_cooldown(cooldown_seconds)
+    if not cooldown.acquired:
         RETRAIN_TRIGGERS_TOTAL.labels(source="grafana", outcome="suppressed").inc()
         return RetrainWebhookResponse(
             status="suppressed",
-            detail=f"Retraining suppressed by cooldown ({int(remaining)}s remaining)",
+            detail=f"Retraining suppressed by cooldown ({int(cooldown.remaining_seconds)}s remaining)",
         )
 
     try:
