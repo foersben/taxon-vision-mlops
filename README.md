@@ -7,6 +7,7 @@
 [![Conformal Coverage](https://img.shields.io/badge/conformal%20coverage-95%25%20guaranteed-success)](docs/uncertainty_and_safety/conformal_prediction_theory.md)
 [![Model Backbone](https://img.shields.io/badge/backbone-DINOv3%20ViT--S%2F16-blueviolet)](https://github.com/facebookresearch/dinov)
 [![MLflow Registry](https://img.shields.io/badge/registry-MLflow%203.16.0-informational)](http://localhost:5000)
+[![DagsHub Hub](https://img.shields.io/badge/DagsHub-DVC%20%26%20MLflow-1890ff.svg)](https://dagshub.com/foersben/taxon-vision-mlops)
 
 TaxonVision-MLOps is a production-grade, end-to-end machine learning platform designed for fine-grained biological species identification from citizen-science photography (such as iNaturalist and GBIF DarwinCore). It unites self-supervised vision representations, class-balanced loss functions for long-tail biological distributions, distribution-free statistical uncertainty guarantees via Split Conformal Prediction, and an industrial MLOps infrastructure featuring automated drift monitoring, containerised microservices, and a four-gate model promotion lifecycle.
 
@@ -209,17 +210,26 @@ flowchart LR
         Airflow -.->|Trigger Retraining DAG| Jenkins["Bare-Metal Jenkins<br/>(NVIDIA RTX 5070 Ti)"]
     end
 
-    subgraph StorageLayer ["Artefact & Metadata Stores"]
+    subgraph InternalStorage ["Cluster Storage & Registry"]
         FastAPI -.-> MLflow["MLflow 3.16.0 Registry"]
-        MLflow -.-> S3["SeaweedFS S3 Store"]
+        MLflow -.-> S3["Local SeaweedFS S3 Store"]
+        Jenkins -->|"Fast Zero-Egress DVC"| S3
+    end
+
+    subgraph CloudStorage ["Cloud Collaboration & CI (DagsHub)"]
+        GHA["GitHub Actions CI"] -->|"dvc pull (DAGSHUB_TOKEN)"| DagsHubDVC["DagsHub DVC Remote<br/>(s3://dvc)"]
+        Dev["Developer Workstation"] -->|"dvc push / pull"| DagsHubDVC
+        FastAPI -.->|"Mirror / Public View"| DagsHubMLflow["DagsHub MLflow 2.x<br/>(Public Dashboard)"]
     end
 
     classDef core fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
     classDef obs fill:#0f172a,stroke:#10b981,stroke-width:1px,color:#e2e8f0;
     classDef store fill:#1e1b4b,stroke:#8b5cf6,stroke-width:2px,color:#f8fafc;
+    classDef cloud fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc;
     class Traefik,FastAPI,Dashboard core;
     class PG,Prom,Grafana,Airflow,DriftReport,Jenkins obs;
     class MLflow,S3 store;
+    class GHA,Dev,DagsHubDVC,DagsHubMLflow cloud;
 ```
 
 ### 1. Dual-Target CI/CD Topology
@@ -244,6 +254,17 @@ flowchart LR
     * *Tier 2 (Multivariate RKHS $\text{MMD}^2$):* High-sensitivity kernel two-sample test ($B = 200$ bootstrap permutations).
     * *Visual Diagnostics:* Automated rendering of 8-dimensional PCA projection snapshots via Evidently 0.7 (`reports/data_drift_report.html`).
 * If sustained drift is detected, Airflow triggers Alertmanager and dispatches an automated retraining run on Jenkins.
+
+### 4. Dual-Tier Storage & Tracking: Cloud Collaboration (DagsHub) vs. Local Serving
+
+To balance public reproducibility and CI automation with high-throughput local GPU training economics, the platform deploys a two-tier storage and tracking topology:
+
+* **Cloud Collaboration Tier (DagsHub):**
+    * *DVC Remote (`origin`):* Hosted on DagsHub S3 storage (`https://dagshub.com/foersben/taxon-vision-mlops.s3`). Serves as the public immutable artefact hub for versioned Parquet manifests, feature tensors, and production ONNX models. GitHub Actions CI uses `DAGSHUB_TOKEN` to pull verified weights (`models/checkpoints/model_int8.onnx.dvc`) during pull request testing without requiring network access to private infrastructure.
+    * *MLflow 2.x Hosted Mirror:* Provides public web access to run parameters, validation metrics, and training curves for open scientific collaboration.
+* **Internal Bare-Metal Tier (Cluster & Workstation):**
+    * *Local SeaweedFS S3 Remote (`local-seaweedfs`):* Cluster-internal S3-compatible object store (`http://seaweedfs:8333`). Eliminates cloud bandwidth latency and egress costs by staging multi-gigabyte embeddings and intermediate checkpoints directly over the local NVMe bus during continuous training.
+    * *Self-Hosted MLflow 3.16.0 + PostgreSQL 16:* Private high-performance tracking server powering live Bayesian Optuna sweeps, native MLflow 3.x First-Class `LoggedModel` lineage, and automated Four-Gate promotion tags (`@Production`, `@Challenger`, `@Archived`).
 
 ---
 
