@@ -3,95 +3,106 @@ type: Reference
 title: FastAPI Service & OpenAPI Contract Reference
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
-version: 1.0
-description: REST endpoints, request schemas, and response contracts.
-tags: [api, fastapi, openapi, endpoints]
-generated: {by: process:scaffold-init, at: "2026-10-02T10:00:00Z"}
-verified: {by: process:scaffold-init, at: "2026-10-02T10:00:00Z"}
+version: 1.1
+description: Complete REST API and HTMX hypermedia endpoint reference, threadpool concurrency invariants, and authentication contracts.
+tags: [api, fastapi, openapi, endpoints, htmx, drift, retrain, passport]
+generated: {by: "process:docs-librarian", at: "2026-11-08T17:40:00Z"}
+verified: {by: "process:docs-librarian", at: "2026-11-08T17:40:00Z"}
+sources:
+  - resource: "src/taxon_vision/service/api.py"
+  - resource: "src/taxon_vision/service/routes/predict.py"
+  - resource: "src/taxon_vision/service/routes/explain.py"
+  - resource: "src/taxon_vision/service/routes/views.py"
+  - resource: "src/taxon_vision/service/routes/drift.py"
+  - resource: "src/taxon_vision/service/routes/retrain.py"
+  - resource: "src/taxon_vision/service/schemas.py"
 ---
 
 # FastAPI Service & OpenAPI Contract Reference
 
-The TaxonVision REST API is built on FastAPI and designed to serve high-throughput, low-latency requests in a zero-allocation inference environment.
+The TaxonVision-MLOps web service ([`src/taxon_vision/service/api.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/service/api.py)) unifies the machine-to-machine REST API, the server-rendered Jinja2/HTMX operator cockpit, the on-demand statistical drift evaluation runner, and the Grafana-to-Airflow retraining webhook relay inside a single high-concurrency ASGI application.
 
-## 1. Architectural Setup: Non-Blocking Threadpool Offloading
+---
 
-**What we chose:**
-All synchronous CPU/GPU bound operations (e.g., PyTorch training, ONNX inference matrix multiplications, forward-hooked Class Activation Mapping, and synchronous Redis cache queries) are explicitly offloaded to an AnyIO worker threadpool using `await anyio.to_thread.run_sync(...)`.
+## 1. Architectural Invariants: Event-Loop Protection & Zero-Allocation Caching
 
-**Why we chose it (Strategic Validation):**
-FastAPI uses a single-threaded `asyncio` event loop. A common anti-pattern in MLOps is placing heavy synchronous PyTorch calls, image decode routines, or Redis socket calls directly inside `async def` route handlers. When this happens, the single asyncio thread blocks completely until the computation or network wait finishes. During this time, the server cannot accept new connections or respond to `/health` liveness probes, causing Kubernetes to falsely assume the pod is dead and terminate it. Offloading to AnyIO ensures the main event loop remains free to handle incoming connections and health checks, guaranteeing robust scaling under load.
+### 1.1 Non-Blocking AnyIO Threadpool Offloading (Rule 08)
 
-## 2. Zero-Allocation Inference Hot Path
+FastAPI runs on a single-threaded `asyncio` event loop per worker process. Executing synchronous CPU-bound operations (image decoding, ONNX Runtime matrix math, Wasserstein-1 / MMD² permutation testing, forward-hooked CAM rendering) or synchronous I/O (PostgreSQL queries, Redis cache lookups, local JSON report reads) directly inside an `async def` route handler would stall the event loop, causing Kubernetes `/health` liveness probes to time out.
 
-**What we chose:**
-Image preprocessing transforms (`torchvision.transforms.Compose`) are pre-allocated and cached using the `@lru_cache` decorator on the `get_image_transform()` method.
+Every route in `src/taxon_vision/service/routes/` enforces non-blocking concurrency via two mechanisms:
 
-**Why we chose it (Semantic Validation):**
-Re-instantiating transform pipelines on every incoming request triggers repeated memory allocations on the heap and forces the Python Garbage Collector into constant churn. For a service bound by strict sub-25ms inference SLOs, dynamic allocations on the hot path are unacceptable. Caching the immutable transform pipeline ensures zero-allocation routing, eliminating GC pauses and maintaining constant p95 latency percentiles.
+* **`await anyio.to_thread.run_sync(...)`:** Offloads synchronous inference (`run_prediction`), CAM generation, drift computation (`evaluate_recent_drift`), Redis caching (`cache.store` / `cache.get`), and Model Passport compilation (`load_model_passport`) onto the AnyIO worker threadpool.
+* **FastAPI `BackgroundTasks`:** Dispatches PostgreSQL prediction telemetry persistence (`get_telemetry_store().record(rec)`) after the HTTP response payload is constructed, ensuring database inserts add $0.0\,\text{ms}$ to client-perceived `/api/v1/predict` latency.
 
-## 3. OpenAPI REST & HTMX Endpoints Reference
+### 1.2 Pre-Allocated Transform & Engine Singleton Caching (Rule 02)
 
-The FastAPI service exposes machine REST API endpoints alongside server-rendered HTMX partials:
+Re-instantiating `torchvision.transforms.Compose` pipelines or ONNX Runtime sessions on every request triggers heap fragmentation and Python garbage collection pauses. Both `get_image_transform()` and the active `ONNXInferenceEngine` are cached in memory via `@lru_cache`, while the Active Model Passport (`load_model_passport()`) is cached with a 60-second monotonic TTL.
 
-* **`POST /api/v1/predict`** (alias: `POST /predict`)
-    * **Description:** High-throughput species classification endpoint. Preprocesses image, runs ONNX Runtime inference, evaluates non-conformity scores against calibrated $\hat{q}$, evaluates Helmholtz free energy against $\tau_{\text{ood}}$, and optionally renders visual attribution CAM overlays.
-    * **Request:** `multipart/form-data` containing `file: UploadFile` and optional query flag `explain: bool = false`.
-    * **Response Schema:** JSON object containing `predictions: list[TaxonPrediction]`, `conformal_set: list[int]`, `ood_score: float`, `is_ood: bool`, `routing_tier: str`, and optional `cam_overlay_base64: str | None`.
-    * **Latency SLO:** < 25.0 ms p95 on GPU / < 50.0 ms p95 on CPU.
-    * **Error Status Codes:**
-        * `400 Bad Request` (Corrupted image format or unparsable payload)
-        * `422 Unprocessable Entity` (File upload missing or empty)
-        * `500 Internal Server Error` (Failures explicitly logged with full traceback and reported to Prometheus)
-* **`POST /api/v1/explain`**
-    * **Description:** On-demand visual explainability via forward-hooked Class Activation Mapping (CAM). Resolves image bytes either directly from multipart upload or by looking up `image_hash` from the distributed Redis ephemeral cache (`redis-ephemeral:6379`), eliminating multi-pod split-brain errors.
-    * **Request:** Query parameters `image_hash: str | None`, `target_class_index: int | None`, or optional multipart `file: UploadFile`.
-    * **Response Schema:**
-        * JSON Client (`Accept: application/json`): `ExplainResponse` containing `image_hash: str`, `target_class_index: int`, `cam_overlay_base64: str`, and `execution_time_ms: float`.
-        * HTMX Client (`HX-Request: true`): HTML drawer fragment (`partials/cam_result.html`) displaying the rendered CAM overlay heatmap and activation legend.
-    * **Error Status Codes:**
-        * `422 Unprocessable Entity` (Image hash not found in cache or expired beyond 15-minute TTL; renders inline warning fragment `partials/cam_error.html` for HTMX clients)
-* **`POST /ui/predict-htmx`**
-    * **Description:** Server-rendered prediction endpoint powering the operator dashboard. Executes ONNX inference, stores the specimen image in the distributed cache, and returns the interactive prediction card HTML partial with lazy-loading CAM inspection drawers.
-    * **Request:** `multipart/form-data` containing `file: UploadFile`.
-    * **Response Schema:** HTML fragment (`partials/prediction_card.html`).
-* **`POST /api/v1/train`** (aliases: `POST /api/v1/training`, `POST /train`, `POST /training`)
-    * **Description:** Asynchronous training trigger endpoint. Dispatches model classification head training onto the AnyIO background worker pool, preventing blocking of the web service.
-    * **Request:** Query parameters `epochs: int = 15`, `tune: bool = false`, `extractor: str = "dinov3"`.
-    * **Response Schema:** JSON object `{"status": "training_dispatched", "task": "background_task", "params": {...}}`.
-    * **Latency SLO:** Immediate HTTP 200/202 dispatch response (< 10 ms).
-* **`GET /health`**
-    * **Description:** Basic Kubernetes liveness probe endpoint.
-    * **Request Schema:** None.
-    * **Response Schema:** JSON object `{"status": "healthy", "service": "taxon-vision"}`.
-    * **Latency SLO:** < 2 ms.
-* **`GET /health/ready`**
-    * **Description:** Kubernetes readiness probe verifying model checkpoint availability, taxa catalog integrity, and runtime engine pre-warming.
-    * **Request Schema:** None.
-    * **Response Schema:** JSON object `{"status": "ready", "model_loaded": true, "taxa_count": 10}`.
-    * **Latency SLO:** < 5 ms.
-* **`GET /metrics`**
-    * **Description:** Prometheus exposition scrape target exposing latency histograms, conformal set cardinality counters, and HTTP error metrics.
-    * **Request Schema:** None.
-    * **Response Schema:** Prometheus exposition text format.
-    * **Latency SLO:** < 10 ms.
-* **`POST /api/v1/drift/evaluate`**
-    * **Description:** On-demand statistical drift evaluation across the latest prediction window against canonical baseline embeddings. Offloads synchronous Wasserstein-1 and MMD² permutation matrix math to worker threads.
-    * **Request:** Protected by internal Bearer token (`TAXON_INTERNAL_API_TOKEN`).
-    * **Response Schema:** JSON object `DriftEvaluationResponse` (`drift_detected: bool`, `status: str`, `w1_distance: float`, `w1_threshold: float`, `mmd2: float | None`, `mmd2_p_value: float | None`, `window_size: int`, `n_reference: int`, `mlflow_run_id: str | None`, `report_path: str | None`).
-    * **Latency SLO:** < 500 ms (asynchronous offload).
-* **`GET /api/v1/drift/latest`**
-    * **Description:** Fast query retrieving the most recently recorded drift evaluation summary directly from the persistent telemetry repository.
-    * **Request Schema:** None.
-    * **Response Schema:** JSON object `DriftRunSummary | None`.
-    * **Latency SLO:** < 5 ms.
-* **`POST /api/v1/retrain/webhook`**
-    * **Description:** Authenticated Grafana Alertmanager webhook receiver acting as a relay bridge to Airflow 3 DAG orchestrator. Validates static Bearer token using constant-time comparison, filters for firing alerts with `action=retrain`, enforces a 6-hour sliding cooldown, and triggers the `model_retraining` Airflow DAG asynchronously.
-    * **Request:** JSON object `GrafanaWebhookPayload` accompanied by `Authorization: Bearer <TAXON_RETRAIN_WEBHOOK_SECRET>`.
-    * **Response Schema:** JSON object `RetrainWebhookResponse` (`status: str` ['triggered', 'suppressed', 'ignored'], `detail: str`, `dag_run_id: str | None`).
-    * **Latency SLO:** < 25 ms.
-* **`GET /ui/passport`**
-    * **Description:** HTMX partial rendering the active model governance passport pill strip on the operator dashboard. Displays active model name, MLflow run ID, validation accuracy, p95 CPU latency, INT8 quantization drop, and exchangeability verdict.
-    * **Request Schema:** None.
-    * **Response Schema:** HTML fragment (`partials/model_passport.html`).
-    * **Latency SLO:** < 5 ms (in-memory cached with 60s TTL).
+---
+
+## 2. Complete Endpoint Reference Matrix
+
+| HTTP Method & Path | Route Module | Auth Guard | Primary Purpose | Latency SLO |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET /` | [`routes/views.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/service/routes/views.py) | Public | Renders the Jinja2/HTMX operator dashboard (`index.html`) with the frosted-glass **Active Model Passport** governance strip. | $< 15\,\text{ms}$ (`< 0.1 ms` on passport cache hit) |
+| `POST /ui/predict-htmx` | [`routes/views.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/service/routes/views.py) | Public | Processes uploaded specimen image, caches raw bytes in Redis (`taxon:img:{sha256}`), and returns the HTMX `partials/prediction_card.html` fragment. | $< 35\,\text{ms}$ p95 |
+| `POST /api/v1/predict` (alias `/predict`) | [`routes/predict.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/service/routes/predict.py) | Public | Machine REST classification endpoint returning top-1 taxon, Split Conformal set $C(X)$, Helmholtz OOD energy, and async telemetry dispatch. | $< 25\,\text{ms}$ p95 |
+| `POST /api/v1/explain` | [`routes/explain.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/service/routes/explain.py) | Public | Generates forward-hooked Class Activation Mapping (CAM) overlay from `image_hash` (Redis lookup) or uploaded file; returns JSON or HTMX partial. | $< 40\,\text{ms}$ p95 |
+| `POST /api/v1/drift/evaluate` | [`routes/drift.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/service/routes/drift.py) | Bearer `TAXON_INTERNAL_API_TOKEN` | Executes Tier 1 ($W_1$) and Tier 2 (RBF $\text{MMD}^2$) drift evaluation over the latest 500 PostgreSQL predictions, logs to MLflow, and records `drift_runs`. | $< 500\,\text{ms}$ (threadpool offload) |
+| `GET /api/v1/drift/latest` | [`routes/drift.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/service/routes/drift.py) | Public | Retrieves the most recent `DriftRunSummary` from the PostgreSQL `drift_runs` table without recomputing statistics. | $< 5\,\text{ms}$ |
+| `POST /api/v1/retrain/webhook` | [`routes/retrain.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/service/routes/retrain.py) | Bearer `TAXON_RETRAIN_WEBHOOK_SECRET` | Receives Grafana Alertmanager webhooks, enforces a 6-hour cooldown lock, and triggers the `model_retraining` DAG in Airflow 3.0. | $< 25\,\text{ms}$ |
+| `POST /api/v1/train` | [`routes/train.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/service/routes/train.py) | Public / Internal | Dispatches asynchronous classification head training onto background workers. | $< 10\,\text{ms}$ dispatch |
+| `GET /health` & `GET /health/ready` | [`routes/health.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/service/routes/health.py) | Public | Kubernetes liveness and readiness probes verifying ONNX checkpoint and taxa catalogue readiness. | $< 5\,\text{ms}$ |
+| `GET /metrics` | [`api.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/service/api.py) | Public (Cluster) | Prometheus scrape target exposing latency histograms, conformal counters, and `DriftMetricsCollector` gauges. | $< 10\,\text{ms}$ |
+
+---
+
+## 3. Detailed Endpoint Contracts
+
+### 3.1 `GET /` (Operator Cockpit & Active Model Passport)
+
+* **Execution Flow:** Offloads [`load_model_passport()`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/service/passport.py#L168-L220) via `await anyio.to_thread.run_sync(load_model_passport)`.
+* **Bound Template Context (`ModelPassport`):**
+    * `model_name` (`str`, e.g. `"taxon_vision_onnx@Production"`), `model_version` (`str`), `mlflow_model_id` (`str | None`), `backbone` (`str`, e.g. `"dinov3 INT8"`).
+    * `nominal_coverage` (`float`, `0.95`), `empirical_test_coverage` (`float`), `mean_set_size` (`float`), `singleton_rate` (`float`), `p95_latency_ms` (`float`).
+    * `exchangeability_status` (`"Healthy"` | `"Drift Warning"` | `"Warming Up"`) and `mmd2_p_value` (`float | None`).
+
+### 3.2 `POST /api/v1/predict` (Species Classification & Epistemic Triage)
+
+* **Request:** `multipart/form-data` with `file: UploadFile` (JPEG, PNG, or WebP $\le 15\,\text{MB}$) and optional query parameter `explain: bool = false`.
+* **Response (`PredictionResponse`):**
+    * `observation_id` (`UUID`), `taxon_id` (`int`), `scientific_name` (`str`), `common_name` (`str`), `confidence` (`float`).
+    * `conformal_set` (`list[str]` of admissible taxa satisfying $1 - \hat{\pi}_k(\mathbf{x}) \le \hat{q}_\alpha$).
+    * `ood_energy_score` (`float`), `is_ood` (`bool`), `requires_human_review` (`bool`), `routing_tier` (`"auto_accepted"` | `"human_triage"` | `"ood_rejected"`).
+    * `latency_ms` (`float`) and optional `cam_heatmap_base64` (`str | None`).
+* **Asynchronous Telemetry Side-Effect:** Queues `PredictionRecord` (including the 384-D pre-normalised `embedding`) into FastAPI `BackgroundTasks` for insertion into PostgreSQL `predictions`.
+
+### 3.3 `POST /api/v1/drift/evaluate` & `GET /api/v1/drift/latest`
+
+* **Authentication (`POST /api/v1/drift/evaluate`):** Validated by `verify_internal_token()` against `TAXON_INTERNAL_API_TOKEN` (`HTTP 401 Unauthorized` on mismatch).
+* **Response (`DriftEvaluationResponse`):**
+
+```json
+{
+  "drift_detected": false,
+  "status": "evaluated",
+  "w1_distance": 0.0684,
+  "w1_threshold": 0.15,
+  "mmd2": 0.0041,
+  "mmd2_p_value": 0.4129,
+  "window_size": 500,
+  "n_reference": 169,
+  "mlflow_run_id": "a8f39c12e4b04891a2c3d4e5f6071829",
+  "report_path": "reports/drift_report.html"
+}
+```
+
+### 3.4 `POST /api/v1/retrain/webhook` (Grafana-to-Airflow Relay)
+
+* **Authentication:** Validated by `verify_retrain_token()` against `TAXON_RETRAIN_WEBHOOK_SECRET` using constant-time `hmac.compare_digest` (`HTTP 401 Unauthorized` on mismatch).
+* **Request (`GrafanaWebhookPayload`):** Standard Grafana Alertmanager webhook JSON body containing `status`, `alerts[]`, and `commonLabels` (mapped via Pydantic alias to `common_labels`).
+* **Response (`RetrainWebhookResponse`, HTTP 200 OK):**
+    * `status`: `"triggered"` (Airflow `model_retraining` DAG run created), `"suppressed"` (6-hour cooldown lock active), or `"ignored"` (no firing alert with `action="retrain"`).
+    * `detail`: Human-readable explanation (including remaining cooldown seconds when suppressed).
+    * `dag_run_id`: Dispatched Airflow DAG run identifier (or `null` when suppressed/ignored).

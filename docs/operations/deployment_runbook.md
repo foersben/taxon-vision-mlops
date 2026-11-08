@@ -14,21 +14,21 @@ verified: {by: process:agent-jules, at: "2026-10-10T17:30:00Z"}
 
 ## Section 1: Local Development & Verification
 
-The local development environment requires initialization of the dependent infrastructure and application services.
+The local development environment orchestrates the complete polyglot storage, tracking, and orchestration stack via Docker Compose (using committed non-sensitive test defaults as detailed in [Security Architecture & Credentials Governance](security_and_credentials.md)):
 
-Start the complete local microservices stack via Docker Compose:
+Start the complete local microservices stack (`postgres`, `seaweedfs`, `mlflow`, `redis`, `airflow-apiserver`, `airflow-scheduler`, `airflow-dag-processor`, `prometheus`, `grafana`, and `app`) via Docker Compose:
 
 ```bash
 docker compose up -d
 ```
 
-Start the Pixi-managed FastAPI service:
+Start the Pixi-managed FastAPI service directly on the host for rapid hot-reload iteration:
 
 ```bash
 pixi run -e dev api
 ```
 
-Start the local MLflow tracking server:
+Start a standalone local MLflow tracking server via Pixi:
 
 ```bash
 pixi run -e dev mlflow
@@ -105,7 +105,8 @@ The deployment infrastructure separates Day-0 cluster prerequisites from Day-2 c
     * Applied once by cluster administrators using `kubectl apply`:
         * [deploy/k8s/jenkins-agent-rbac.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/jenkins-agent-rbac.yaml): Provisions `jenkins-ci` and `taxon-vision` namespaces, machine ServiceAccount `jenkins-agent`, and RBAC bindings for deployments, services, pods, configmaps, secrets, persistentvolumeclaims, and Traefik CRDs.
         * [deploy/k8s/nvidia-time-slicing-config.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/nvidia-time-slicing-config.yaml): Partitions the physical RTX 5070 Ti into 4 virtual GPU slices in `kube-system`.
-        * [deploy/k8s/mlops-storage-and-optuna.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/mlops-storage-and-optuna.yaml): Provisions the in-cluster SeaweedFS object store (ports 8333 S3, 8888 Filer, 9333 Master, 8080 Volume) and the persistent Optuna SQLite telemetry dashboard (`NodePort 30081`).
+        * [deploy/k8s/postgres.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/postgres.yaml): Provisions the consolidated PostgreSQL 16 (`postgres:16-alpine`) relational instance (`NodePort 30432`) hosting isolated `telemetry`, `optuna`, `airflow`, and `mlflow` databases on BTRFS non-CoW storage (`/var/lib/taxon-vision/postgres`).
+        * [deploy/k8s/mlops-storage-and-optuna.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/mlops-storage-and-optuna.yaml): Provisions the in-cluster SeaweedFS object store (ports 8333 S3, 8888 Filer, 9333 Master, 8080 Volume; auto-initializing buckets `taxon-dvc-cache`, `triage-queue`, and `mlflow-artifacts`), the MLflow v3.16.0 tracking server (`NodePort 30500`), and the Optuna dashboard (`NodePort 30081`).
         * [deploy/k8s/monitoring-prometheus-grafana.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/monitoring-prometheus-grafana.yaml): Provisions in-cluster Prometheus TSDB (`NodePort 30090`) and Grafana visualizer (`NodePort 30300`) with BTRFS NOCOW persistent storage.
         * [deploy/k8s/traefik-ingress.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/traefik-ingress.yaml): Provisions Traefik v3.1 `IngressRoute` and 80/20 weighted `TraefikService` for canary deployment.
         * [deploy/k8s/redis-ephemeral.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/redis-ephemeral.yaml): Provisions in-cluster Redis ephemeral image cache (64 MB memory ceiling, LRU eviction) resolving multi-pod split-brain for visual attribution CAM queries.
@@ -177,23 +178,15 @@ When commits are pushed to `main` or release tags, the declarative pipeline in [
 
 * **Step 1 (Toolchain Provisioning):** The container runner installs `kubernetes-client` (from conda-forge, exposing `kubectl`) and standalone `git` into `/root/.pixi/bin`.
 * **Step 2 (Verification Gates):** Executes Ruff linting, MyPy type checks, License compliance audits, OKF validation, unit tests (with 78% line coverage threshold), integration tests, and strict Zensical build.
-* **Step 3 (GPU Model Training & Checkpoint - main branch only):**
-    * Targets 1 of the 4 NVIDIA time-slicing partitions on `hive-mind` using the dedicated GPU agent pod requesting `nvidia.com/gpu: 1` in `Jenkinsfile`.
-    * Extracts ViT feature representations from S3 images into 4-way partitions: `pixi run -e dev python -m taxon_vision.pipelines.extract_features --extractor dinov3 --manifest data/manifests/dataset_manifest.parquet --out-dir data/embeddings`.
-    * Caps VRAM at 70% (`--cuda-memory-fraction 0.7`) to reserve headroom for live services.
-    * Executes classification head training with Optuna tuning: `pixi run -e dev python -m taxon_vision.pipelines.train --extractor dinov3 --epochs 15 --train-embeddings data/embeddings/train_embeddings.pt --val-embeddings data/embeddings/val_embeddings.pt`.
-    * Re-exports and quantizes the ONNX graph (`taxon_vision.pipelines.export_onnx`) and pushes `models/checkpoints/head.pt` and `models/checkpoints/model_int8.onnx` to the DagsHub DVC remote.
-    * Logs metrics and registry aliases to DagsHub MLflow.
-* **Step 4 (Deployment Rollout & Hygiene):**
-    * Applies [deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml), [deploy/k8s/redis-ephemeral.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/redis-ephemeral.yaml), and [deploy/k8s/monitoring-prometheus-grafana.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/monitoring-prometheus-grafana.yaml) using `jenkins-deployer-role` permissions. `imagePullPolicy: Always` ensures the pod pulls the fresh container published by GitHub Actions.
+* **Step 3 (GPU Model Training & Checkpoint):**
+    * Targets 1 of the 4 NVIDIA time-slicing partitions on `hive-mind` using the dedicated GPU agent pod ([`deploy/k8s/jenkins-gpu-pod.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/jenkins-gpu-pod.yaml)) requesting `nvidia.com/gpu: 1` in `Jenkinsfile` and executing [`scripts/ci/jenkins_gpu_train.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/ci/jenkins_gpu_train.sh).
+    * Executes the 8-stage DVC pipeline (`ingestion` [when `INGEST_DATA=true`] -> `audit_license` -> `extract_features` -> `data_drift` -> `train` -> `export_onnx` -> `calibrate` -> `evaluate`), capping PyTorch VRAM at 70% (`TAXON_CUDA_MEMORY_FRACTION=0.7`) to reserve $4.8\text{ GB}$ headroom for live ONNX serving.
+    * Pushes updated checkpoints (`models/checkpoints/head.pt`, `models/checkpoints/model_int8.onnx`) to both the in-cluster SeaweedFS cache (`local-seaweedfs`) and the DagsHub S3 remote (`origin`), while logging unified cross-stage runs and Four-Gate Promotion aliases (`@Production` / `@Challenger` / `@Archived`) to MLflow.
+* **Step 4 (Deployment Rollout & Verification):**
+    * Hydrates checkpoints from `local-seaweedfs` (with fallback to `origin`) and atomically stages them via temporary rename (`mv -f`) into `/var/lib/taxon-vision/checkpoints/` with `chmod a+r` permissions for the non-root serving pod (`UID 10001`).
+    * Applies [deploy/k8s/postgres.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/postgres.yaml), [deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml), and [deploy/k8s/monitoring-prometheus-grafana.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/monitoring-prometheus-grafana.yaml) using `jenkins-agent` ServiceAccount RBAC permissions.
     * Triggers zero-downtime rolling update: `kubectl rollout restart deployment/taxon-vision-serving -n taxon-vision`.
-    * Awaits readiness probe verification: `kubectl rollout status deployment/taxon-vision-serving -n taxon-vision --timeout=120s`.
-    * **Automated Pod Hygiene & Pruning:** To prevent etcd bloat and pod accumulation from completed/failed batch runs, deployments configure `revisionHistoryLimit: 3`. Furthermore, the pipeline triggers automated pruning of orphaned or completed pods:
-
-        ```bash
-        kubectl delete pod -n taxon-vision --field-selector=status.phase==Failed --ignore-not-found
-        kubectl delete pod -n taxon-vision --field-selector=status.phase==Succeeded --ignore-not-found
-        ```
+    * Awaits readiness probe verification (`kubectl rollout status deployment/taxon-vision-serving -n taxon-vision --timeout=120s`) and runs [`scripts/ci/verify_deployment.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/ci/verify_deployment.sh). For the multi-tier staging vs production branch promotion architecture, see [Multi-Tier Deployment & Promotion Strategy](deployment_strategy.md).
 
 ## Section 9: Container Packaging & GitHub Container Registry (GHCR)
 
@@ -248,24 +241,18 @@ The in-cluster SeaweedFS service (`chrislusf/seaweedfs:latest`) manages the high
       aws --endpoint-url=http://192.168.178.30:8333 s3 ls
     ```
 
-### Optuna Telemetry Dashboard Administration
+### PostgreSQL, MLflow & Optuna Telemetry Administration
 
-Hyperparameter optimization telemetry is persisted across pipeline runs to prevent search space loss:
+Relational telemetry, MLflow experiment tracking, and Optuna hyperparameter search studies are consolidated into the in-cluster PostgreSQL 16 instance ([`deploy/k8s/postgres.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/postgres.yaml)):
 
-* **Web UI Access:** The Optuna dashboard is accessible on the local network at:
-
-    ```text
-    http://192.168.178.30:30081/
-    ```
-
-* **Database Verification on Host:** The database resides on the host at `/var/lib/taxon-vision/optuna/optuna_studies.db`. Operators can verify that Write-Ahead Logging (`WAL`) is active:
+* **PostgreSQL Cluster Health Verification (`NodePort 30432`):**
 
     ```bash
-    sqlite3 /var/lib/taxon-vision/optuna/optuna_studies.db "PRAGMA journal_mode;"
-    # Output: wal
+    kubectl exec -n taxon-vision deploy/postgres -- pg_isready -U postgres
     ```
 
-* **Concurrent Access Integrity:** WAL mode guarantees that the web dashboard process (reading historical trials) does not acquire exclusive database locks that could stall active training jobs on the GPU.
+* **MLflow v3.16.0 Tracking Server (`NodePort 30500`):** Accessible on the local network at `http://192.168.178.30:30500/`, storing relational metadata in PostgreSQL (`mlflow` database) and proxying artefacts to SeaweedFS (`s3://mlflow-artifacts`).
+* **Optuna Dashboard (`NodePort 30081`):** Configured in [`deploy/k8s/mlops-storage-and-optuna.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/mlops-storage-and-optuna.yaml) to connect to `postgresql+psycopg2://optuna:...@postgres.taxon-vision.svc.cluster.local:5432/optuna`. Kept at `replicas: 0` when idle to conserve memory and scaled on demand via `kubectl scale deployment/optuna-dashboard -n taxon-vision --replicas=1`.
 
 ---
 
@@ -334,34 +321,33 @@ sudo chown -R 472:472 /var/lib/taxon-vision/grafana && sudo chmod -R 775 /var/li
 
 ---
 
-## Section 12: Evidently AI Drift Monitoring & Retraining Workflows
+## Section 12: Representation Drift Monitoring & Automated Retraining Workflows
 
-The platform deploys a dual-tier drift strategy: an inline real-time 1D Wasserstein-1 check and an offline multivariate RKHS MMD batch analysis.
+The platform enforces a two-tier representation drift detection strategy across both offline DVC training gates and online production serving (detailed in [Representation Drift Detection & Telemetry](drift_detection_and_telemetry.md) and [Apache Airflow 3 Orchestration](airflow_orchestration.md)):
 
-### Online Real-Time Drift Alerting
+### Online Sliding-Window Evaluation & Prometheus Exposition
 
-* **Prometheus Exposition:** Forward passes calculate the Wasserstein-1 distance across unnormalized $L_2$ embedding norms in $< 1\text{ ms}$ on CPU, exposed at `GET /metrics` via gauge `embedding_drift_w1`.
-* **Alert Trigger:** A sustained value exceeding threshold $\tau = 0.15$ indicates sudden sensor exposure shifts, optical fouling, or severe feature magnitude distortion.
+* **Hourly Evaluation Trigger:** The Airflow `prediction_drift_monitor` DAG invokes `POST /api/v1/drift/evaluate` every hour (`0 * * * *`). FastAPI queries the latest $W=500$ pre-normalised production embeddings from PostgreSQL (`predictions`), evaluates 1D Wasserstein-1 norm distance (`taxon_embedding_drift_w1`), multivariate RKHS MMD² (`taxon_embedding_drift_mmd2` and `taxon_embedding_drift_mmd_pvalue`), and renders an Evidently 0.7 8-D PCA HTML snapshot (`reports/drift_latest.html`).
+* **Grafana Alerting & Webhook Relay:** If `taxon_embedding_drift_w1 > 0.15` for 15 minutes or `taxon_embedding_drift_detected == 1`, Grafana Alertmanager triggers `POST /api/v1/retrain/webhook`, which authenticates and dispatches the Airflow `model_retraining` DAG.
 
-### Offline Scheduled Batch Audit via Evidently AI
+### Offline DVC Stage 3.5 Training Gate (`data_drift`)
 
-For deep geometric manifold audits across scheduled weekly windows:
+Before training a new linear head during `dvc repro`, Stage 3.5 ([`src/taxon_vision/pipelines/data_drift.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/pipelines/data_drift.py)) compares the newly extracted `train_embeddings.pt` against `reference_train_embeddings.pt`:
 
 ```bash
-# Execute batch drift analysis across calibration baseline and current window
-pixi run -e dev python -m taxon_vision.pipelines.audit_drift \
-    --reference data/embeddings/cal_embeddings.pt \
-    --current data/embeddings/production_window.pt \
-    --report-html reports/data_drift_report.html \
-    --metrics-json metrics/drift_summary.json
+pixi run -e dev python -m taxon_vision.pipelines.data_drift \
+    --current data/embeddings/train_embeddings.pt \
+    --reference data/embeddings/reference_train_embeddings.pt \
+    --output reports/data_drift.json
 ```
 
-* **Interactive Report Inspection:** Operators inspect distribution comparisons, feature energy shifts, and multivariate MMD test statistics in `reports/data_drift_report.html`.
-* **Automated Pipeline Retraining:** If the multivariate permutation test rejects the null hypothesis ($p < 0.01$), the script exits with status code 2, signalling Jenkins to trigger the unified DVC retraining DAG:
+And empirical drift thresholds are calibrated from the training manifold via:
 
-    ```bash
-    dvc repro extract_features train export_onnx calibrate evaluate
-    ```
+```bash
+pixi run -e dev python -m taxon_vision.pipelines.calibrate_drift \
+    --reference data/embeddings/train_embeddings.pt \
+    --config-out config/drift_config.yaml
+```
 
 ---
 

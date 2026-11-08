@@ -22,15 +22,16 @@ Components in Section 1 are fully wired into continuous integration, governed by
 
 | Subsystem | Primary Source Files | Verification Target & Artifacts | Operational Status |
 | :--- | :--- | :--- | :--- |
-| **7-Stage Epistemic Diamond DVC DAG** | `src/taxon_vision/pipelines/{ingest,audit_license,extract_features,train,export_onnx,calibrate,evaluate}.py` | `dvc.yaml`, `dvc.lock`, `params.yaml`, `tests/unit/test_pipelines.py` | **Production:** Single-trunk deterministic DAG running automated hash checks and metric tracking. |
+| **8-Stage Epistemic Diamond DVC DAG** | `src/taxon_vision/pipelines/{ingest,audit_license,extract_features,data_drift,train,export_onnx,calibrate,evaluate}.py` | `dvc.yaml`, `dvc.lock`, `params.yaml`, `tests/unit/test_pipelines.py`, `tests/unit/test_data_drift_pipeline.py` | **Production:** Single-trunk deterministic 8-stage DAG with frozen ingestion guard (`frozen: true`) and pre-training representation drift verification (`reports/data_drift.json`). |
 | **Open License Gatekeeper & Attribution** | `src/taxon_vision/domain/license.py`, `data/license_filter.py`, `pipelines/audit_license.py` | `tests/unit/test_license_filter.py`, `python -m taxon_vision.pipelines.audit_license` | **Production:** Enforces CC0, CC-BY, and CC-BY-NC compliance; strictly rejects unverified `static.inaturalist.org` hotlinks and retains photographer provenance. |
+| **Active Learning Feedback Ingestion** | `src/taxon_vision/active_learning/feedback.py` | `tests/unit/test_feedback_merge.py` | **Production:** Parses Label Studio JSON and flagged triage annotations, maps verified scientific names to `taxon_id`, and deduplicates/merges records into `raw_manifest.parquet`. |
 | **Frozen Vision Backbone Factory & 4-Way Splits** | `src/taxon_vision/models/factory.py`, `models/training/types.py`, `pipelines/extract_features.py` | `tests/unit/test_models_components.py`, `data/embeddings/*.pt` | **Production:** Frozen `BackboneFactory` supporting `dinov3_vits14`, `bioclip-2`, `dinov2_vits14`, `mobilenetv4_conv_small`, and `efficientnet_b0`. Generates zero-leakage `train`, `val`, `cal`, and `test` partitions. |
 | **Long-Tail Linear Probe & Class-Balanced Loss** | `src/taxon_vision/models/{head.py,loss.py}`, `models/training/{embeddings,runner,loops,checkpoint}.py` | `tests/unit/test_class_balanced_loss.py`, `tests/unit/test_cli_and_training.py` | **Production:** Convex linear classification head trained with effective number of samples weighting ($E_{n_y} = (1 - \beta^{n_y}) / (1 - \beta)$, $\beta = 0.9999$). |
-| **MLflow 3.x Lineage & Four-Gate Model Promotion** | `src/taxon_vision/models/training/{tracking,promotion}.py` | `reports/train_metrics.json`, `tests/unit/test_tracking.py`, `tests/unit/test_promotion.py` | **Production:** Four-gate model registry promotion enforcing Accuracy, p95 Latency ceilings, INT8 quantization degradation ($\le 3\%$), and MMD² calibration exchangeability. |
-| **Two-Tier Representation Drift Engine & Telemetry Store** | `src/taxon_vision/monitoring/{drift,drift_runner}.py`, `service/telemetry_store.py` | `tests/unit/test_monitoring.py`, `tests/unit/test_telemetry_store.py` | **Production:** Evaluates Wasserstein-1 norm drift and multivariate MMD² permutation tests over sliding production windows, persisting records in PostgreSQL and exposing Prometheus metrics. |
+| **MLflow 3.x Lineage & Four-Gate Model Promotion** | `src/taxon_vision/models/training/{tracking,promotion,visualizations}.py`, `inference/mlflow_model.py` | `reports/train_metrics.json`, `tests/unit/test_tracking.py`, `tests/unit/test_promotion.py` | **Production:** Cross-stage MLflow run continuity (`resume_parent_mlflow_run`), 5-dataset `mlflow.data` lineage, `TaxonVisionPyFuncModel` packaging, and Four-Gate promotion enforcing INT8 drop ($\le 3\%$), Macro PR-AUC, p95 Latency ceilings, and MMD² calibration exchangeability. |
+| **Two-Tier Representation Drift Engine & Telemetry Store** | `src/taxon_vision/monitoring/{drift,drift_runner}.py`, `pipelines/calibrate_drift.py`, `service/telemetry_store.py` | `tests/unit/test_monitoring.py`, `tests/unit/test_telemetry_store.py`, `tests/unit/test_drift_runner.py` | **Production:** Evaluates Wasserstein-1 norm drift, bootstrap-calibrated thresholds (`calibrate_drift.py`), multivariate MMD² permutation tests, and 8-D PCA Evidently 0.7 reports over sliding production windows, persisting records in PostgreSQL and exposing Prometheus metrics. |
 | **Airflow 3 LocalExecutor DAG Orchestration** | `airflow/dags/{prediction_drift_monitor,model_retraining}.py`, `scripts/maintenance/visualize_airflow_dag.py` | `tests/unit/test_airflow_dags.py`, `just airflow-dag` | **Production:** Hourly automated drift monitor DAG and event-driven GPU retraining orchestrator integrated with Jenkins and MLflow promotion reports. |
 | **Grafana Dashboards, Alerts & Retraining Relay** | `deploy/grafana/provisioning/`, `service/routes/retrain.py` | `tests/integration/test_retrain_routes.py` | **Production:** Provisioned 6-panel dashboard, Alertmanager rules with 6-hour repeat interval, and authenticated FastAPI webhook relay triggering Airflow DAGs. |
-| **Active Model Passport & Operator Cockpit** | `src/taxon_vision/service/routes/views.py`, `templates/index.html` | `tests/unit/test_passport.py`, `GET /ui/passport` | **Production:** Real-time frosted-glass model passport pill strip cached in-memory with 60s TTL and non-blocking AnyIO threadpool execution. |
+| **Active Model Passport & Operator Cockpit** | `src/taxon_vision/service/passport.py`, `service/routes/views.py`, `templates/index.html` | `tests/unit/test_passport.py`, `GET /` | **Production:** Real-time frosted-glass model passport pill strip on `GET /` cached in-memory with 60s TTL and non-blocking AnyIO threadpool execution (`load_model_passport`). |
 | **Dual-Output ONNX Export & Logit-Protecting PTQ** | `src/taxon_vision/inference/{onnx_exporter,quantizer,calibration}.py` | `models/checkpoints/model_int8.onnx`, `tests/unit/test_onnx_exporter.py`, `tests/unit/test_quantizer.py` | **Production:** `_ONNXDualOutputModule` exports fused `logits` $[N, K]$ and `embeddings` $[N, D]$. `find_logit_nodes` preserves FP32 logit precision under INT8 PTQ. `load_calibration_tensors` enforces real sample calibration. |
 | **Split Conformal Prediction & OOD Screening** | `src/taxon_vision/uncertainty/{conformal,ood_detector}.py`, `pipelines/calibrate.py` | `tests/invariants/test_conformal_coverage_invariant.py`, `tests/unit/test_conformal_bounds.py`, `tests/unit/test_ood_energy.py` | **Production:** Evaluates empirical quantile cutoff $\hat{q}_\alpha$ on calibration partition. Gated by Helmholtz Free Energy ($E(x; T) \le \tau_{\text{OOD}}$) and Normalized Shannon Entropy ($\bar{H} \ge 0.82$). |
 | **FastAPI Serving & Flagged Specimen Storage** | `src/taxon_vision/service/{api,inference,schemas,storage}.py`, `service/routes/*.py` | `tests/integration/test_api_endpoints.py`, `tests/integration/test_views_and_routes.py` | **Production:** Zero-allocation ONNX `IOBinding` engine with multipart upload. When `is_ood` or `requires_human_review` triggers, `service/storage.py` atomically writes `.npy` embeddings, `.json` metadata, and appends to `manifest.jsonl`. |
@@ -68,9 +69,11 @@ The following capabilities are formal architectural designs and specifications; 
 
 | Capability | Target Architecture & Proposed Stack | Planned Functionality |
 | :--- | :--- | :--- |
+| **Kubernetes `secretKeyRef` & Provisioning (Step 9)** | `deploy/k8s/api-deployment.yaml`, `scripts/deploy/provision_k8s_secrets.sh`, `.gitguardian.yaml` | Migrates literal bootstrap DSNs in Kubernetes manifests to `secretKeyRef` (`taxon-vision-secrets`, `airflow-secrets`) synced from `/etc/taxon-vision/production.env`. |
+| **Multi-Tier Staging Namespace & Kustomize (Step 10)** | `deploy/k8s/{base,overlays/staging,overlays/production}`, `Jenkinsfile`, `.github/workflows/ci.yml` | Routes `develop` builds (`:develop`) to `namespace: taxon-vision-staging` (`staging.taxon.benjamin-foerster.eu`, Sablier scale-to-zero) before promoting `main` (`:latest`) to `taxon-vision`. |
+| **Traffic Replay & Drift Simulator CLI (Step 12)** | `scripts/ops/replay_traffic.py`, `Justfile` (`simulate-traffic`, `simulate-drift`) | Synthesizes baseline and corrupted (Gaussian blur / brightness shift) inference traffic to validate end-to-end drift alerting and Airflow retraining loops on demand. |
 | **BADGE Active Learning** | `active_learning/query.py` + PyTorch gradient embedding computation | Generates hallucinated loss gradients ($g_x = (p - e_{\hat{y}}) \otimes z$) and samples diverse batches via k-means++ in gradient space. |
 | **Persistent Triage Queue** | Parquet + DuckDB storage layer + Label Studio webhook sync | Replaces in-memory `TriageQueue` with persistent columnar triage queue and bidirectional Label Studio annotation ingest. |
-| **Offline Multivariate $\text{MMD}^2$ Drift** | `monitoring/drift.py` + Gaussian RBF kernel RKHS two-sample test | Unbiased finite-sample test ($\text{MMD}_u^2$) executed on weekly batches in Jenkins CI/CD to detect non-linear manifold distortion. |
 | **Parent-Child Visual Chunking** | YOLO-World / OWL-ViT v2 + BioCLIP-2 ($d=512$) | Isolates diagnostic specimen crop $I_{\text{child}}$ from parent environmental scene $I_{\text{parent}}$ to eliminate background bias. |
 | **Biogeographically Filtered HNSW** | LanceDB / embedded HNSW with Haversine distance ($\le 100\text{ km}$) + Julian day phenology | Prunes biologically impossible taxa before visual nearest-neighbor search. |
 | **Reciprocal Rank Fusion (RRF)** | Rank aggregation engine ($k=60$) | Combines visual embedding similarity with taxonomic taxonomy tree distance. |
@@ -79,24 +82,16 @@ The following capabilities are formal architectural designs and specifications; 
 
 ---
 
-## 5. Automated Model Promotion Strategy
+## 5. Automated Four-Gate Model Promotion Strategy
 
-To protect the core identification service against regression, especially on rare, long-tail taxa where standard accuracy is misleading, we implement a **PR-AUC Safe Promotion** strategy via the MLflow Model Registry.
+To protect the live identification service against silent regressions on long-tail taxa, quantisation collapse, latency violations, or conformal non-exchangeability, model registration and alias assignment are deferred until Stage 7 (`evaluate.py`) and governed by the **Four-Gate Promotion Engine** in [`src/taxon_vision/models/training/promotion.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/promotion.py) (detailed in [Four-Gate Model Promotion & Active Model Passport](../model_engineering/model_promotion_gates.md)):
 
-### The Core Metric
+1. **Gate 1 - INT8 Quantisation Accuracy Drop:** Verifies $\max(0, \text{Acc}_{\text{FP32, val}} - \text{Acc}_{\text{INT8, test}}) \le 0.03$ (`max_int8_accuracy_drop: 0.03`).
+2. **Gate 2 - Macro PR-AUC Non-Inferiority:** Compares holdout Macro PR-AUC against the incumbent `@Production` model version in the MLflow Model Registry ($\text{PR-AUC}_{\text{cand}} \ge \text{PR-AUC}_{\text{prod}} - \epsilon$).
+3. **Gate 3 - Hardware-Aware p95 Latency Budget:** Enforces $\text{Latency}_{\text{p95}} \le 15.0\text{ ms}$ on bare-metal GPU or $\le 25.0\text{ ms}$ on CPU.
+4. **Gate 4 - Calibration-to-Test Exchangeability ($\text{MMD}_u^2$):** Asserts `reports/data_drift.json` did not flag severe representation drift between reference and training manifolds.
 
-Models are evaluated strictly on a robust, imbalance-aware metric rather than raw accuracy:
-
-$$ \text{Promotion Score} = \text{Macro PR-AUC} $$
-
-* **Macro PR-AUC (Precision-Recall AUC):** Heavily penalizes false positives on rare classes. By relying exclusively on this metric for automated promotion decisions, we ensure that performance gains are true across all taxa, not just the most common ones.
-
-### Registry Promotion Logic
-
-When a new classification head finishes training, it is automatically logged to the `taxon_vision_classifier` registry. The pipeline then compares its Macro PR-AUC score against the model currently tagged as `@Production`:
-
-* **Outperforms Production:** The new model is automatically tagged as **`@Challenger`** (or `@Staging`). It is **not** immediately pushed to `@Production`. This ensures we keep at most two competing models active, and stages the new model for deeper human review or automated integration canary sweeps.
-* **Underperforms Production:** The new model is tagged as **`@Archived`** (or `@Rejected`), ensuring underperforming checkpoints never pollute the deployment pipeline.
+Candidates passing all four gates are assigned the **`@Production`** alias (or **`@Challenger`** when `stage_as_challenger: true` for Traefik 80/20 canary testing), whereas candidates failing any gate are tagged **`@Archived`** with explicit `rejection_reasons`.
 
 ---
 
