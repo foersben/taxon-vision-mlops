@@ -165,7 +165,7 @@ spec:
             pixi run --frozen -e ci-dev pytest tests/integration/ tests/invariants/ \
               --cov=src/taxon_vision \
               --cov-append \
-              --cov-report=xml:coverage.xml \
+              --cov-report=xml:reports/coverage/coverage.xml \
               --cov-fail-under=80 \
               -x -q -o "addopts="
           '''

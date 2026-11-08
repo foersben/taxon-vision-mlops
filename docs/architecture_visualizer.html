@@ -25,13 +25,13 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"
     />
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 
     <!-- Core Graph & Chart Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
-    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
 
     <style>
       :root {
@@ -2479,9 +2479,26 @@
         };
       }
 
-      function initCytoscape() {
+      function initCytoscape(retries = 30) {
         const container = document.getElementById("cy");
-        if (!container || typeof cytoscape === "undefined") return;
+        if (!container) return;
+        if (typeof cytoscape === "undefined") {
+          if (retries > 0) {
+            setTimeout(() => initCytoscape(retries - 1), 60);
+          } else {
+            console.error("Cytoscape.js library failed to load from CDN.");
+          }
+          return;
+        }
+        if (cy) return;
+
+        try {
+          if (typeof cytoscapeDagre !== "undefined") {
+            cytoscape.use(cytoscapeDagre);
+          }
+        } catch (err) {
+          console.warn("Dagre registration note:", err);
+        }
 
         cy = cytoscape({
           container: container,
@@ -2579,6 +2596,12 @@
             document.getElementById("sidebar").classList.remove("open");
           }
         });
+
+        // Default populate inspector data without covering the canvas initially
+        const defaultNode = cy.$("#route_predict");
+        if (defaultNode && defaultNode.length > 0) {
+          renderNodeInspector(defaultNode.data(), false);
+        }
       }
 
       function highlightNeighborhood(node) {
@@ -3051,68 +3074,76 @@
         });
       }
 
-      document.addEventListener("DOMContentLoaded", () => {
+      function bootVisualizer() {
         initCytoscape();
         renderModelCards();
         updateSimulatorWorkbench();
-
-        // Dynamic fetch of assets/pareto_results.json (fallback to PARETO_RAW)
-        const fetchParetoData = () => {
-          const tryFetch = (url) =>
-            fetch(url).then((res) => {
-              if (!res.ok) throw new Error("HTTP " + res.status);
-              return res.json();
-            });
-
-          tryFetch("assets/pareto_results.json")
-            .catch(() => tryFetch("../assets/pareto_results.json"))
-            .catch(() => tryFetch("/taxon-vision-mlops/assets/pareto_results.json"))
-            .then((jsonData) => {
-              if (Array.isArray(jsonData) && jsonData.length > 0) {
-                jsonData.forEach((item) => {
-                  const match = PARETO_RAW.find((d) => d.extractor === item.extractor);
-                  if (match) {
-                    if (item.p50_latency_ms !== undefined) match.p50_latency_ms = item.p50_latency_ms;
-                    if (item.p95_latency_ms !== undefined) match.p95_latency_ms = item.p95_latency_ms;
-                    if (item.throughput_fps !== undefined) match.throughput_fps = item.throughput_fps;
-                    if (item.vram_peak_mb !== undefined) match.vram_peak_mb = item.vram_peak_mb;
-                    if (item.parameters_m !== undefined) match.parameters_m = item.parameters_m;
-                    if (item.accuracy_score !== undefined) match.accuracy_score = item.accuracy_score;
-                    if (item.canonical_baseline !== undefined) match.canonical_baseline = item.canonical_baseline;
-                  }
-                });
-                renderModelCards();
-                const paretoView = document.getElementById("pareto-view");
-                if (paretoView && paretoView.classList.contains("active")) {
-                  renderPlotlyCharts();
-                }
-              }
-            })
-            .catch((err) => {
-              console.debug("pareto_results.json not fetched, using PARETO_RAW fallback", err);
-            });
-        };
         fetchParetoData();
-
-        // Default populate inspector data without covering the canvas initially
-        const defaultNode = cy ? cy.$("#route_predict") : null;
-        if (defaultNode && defaultNode.length > 0) {
-          renderNodeInspector(defaultNode.data(), false);
-        }
+        initControls();
 
         // ResizeObserver guarantees zero blank views when opening inside Antigravity Webviews
         if (typeof ResizeObserver !== "undefined") {
-          const ro = new ResizeObserver(() => {
-            if (
-              cy &&
-              document.getElementById("graph-view").classList.contains("active")
-            ) {
-              cy.resize();
-              cy.fit(undefined, 45);
-            }
-          });
-          ro.observe(document.getElementById("cy"));
+          const cyEl = document.getElementById("cy");
+          if (cyEl) {
+            const ro = new ResizeObserver(() => {
+              if (
+                cy &&
+                document.getElementById("graph-view").classList.contains("active")
+              ) {
+                cy.resize();
+                cy.fit(undefined, 45);
+              }
+            });
+            ro.observe(cyEl);
+          }
         }
+      }
+
+      // Dynamic fetch of assets/pareto_results.json (fallback to PARETO_RAW)
+      const fetchParetoData = () => {
+        const tryFetch = (url) =>
+          fetch(url).then((res) => {
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            return res.json();
+          });
+
+        tryFetch("assets/pareto_results.json")
+          .catch(() => tryFetch("../assets/pareto_results.json"))
+          .catch(() => tryFetch("/taxon-vision-mlops/assets/pareto_results.json"))
+          .then((jsonData) => {
+            if (Array.isArray(jsonData) && jsonData.length > 0) {
+              jsonData.forEach((item) => {
+                const match = PARETO_RAW.find((d) => d.extractor === item.extractor);
+                if (match) {
+                  if (item.p50_latency_ms !== undefined) match.p50_latency_ms = item.p50_latency_ms;
+                  if (item.p95_latency_ms !== undefined) match.p95_latency_ms = item.p95_latency_ms;
+                  if (item.throughput_fps !== undefined) match.throughput_fps = item.throughput_fps;
+                  if (item.vram_peak_mb !== undefined) match.vram_peak_mb = item.vram_peak_mb;
+                  if (item.parameters_m !== undefined) match.parameters_m = item.parameters_m;
+                  if (item.accuracy_score !== undefined) match.accuracy_score = item.accuracy_score;
+                  if (item.canonical_baseline !== undefined) match.canonical_baseline = item.canonical_baseline;
+                }
+              });
+              renderModelCards();
+              const paretoView = document.getElementById("pareto-view");
+              if (paretoView && paretoView.classList.contains("active")) {
+                renderPlotlyCharts();
+              }
+            }
+          })
+          .catch((err) => {
+            console.debug("pareto_results.json not fetched, using PARETO_RAW fallback", err);
+          });
+      };
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", bootVisualizer);
+      } else {
+        bootVisualizer();
+      }
+
+      // Tab switching and layout controls attached immediately or on DOM ready
+      const initControls = () => {
 
         // View Tab Switching
         document.querySelectorAll(".tab-btn").forEach((btn) => {
@@ -3314,7 +3345,7 @@
               cy.elements().removeClass("dimmed highlighted-edge highlighted");
           }
         });
-      });
+      };
     </script>
   </body>
 </html>

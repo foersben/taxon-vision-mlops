@@ -112,12 +112,23 @@ cache_dir = ".cache/mypy_cache"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "--cov=src/taxon_vision --cov-report=term-missing --cov-report=html --cov-report=xml"
+addopts = "--cov=src/taxon_vision --cov-report=term-missing --cov-report=html:reports/coverage/html --cov-report=xml:reports/coverage/coverage.xml"
 cache_dir = ".cache/pytest_cache"
 filterwarnings = ["ignore::FutureWarning", "ignore::DeprecationWarning"]
 markers = [
     "integration: mark test as integration test requiring external services",
 ]
+
+[tool.coverage.run]
+data_file = ".cache/coverage/.coverage"
+branch = true
+source = ["src/taxon_vision"]
+
+[tool.coverage.html]
+directory = "reports/coverage/html"
+
+[tool.coverage.xml]
+output = "reports/coverage/coverage.xml"
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]

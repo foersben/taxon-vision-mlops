@@ -25,6 +25,7 @@ MANIFEST
 
 # Unit test / coverage reports
 reports/*.html
+reports/coverage/
 htmlcov/
 .tox/
 .nox/

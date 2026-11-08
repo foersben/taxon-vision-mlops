@@ -305,7 +305,7 @@ mlflow-up: mlflow-kill
 [group("mlops")]
 pipeline-run mode="dev":
     @if [ "{{mode}}" = "prod" ]; then \
-        docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm pipeline-runner; \
+        docker compose -f docker-compose.yml -f deploy/compose/docker-compose.prod.yml run --rm pipeline-runner; \
     else \
         docker compose -f docker-compose.yml -f docker-compose.override.yml run --rm pipeline-runner; \
     fi
@@ -397,4 +397,4 @@ lab:
 [group("utils")]
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
-	rm -rf .cache site build dist .pytest_cache .mypy_cache .ruff_cache htmlcov .pixi .venv uv.lock
+	rm -rf .cache site build dist .pytest_cache .mypy_cache .ruff_cache htmlcov .coverage .coverage.* coverage.xml reports/coverage mlflow.db mlruns .complexipy_cache
