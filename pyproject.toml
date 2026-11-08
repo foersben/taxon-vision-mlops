@@ -66,7 +66,7 @@ packages = ["src/taxon_vision"]
 target-version = "py312"
 line-length = 120
 force-exclude = true
-extend-exclude = [".pixi", "scratch", "notebooks", "site", "openwiki"]
+extend-exclude = [".pixi", "scratch", "scripts/scratch", "notebooks", "site", "openwiki"]
 cache-dir = ".cache/ruff_cache"
 
 [tool.ruff.lint]
@@ -106,7 +106,7 @@ disallow_any_generics = false
 check_untyped_defs = true
 ignore_missing_imports = true
 explicit_package_bases = true
-exclude = ["scratch/", "notebooks/", "site/", "airflow/"]
+exclude = ["scratch/", "scripts/scratch/", "notebooks/", "site/", "airflow/"]
 cache_dir = ".cache/mypy_cache"
 
 [tool.pytest.ini_options]

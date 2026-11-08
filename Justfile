@@ -35,17 +35,9 @@ _setup-core:
 [private]
 _setup-scratch:
 	@echo "==> Configuring scratch experimentation repository..."
-	@mkdir -p scratch/notebooks
-	@if [ ! -d "scratch/.git" ]; then \
-		git -C scratch init; \
-		printf "# TaxonVision Scratch & Experimentation\n\nLocal isolated workspace for interactive notebooks.\n" > scratch/README.md; \
-		printf ".ipynb_checkpoints/\n__pycache__/\n*.pyc\n" > scratch/.gitignore; \
-		echo "*.ipynb filter=nbstripout" > scratch/.gitattributes; \
-		git -C scratch config filter.nbstripout.clean "pixi run -e dev nbstripout"; \
-		git -C scratch config filter.nbstripout.smudge cat; \
-	fi
+	@mkdir -p scripts/scratch/notebooks
 	@pixi run --frozen -e dev python -m ipykernel install --user --name=taxon-scratch --display-name="TaxonVision (Scratch)"
-	@echo "==> Scratch environment ready at ./scratch. Launch with: just lab"
+	@echo "==> Scratch environment ready at ./scripts/scratch. Launch with: just lab"
 
 # Enter activated Pixi development shell
 [group("setup")]
@@ -307,7 +299,7 @@ pipeline-run mode="dev":
     @if [ "{{mode}}" = "prod" ]; then \
         docker compose -f docker-compose.yml -f deploy/compose/docker-compose.prod.yml run --rm pipeline-runner; \
     else \
-        docker compose -f docker-compose.yml -f docker-compose.override.yml run --rm pipeline-runner; \
+        docker compose -f docker-compose.yml -f deploy/compose/docker-compose.dev.yml run --rm pipeline-runner; \
     fi
 
 # ── Serving & Web UI ────────────────────────────────────────────────────────
@@ -322,10 +314,15 @@ run-api:
 run:
 	@just run-api
 
-# Launch complete multi-service microservice stack via Docker Compose (FastAPI, SeaweedFS, Optuna, Prometheus, Grafana)
+# Launch complete multi-service microservice stack via Docker Compose in production mode
 [group("app")]
 up:
 	docker compose up -d --build
+
+# Launch complete multi-service microservice stack in development mode with host volume mounts
+[group("app")]
+up-dev:
+	docker compose -f docker-compose.yml -f deploy/compose/docker-compose.dev.yml up -d --build
 
 # Stop multi-service Docker Compose microservices
 [group("app")]
@@ -391,7 +388,7 @@ wiki-viz:
 # Launch JupyterLab within the isolated scratch experimentation workspace
 [group("utils")]
 lab:
-	pixi run --frozen -e dev jupyter lab --notebook-dir=scratch --ip=127.0.0.1 --port=8888
+	pixi run --frozen -e dev jupyter lab --notebook-dir=scripts/scratch --ip=127.0.0.1 --port=8888
 
 # Clean build artifacts, caches, and ephemeral files
 [group("utils")]

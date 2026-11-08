@@ -49,6 +49,7 @@ mlruns/
 # Jupyter Notebook & Scratch
 .ipynb_checkpoints/
 scratch/
+scripts/scratch/
 
 # Environments
 .env
@@ -56,6 +57,8 @@ scratch/
 .venv/
 env/
 venv/
+docker-compose.override.yml
+docker-compose.override.yaml
 
 # Pixi
 .pixi/

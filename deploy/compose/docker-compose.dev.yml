@@ -1,7 +1,9 @@
 # ==============================================================================
 # TaxonVision-MLOps Docker Compose: Development Mode Overrides
 # ==============================================================================
-# Automatically loaded by `docker compose up`. Bind-mounts host source code and
+# Explicitly loaded via:
+#   docker compose -f docker-compose.yml -f deploy/compose/docker-compose.dev.yml up -d
+# or via Justfile: `just up-dev`. Bind-mounts host source code and
 # data directories for rapid iterative development and live hot-reloading.
 # ==============================================================================
 

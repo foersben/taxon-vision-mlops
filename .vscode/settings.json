@@ -23,6 +23,7 @@
   ],
   "python.analysis.ignore": [
     "scratch/**",
+    "scripts/scratch/**",
     "**/*.ipynb"
   ],
   "notebook.formatOnSave.enabled": false,

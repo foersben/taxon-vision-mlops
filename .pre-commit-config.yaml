@@ -1,6 +1,6 @@
 minimum_pre_commit_version: "3.7.0"
 default_stages: [pre-commit]
-exclude: ^(site/|docs/viz\.html|\.cache/|\.pixi/|scratch/|docs/\.archive/)
+exclude: ^(site/|docs/viz\.html|\.cache/|\.pixi/|scratch/|scripts/scratch/|docs/\.archive/)
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -42,7 +42,7 @@ repos:
     rev: 0.9.1
     hooks:
       - id: nbstripout
-        files: ^(notebooks/|scratch/)
+        files: ^(notebooks/|scratch/|scripts/scratch/)
 
   - repo: local
     hooks:
