@@ -12,7 +12,7 @@ TaxonVision-MLOps is a production-grade, end-to-end machine learning platform de
 
 ---
 
-## Executive Overview & Architectural Motivation
+## Overview & Architecture
 
 Citizen-science photographic datasets present three severe real-world challenges that break standard computer vision deployments:
 

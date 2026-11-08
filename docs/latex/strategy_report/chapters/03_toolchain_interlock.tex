@@ -69,6 +69,56 @@ Feature jitter $\sigma$ & uniform & $[0.0, 0.05]$; zero-mean Gaussian perturbati
 \end{tabularx}
 \end{table}
 
+\subsubsection{Effective Sample Weighting and the Non-Saturating Dynamics of \texorpdfstring{$\beta$}{beta}}
+\label{sec:cb_beta_dynamics}
+
+A widespread conceptual misconception in loss re-weighting is assuming that setting the Class-Balanced Loss parameter $\beta$ close to unity (for example, $\beta = 0.9999$ in \nolinkurl{params.yaml}) implies ``weak'' or ``negligible'' balancing. In the mathematical formulation of Cui et al.~\cite{cui2019classbalanced}, the parameter dynamics operate in the exact reverse:
+
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Zero-Balancing Lower Limit ($\beta \to 0$):}
+    \begin{equation}
+      \lim_{\beta \to 0} E_{N_i} = \lim_{\beta \to 0} \frac{1 - \beta^{N_i}}{1 - \beta} = 1.0 \implies W_i = 1.0
+    \end{equation}
+    All classes receive identical weights regardless of empirical frequency, collapsing cleanly to standard unweighted Cross-Entropy loss.
+    \item \textbf{Inverse-Frequency Upper Limit ($\beta \to 1^-$):}
+    Applying L'H\^{o}pital's Rule yields:
+    \begin{equation}
+      \lim_{\beta \to 1^-} \frac{1 - \beta^{N_i}}{1 - \beta} = \lim_{\beta \to 1^-} \frac{-N_i \beta^{N_i - 1}}{-1} = N_i \implies W_i \propto \frac{1}{N_i}
+    \end{equation}
+    Class weights converge asymptotically to unconstrained inverse class frequency weighting.
+\end{itemize}
+
+Crucially, the effective number of samples $E_{N_i}$ is mathematically bounded by an asymptotic saturation ceiling:
+\begin{equation}
+  E_{\max} = \lim_{N_i \to \infty} E_{N_i} = \frac{1}{1 - \beta}
+\end{equation}
+
+For any candidate value of $\beta$, once the empirical observation count $N_i$ substantially exceeds $\frac{1}{1 - \beta}$, the term $\beta^{N_i} \approx 0$, causing $E_{N_i} \approx E_{\max}$ to saturate across all classes. If an engineer were to select a smaller parameter such as $\beta = 0.90$, the saturation ceiling would collapse to $E_{\max} = \frac{1}{0.10} = 10$. On biological datasets possessing $N_i \ge 100$ specimens per taxon, $\beta^{N_i} = 0.90^{100} \approx 2.6 \times 10^{-5} \approx 0$, which evaluates to $E_{N_i} = 10$ across all classes. The resulting class weights $W_i = \frac{1 - \beta}{E_{N_i}}$ become completely identical ($1.0000$), totally neutralising the balancing mechanism.
+
+Consequently, to maintain non-saturating dynamic sensitivity across citizen-science observation frequencies ($N_i \in [50, 2000]$), $\beta$ must reside within the high-sensitivity interval $[0.99, 0.9999]$ (Table~\ref{tab:beta_comparison}).
+
+\begin{table}[htbp]
+\centering
+\caption{Class weight behaviour and saturation ceilings across candidate $\beta$ values evaluated over our training split ($N = [114, 122, 111, 116, 119, 118, 129, 111, 111, 102]$).}
+\label{tab:beta_comparison}
+\begin{tabularx}{\textwidth}{@{}l r r r X@{}}
+\toprule
+\textbf{Candidate $\beta$} & \textbf{Min Weight} & \textbf{Max Weight} & \textbf{Ratio (Max/Min)} & \textbf{Operational Regime} \\
+\midrule
+$\beta = 0.0$ & $1.0000$ & $1.0000$ & $1.0000$ & Standard unweighted Cross-Entropy (no balancing). \\
+$\beta = 0.90$ & $1.0000$ & $1.0000$ & $1.0000$ & Saturated ($E_{\max}=10$; zero discriminatory effect). \\
+$\beta = 0.99$ & $0.9424$ & $1.0677$ & $1.1330$ & Moderately damped balancing ($E_{\max}=100$). \\
+\textbf{$\beta = 0.9959$ (Optuna)} & \textbf{$0.9163$} & \textbf{$1.0968$} & \textbf{$1.1969$} & \textbf{Optimal validation PR-AUC ($+19.7\%$ minority boost).} \\
+$\beta = 0.999$ & $0.8967$ & $1.1191$ & $1.2481$ & Strong balancing ($E_{\max}=1,000$). \\
+$\beta = 0.9999$ (Baseline) & $0.8911$ & $1.1255$ & $1.2630$ & Near-inverse frequency ($+26.3\%$ minority boost). \\
+Pure Inverse Frequency & $0.8905$ & $1.1262$ & $1.2647$ & Unconstrained reciprocal frequency ($1/N$). \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Parameter Sourcing and Precedence Hierarchy.}
+The value declared in \nolinkurl{params.yaml:training.cb_beta} ($0.9999$) represents the canonical literature baseline for large-scale biodiversity imagery. During automated hyperparameter optimization (\texttt{src/taxon\_vision/models/training/tuning.py}), Optuna explored the bounded interval $\beta \in [0.99, 0.9999]$ targeting validation Macro PR-AUC. The resulting Bayesian optimum converged to $\beta = 0.995927$, persisted in \nolinkurl{models/checkpoints/best_params.yaml}. In the training runner (\texttt{runner.py}), parameter resolution executes via a three-tier hierarchy: Tier~1 (active Optuna study if \texttt{--tune} is passed), Tier~2 (persisted \nolinkurl{best_params.yaml}), and Tier~3 (configuration baseline). Thus, the production model was trained under Optuna's optimal $\beta = 0.9959$, providing a calibrated $+19.7\%$ gradient boost on rare taxa without triggering inverse-frequency gradient instability.
+
 \subsection{MLflow 3.x Interlock Architecture and Model Passports}
 
 Whilst Optuna orchestrates the search mathematics, it inherently lacks the infrastructure to permanently archive model provenance across a distributed engineering team. MLflow bridges this gap, operating as the continuous flight data recorder for our training pipeline.
