@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Pixi Managed](https://img.shields.io/badge/managed%20by-pixi-blue)](https://pixi.sh)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
-[![Conformal Coverage](https://img.shields.io/badge/conformal%20coverage-95%25%20guaranteed-success)](docs/concepts/uncertainty_and_safety.md)
+[![Conformal Coverage](https://img.shields.io/badge/conformal%20coverage-95%25%20guaranteed-success)](docs/uncertainty_and_safety/conformal_prediction_theory.md)
 [![Model Backbone](https://img.shields.io/badge/backbone-DINOv3%20ViT--S%2F16-blueviolet)](https://github.com/facebookresearch/dinov)
 [![MLflow Registry](https://img.shields.io/badge/registry-MLflow%203.16.0-informational)](http://localhost:5000)
 
@@ -86,15 +86,15 @@ In citizen-science applications, presenting an erroneous classification with $99
 ```mermaid
 flowchart TD
     Logits["Input Observation Logits & Embeddings"] --> EnergyCalc["Helmholtz Free Energy Gating<br/>E(x; T) = -T · log Σ exp(f_k / T)"]
-    EnergyCalc -->|Energy > τ_ood (-2.4029)| OODRoute["Out-of-Distribution Detected<br/>Route to Human Expert Review"]
+    EnergyCalc -->|"Energy > τ_ood (-2.4029)"| OODRoute["Out-of-Distribution Detected<br/>Route to Human Expert Review"]
 
-    EnergyCalc -->|Energy ≤ τ_ood| ConformalCalc["Split Conformal Non-Conformity<br/>Score: s_k = 1 - π(k | x)"]
+    EnergyCalc -->|"Energy ≤ τ_ood"| ConformalCalc["Split Conformal Non-Conformity<br/>Score: s_k = 1 - π(k | x)"]
     ConformalCalc --> SetGen["Form Conformal Prediction Set<br/>C(x) = {k : s_k ≤ q̂ (0.6337)}"]
 
     SetGen --> CheckEmpty{"Prediction Set Cardinality"}
-    CheckEmpty -->|"|C(x)| = 0 (Empty Set)"| TriageEmpty["Model Entirely Unfamiliar<br/>Route to Triage Queue"]
-    CheckEmpty -->|"1 ≤ |C(x)| ≤ 3 (Accepted Set)"| AutoAccept["Guaranteed Marginal Coverage (≥ 95%)<br/>Accept Classification Result"]
-    CheckEmpty -->|"|C(x)| > 3 (Ambiguous Set)"| TriageAmbiguous["High Taxonomic Ambiguity<br/>Route to Triage Queue"]
+    CheckEmpty -->|"Empty Set: Cardinality = 0"| TriageEmpty["Model Entirely Unfamiliar<br/>Route to Triage Queue"]
+    CheckEmpty -->|"Accepted Set: 1 to 3 Taxa"| AutoAccept["Guaranteed Marginal Coverage (≥ 95%)<br/>Accept Classification Result"]
+    CheckEmpty -->|"Ambiguous Set: Greater than 3 Taxa"| TriageAmbiguous["High Taxonomic Ambiguity<br/>Route to Triage Queue"]
 
     classDef stage fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
     classDef decision fill:#0f172a,stroke:#f59e0b,stroke-width:2px,color:#f8fafc;
@@ -381,4 +381,4 @@ just docs-serve
 
 ## License & Attribution
 
-This project is licensed under the terms of the [MIT License](LICENSE). All photographic assets ingested by the pipeline adhere to Creative Commons open licenses (`CC0`, `CC-BY`, `CC-BY-NC`) with full photographer attribution preserved in all manifest records and user-facing dashboards.
+This project is licensed under the terms of the [MIT License](https://opensource.org/licenses/MIT). All photographic assets ingested by the pipeline adhere to Creative Commons open licenses (`CC0`, `CC-BY`, `CC-BY-NC`) with full photographer attribution preserved in all manifest records and user-facing dashboards.
