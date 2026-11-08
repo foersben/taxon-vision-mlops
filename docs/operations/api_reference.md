@@ -46,8 +46,8 @@ Re-instantiating `torchvision.transforms.Compose` pipelines or ONNX Runtime sess
 | HTTP Method & Path | Route Module | Auth Guard | Primary Purpose | Latency SLO |
 | :--- | :--- | :--- | :--- | :--- |
 | `GET /` | [`routes/views.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/service/routes/views.py) | Public | Renders the Jinja2/HTMX operator dashboard (`index.html`) with the frosted-glass **Active Model Passport** governance strip. | $< 15\,\text{ms}$ (`< 0.1 ms` on passport cache hit) |
-| `POST /ui/predict-htmx` | [`routes/views.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/service/routes/views.py) | Public | Processes uploaded specimen image, caches raw bytes in Redis (`taxon:img:{sha256}`), and returns the HTMX `partials/prediction_card.html` fragment. | $< 35\,\text{ms}$ p95 |
-| `POST /api/v1/predict` (alias `/predict`) | [`routes/predict.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/service/routes/predict.py) | Public | Machine REST classification endpoint returning top-1 taxon, Split Conformal set $C(X)$, Helmholtz OOD energy, and async telemetry dispatch. | $< 25\,\text{ms}$ p95 |
+| `POST /ui/predict-htmx` | [`routes/views.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/service/routes/views.py) | Public | Processes uploaded specimen image, caches raw bytes in Redis (`taxon:img:{sha256}`), and returns the HTMX `partials/prediction_card.html` fragment. | $< 35\,\text{ms}$ p95 (GPU) / `~55 ms` (CPU INT8) |
+| `POST /api/v1/predict` (alias `/predict`) | [`routes/predict.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/service/routes/predict.py) | Public | Machine REST classification endpoint returning top-1 taxon, Split Conformal set $C(X)$, Helmholtz OOD energy, and async telemetry dispatch. | $< 25\,\text{ms}$ p95 (GPU) / `50.38 ms` p95 (CPU INT8, $\le 120\,\text{ms}$ SLA) |
 | `POST /api/v1/explain` | [`routes/explain.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/service/routes/explain.py) | Public | Generates forward-hooked Class Activation Mapping (CAM) overlay from `image_hash` (Redis lookup) or uploaded file; returns JSON or HTMX partial. | $< 40\,\text{ms}$ p95 |
 | `POST /api/v1/drift/evaluate` | [`routes/drift.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/service/routes/drift.py) | Bearer `TAXON_INTERNAL_API_TOKEN` | Executes Tier 1 ($W_1$) and Tier 2 (RBF $\text{MMD}^2$) drift evaluation over the latest 500 PostgreSQL predictions, logs to MLflow, and records `drift_runs`. | $< 500\,\text{ms}$ (threadpool offload) |
 | `GET /api/v1/drift/latest` | [`routes/drift.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/service/routes/drift.py) | Public | Retrieves the most recent `DriftRunSummary` from the PostgreSQL `drift_runs` table without recomputing statistics. | $< 5\,\text{ms}$ |
@@ -92,7 +92,7 @@ Re-instantiating `torchvision.transforms.Compose` pipelines or ONNX Runtime sess
   "mmd2": 0.0041,
   "mmd2_p_value": 0.4129,
   "window_size": 500,
-  "n_reference": 169,
+  "n_reference": 164,
   "mlflow_run_id": "a8f39c12e4b04891a2c3d4e5f6071829",
   "report_path": "reports/drift_report.html"
 }

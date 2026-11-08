@@ -88,7 +88,7 @@ During Stage 7 (`evaluate`), [`evaluate_promotion_gates(criteria: PromotionCrite
 | :--- | :--- | :--- | :--- | :--- |
 | **Gate 1a: Incumbent Supremacy** | $\text{PR-AUC}_{\text{cand}} \ge \text{PR-AUC}_{\text{incumbent}}$ | Dynamic (queried from `@Production` & `@Challenger` runs) | `@Archived` (`gate="below_incumbent"`) | Guarantees monotonic non-degradation of macro precision-recall across imbalanced biological classes. |
 | **Gate 1b: INT8 Quantisation Fidelity** | $\text{Acc}_{\text{FP32}} - \text{Acc}_{\text{INT8}} \le \delta_{\text{quant}}$ | `quantization_drop_tol: 0.03` ($3.0\%$) | `@Archived` (`gate="quantization_drop_exceeded"`) | Prevents promoting models whose activation distributions clip severely under INT8 dynamic/static quantisation. |
-| **Gate 2: Conformal Coverage Guarantee** | $\hat{c}_{\text{test}} \ge (1 - \alpha) - \epsilon_{\text{cov}}$ | `coverage_tolerance: 0.05` (floor $= 0.90$ for $1-\alpha = 0.95$) | `@Archived` (`gate="conformal_coverage_violation"`) | Accounts for finite-sample binomial variance on the holdout test split ($N_{\text{test}}=169$, where $\pm 0.05$ corresponds to $\approx 2.5\sigma$ binomial sampling tolerance) while rejecting miscalibrated sets. |
+| **Gate 2: Conformal Coverage Guarantee** | $\hat{c}_{\text{test}} \ge (1 - \alpha) - \epsilon_{\text{cov}}$ | `coverage_tolerance: 0.05` (floor $= 0.90$ for $1-\alpha = 0.95$) | `@Archived` (`gate="conformal_coverage_violation"`) | Accounts for finite-sample binomial variance on the holdout test split ($N_{\text{test}}=164$, where $\pm 0.05$ corresponds to $\approx 2.5\sigma$ binomial sampling tolerance; empirical test coverage $= 91.46\%$ and calibration coverage $= 96.77\%$) while rejecting miscalibrated sets. |
 | **Gate 3: Physical Latency Budget** | $L_{p95} \le \tau_{\text{latency}}$ | `latency_slo_ms: 120.0` ms | `@Archived` (`gate="latency_slo_violation"`) | Enforces an upper bound on single-stream ONNX Runtime execution across both bare-metal P-cores and virtualised CI runners. |
 | **Gate 4a: Cold-Start Bootstrap** | $\text{PR-AUC}_{\text{incumbent}} \text{ is None}$ | First registered model | `@Production` (`gate="initial_production"`) | Allows an unpopulated registry to bootstrap its initial `@Production` champion once Gates 1-3 pass. |
 | **Gate 4b: Live Telemetry Sample Volume** | $N_{\text{live}} \ge N_{\min}$ | `min_telemetry_samples: 50` | `@Challenger` (`gate="insufficient_traffic"`) | Prevents premature promotion when an incumbent already exists but the PostgreSQL `predictions` table holds fewer than 50 recent observations. |
@@ -113,9 +113,9 @@ Every registered model version is stamped with cryptographic and statistical pro
 * `git_sha`: Exact Git commit SHA-1 hash (`git rev-parse HEAD`).
 * `dvc_dataset_hash`: Content MD5 digest of `dataset_manifest.parquet` parsed directly from `dvc.lock`.
 * `extractor`: Vision foundation backbone identifier (`dinov3`, `bioclip-2`, etc.).
-* `val_pr_auc`: Candidate Macro PR-AUC score (`0.9965`).
-* `empirical_coverage`: Measured holdout conformal coverage (`0.9645`).
-* `p95_latency_ms`: Measured 95th-percentile INT8 ONNX latency in milliseconds.
+* `val_pr_auc`: Candidate Macro PR-AUC score (`0.9717` median / `0.9255` worst-class AP).
+* `empirical_coverage`: Measured holdout conformal coverage (`0.9146` test / `0.9677` calibration).
+* `p95_latency_ms`: Measured 95th-percentile INT8 ONNX latency in milliseconds (`50.38` ms on CPU INT8).
 * `exchangeability_mmd2_p_value`: Permutation test $p$-value comparing `cal_embeddings.pt` against live telemetry.
 * `gate` & `promotion_verdict`: Exact decision path (e.g. `promoted_all_4_gates` / `Production`).
 

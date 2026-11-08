@@ -66,12 +66,12 @@ The pipeline tracks 11 core data, reference, report, and model artefacts across 
 | Artefact Identifier | Canonical Filesystem Path | Producing DVC Stage | Storage Target & Remote | Cryptographic & Statistical Invariant |
 | :--- | :--- | :--- | :--- | :--- |
 | **Raw Manifest** | `data/manifests/raw_manifest.parquet` | `ingestion` (`frozen: true`) | Local Git/DVC Workspace | Content hash of initial iNaturalist observation metadata and photo URLs. |
-| **Dataset Manifest** | `data/manifests/dataset_manifest.parquet` | `audit_license` | Local Git/DVC Workspace | 100% CC0, CC-BY, or CC-BY-NC validated citizen-science records with attribution. |
-| **Train Embeddings** | `data/embeddings/train_embeddings.pt` | `extract_features` | DagsHub S3 (`origin`) & SeaweedFS (`local-seaweedfs`) | 70% stratified training split ($1{,}182 \times 384$ tensor). |
-| **Val Embeddings** | `data/embeddings/val_embeddings.pt` | `extract_features` | DagsHub S3 (`origin`) & SeaweedFS (`local-seaweedfs`) | 10% stratified validation split ($169 \times 384$ tensor). |
-| **Cal Embeddings** | `data/embeddings/cal_embeddings.pt` | `extract_features` | DagsHub S3 (`origin`) & SeaweedFS (`local-seaweedfs`) | 10% stratified conformal calibration & serving drift reference ($169 \times 384$ tensor). |
-| **Test Embeddings** | `data/embeddings/test_embeddings.pt` | `extract_features` | DagsHub S3 (`origin`) & SeaweedFS (`local-seaweedfs`) | 10% stratified holdout evaluation split ($169 \times 384$ tensor). |
-| **Reference Train Baseline** | `data/reference/reference_train_embeddings.pt` | Reference Baseline | Local Git/DVC Workspace | Historical training representation baseline for Stage 3.5 drift comparison. |
+| **Dataset Manifest** | `data/manifests/dataset_manifest.parquet` | `audit_license` | Local Git/DVC Workspace | 100% CC0, CC-BY, or CC-BY-NC validated citizen-science records with attribution ($1{,}646$ observations). |
+| **Train Embeddings** | `data/embeddings/train_embeddings.pt` | `extract_features` | DagsHub S3 (`origin`) & SeaweedFS (`local-seaweedfs`) | 70% stratified training split ($1{,}153 \times 384$ tensor). |
+| **Val Embeddings** | `data/embeddings/val_embeddings.pt` | `extract_features` | DagsHub S3 (`origin`) & SeaweedFS (`local-seaweedfs`) | 10% stratified validation split ($164 \times 384$ tensor). |
+| **Cal Embeddings** | `data/embeddings/cal_embeddings.pt` | `extract_features` | DagsHub S3 (`origin`) & SeaweedFS (`local-seaweedfs`) | 10% stratified conformal calibration & serving drift reference ($164 \times 384$ tensor; $155$ inliers after OOD gating). |
+| **Test Embeddings** | `data/embeddings/test_embeddings.pt` | `extract_features` | DagsHub S3 (`origin`) & SeaweedFS (`local-seaweedfs`) | 10% stratified holdout evaluation split ($164 \times 384$ tensor). |
+| **Reference Train Baseline** | `data/reference/reference_train_embeddings.pt` | Reference Baseline | Local Git/DVC Workspace | Historical training representation baseline ($1{,}182 \times 384$ tensor) for Stage 3.5 drift comparison. |
 | **Training Drift Report** | `reports/data_drift.json` | `data_drift` | Uncached DVC Metric | Tier 1 $W_1$ norm distance and Tier 2 RBF MMD² p-value gating Stage 4 (`train`). |
 | **Taxa Perimeter** | `config/taxa_catalog.yaml` | Git Tracked | Local Repository Root | 10 biological taxa definitions forming the Level 1 classification boundary. |
 | **Head Checkpoint** | `models/checkpoints/head.pt` | `train` | Cloud Remote (`s3://dvc` at DagsHub) | Cosine classification head weights $\mathbf{W}$ optimised via Class-Balanced Loss. |

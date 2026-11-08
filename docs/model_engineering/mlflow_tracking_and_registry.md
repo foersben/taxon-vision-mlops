@@ -105,11 +105,11 @@ During Stage 4 (`train`), [`_log_dataset_lineage()`](file:///home/benni/Document
 
 | Dataset Identifier | MLflow Context Tag | Constructor & Source | Attached Provenance Metadata |
 | :--- | :--- | :--- | :--- |
-| `inaturalist_open_manifest` | `context="manifest"` | `mlflow.data.from_pandas(df, source="data/manifests/dataset_manifest.parquet", targets="taxon_id")` | `sha256` hex digest, `license.policy="CC0,CC-BY,CC-BY-NC"`, `records_count="1689"` |
-| `train_embeddings` | `context="training"` | `mlflow.data.from_numpy(features=train_embeddings, targets=train_labels)` | 70% stratified training partition ($1{,}182 \times 384$) |
-| `val_embeddings` | `context="validation"` | `mlflow.data.from_numpy(features=val_embeddings, targets=val_labels)` | 10% stratified validation partition ($169 \times 384$) |
-| `cal_embeddings` | `context="calibration"` | `mlflow.data.from_numpy(features=cal_embeddings, targets=cal_labels)` | 10% conformal calibration partition ($169 \times 384$) |
-| `test_embeddings` | `context="test"` | `mlflow.data.from_numpy(features=test_embeddings, targets=test_labels)` | 10% unbiased holdout evaluation partition ($169 \times 384$) |
+| `inaturalist_open_manifest` | `context="manifest"` | `mlflow.data.from_pandas(df, source="data/manifests/dataset_manifest.parquet", targets="taxon_id")` | `sha256` hex digest, `license.policy="CC0,CC-BY,CC-BY-NC"`, `records_count="1646"` |
+| `train_embeddings` | `context="training"` | `mlflow.data.from_numpy(features=train_embeddings, targets=train_labels)` | 70% stratified training partition ($1{,}153 \times 384$) |
+| `val_embeddings` | `context="validation"` | `mlflow.data.from_numpy(features=val_embeddings, targets=val_labels)` | 10% stratified validation partition ($164 \times 384$) |
+| `cal_embeddings` | `context="calibration"` | `mlflow.data.from_numpy(features=cal_embeddings, targets=cal_labels)` | 10% conformal calibration partition ($164 \times 384$; $155$ inliers) |
+| `test_embeddings` | `context="test"` | `mlflow.data.from_numpy(features=test_embeddings, targets=test_labels)` | 10% unbiased holdout evaluation partition ($164 \times 384$) |
 
 Furthermore, [`_log_bound_evaluation_metrics()`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/tracking.py#L391-L415) passes `model_id=model_id` and `dataset=val_ds` directly to `mlflow.log_metrics(...)`, linking validation curves and holdout scores to both the `LoggedModel` entity and the specific dataset split in the MLflow 3.x UI.
 

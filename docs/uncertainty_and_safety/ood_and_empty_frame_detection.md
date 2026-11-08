@@ -148,7 +148,7 @@ TaxonVision-MLOps combines Helmholtz Free Energy $E(x; T)$, Normalized Shannon E
 
 | Quadrant | Epistemic Condition | Conformal Set Size $\vert\mathcal{C}(x)\vert$ | Operational Routing Decision | System Latency & Handling SLO |
 | :--- | :--- | :--- | :--- | :--- |
-| **Quadrant 1** | Inlier Specimen: $E \le \tau_{\text{OOD}}$, $\bar{H} < 0.40$ | $\vert\mathcal{C}(x)\vert = 1$ | **Fast-Path Automated Acceptance** | Single-species resolution returned in $< 15\text{ ms}$. |
+| **Quadrant 1** | Inlier Specimen: $E \le \tau_{\text{OOD}}$, $\bar{H} < 0.40$ | $\vert\mathcal{C}(x)\vert = 1$ | **Fast-Path Automated Acceptance** | Single-species resolution returned in $\approx 50.4\text{ ms}$ p95 CPU INT8 ($\le 15\text{ ms}$ GPU target). |
 | **Quadrant 2** | Sister-Taxa Mimicry: $E \le \tau_{\text{OOD}}$, $0.25 \le \bar{H} \le 0.70$ | $\vert\mathcal{C}(x)\vert \in [2, 3]$ | **Sister-Taxa Vision-RAG Engine** | Multimodal knowledge retrieval card emitted in $< 45\text{ ms}$. |
 | **Quadrant 3** | Diffuse Clutter / Blank: $E \le \tau_{\text{OOD}}$, $\bar{H} \ge 0.85$ | $\vert\mathcal{C}(x)\vert \ge 4$ or $M(x) \approx 0$ | **Empty Frame / Clutter Rejection** | Automatically flagged as uninformative; rejected from training. |
 | **Quadrant 4** | Semantic Outlier: $E > \tau_{\text{OOD}}$ | $\vert\mathcal{C}(x)\vert = 0$ or Non-Biological | **Semantic OOD Human Triage** | Dispatched to Label Studio expert verification queue. |

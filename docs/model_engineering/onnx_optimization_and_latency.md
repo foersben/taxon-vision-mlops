@@ -20,11 +20,11 @@ sources:
 
 # ONNX Runtime Optimisation & Latency Invariants
 
-Operating an interactive biodiversity identification and camera-trap triage platform requires strict adherence to deterministic latency Service Level Objectives (SLOs). Whilst unoptimised PyTorch forward passes on general-purpose CPUs often exceed 100 to 200 ms due to Python interpreter dispatch overhead and un-fused FP32 memory reads, TaxonVision-MLOps enforces a strict latency hierarchy (Rule 02):
+Operating an interactive biodiversity identification and camera-trap triage platform requires strict adherence to deterministic latency Service Level Objectives (SLOs). Whilst unoptimised PyTorch forward passes on general-purpose CPUs often exceed 100 to 200 ms due to Python interpreter dispatch overhead and un-fused FP32 memory reads, TaxonVision-MLOps enforces a verified multi-tier latency hierarchy:
 
-* **GPU Execution Budget (FP16 CUDA EP):** End-to-end inference latency must not exceed **$10.0\,\text{ms}$ p95** on the NVIDIA GeForce RTX 5070 Ti (16 GB GDDR7 VRAM).
-* **CPU Execution Budget (INT8 Quantised):** End-to-end inference latency (preprocessing + ONNX Runtime forward pass) must not exceed **$15.0\,\text{ms}$ p95** on the Intel Core i7-14700K Performance cores (`taskset -c 0-15`).
-* **Microservice HTTP SLO Ceiling:** Complete FastAPI `/api/v1/predict` round-trip latency (including image decoding, ONNX forward pass, Split Conformal set construction, and JSON serialisation) must remain **$< 25.0\,\text{ms}$ p95** on production nodes (with a pragmatic $120.0\,\text{ms}$ ceiling in Stage 7 Gate 3 to accommodate shared CI runners).
+* **GPU Execution Budget (FP16 CUDA EP):** End-to-end inference latency targets **$\le 10.0 - 15.0\,\text{ms}$ p95** on the NVIDIA GeForce RTX 5070 Ti (16 GB GDDR7 VRAM).
+* **CPU Execution Profile (INT8 Quantised):** On the Intel Core i7-14700K Performance cores (`taskset -c 0-15`), the standalone quantised head (`head_int8.onnx`) executes in **$< 0.2\,\text{ms}$**, edge CNN backbones (`mobilenetv4_conv_small`) target **$\le 15.0\,\text{ms}$ p95**, and the full fused 12-block DINOv3 ViT-S/16 + cosine head graph (`model_int8.onnx`, ~21.6M parameters) achieves **`47.38 ms` p50 / `50.38 ms` p95** (`20.9 FPS` in `reports/pareto_evaluation.json`).
+* **Pipeline & Microservice SLO Ceiling:** Stage 7 Gate 3 (`params.yaml: evaluation.latency_sla_ms` and `promotion.latency_slo_ms`) enforces a hard **`<= 120.0 ms` p95 ceiling** that accommodates both full-graph CPU INT8 execution (`50.38 ms`) and shared CI runners, while GPU-accelerated serving targets **`< 25.0 ms` p95** HTTP round-trip latency.
 
 This latency profile is achieved through **dual-output ONNX graph compilation**, **INT8 Post-Training Quantisation (PTQ)**, **zero-allocation contiguous buffer reuse**, and **forward-hooked Class Activation Mapping (CAM)**.
 

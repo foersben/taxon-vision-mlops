@@ -126,7 +126,7 @@ flowchart TD
 
 ### 3.3 Hardware & NVIDIA Time-Slicing Resource Partitioning on `hive-mind`
 
-To guarantee that staging verification and Jenkins GPU training never degrade production p95 inference latency ($\le 10\text{ ms}$ GPU / $\le 15\text{ ms}$ CPU), compute and memory resources on `hive-mind` are partitioned across the Intel Core i7-14700K (8 Performance-cores / 16 threads `0-15`, 12 Efficient-cores `16-27`), 128 GB DDR5 RAM, and the 4 virtual time-sliced replicas of the NVIDIA GeForce RTX 5070 Ti (16 GB GDDR7 VRAM):
+To guarantee that staging verification and Jenkins GPU training never degrade production p95 inference latency ($\le 10-15\text{ ms}$ GPU target / `50.38 ms` empirical CPU INT8 within the $\le 120.0\text{ ms}$ Stage 7 SLA gate), compute and memory resources on `hive-mind` are partitioned across the Intel Core i7-14700K (8 Performance-cores / 16 threads `0-15`, 12 Efficient-cores `16-27`), 128 GB DDR5 RAM, and the 4 virtual time-sliced replicas of the NVIDIA GeForce RTX 5070 Ti (16 GB GDDR7 VRAM):
 
 | Cluster Workload | Kubernetes Namespace | CPU Allocation & Affinity Target | RAM Limit | GPU Slot & VRAM Budget | Lifecycle Policy |
 | :--- | :--- | :--- | :--- | :--- | :--- |

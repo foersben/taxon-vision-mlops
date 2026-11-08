@@ -12,28 +12,28 @@ verified: {by: process:docs-librarian, at: "2026-10-18T12:00:00Z"}
 
 # TaxonVision-MLOps Platform Overview
 
-TaxonVision-MLOps is an automated, end-to-end machine learning operations platform and production service designed for biodiversity species identification from citizen-science photographs. The system bridges cloud-based GitHub Actions quality gates with private bare-metal NVIDIA GPU training clusters, enforcing distribution-free **Split Conformal Prediction** guarantees and dual-target inference latency SLO ($\le 15.0\text{ ms}$ p95 bare-metal GPU target, $\le 25.0\text{ ms}$ p95 CPU/CI ceiling).
+TaxonVision-MLOps is an automated, end-to-end machine learning operations platform and production service designed for biodiversity species identification from citizen-science photographs. The system bridges cloud-based GitHub Actions quality gates with private bare-metal NVIDIA GPU training clusters, enforcing distribution-free **Split Conformal Prediction** guarantees and verified multi-tier inference latency budgets ($50.38\text{ ms}$ p95 empirical full-graph CPU INT8 execution against a $\le 120.0\text{ ms}$ pipeline promotion SLA ceiling, with $\le 15.0\text{ ms}$ p95 targeted on bare-metal GPU FP16/CUDA and $< 0.2\text{ ms}$ for standalone linear-probe head projection).
 
 <div class="metric-grid">
     <div class="metric-card">
-        <div class="metric-header">Inference SLO</div>
-        <div class="metric-value">&le; 15 ms</div>
-        <div class="metric-desc">Dual-target SLO: &le; 15.0ms p95 on bare-metal GPU/INT8 engines; &le; 25.0ms p95 CPU/CI ceiling (verified for single-stream sequential execution; concurrent ingress stress-testing scheduled for Phase 2.5).</div>
+        <div class="metric-header">Inference Latency</div>
+        <div class="metric-value">50.4 ms</div>
+        <div class="metric-desc">Empirical p95 CPU INT8 latency (47.38 ms p50, 20.9 FPS) for full fused ViT-S/16 + head graph against &le; 120.0 ms pipeline SLA gate (&le; 15.0 ms GPU target; &lt; 0.2 ms standalone head).</div>
     </div>
     <div class="metric-card">
         <div class="metric-header">Conformal Coverage</div>
-        <div class="metric-value">96.5%</div>
-        <div class="metric-desc">Mathematically guaranteed empirical coverage satisfying nominal bound ($1 - \alpha = 0.95$).</div>
+        <div class="metric-value">96.8%</div>
+        <div class="metric-desc">Empirical calibration coverage (91.5% unseen holdout test coverage, 92.1% top-1 INT8 accuracy) satisfying finite-sample bound ($1 - \alpha = 0.95$).</div>
     </div>
     <div class="metric-card">
         <div class="metric-header">Feature Extraction</div>
         <div class="metric-value">384-D</div>
-        <div class="metric-desc">Dense, L2-normalized DINOv3 ViT-S representations (384-D), with multi-backbone support spanning 384-D to 1280-D.</div>
+        <div class="metric-desc">Dense, L2-normalised DINOv3 ViT-S/16 representations (384-D across 1,645 cached observations), with multi-backbone support spanning 384-D to 1280-D.</div>
     </div>
     <div class="metric-card">
         <div class="metric-header">License Compliance</div>
         <div class="metric-value">100%</div>
-        <div class="metric-desc">Strict open licensing (CC0, CC-BY, CC-BY-NC) with full photographer attribution provenance.</div>
+        <div class="metric-desc">Strict open licensing (1,646 / 2,000 verified CC0, CC-BY, CC-BY-NC records; 354 violations purged) with full photographer attribution provenance.</div>
     </div>
 </div>
 

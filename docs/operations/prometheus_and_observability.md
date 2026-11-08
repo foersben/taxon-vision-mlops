@@ -31,7 +31,7 @@ flowchart TD
     end
 
     subgraph Monitoring["Real-Time Prometheus Telemetry (/metrics)"]
-        API --> LAT["Latency Histograms<br/>(p50, p95 <= 15ms CPU, p99)"]
+        API --> LAT["Latency Histograms<br/>(p50, p95 <= 15ms GPU / 50.4ms CPU INT8)"]
         API --> SET["Conformal Set Cardinality<br/>|C(x)| Distribution"]
         API --> OOD["Helmholtz Free Energy<br/>E(x; T) Histogram"]
         API --> ERR["Status Categorisation<br/>(success vs fallback vs error)"]
@@ -62,7 +62,7 @@ The platform exposes real-time Prometheus metrics at `GET /metrics` via `prometh
 
 | Metric Identifier | Metric Type | Labels / Dimensions | Architectural Description & Alert Thresholds |
 | :--- | :--- | :--- | :--- |
-| **`taxon_inference_latency_seconds_bucket`** | Histogram | `extractor`, `backend`, `le` | Tracks execution duration across feature extraction and head projection. Evaluates p50, p95, and p99 latency SLO ($\le 15.0\,\text{ms}$ CPU / $\le 25.0\,\text{ms}$ HTTP). |
+| **`taxon_inference_latency_seconds_bucket`** | Histogram | `extractor`, `backend`, `le` | Tracks execution duration across feature extraction and head projection. Evaluates p50, p95, and p99 latency SLO ($\le 15.0\,\text{ms}$ GPU target / `50.38 ms` empirical CPU INT8 within $\le 120.0\,\text{ms}$ SLA). |
 | **`taxon_conformal_set_size_bucket`** | Histogram | `le` | Measures the cardinality $\lvert C(X) \rvert$ of admissible prediction sets. An elevated mean set size ($> 3.0$) indicates rising epistemic ambiguity. |
 | **`taxon_conformal_empty_set_total`** | Counter | None | Increments whenever $C(X) = \emptyset$. Indicates total lack of confidence at nominal $1 - \alpha$; routes to human triage. |
 | **`taxon_ood_energy_score_bucket`** | Histogram | `le` | Tracks negative Helmholtz free energy $E(\mathbf{x}; T)$ scores. Activations exceeding $\tau_{\text{OOD}}$ trigger outlier isolation. |

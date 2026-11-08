@@ -24,7 +24,7 @@ sources:
 
 When a conventional web microservice fails - for instance, when a database table is missing or a JSON payload is malformed - it raises an immediate runtime exception and returns an HTTP `4xx` or `5xx` status code. Standard DevOps monitoring easily catches such crashes.
 
-Machine learning models fail in a far more insidious manner: **silent epistemic decay**. Suppose our taxonomic classifier is trained and calibrated on springtime citizen-science photographs of adult monarch butterflies (*Danaus plexippus*) under bright daylight. Months later, field biologists begin uploading autumn camera-trap images captured under heavy morning fog, lens condensation, or different foliage backgrounds. The FastAPI `/api/v1/predict` endpoint continues to return HTTP `200 OK` in under 15 milliseconds, and the CPU and memory graphs in Grafana look completely normal. Yet the underlying probability distribution of the input images $P_{\text{live}}(X)$ has shifted away from the calibration distribution $P_{\text{cal}}(X)$ - a phenomenon known as **covariate shift** or **representation drift**.
+Machine learning models fail in a far more insidious manner: **silent epistemic decay**. Suppose our taxonomic classifier is trained and calibrated on springtime citizen-science photographs of adult monarch butterflies (*Danaus plexippus*) under bright daylight. Months later, field biologists begin uploading autumn camera-trap images captured under heavy morning fog, lens condensation, or different foliage backgrounds. The FastAPI `/api/v1/predict` endpoint continues to return HTTP `200 OK` in ~50 milliseconds on CPU INT8 (or under 15 milliseconds on GPU), and the CPU and memory graphs in Grafana look completely normal. Yet the underlying probability distribution of the input images $P_{\text{live}}(X)$ has shifted away from the calibration distribution $P_{\text{cal}}(X)$ - a phenomenon known as **covariate shift** or **representation drift**.
 
 In TaxonVision-MLOps, detecting representation drift is not merely a heuristic "nice-to-have"; it is a **strict mathematical requirement** for our Split Conformal Prediction safety guarantee:
 
@@ -50,7 +50,7 @@ flowchart TD
     end
 
     subgraph Runner["2. Two-Tier Statistical Drift Engine (evaluate_recent_drift)"]
-        REF["Reference Baseline<br/>data/embeddings/cal_embeddings.pt<br/>(N_ref = 169, cached in RAM)"] --> T1
+        REF["Reference Baseline<br/>data/embeddings/cal_embeddings.pt<br/>(N_ref = 164, cached in RAM)"] --> T1
         REF --> T2
         PG_PRED -->|Sliding Window N <= 500<br/>(min_samples = 50)| T1["Tier 1: 1D Wasserstein-1 on L2 Norms<br/>W1( ||z_ref||_2 , ||z_curr||_2 ) > tau_W1"]
         PG_PRED -->|Sliding Window N <= 500| T2["Tier 2: Multivariate RKHS RBF MMD²<br/>B = 200 Permutations, p_value < alpha (0.01)"]
@@ -95,7 +95,7 @@ What value of $W_1$ constitutes a genuine drift alert? Hardcoding an arbitrary m
 
 To derive a mathematically defensible threshold with a controlled **$1\%$ false-alarm rate ($\alpha = 0.01$)**, [`src/taxon_vision/pipelines/calibrate_drift.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/pipelines/calibrate_drift.py) executes a **1,000-iteration bootstrap null-distribution simulation** ([`calibrate_drift_threshold()`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/pipelines/calibrate_drift.py#L124-L181)):
 
-1. Loads the pre-normalised Euclidean norms of the in-distribution calibration split (`data/embeddings/cal_embeddings.pt`, $N_{\text{cal}} = 169$) and the independent in-distribution holdout test split (`data/embeddings/test_embeddings.pt`, $N_{\text{test}} = 169$).
+1. Loads the pre-normalised Euclidean norms of the in-distribution calibration split (`data/embeddings/cal_embeddings.pt`, currently $N_{\text{cal}} = 164$; $N = 169$ in the initial bootstrap calibration snapshot recorded below) and the independent in-distribution holdout test split (`data/embeddings/test_embeddings.pt`, currently $N_{\text{test}} = 164$).
 2. For $b = 1, \dots, 1{,}000$ iterations (seeded deterministically with `seed = 42`), draws a random bootstrap sample from `test_norms` and computes the null Wasserstein-1 distance $W_1^{(b)}$ against `ref_norms`.
 3. Selects the **99th percentile** of $\big\{W_1^{(1)}, \dots, W_1^{(1000)}\big\}$ as the calibrated alert ceiling $\tau_{W_1}$ and writes [`config/drift_config.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/config/drift_config.yaml) alongside the cryptographic SHA-256 digest of `cal_embeddings.pt`:
 

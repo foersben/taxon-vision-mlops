@@ -291,7 +291,7 @@ just dvc-push
 * **Package & Environment Management:** Strictly managed via `pixi`. We utilise a dual-environment strategy: `ci-dev` (CPU only) for continuous integration, and `dev` (GPU enabled) for the remote GPU runners; model training is never executed on the developer workstation.
 * **Task Automation:** All pipeline steps, testing, and linting are executed via `just` (as defined in our `Justfile`).
 * **CI/CD Pipelines:** GitHub Actions (`.github/workflows/ci.yml`) triggers on pushes or pull requests to `main` and `develop`. It runs automated quality gates (Ruff, MyPy, pytest coverage with an 80% threshold, license compliance, OKF frontmatter validation, and cognitive complexity via `complexipy`). Upon merging to `main`, GitHub Actions automatically builds and publishes the production container to GitHub Container Registry (`ghcr.io/foersben/taxon-vision-mlops:latest` and `:sha-...`), pulling model checkpoints from DagsHub DVC. All legacy manual deployment approvals and phantom environments have been removed.
-* **Data Versioning & Tracking:** We rely on DVC for dataset immutability and MLflow (hosted on DagsHub) for experiment tracking.
+* **Data Versioning & Tracking:** We rely on DVC (`local-seaweedfs` in-cluster primary cache + DagsHub S3 offsite archive) for dataset immutability and self-hosted MLflow v3.16.0 on `hive-mind` (backed by PostgreSQL 16 and SeaweedFS S3) for experiment tracking and Model Registry governance.
 
 ## In-Cluster Storage Architecture: SeaweedFS Object Store
 

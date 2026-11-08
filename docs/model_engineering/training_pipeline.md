@@ -29,7 +29,7 @@ The training module ([`src/taxon_vision/models/training/`](file:///home/benni/Do
 ## 1. Design Principles
 
 * **Remote Cluster Execution Paradigm:** The local developer workstation serves strictly as an authoring, unit-testing, and orchestration plane. Heavy PyTorch feature extraction, Optuna Bayesian hyperparameter sweeps, and ONNX graph compilation execute on the dedicated bare-metal compute node (`hive-mind`) inside Kubernetes pods governed by GPU time-slicing slots and explicit VRAM fractions.
-* **Zero Backbone Backpropagation:** All gradient descent iterates exclusively over the lightweight classification head (`Dropout` + `Linear` / Cosine projection), operating on embeddings pre-extracted by the frozen vision backbone (`dinov3`, `bioclip-2`, `dinov2_vits14`, `mobilenetv4_conv_small`). This reduces a full training epoch over 1,182 observations to milliseconds.
+* **Zero Backbone Backpropagation:** All gradient descent iterates exclusively over the lightweight classification head (`Dropout` + `Linear` / Cosine projection), operating on embeddings pre-extracted by the frozen vision backbone (`dinov3`, `bioclip-2`, `dinov2_vits14`, `mobilenetv4_conv_small`). This reduces a full 30-epoch training run over 1,153 observations to 3.61 seconds.
 * **Class-Balanced Loss for Long-Tail Distributions:** Biodiversity observation streams follow a steep Pareto power law. The loss formulation re-weights each species $y$ by the effective number of samples $E_{n_y}$:
 
     $$\mathcal{L}_{\text{CB}}(\mathbf{p}, y) = -\frac{1 - \beta}{1 - \beta^{n_y}} \log(p_y)$$
@@ -123,7 +123,7 @@ flowchart TD
 
 ## 5. Optimal Training Dynamics & Hardware Budgeting
 
-* **Epoch Budget:** Linear and cosine heads over frozen foundation embeddings typically converge within 5 to 15 epochs.
+* **Epoch Budget:** Linear and cosine heads over frozen foundation embeddings are trained for up to 30 epochs (`params.yaml: training.epochs: 30`, completing in ~3.6 seconds on cached tensors with `early_stopping_patience=5`).
 * **Batch Size & VRAM Partitioning:**
     * **Batch Size 32-64 for Cached Embeddings:** Maximises SIMD vector throughput with minimal gradient variance.
     * **70% CUDA Memory Cap on RTX 5070 Ti:** When extracting features or training on the bare-metal host's NVIDIA GeForce RTX 5070 Ti (16 GB GDDR7 VRAM), `configure_cuda_memory_budget()` enforces `torch.cuda.set_per_process_memory_fraction(0.7)` ($11.2\,\text{GB}$ ceiling), guaranteeing an isolated $4.8\,\text{GB}$ VRAM reserve for the active INT8 ONNX serving pod.
@@ -200,7 +200,7 @@ The continuous integration and delivery pipeline defined in [`Jenkinsfile`](file
 
 * **Blackwell GPU & CUDA 12.8 / Driver 13.4 Boundary:** The bare-metal node `hive-mind` is equipped with an Intel Core i7-14700K (8 P-cores, 12 E-cores), 128 GB DDR5 RAM, and an NVIDIA GeForce RTX 5070 Ti (16 GB GDDR7 VRAM, Blackwell compute capability 12.0) running NVIDIA Driver 615.71.09 (CUDA UMD 13.4). Ephemeral GPU training agent pods (`taxon-vision-jenkins-gpu-agent`) request one time-sliced GPU slot (`nvidia.com/gpu: 1`) and execute PyTorch `cu128` kernels pinned to the 16 P-core threads (`taskset -c 0-15`).
 * **In-Cluster SeaweedFS Feature Caching:** Intermediate feature tensors (`data/embeddings/*.pt`) are pulled from and pushed to the in-cluster SeaweedFS S3 service (`local-seaweedfs` at `http://seaweedfs.taxon-vision.svc.cluster.local:8333/taxon-dvc-cache`) over NVMe loopback.
-* **Four-Gate Promotion & Zero-Downtime Rollout:** Stage 7 (`eval`) evaluates the exported INT8 ONNX model across all four promotion gates ([`promotion.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/promotion.py)). Upon passing, Jenkins triggers `kubectl rollout restart deployment/taxon-vision-api -n taxon-vision` and runs [`scripts/verify_deployment.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/verify_deployment.sh) to verify `/health`, `/health/ready`, and live Prometheus counter increments (`taxon_predictions_total`).
+* **Four-Gate Promotion & Zero-Downtime Rollout:** Stage 7 (`eval`) evaluates the exported INT8 ONNX model across all four promotion gates ([`promotion.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/promotion.py)). Upon passing, Jenkins triggers `kubectl rollout restart deployment/taxon-vision-api -n taxon-vision` and runs [`scripts/ci/verify_deployment.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/ci/verify_deployment.sh) to verify `/health`, `/health/ready`, and live Prometheus counter increments (`taxon_predictions_total`).
 
 ---
 

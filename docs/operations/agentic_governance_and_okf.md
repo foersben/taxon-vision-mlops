@@ -72,7 +72,7 @@ To prevent token waste and cognitive thrashing, AI agents do not scan the entire
 | **`@06-uncertainty-safety-engineer`** | Epistemic Uncertainty Engineer | `src/taxon_vision/uncertainty/`, `pipelines/calibrate.py` | Split Conformal Prediction ($1 - \alpha$), finite-sample quantile inflation, and Helmholtz Free Energy OOD gating. | Conformal prediction, coverage guarantees, OOD detection |
 | **`@07-active-learning-engineer`** | Active Learning & HITL Engineer | `src/taxon_vision/active_learning/`, `service/storage.py` | Margin sampling, BADGE gradient embeddings, binary max-heap `TriageQueue`, and Label Studio ingestion. | Active learning, triage ranking, human review queue |
 | **`@08-observability-engineer`** | Telemetry & Observability Engineer | `src/taxon_vision/monitoring/`, `deploy/k8s/` | Prometheus latency histograms, Wasserstein-1 embedding drift, and MMD distribution monitors. | Telemetry, Prometheus metrics, concept drift, Grafana |
-| **`@09-api-and-ui-developer`** | API & Web Interface Developer | `src/taxon_vision/service/`, `src/taxon_vision/templates/` | FastAPI machine endpoints, Jinja2 / HTMX server-rendered dashboards, and file upload validation. | REST API, FastAPI routes, web dashboard, HTMX views |
+| **`@09-api-and-ui-developer`** | API & Web Interface Developer | `src/taxon_vision/service/`, `src/taxon_vision/service/templates/` | FastAPI machine endpoints, Jinja2 / HTMX server-rendered dashboards, and file upload validation. | REST API, FastAPI routes, web dashboard, HTMX views |
 | **`@10-qa-automator`** | QA & Regression Automator | `tests/`, `tests/invariants/` | Unit test fixtures, mock S3 clients, hypothesis property tests, and statistical coverage assertions. | Test suites, regression prevention, CI assertions |
 | **`@11-docs-librarian`** | Documentation Librarian | `docs/`, `openwiki/`, `zensical.toml` | Zensical static portal maintenance, KaTeX equations, Mermaid architecture diagrams, and OKF validation. | Documentation updates, Zensical build, KaTeX equations |
 | **`@12-git-operator`** | Git Security & Release Operator | `.github/workflows/`, `scripts/ci/` | Git branch hygiene, GPG/SSH signed commit verification, semantic release tags, and PR lifecycle. | Git commits, signed tags, PR merges, release packaging |
@@ -93,8 +93,8 @@ Repository architectural standards defined in `.agents/rules/` are immutable and
     * DVC dataset immutability verified via SHA256 manifest digests.
 * **Inference Latency Invariants (`02-inference-latency-invariants.md`):**
     * Zero dynamic memory allocations on hot inference paths.
-    * Pinned ONNX Runtime I/O buffers pre-allocated during application warmup.
-    * Strict p95 latency budget: $\le 15.0\text{ ms}$ on target GPU serving profiles.
+    * Contiguous C-order NumPy buffers pre-allocated during application warmup.
+    * Strict p95 latency budget: $\le 15.0\text{ ms}$ on target GPU serving profiles (and $\le 120.0\text{ ms}$ Stage 7 CPU/CI SLA gate, with `50.38 ms` empirical CPU INT8 p95).
 * **Git Security & Signing (`03-git-security-and-signing.md`):**
     * Mandatory GPG/SSH commit signing (`git commit -S`) for local developers and automated agents. Unsigned commits are rejected by Git pre-commit hooks.
 * **Markdown Formatting Rules (`04-markdown-formatting.md`):**
@@ -120,7 +120,7 @@ Agent skills reside in `.agents/skills/` and provide specialized, deterministic 
 3. **`run-pareto-benchmarks` (`/benchmark-pareto`):** Profiles candidate backbones across accuracy, p50/p95 latency, memory footprint, and serving cost.
 4. **`active-learning-cycle` (`/active-learning-step`):** Executes sample query ranking via margin sampling, simulates human annotation ingestion from Label Studio, and triggers DVC retraining.
 5. **`doc-synchronization-pipeline` (`/doc-synchronization-pipeline`):** Re-indexes codebase changes, verifies OKF v0.2 frontmatter compliance, formats Markdown under project typography invariants, and executes strict Zensical builds.
-6. **`full-pipeline-validation` (`/validate-full-stack`):** End-to-end quality gate executing `ruff`, `mypy`, `complexipy`, unit tests, coverage verification, and the 7-stage DVC pipeline.
+6. **`full-pipeline-validation` (`/validate-full-stack`):** End-to-end quality gate executing `ruff`, `mypy`, `complexipy`, unit tests, coverage verification, and the 8-stage DVC pipeline.
 7. **`validate-okf`:** Audits all repository markdown files against the OKF v0.2 frontmatter schema and validates cross-document markdown filesystem links.
 8. **`visualize-okf`:** Parses compliant OKF markdown files and generates the interactive Cytoscape.js knowledge graph visualizer at `docs/viz.html`.
 
@@ -183,11 +183,11 @@ The following table links key architectural claims in `openwiki/` to their verif
 | **`concepts/uncertainty-and-safety.md`** | Human review triage referral on empty sets, set size $> k_{\max}$, or low confidence | [`src/taxon_vision/uncertainty/conformal.py#L76-L83`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/uncertainty/conformal.py#L76-L83) | `tests/unit/test_conformal_bounds.py` |
 | **`concepts/uncertainty-and-safety.md`** | Numerically stable Helmholtz Free Energy $E(x; T) = -T \ln \sum \exp(z_k / T)$ calculation via max-subtraction LogSumExp | [`src/taxon_vision/uncertainty/ood_detector.py#L50-L70`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/uncertainty/ood_detector.py#L50-L70) | `tests/unit/test_ood_energy.py` |
 | **`architecture/domain-and-taxa.md`** | DarwinCore taxonomic node modeling and hierarchical catalog lookup | [`src/taxon_vision/domain/taxonomy.py#L15-L45`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/domain/taxonomy.py#L15-L45) | `tests/unit/test_data_components.py` |
-| **`architecture/domain-and-taxa.md`** | Creative Commons Open License validation and commercial permissibility checks | [`src/taxon_vision/domain/license.py#L10-L35`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/domain/license.py#L10-L35) | `tests/invariants/test_license_compliance_invariant.py` |
+| **`architecture/domain-and-taxa.md`** | Creative Commons Open License validation and commercial permissibility checks | [`src/taxon_vision/domain/license.py#L10-L35`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/domain/license.py#L10-L35) | `tests/unit/test_license_filter.py` & `audit_license` |
 | **`workflows/data-ingestion-and-versioning.md`** | Paginated iNaturalist v1 REST API queries and observation record formatting | [`src/taxon_vision/data/inat_client.py#L40-L75`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/data/inat_client.py#L40-L75) | `tests/unit/test_data_components.py` |
 | **`workflows/data-ingestion-and-versioning.md`** | AWS S3 Open Data streaming and local LRU image byte caching | [`src/taxon_vision/data/s3_streamer.py#L30-L65`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/data/s3_streamer.py#L30-L65) | `tests/unit/test_data_components.py` |
-| **`workflows/model-training-and-hpo.md`** | Effective-number Class-Balanced Cross-Entropy loss computation ($E_n = \frac{1 - \beta^n}{1 - \beta}$) | [`src/taxon_vision/models/loss.py#L22-L55`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/loss.py#L22-L55) | `tests/unit/test_models_components.py` |
-| **`workflows/inference-and-optimization.md`** | Zero-allocation ONNX Runtime inference engine with pre-allocated I/O bindings | [`src/taxon_vision/inference/onnx_engine.py#L35-L85`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/inference/onnx_engine.py#L35-L85) | `tests/invariants/test_latency_budget_invariant.py` |
+| **`workflows/model-training-and-tracking.md`** | Effective-number Class-Balanced Cross-Entropy loss computation ($E_n = \frac{1 - \beta^n}{1 - \beta}$) | [`src/taxon_vision/models/loss.py#L22-L55`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/loss.py#L22-L55) | `tests/unit/test_models_components.py` |
+| **`workflows/inference-and-optimization.md`** | Zero-allocation ONNX Runtime inference engine with contiguous pre-allocated buffers | [`src/taxon_vision/inference/onnx_engine.py#L35-L85`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/inference/onnx_engine.py#L35-L85) | `tests/unit/test_onnx_exporter.py` & `tests/unit/test_quantizer.py` |
 | **`operations/deployment-and-observability.md`** | Wasserstein-1 distance approximation on representation embedding norms for drift detection | [`src/taxon_vision/monitoring/drift.py#L10-L35`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/monitoring/drift.py#L10-L35) | `tests/unit/test_monitoring.py` |
 | **`operations/deployment-and-observability.md`** | Binary max-heap priority review queue prioritizing observations with $\mathcal{O}(\log N)$ push/pop | [`src/taxon_vision/active_learning/triage_queue.py#L28-L80`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/active_learning/triage_queue.py#L28-L80) | `tests/unit/test_active_learning.py` |
 
@@ -209,13 +209,13 @@ flowchart TD
     subgraph T2["Tier 2: Integration Tests (tests/integration/)"]
         I1["FastAPI Machine Endpoints (/predict)"]
         I2["HTMX Server-Rendered Views (/dashboard)"]
-        I3["7-Stage Pipeline Orchestration (ingest -> eval)"]
+        I3["8-Stage Pipeline Orchestration (ingest -> eval)"]
     end
 
     subgraph T3["Tier 3: Invariant Tests (tests/invariants/)"]
-        N1["Conformal Coverage Guarantee (P(Y in C) >= 1 - alpha)"]
-        N2["Inference Latency SLO Budget (p95 <= 15 ms)"]
-        N3["Creative Commons Open License Compliance"]
+        N1["Conformal Coverage Guarantee (test_conformal_coverage_invariant.py)"]
+        N2["Hardware Ground-Truth Invariant (test_hardware_invariants.py)"]
+        N3["Pure Pixi Toolchain Invariant (test_pure_pixi_invariant.py)"]
     end
 
     T1 --> T2 --> T3

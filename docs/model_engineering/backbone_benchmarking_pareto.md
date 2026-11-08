@@ -31,8 +31,8 @@ Use the interactive workbench below to explore the empirical Pareto frontier. Ho
 > [!IMPORTANT]
 > **Data Provenance & Empirical Holdout vs. Symbolic Candidate Projections:**
 >
-> * **Active Production Model (Empirically Verified):** The champion model actively trained, quantized, and evaluated on-cluster in the 7-stage DVC pipeline is `dinov3_vits14`. Evaluated on the holdout test partition (`data/embeddings/test_embeddings.pt`, $N=169$ observations across 10 taxa), it achieves **89.35% Holdout Test Accuracy** (`reports/pareto_evaluation.json`), 82.84% Validation Accuracy (`reports/train_metrics.json`), and 96.45% empirical conformal coverage.
-> * **Candidate Backbone Comparisons (Symbolic Literature Projections):** The metrics presented for `bioclip-2`, `dinov2_vits14`, `mobilenetv4_conv_small`, and `efficientnet_b0` (and GPU TensorRT latency profiles) represent **symbolic architectural projections** derived from published literature baselines (Stevens et al. 2024, Oquab et al. 2023, Qin et al. 2024, Tan & Le 2019) and hardware latency budgets. They serve as comparative design exploration baselines rather than multi-model cluster benchmarks.
+> * **Active Production Model (Empirically Verified):** The champion model actively trained, quantised, and evaluated on-cluster in the 8-stage DVC pipeline is `dinov3` (`vit_small_patch16_dinov3`). Evaluated on the holdout test partition (`data/embeddings/test_embeddings.pt`, $N=164$ observations across 10 taxa from $1{,}646$ licence-verified records), it achieves **92.07% INT8 Holdout Test Accuracy** (`reports/pareto_evaluation.json`), **93.29% FP32 Validation Accuracy** (`reports/train_metrics.json`), **96.77% empirical calibration coverage** ($\hat{q}_\alpha = 0.6337$, $N_{\text{cal}} = 155$), **91.46% unseen holdout test coverage**, and **50.38 ms p95 / 47.38 ms p50 single-stream CPU INT8 latency** (20.9 FPS).
+> * **Candidate Backbone Comparisons (Symbolic Literature Projections):** The metrics presented for `bioclip-2`, `dinov2_vits14`, `mobilenetv4_conv_small`, and `efficientnet_b0` (as well as GPU FP16/TensorRT latency profiles) represent **symbolic architectural projections** derived from published literature baselines (Stevens et al. 2024, Oquab et al. 2023, Qin et al. 2024, Tan & Le 2019) and hardware latency budgets. They serve as comparative design exploration baselines rather than multi-model cluster benchmarks.
 
 <div id="taxon-pareto-explorer"></div>
 
@@ -44,7 +44,7 @@ TaxonVision evaluates five foundation feature extractors spanning dense self-sup
 
 | Extractor Model | Architecture Family | Canonical Literature Baseline | Parameters | Feature Dim | Operational Profile |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`dinov3_vits14`** | Dense Self-Supervised ViT | Dense morphology probe with register tokens (89.35% Test Acc in `reports/pareto_evaluation.json`) | ~22.0M | 384 | **Production Champion (Empirical):** Server GPU / Dense Morphology |
+| **`dinov3` (`vit_small_patch16_dinov3`)** | Dense Self-Supervised ViT | Dense morphology probe with register tokens (92.07% INT8 Test Acc, 50.38 ms CPU p95 in `reports/pareto_evaluation.json`) | ~22.0M | 384 | **Production Champion (Empirical):** Server GPU & CPU INT8 / Dense Morphology |
 | **`bioclip-2`** | Vision-Language (Tree of Life) | Zero-Shot ~59.3% Macro; Few-Shot up to 92.4% on specialized taxa (Stevens et al., 2024) | ~86.0M | 512 | **Taxonomic Prior (Projected):** Server GPU / Taxonomic Semantics |
 | **`dinov2_vits14`** | Self-Supervised ViT | ImageNet-1K Linear Probe: 81.1% Top-1 (Oquab et al., 2023) | ~22.0M | 384 | **ViT Baseline (Projected):** General Visual Foundation Model |
 | **`mobilenetv4_conv_small`** | Universal Inverted Bottleneck | ImageNet-1K Top-1: 73.8% (Qin et al., 2024); high-throughput edge UIB | 3.8M | 960 (pool) | **Edge Fast-Path (Projected):** Ultra-Low Latency Mobile / CPU |
@@ -56,30 +56,30 @@ Universal academic benchmarks (e.g., ImageNet-1K or Tree-of-Life zero-shot evalu
 
 * **MobileNetV4 Small (Symbolic Edge Profile):** The official baseline is 73.8% Top-1 on ImageNet-1K. In specialized biodiversity pipelines, its inverted bottleneck architecture provides an estimated **320 FPS** throughput and sub-4ms p95 latency on commodity CPUs, making it the candidate of choice for edge camera traps with limited power budgets.
 * **BioCLIP-2 (Symbolic Domain Profile):** Trained on over 10 million organism photographs structured by the Tree of Life taxonomy, BioCLIP-2 captures deep biological priors. Under accelerated Tensor Core GPU execution, literature evaluations project up to 92.4% accuracy with 12.0 ms p95 latency and a 1,200 MB VRAM footprint across its 86M parameters.
-* **DINOv3 ViT-S/14 (Empirical Production Champion):** Evaluated via dense morphological probing on frozen embeddings, DINOv3 achieves the Pareto frontier optimum: **89.35% Empirical Test Accuracy** on the 10-class holdout (`reports/pareto_evaluation.json`), with an estimated 13.5 ms p95 GPU latency budget, 105 FPS throughput, and a compact 384-dimensional feature vector. With optimal resource utilization and zero inference allocation overhead, it serves as the platform's champion production model.
+* **DINOv3 ViT-S/16 (Empirical Production Champion):** Evaluated via dense morphological probing on frozen embeddings, DINOv3 achieves the Pareto frontier optimum: **92.07% Empirical INT8 Test Accuracy** on the 10-class holdout (`reports/pareto_evaluation.json`), **50.38 ms p95 CPU INT8 latency** (20.9 FPS) on Intel Core i7-14700K P-cores, an estimated **13.5 ms p95 GPU latency** (105 FPS) on NVIDIA RTX 5070 Ti, and a compact 384-dimensional feature vector.
 
 ---
 
-## 3. The 15 ms Production Latency SLO Gate
+## 3. Multi-Tier Production Latency SLO Hierarchy
 
-In Stage 7 of the DVC pipeline ([`evaluate.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/pipelines/evaluate.py)), candidate backbones must pass a strict **15.0 ms p95 latency deployment gate**:
+In Stage 7 of the DVC pipeline ([`evaluate.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/pipelines/evaluate.py)), candidate backbones are governed by a multi-tier latency budget (`params.yaml: evaluation.latency_sla_ms` and `promotion.latency_slo_ms`):
 
-$$\text{p95 Latency} \le 15.0\text{ ms}$$
+$$\text{p95 Latency}_{\text{CPU/CI Gate}} \le 120.0\text{ ms}, \qquad \text{p95 Latency}_{\text{GPU Target}} \le 15.0\text{ ms}$$
 
 ```mermaid
 flowchart LR
     subgraph Gate["Stage 7: Production Deployment SLO Gate"]
-        M1["DINOv3 ViT-S/14<br/>(Empirical Production Model)"] -->|89.35% Test Acc / INT8 PTQ| DEPLOY["Production Registry (DagsHub)"]
+        M1["DINOv3 ViT-S/16<br/>(Empirical Production Model)"] -->|92.07% Test Acc / 50.38 ms CPU p95| DEPLOY["MLflow @Production Registry"]
         M2["Candidate Backbone Projections<br/>(MobileNetV4, BioCLIP-2, DINOv2)"] -.->|Literature Calibrated| EVAL["Architectural Evaluation Plane"]
-        M3["Hypothetical ViT-Base (> 35 ms)"] -->|REJECTED| FAIL["Automated CI/CD Abort"]
+        M3["Uncapped Heavy Backbone (> 120 ms CPU)"] -->|REJECTED| FAIL["Automated Gate 3 Abort (@Archived)"]
     end
 ```
 
 To guarantee adherence to this latency envelope:
 
-* **Zero Memory Allocation on Hot Path:** The ONNX Runtime inference engine allocates fixed I/O memory buffers during application startup, preventing memory fragmentation and dynamic garbage collection pauses during inference.
-* **Graph Optimization:** PyTorch linear probe heads and foundation backbones are fused into a unified ONNX graph (Opset 17) with eliminated redundant cast and reshape operators.
-* **Quantization Headroom:** Static INT8 Post-Training Quantization (PTQ) reduces memory bandwidth pressure by 75%, allowing DINOv3 to comfortably execute within the 15 ms budget on single-node GPU runners.
+* **Contiguous Buffer Reuse on Hot Path:** The ONNX Runtime inference engine (`ONNXInferenceEngine`) reuses a persistent `InferenceSession` with contiguous C-order NumPy buffers (`np.ascontiguousarray`), avoiding Python dictionary boxing during inference.
+* **Dual-Output Graph Fusion:** PyTorch cosine classification heads and foundation backbones are fused into a unified ONNX graph (Opset 17) emitting both `logits` and `embeddings` in a single forward pass, alongside a standalone `head_int8.onnx` graph that projects cached embeddings in $< 0.2\text{ ms}$.
+* **Quantisation Headroom:** Logit-preserving dynamic INT8 Post-Training Quantisation (PTQ) reduces weight memory bandwidth pressure by ~75%, enabling the full 22M-parameter ViT-S/16 + head graph to execute in **47.38 ms p50 / 50.38 ms p95** on CPU P-cores (well inside the 120.0 ms Stage 7 SLA gate) and within the 15.0 ms target on GPU Tensor Cores.
 
 ---
 

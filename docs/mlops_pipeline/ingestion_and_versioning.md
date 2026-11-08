@@ -75,7 +75,7 @@ TaxonVision-MLOps circumvents this trap via **zero-duplication streaming**:
 
 * **Zero-Disk S3 Batch Streaming:** [`S3ImageStreamer`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/data/s3_streamer.py#L16) streams image objects directly from the public AWS S3 bucket (`s3://inaturalist-open-data/`) into ephemeral RAM buffers during Stage 3 (`extract_features`) without writing raw JPEG files to local disk.
 * **Lightweight Parquet Manifests:** The local repository stores only cryptographically validated Parquet index files (`raw_manifest.parquet` and `dataset_manifest.parquet`) containing observation UUIDs, taxon IDs, source URLs, and attribution headers.
-* **Minimal Storage Footprint:** An index representing 10 million biological observations occupies less than 300 MB of disk space, whilst our curated 1,689-observation Level 1 baseline manifest occupies $< 500\,\text{KB}$.
+* **Minimal Storage Footprint:** An index representing 10 million biological observations occupies less than 300 MB of disk space, whilst our curated 1,646-observation Level 1 baseline manifest occupies $< 500\,\text{KB}$.
 
 ### Downstream Feature Extraction & Embedding Cache
 

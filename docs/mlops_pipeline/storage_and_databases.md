@@ -189,7 +189,7 @@ Large-scale computer vision workflows frequently suffer from severe network bott
 * Hosts two dedicated S3 buckets:
     * `s3://taxon-dvc-cache`: Functions as an accelerated NVMe read mirror ($< 2\,\text{ms}$ loopback latency) for intermediate feature tensors (`{train,val,cal,test}_embeddings.pt`) and manifests during cluster GPU feature extraction and Optuna HPO sweeps.
     * `s3://mlflow-artifacts`: Stores heavy MLflow 3.16.0 artefacts - including serialized `TaxonVisionPyFuncModel` bundles (`pyfunc_model`), 6 holdout diagnostic visualisations (`visualizations/*.png`), per-taxon holdout audit tables (`per_taxon_holdout_audit.json`), and standalone Evidently PCA drift reports (`drift_report.html`). Because the `mlflow-server` container is launched with `--serve-artifacts` and `--artifacts-destination s3://mlflow-artifacts`, pipeline workers upload artefacts via the standard MLflow HTTP proxy on port `5000` without needing direct S3 credentials on the client side.
-* **Storage Lock Collision Prevention:** The SeaweedFS volume daemon manages embedded LevelDB metadata stores on bare-metal `hostPath` mounts. Because LevelDB enforces strict single-writer file locks (`LOCK: Resource temporarily unavailable`), standard Kubernetes `RollingUpdate` deployments would cause new pods to crash while terminating pods still hold the file lock. Consequently, the deployment manifest ([`deploy/k8s/seaweedfs-s3.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/seaweedfs-s3.yaml)) mandates `strategy.type: Recreate`, ensuring old pods fully release volume locks before replacement pods mount the storage bus.
+* **Storage Lock Collision Prevention:** The SeaweedFS volume daemon manages embedded LevelDB metadata stores on bare-metal `hostPath` mounts. Because LevelDB enforces strict single-writer file locks (`LOCK: Resource temporarily unavailable`), standard Kubernetes `RollingUpdate` deployments would cause new pods to crash while terminating pods still hold the file lock. Consequently, the deployment manifest ([`deploy/k8s/mlops-storage-and-optuna.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/mlops-storage-and-optuna.yaml)) mandates `strategy.type: Recreate`, ensuring old pods fully release volume locks before replacement pods mount the storage bus.
 
 ### Tier 2: Cloud Sync Remote (DagsHub `s3://dvc` / `origin`)
 
@@ -205,14 +205,14 @@ In conformal prediction and safety-critical machine learning, data leakage betwe
 
 ```mermaid
 flowchart TD
-    D["dataset_manifest.parquet<br/>(N = 1,689 Validated Observations)"]
+    D["dataset_manifest.parquet<br/>(N = 1,646 Validated Observations; 1,645 Streamed)"]
 
     subgraph StratSplit["Deterministic Stratified Hash Split (PRNG Seed = 42)"]
         direction TB
-        T["Train Partition (70%): 1,182 Samples"]
-        V["Val Partition (10%): 169 Samples"]
-        C["Cal Partition (10%): 169 Samples"]
-        E["Test Partition (10%): 169 Samples"]
+        T["Train Partition (70%): 1,153 Samples"]
+        V["Val Partition (10%): 164 Samples"]
+        C["Cal Partition (10%): 164 Samples (155 Inliers)"]
+        E["Test Partition (10%): 164 Samples"]
     end
 
     D --> StratSplit

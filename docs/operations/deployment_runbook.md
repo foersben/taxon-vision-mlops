@@ -85,13 +85,13 @@ The preview/operator service is exposed to a selected external audience using tw
 ## Section 5: Dataset Scaling Horizons
 
 > [!NOTE]
-> **Data Horizon Provenance:** The Dev Baseline reflects the active verified ground truth of the repository (1,689 verified observations across 10 biological taxa in `data/manifests/dataset_manifest.parquet` filtered from 2,000 ingested records). Horizons 1 through 3 represent forward-looking architectural scaling roadmap milestones and capacity planning projections, rather than completed runs.
+> **Data Horizon Provenance:** The Dev Baseline reflects the active verified ground truth of the repository (1,646 verified observations across 10 biological taxa in `data/manifests/dataset_manifest.parquet` filtered from 2,000 ingested records). Horizons 1 through 3 represent forward-looking architectural scaling roadmap milestones and capacity planning projections, rather than completed runs.
 
 The architectural breakdown details how TaxonVision-MLOps scales across data horizons:
 
 | Horizon | Scale | Infrastructure & Architecture Details | Validation & Verification |
 | --- | --- | --- | --- |
-| Dev Baseline (Current) | 1,689 verified observations, 10 taxa | Local SQLite & disk cache | Rapid offline unit/conformal testing |
+| Dev Baseline (Current) | 1,646 verified observations, 10 taxa | Local SQLite & disk cache | Rapid offline unit/conformal testing |
 | Horizon 1 (Pilot Perimeter, Projected) | ~5,000 observations, 10 curated target taxa | Single GPU training, DVC versioning on DagsHub | Strict CC-BY/CC0 verification |
 | Horizon 2 (Regional Production, Projected) | ~50,000 observations, 100 taxa | Multi-GPU Distributed Data Parallel (DDP), S3/SeaweedFS bucket versioning | Automated concept drift detection |
 | Horizon 3 (Global Scale, Projected) | 100,000+ exemplars, ~50 TB raw imagery | Distributed zero-copy streaming with Ray Data and PyTorch WebDataset, fine-tuning foundation vision backbones (DINOv2, BioCLIP-2) | Conformal calibration on stratified holdouts |
@@ -301,7 +301,7 @@ The Traefik ingress controller on `hive-mind` manages weighted traffic distribut
     kubectl apply -f deploy/k8s/traefik-ingress.yaml
     ```
 
-* **Canary Promotion Step 2 (Full Cutover 100/0):** If Prometheus metrics confirm the challenger meets latency SLO (p95 $\le 15.0\text{ ms}$) and conformal error guarantees ($1 - \alpha \ge 0.90$), update the primary deployment image tag to the challenger release and reset weights to 100/0.
+* **Canary Promotion Step 2 (Full Cutover 100/0):** If Prometheus metrics confirm the challenger meets the latency SLO (p95 $\le 15.0\text{ ms}$ on GPU / $\le 120.0\text{ ms}$ CPU SLA gate, `50.38 ms` empirical CPU INT8) and conformal error guarantees ($1 - \alpha \ge 0.90$), update the primary deployment image tag to the challenger release and reset weights to 100/0.
 * **Instant Emergency Rollback:** If the challenger experiences elevated error rates, instantly route 100% of traffic back to the stable baseline:
 
     ```bash
@@ -332,21 +332,23 @@ The platform enforces a two-tier representation drift detection strategy across 
 
 ### Offline DVC Stage 3.5 Training Gate (`data_drift`)
 
-Before training a new linear head during `dvc repro`, Stage 3.5 ([`src/taxon_vision/pipelines/data_drift.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/pipelines/data_drift.py)) compares the newly extracted `train_embeddings.pt` against `reference_train_embeddings.pt`:
+Before training a new linear head during `dvc repro`, Stage 3.5 ([`src/taxon_vision/pipelines/data_drift.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/pipelines/data_drift.py)) compares the newly extracted `train_embeddings.pt` against `data/reference/reference_train_embeddings.pt`:
 
 ```bash
 pixi run -e dev python -m taxon_vision.pipelines.data_drift \
+    --reference data/reference/reference_train_embeddings.pt \
     --current data/embeddings/train_embeddings.pt \
-    --reference data/embeddings/reference_train_embeddings.pt \
-    --output reports/data_drift.json
+    --metrics-out reports/data_drift.json \
+    --report-out reports/data_drift_report.html
 ```
 
-And empirical drift thresholds are calibrated from the training manifold via:
+And empirical drift thresholds are calibrated from the calibration and holdout test manifolds via:
 
 ```bash
 pixi run -e dev python -m taxon_vision.pipelines.calibrate_drift \
-    --reference data/embeddings/train_embeddings.pt \
-    --config-out config/drift_config.yaml
+    --reference-source data/embeddings/cal_embeddings.pt \
+    --test-source data/embeddings/test_embeddings.pt \
+    --output-config config/drift_config.yaml
 ```
 
 ---
@@ -365,9 +367,9 @@ kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/st
 kubectl rollout status deployment -n argocd argocd-server --timeout=120s
 ```
 
-### Declarative Application CRD
+### Declarative Application CRD (Reference Template)
 
-Create and apply the GitOps Application definition (`deploy/k8s/argocd-application.yaml`):
+Create and apply a GitOps Application definition (reference template for future enterprise GitOps migration; active K3s continuous delivery is orchestrated via Jenkins as detailed in Section 8):
 
 ```yaml
 apiVersion: argoproj.io/v1alpha1

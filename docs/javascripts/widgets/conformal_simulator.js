@@ -14,13 +14,13 @@
 
         function updateSimulation() {
             const alpha = parseFloat(alphaSlider.value) || 0.05;
-            const energyThresh = energySlider ? parseFloat(energySlider.value) : -2.28;
+            const energyThresh = energySlider ? parseFloat(energySlider.value) : -2.40;
             const temp = tempSlider ? parseFloat(tempSlider.value) : 1.0;
 
             const coverageTarget = (1.0 - alpha) * 100;
-            const qHat = (1.0 - alpha * 0.92).toFixed(4);
-            const avgSetSize = (1.0 + Math.pow(alpha, -0.42) * 0.45).toFixed(2);
-            const triageRate = (alpha * 100 * 0.85 + (energyThresh < -12.0 ? 5.2 : 1.8)).toFixed(1);
+            const qHat = (1.0 - alpha * 7.326).toFixed(4);
+            const avgSetSize = (1.0 + Math.pow(alpha, -0.15) * 0.01).toFixed(2);
+            const triageRate = (alpha * 100 * 0.36 + (energyThresh < -12.0 ? 5.2 : 0.03)).toFixed(1);
 
             // Update DOM displays
             const alphaValDisplay = document.getElementById("sim-alpha-val");

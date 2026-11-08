@@ -4,18 +4,18 @@ title: Architecture, Database & Parameter Reference
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
 version: 1.0
-description: Unified technical reference mapping 7-stage Epistemic Diamond DAG pipelines, storage technologies, and exhaustive parameters across TaxonVision.
+description: Unified technical reference mapping 8-stage Epistemic Diamond DAG pipelines, storage technologies, and exhaustive parameters across TaxonVision.
 tags: [architecture, pipelines, database, storage, parameters, reference]
 verified: {by: process:okf-updater}
 ---
 
 # Architecture, Database & Parameter Reference
 
-This document provides a single, unified reference covering the 7-stage Epistemic Diamond DAG pipeline topology, the storage and database technologies across all pipeline tiers, and an exhaustive configuration parameter dictionary.
+This document provides a single, unified reference covering the 8-stage Epistemic Diamond DAG pipeline topology, the storage and database technologies across all pipeline tiers, and an exhaustive configuration parameter dictionary.
 
 ## 1. Pipeline Call & Subsystem Dependency Topology
 
-The following diagram maps the execution flow of all 7 stages in `src/taxon_vision/pipelines/` to their underlying classes and submodules across `data`, `models`, `inference`, `uncertainty`, `monitoring`, and `service`:
+The following diagram maps the execution flow of all 8 stages in `src/taxon_vision/pipelines/` to their underlying classes and submodules across `data`, `models`, `inference`, `uncertainty`, `monitoring`, and `service`:
 
 ```mermaid
 flowchart TD
@@ -43,6 +43,13 @@ flowchart TD
         P3 --> C3B --> C3C --> A3
     end
 
+    subgraph S35["Stage 3.5: Training Data Drift Gate"]
+        P35["pipelines.data_drift"]
+        C35A["monitoring.drift<br/>.evaluate_two_tier_drift"]
+        A35["reports/<br/>data_drift.json"]
+        A3 --> P35 --> C35A --> A35
+    end
+
     subgraph S4["Stage 4: Head Training"]
         P4["pipelines.train"]
         C4A["models.training.runner<br/>.run_training_pipeline"]
@@ -51,6 +58,7 @@ flowchart TD
         C4D["models.training.tracking<br/>.MLflowTracker"]
         A4["models/checkpoints/<br/>head.pt"]
         A3 --> P4 --> C4A
+        A35 --> P4
         C4A --> C4B
         C4A --> C4C
         C4A --> C4D --> A4
@@ -115,8 +123,8 @@ The TaxonVision platform relies on specialized, purpose-built storage technologi
 | **SQLite (PVC)** | `/workspace/optuna/optuna_studies.db` | Relational SQL DB | Persistent RDB backend for Optuna Bayesian hyperparameter studies, ensuring search trials resume seamlessly across pod restarts. |
 | **SeaweedFS S3** | `s3://taxon-dvc-cache` (`local-seaweedfs`) | S3 Object Store API | Fast in-cluster object store deployed on host NVMe storage inside Kubernetes (`strategy.type: Recreate`), acting as an accelerated local NVMe cache ($< 2\text{ ms}$). |
 | **Redis Ephemeral Cache** | In-Cluster Pod (`redis-ephemeral:6379`) | Raw specimen image uploads for CAM | In-memory key-value cache with 15-minute rolling TTL (`SETEX 900`) and 64 MB LRU ceiling, eliminating multi-pod serving split-brain. |
-| **DagsHub DVC S3** | `s3://dvc` (`origin`) | Content-Addressed Hash | Cryptographically hashed DVC remote repository storing canonical cloud mirror for all 8 pipeline artifacts (~25 MB total). |
-| **MLflow Model Registry** | Remote DagsHub Registry | Artifacts + Schema Metadata | Centralized experiment tracking server storing training loss curves, Macro PR-AUC scores, and model versions with input/output `TensorSpec` contracts. |
+| **DagsHub DVC S3** | `s3://dvc` (`origin`) | Content-Addressed Hash | Cryptographically hashed DVC remote repository storing canonical cloud mirror for all pipeline artefacts (~25 MB total). |
+| **MLflow 3.x Model Registry** | Self-Hosted Server (`http://mlflow-server:5000`) & SQLite Fallback | Artefacts + Schema Metadata | Centralised experiment tracking server (PostgreSQL + SeaweedFS S3) storing loss curves, `LoggedModel` lineage, and `@Production` / `@Challenger` registry aliases. |
 | **Prometheus / Evidently** | `/metrics` endpoint | Time-Series Metrics & JSON | Real-time monitoring of p95 latency SLOs, HTTP status distributions, prediction set cardinality, and feature representation drift. |
 
 ## 3. Exhaustive System Parameter Reference
@@ -135,17 +143,17 @@ Root `/params.yaml` serves as the authoritative single source of truth for all p
 | `feature_extraction` | `val_split` | `float` | `0.10` | Fraction of data allocated to validation split. |
 | `feature_extraction` | `cal_split` | `float` | `0.10` | Fraction of data allocated to calibration split. |
 | `feature_extraction` | `test_split` | `float` | `0.10` | Fraction of data allocated to held-out test split. |
-| `training` | `epochs` | `int` | `5` | Training epochs for linear head probing. |
+| `training` | `epochs` | `int` | `30` | Training epochs for linear head probing. |
 | `training` | `batch_size` | `int` | `32` | Mini-batch size during head optimization. |
 | `training` | `learning_rate` | `float` | `0.001` | Initial learning rate for AdamW optimizer. |
 | `training` | `weight_decay` | `float` | `0.0001` | L2 weight regularization penalty factor. |
 | `training` | `cb_beta` | `float` | `0.9999` | Class-Balanced Loss effective sample weighting parameter. |
 | `training` | `tune` | `bool` | `false` | Whether to execute Optuna Bayesian tuning before training. |
-| `export` | `quantize_int8` | `bool` | `true` | Whether to apply static INT8 quantization on exported ONNX. |
+| `export` | `quantize_int8` | `bool` | `true` | Whether to apply INT8 quantization on exported ONNX. |
 | `conformal` | `alpha` | `float` | `0.05` | Maximum allowable marginal error rate ($1 - \alpha = 0.95$). |
 | `conformal` | `min_confidence` | `float` | `0.60` | Minimum top-1 probability to bypass human triage. |
 | `conformal` | `ood_tpr` | `float` | `0.95` | True positive rate on calibration data for OOD energy threshold. |
-| `evaluation` | `latency_sla_ms` | `float` | `25.0` | Production p95 latency SLO threshold in milliseconds. |
+| `evaluation` | `latency_sla_ms` | `float` | `120.0` | Stage 7 pipeline promotion p95 latency SLA ceiling in milliseconds (50.38 ms empirical CPU INT8; <= 15.0 ms GPU target). |
 
 ### 3.2 System Runtime Defaults (`config/default_config.yaml`)
 
@@ -182,8 +190,8 @@ Defines default service infrastructure, model registry mappings, and connection 
 | `model` | `ood_temperature` | `float` | `1.0` | Softmax temperature for Helmholtz free energy. |
 | `model` | `ood_energy_threshold` | `float` | `-2.40` | Default energy threshold before calibration. |
 | `model` | `flagged_storage_dir` | `str` | `"data/flagged_observations"` | Directory for human triage observation queue. |
-| `mlflow` | `tracking_uri` | `str` | Remote DagsHub URI | DagsHub MLflow tracking endpoint. |
-| `mlflow` | `experiment_name` | `str` | `"taxon-vision-head-tuning"` | Experiment grouping name. |
+| `mlflow` | `tracking_uri` | `str` | `"http://127.0.0.1:5000"` | Self-hosted MLflow 3.x tracking server URI (with SQLite fallback). |
+| `mlflow` | `experiment_name` | `str` | `"taxon-vision-head-training"` | Primary experiment grouping name. |
 | `streaming` | `http_max_retries` | `int` | `5` | Maximum retry attempts on transient network failures. |
 | `streaming` | `http_backoff_factor` | `float` | `0.5` | Exponential retry backoff multiplier. |
 | `streaming` | `http_max_connections` | `int` | `16` | Maximum concurrent HTTP connection pool sockets. |
@@ -192,12 +200,6 @@ Defines default service infrastructure, model registry mappings, and connection 
 | `streaming` | `min_extraction_success_ratio` | `float` | `0.95` | Threshold ratio of successful downloads required. |
 | `optuna` | `optuna_storage_uri` | `str` | SQLite URI | SQLAlchemy URI for Optuna study database. |
 | `optuna` | `optuna_study_prefix` | `str` | `"taxon_vision"` | Prefix for generated study names. |
-| `service` | `name` | `str` | `"TaxonVision Service"` | Service title exposed via OpenAPI documentation. |
-| `service` | `version` | `str` | `"0.1.0"` | Semantic API release version. |
-| `service` | `port` | `int` | `8000` | Default TCP bind port. |
-| `service` | `host` | `str` | `"0.0.0.0"` | Network interface listener address. |
-| `service` | `max_image_upload_bytes` | `int` | `15728640` | Maximum allowed multipart image upload size (15 MB). |
-| `service` | `allowed_mime_types` | `list[str]` | `['image/jpeg', 'image/png', 'image/webp']` | Accepted MIME image types for classification. |
 | `service` | `image_cache_max_items` | `int` | `100` | In-memory cache capacity before LRU eviction. |
 | `service` | `image_cache_ttl_seconds` | `float` | `900.0` | Monotonic time-to-live for ephemeral uploads (15 minutes). |
 | `service` | `ui_top_k_candidates` | `int` | `5` | Maximum prediction candidate drawers rendered on UI. |

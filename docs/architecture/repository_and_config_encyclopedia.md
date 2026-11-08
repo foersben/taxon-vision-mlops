@@ -24,7 +24,7 @@ sources:
 In traditional web services, configuration management is straightforward: application settings live in a YAML file and are overridden by container environment variables at deployment time. Machine learning operations (MLOps) introduce two additional sources of state that complicate this picture:
 
 1. **DVC-Tracked Experiment Hyperparameters (`params.yaml`):** Data Version Control (DVC) tracks individual YAML keys (`training.learning_rate`, `conformal.alpha`, `model.extractor`) to compute pipeline invalidation graphs. If runtime service settings (such as HTTP ports or PostgreSQL pool sizes) were mixed into `params.yaml`, changing a web port would needlessly invalidate cached GPU feature embeddings or trigger model retraining.
-2. **Empirically Calibrated Statistical Artefacts (`conformal_config.yaml` & `drift_config.yaml`):** Neither human operators nor static defaults can guess the exact finite-sample conformal quantile ($\hat{q}_\alpha = 0.8405$), the negative Helmholtz free energy cutoff ($\tau_{\text{OOD}} = -2.2792$), or the 99th-percentile null bootstrap Wasserstein-1 drift ceiling ($\tau_{W_1} = 0.12812$). These values are *outputs* of calibration stages that subsequently become *inputs* to the production inference and monitoring services.
+2. **Empirically Calibrated Statistical Artefacts (`conformal_config.yaml` & `drift_config.yaml`):** Neither human operators nor static defaults can guess the exact finite-sample conformal quantile ($\hat{q}_\alpha = 0.6337$), the negative Helmholtz free energy cutoff ($\tau_{\text{OOD}} = -2.4029$), or the 99th-percentile null bootstrap Wasserstein-1 drift ceiling ($\tau_{W_1} = 0.12812$). These values are *outputs* of calibration stages that subsequently become *inputs* to the production inference and monitoring services.
 
 To reconcile static system defaults, DVC experiment hyperparameters, calibrated statistical thresholds, and containerised runtime overrides without hardcoded magic numbers (Rule 00), TaxonVision-MLOps implements a deterministic **3-Tier Configuration Precedence Pyramid** in [`src/taxon_vision/config/loader.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/config/loader.py) validated by strict Pydantic v2 models in [`src/taxon_vision/config/schemas.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/config/schemas.py).
 
@@ -116,7 +116,7 @@ Every parameter declared in root [`params.yaml`](file:///home/benni/Documents/an
 | `feature_extraction.val_split` | `float: 0.10` | `extract_features` | Holdout ratio allocated to validation embeddings for monitoring loss during probe training ($10\%$). |
 | `feature_extraction.cal_split` | `float: 0.10` | `extract_features` | Holdout ratio allocated exclusively to the Split Conformal Prediction calibration set ($10\%$). |
 | `feature_extraction.test_split` | `float: 0.10` | `extract_features` | Holdout ratio allocated to the final evaluation test split for empirical coverage verification ($10\%$). |
-| `training.epochs` | `int: 5` | `train` | Total optimisation epochs over the pre-extracted training embeddings tensor. |
+| `training.epochs` | `int: 30` | `train` | Total optimisation epochs over the pre-extracted training embeddings tensor. |
 | `training.batch_size` | `int: 32` | `train` | Batch size fed to the cosine classifier head during gradient descent. |
 | `training.learning_rate` | `float: 0.001` | `train` | Initial learning rate for the AdamW optimiser ($10^{-3}$). |
 | `training.weight_decay` | `float: 0.0001` | `train` | $L_2$ weight regularisation factor ($10^{-4}$) to prevent overfitting on extracted embeddings. |
@@ -139,13 +139,13 @@ calibration:
   method: split-conformal
   nominal_coverage: 0.95
   alpha: 0.05
-  q_hat: 0.8405
-  tau_ood: -2.2792
-  ood_energy_threshold: -2.2792
+  q_hat: 0.6337
+  tau_ood: -2.4029
+  ood_energy_threshold: -2.4029
   max_set_size_for_auto_accept: 3
   empty_set_action: route_to_human_triage
   min_confidence_threshold: 0.6
-  num_calibration_samples: 169
+  num_calibration_samples: 155
 ```
 
 ### Empirical Bootstrap Drift Calibration Output (`config/drift_config.yaml`)

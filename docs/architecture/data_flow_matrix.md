@@ -102,7 +102,7 @@ flowchart TD
 ### D. Conformal Calibration Schema (`config/conformal_config.yaml`)
 
 * `alpha` (`float`): Nominal error rate ($\alpha = 0.05 \implies 95\%$ target marginal coverage).
-* `q_hat` (`float`): Calibrated non-conformity score quantile threshold ($\hat{q}_\alpha = 0.8405$).
-* `tau_ood` / `ood_energy_threshold` (`float`): Negative Helmholtz free energy cutoff ($-2.2792$) calibrated at $95\%$ in-distribution TPR.
+* `q_hat` (`float`): Calibrated non-conformity score quantile threshold ($\hat{q}_\alpha = 0.6337$).
+* `tau_ood` / `ood_energy_threshold` (`float`): Negative Helmholtz free energy cutoff ($-2.4029$) calibrated at $95\%$ in-distribution TPR.
 * `max_set_size_for_auto_accept` (`int`): Maximum conformal set cardinality ($k_{\text{max}} = 3$) before routing to human expert triage.
-* `num_calibration_samples` (`int`): Calibration split cardinality ($n = 169$).
+* `num_calibration_samples` (`int`): In-distribution calibration sample cardinality ($n = 155$ inliers retained from the $164$-sample calibration split after $95\%$ TPR OOD filtering).
