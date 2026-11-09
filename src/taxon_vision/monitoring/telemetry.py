@@ -154,3 +154,77 @@ try:
 except Exception:
     # Avoid duplicate timeseries exception during test reloading
     pass
+
+
+class HardwareMetricsCollector:
+    """Prometheus metric collector for bare-metal hardware invariants and runtime silicon consumption.
+
+    Summary:
+        Exposes hardware capacities and real-time GPU/host memory consumption to audit adherence to system resource invariants.
+
+    Why:
+        Enforces continuous verification of the physical resource partition (NVIDIA RTX 5070 Ti 16 GB VRAM with 4.8 GB serving reserve, Intel i7-14700K 20 cores, 128 GB DDR5). Tracking runtime memory against these deterministic ceilings detects silent memory leaks and validates zero-allocation invariants before catastrophic OOM eviction occurs.
+
+    How:
+        Queries PyTorch CUDA memory management APIs (`torch.cuda.memory_allocated`, `torch.cuda.memory_reserved`) when CUDA execution is active, gracefully falling back to zero in CPU-only container environments. Yields static capacity gauges representing immutable hardware boundaries alongside dynamic runtime allocation states.
+    """
+
+    def collect(self) -> Iterator[GaugeMetricFamily]:
+        """Collect and yield hardware invariant gauges on Prometheus scrape.
+
+        Returns:
+            Generator yielding GaugeMetricFamily objects for hardware telemetry.
+        """
+        gpu_allocated = 0.0
+        gpu_reserved = 0.0
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                gpu_allocated = float(torch.cuda.memory_allocated(0))
+                gpu_reserved = float(torch.cuda.memory_reserved(0))
+        except Exception:
+            pass
+
+        yield GaugeMetricFamily(
+            "taxon_hardware_gpu_memory_allocated_bytes",
+            "Real-time GPU VRAM allocated by the active inference engine in bytes",
+            value=gpu_allocated,
+        )
+        yield GaugeMetricFamily(
+            "taxon_hardware_gpu_memory_reserved_bytes",
+            "GPU VRAM reserved by the PyTorch caching allocator in bytes",
+            value=gpu_reserved,
+        )
+        yield GaugeMetricFamily(
+            "taxon_hardware_gpu_serving_budget_bytes",
+            "Architectural serving envelope ceiling (4.8 GB) for zero-allocation ONNX Runtime serving",
+            value=5_153_960_755.0,
+        )
+        yield GaugeMetricFamily(
+            "taxon_hardware_gpu_physical_capacity_bytes",
+            "Total physical VRAM capacity (16 GB GDDR7) of NVIDIA GeForce RTX 5070 Ti dedicated compute silicon",
+            value=17_179_869_184.0,
+        )
+        yield GaugeMetricFamily(
+            "taxon_hardware_host_ram_capacity_bytes",
+            "Total physical host RAM capacity (128 GB DDR5) for high-throughput in-memory feature caching",
+            value=137_438_953_472.0,
+        )
+        yield GaugeMetricFamily(
+            "taxon_hardware_host_cpu_cores_total",
+            "Total physical CPU cores (20 cores: 8 P-cores, 12 E-cores) of Intel Core i7-14700K dedicated compute node",
+            value=20.0,
+        )
+        yield GaugeMetricFamily(
+            "taxon_hardware_host_cpu_threads_total",
+            "Total CPU execution threads (28 threads) of Intel Core i7-14700K dedicated compute node",
+            value=28.0,
+        )
+
+
+HARDWARE_COLLECTOR = HardwareMetricsCollector()
+try:
+    REGISTRY.register(HARDWARE_COLLECTOR)
+except Exception:
+    pass

@@ -4,7 +4,20 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "id": null,
-  "links": [],
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Hardware Invariants & Silicon Telemetry",
+      "tooltip": "Switch to Infrastructure & Hardware Invariants Dashboard",
+      "type": "link",
+      "url": "/d/hardware_invariants"
+    }
+  ],
   "liveNow": false,
   "panels": [
     {
