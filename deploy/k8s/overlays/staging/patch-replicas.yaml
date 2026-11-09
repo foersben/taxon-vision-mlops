@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taxon-vision-serving
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+      - name: api-service
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "512Mi"
+            nvidia.com/gpu: "1"
+          limits:
+            cpu: "1"
+            memory: "1024Mi"
+            nvidia.com/gpu: "1"

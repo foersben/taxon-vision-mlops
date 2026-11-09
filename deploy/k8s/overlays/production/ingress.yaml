@@ -1,0 +1,13 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: taxon-vision-production-ingress
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`taxon.benjamin-foerster.eu`) || PathPrefix(`/`)
+      kind: Rule
+      services:
+        - name: taxon-vision-serving
+          port: 8000

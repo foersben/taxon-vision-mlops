@@ -139,7 +139,7 @@ jobs:
   build-and-push-container:
     name: Build & Publish Serving Container (GHCR)
     needs: [quality-gate, cognitive-complexity]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -166,9 +166,9 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=develop,enable=${{ github.ref == 'refs/heads/develop' }}
             type=sha,prefix=sha-
-
       - name: Build and Push Container Image
         uses: docker/build-push-action@v6
         with:

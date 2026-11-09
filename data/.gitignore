@@ -4,4 +4,6 @@
 /optuna
 /seaweedfs
 /airflow
+/postgres
+/logs
 *.pt
