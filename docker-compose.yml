@@ -89,6 +89,7 @@ services:
       - ./data/flagged_observations:/app/data/flagged_observations
       - ./models/checkpoints:/app/models/checkpoints
       - ./data/sample:/app/data/sample
+      - ./data/embeddings:/app/data/embeddings:ro
     depends_on:
       seaweedfs:
         condition: service_started

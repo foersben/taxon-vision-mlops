@@ -51,7 +51,7 @@
       "type": "stat",
       "targets": [
         {
-          "expr": "sum(rate(taxon_predictions_total{status=~\"error|unavailable\"}[5m])) / clamp_min(sum(rate(taxon_predictions_total[5m])), 1e-9)",
+          "expr": "(sum(rate(taxon_predictions_total{status=~\"error|unavailable\"}[5m])) or vector(0)) / clamp_min(sum(rate(taxon_predictions_total[5m])), 1e-9)",
           "refId": "A"
         }
       ]

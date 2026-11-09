@@ -341,6 +341,11 @@ clean-docker:
 logs:
 	docker compose logs -f
 
+# Dispatch synthetic prediction traffic and trigger statistical drift evaluation to warm Grafana
+[group("app")]
+simulate-traffic count="60":
+	pixi run --frozen -e dev python scripts/maintenance/simulate_traffic.py --count {{count}}
+
 # Validate live Kubernetes deployment health, endpoints, and inference
 [group("app")]
 verify-deployment namespace="taxon-vision":
