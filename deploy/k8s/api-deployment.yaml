@@ -46,9 +46,25 @@ spec:
         - name: TAXON_SERVICE__REDIS_URL
           value: "redis://redis-ephemeral.taxon-vision.svc.cluster.local:6379/0"
         - name: TAXON_OPTUNA__OPTUNA_STORAGE_URI
-          value: "postgresql+psycopg://optuna:taxon_optuna_pass@postgres.taxon-vision.svc.cluster.local:5432/optuna"
+          valueFrom:
+            secretKeyRef:
+              name: taxon-vision-secrets
+              key: OPTUNA_STORAGE_URI
         - name: TAXON_TELEMETRY__DATABASE_URL
-          value: "postgresql+psycopg://telemetry:taxon_telemetry_pass@postgres.taxon-vision.svc.cluster.local:5432/telemetry"
+          valueFrom:
+            secretKeyRef:
+              name: taxon-vision-secrets
+              key: TELEMETRY_DATABASE_URL
+        - name: TAXON_INTERNAL_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: taxon-vision-secrets
+              key: INTERNAL_API_TOKEN
+        - name: TAXON_RETRAIN_WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: taxon-vision-secrets
+              key: RETRAIN_WEBHOOK_SECRET
         resources:
           requests:
             cpu: "200m"

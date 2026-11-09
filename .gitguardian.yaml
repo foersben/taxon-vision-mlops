@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Benjamin Förster
+# SPDX-License-Identifier: MIT
+# GitGuardian Configuration
+# Whitelists committed development fixtures and mock secrets
+
+version: 2
+secret:
+  ignored_paths:
+    - "docker-compose.yml"
+    - "deploy/docker/*"

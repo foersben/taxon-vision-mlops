@@ -162,7 +162,7 @@ openssl rand -hex 32
 openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 24
 ```
 
-* **Git Commit Signing Key (Ed25519 SSH Signature per Rule 03):**
+* **Git Commit Signing Key (Ed25519 SSH Cryptographic Signature):**
 
 ```bash
 ssh-keygen -t ed25519 -C "benni@taxon-vision.local" -f ~/.ssh/taxon_commit_signing
