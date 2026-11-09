@@ -55,14 +55,16 @@ services:
       - "--metrics.prometheus.addserviceslabels=true"
       - "--accesslog=true"
       - "--accesslog.format=json"
+      - "--accesslog.filepath=/var/log/traefik/access.log"
       - "--api.dashboard=true"
       - "--api.insecure=true"
     ports:
-      - "${TRAEFIK_HTTP_PORT:-8088}:80"       # Public HTTP entrypoint (default 8088 avoids rootless port 80 permission denied)
-      - "8081:8080"   # Traefik Web UI & Dashboard
-      - "9100:9100"   # Traefik Prometheus metrics port
+      - "${TRAEFIK_HTTP_PORT:-8088}:80" # Public HTTP entrypoint (default 8088 avoids rootless port 80 permission denied)
+      - "8081:8080" # Traefik Web UI & Dashboard
+      - "9100:9100" # Traefik Prometheus metrics port
     volumes:
       - "${DOCKER_SOCK:-/run/user/1000/podman/podman.sock}:/var/run/docker.sock:ro"
+      - ./data/logs/traefik:/var/log/traefik
     restart: unless-stopped
 
   app:
@@ -232,6 +234,8 @@ services:
     volumes:
       - ./config/promtail.yaml:/etc/promtail/promtail.yaml:ro
       - ./data/logs:/var/log/app:ro
+      - ./data/logs/traefik:/var/log/traefik:ro
+      - ./data/airflow/logs:/var/log/airflow:ro
     depends_on:
       - loki
     restart: unless-stopped

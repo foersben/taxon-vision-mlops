@@ -33,3 +33,44 @@ scrape_configs:
       - timestamp:
           source: timestamp
           format: RFC3339Nano
+  # Airflow DAG & Task Logs
+  - job_name: taxon-vision-airflow
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: taxon-vision
+          service: airflow
+          __path__: /var/log/airflow/**/*.log
+
+    pipeline_stages:
+      # Extract dag_id, run_id, and task_id dynamically from the folder structure
+      - regex:
+          source: filename
+          expression: '/var/log/airflow/dag_id=(?P<dag_id>[^/]+)/run_id=(?P<run_id>[^/]+)/task_id=(?P<task_id>[^/]+)/.*\.log'
+      - labels:
+          dag_id:
+          task_id:
+
+  # Traefik Ingress Access Logs
+  - job_name: taxon-vision-traefik
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: taxon-vision
+          service: traefik
+          __path__: /var/log/traefik/*.log
+
+    pipeline_stages:
+      # Parse Traefik's JSON access log properties
+      - json:
+          expressions:
+            client_addr: ClientAddr
+            downstream_status: DownstreamStatus
+            duration_ns: Duration
+            request_path: RequestPath
+            router_name: RouterName
+      - timestamp:
+          source: time
+          format: RFC3339Nano
