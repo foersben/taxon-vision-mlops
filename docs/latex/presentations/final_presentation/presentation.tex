@@ -13,19 +13,20 @@
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{array}
+\usepackage{ragged2e}
 \usepackage{tikz}
 \usetikzlibrary{shapes.geometric,arrows.meta,positioning,fit,calc,backgrounds,shadows.blur}
 \usepackage{xcolor}
 \usepackage[most]{tcolorbox}
 
-% --- Modern Color Palette ---
-\definecolor{SlateDark}{HTML}{0F172A}    % Primary dark slate
+% --- Modern Professional Color Palette ---
+\definecolor{SlateDark}{HTML}{0F172A}    % Primary dark slate header
 \definecolor{SlateMid}{HTML}{1E293B}     % Card border / secondary
 \definecolor{SlateLight}{HTML}{F8FAFC}   % Card background fill
 \definecolor{BlueAccent}{HTML}{2563EB}   % Vibrant engineering blue
 \definecolor{GreenAccent}{HTML}{059669}  % Emerald success / verification
-\definecolor{AmberAccent}{HTML}{D97706}  % Warm amber / alert
-\definecolor{RoseAccent}{HTML}{E11D48}   % Rose red / danger / gate
+\definecolor{AmberAccent}{HTML}{D97706}  % Warm amber / telemetry / alert
+\definecolor{RoseAccent}{HTML}{E11D48}   % Rose red / gatekeeper / danger
 \definecolor{PurpleAccent}{HTML}{7C3AED} % Royal purple / active learning
 \definecolor{TealAccent}{HTML}{0D9488}   % Teal / data engineering
 \definecolor{TextMain}{HTML}{1E293B}     % Primary text
@@ -45,7 +46,7 @@
 
 \setbeamertemplate{frametitle}{%
     \nointerlineskip
-    \begin{beamercolorbox}[wd=\paperwidth,ht=32pt,dp=8pt,leftskip=14pt,rightskip=14pt]{frametitle}
+    \begin{beamercolorbox}[wd=\paperwidth,ht=30pt,dp=7pt,leftskip=14pt,rightskip=14pt]{frametitle}
         {\large\bfseries\insertframetitle}
         \ifx\insertframesubtitle\@empty\else
             \\[2pt]{\footnotesize\color{TextMuted!40}\insertframesubtitle}
@@ -64,32 +65,38 @@
 % --- Custom tcolorbox Card Environments ---
 \newtcolorbox{card}[1][]{
     enhanced, colback=SlateLight, colframe=SlateMid!30,
-    boxrule=0.5pt, arc=2.5pt, left=4pt, right=4pt, top=3pt, bottom=3pt,
+    boxrule=0.5pt, arc=2.5pt, left=5pt, right=5pt, top=3pt, bottom=3pt,
+    fontupper=\footnotesize\RaggedRight,
     fuzzy shadow={0.8pt}{-0.8pt}{0pt}{0.1pt}{black!8}, #1
 }
 \newtcolorbox{bluecard}[1][]{
     enhanced, colback=BlueAccent!5, colframe=BlueAccent!60,
-    boxrule=0.5pt, arc=2.5pt, left=4pt, right=4pt, top=3pt, bottom=3pt,
+    boxrule=0.5pt, arc=2.5pt, left=5pt, right=5pt, top=3pt, bottom=3pt,
+    fontupper=\footnotesize\RaggedRight,
     fuzzy shadow={0.8pt}{-0.8pt}{0pt}{0.1pt}{black!8}, #1
 }
 \newtcolorbox{greencard}[1][]{
     enhanced, colback=GreenAccent!5, colframe=GreenAccent!60,
-    boxrule=0.5pt, arc=2.5pt, left=4pt, right=4pt, top=3pt, bottom=3pt,
+    boxrule=0.5pt, arc=2.5pt, left=5pt, right=5pt, top=3pt, bottom=3pt,
+    fontupper=\footnotesize\RaggedRight,
     fuzzy shadow={0.8pt}{-0.8pt}{0pt}{0.1pt}{black!8}, #1
 }
 \newtcolorbox{ambercard}[1][]{
     enhanced, colback=AmberAccent!5, colframe=AmberAccent!60,
-    boxrule=0.5pt, arc=2.5pt, left=4pt, right=4pt, top=3pt, bottom=3pt,
+    boxrule=0.5pt, arc=2.5pt, left=5pt, right=5pt, top=3pt, bottom=3pt,
+    fontupper=\footnotesize\RaggedRight,
     fuzzy shadow={0.8pt}{-0.8pt}{0pt}{0.1pt}{black!8}, #1
 }
 \newtcolorbox{rosecard}[1][]{
     enhanced, colback=RoseAccent!5, colframe=RoseAccent!60,
-    boxrule=0.5pt, arc=2.5pt, left=4pt, right=4pt, top=3pt, bottom=3pt,
+    boxrule=0.5pt, arc=2.5pt, left=5pt, right=5pt, top=3pt, bottom=3pt,
+    fontupper=\footnotesize\RaggedRight,
     fuzzy shadow={0.8pt}{-0.8pt}{0pt}{0.1pt}{black!8}, #1
 }
 \newtcolorbox{purplecard}[1][]{
     enhanced, colback=PurpleAccent!5, colframe=PurpleAccent!60,
-    boxrule=0.5pt, arc=2.5pt, left=4pt, right=4pt, top=3pt, bottom=3pt,
+    boxrule=0.5pt, arc=2.5pt, left=5pt, right=5pt, top=3pt, bottom=3pt,
+    fontupper=\footnotesize\RaggedRight,
     fuzzy shadow={0.8pt}{-0.8pt}{0pt}{0.1pt}{black!8}, #1
 }
 
@@ -104,7 +111,7 @@
     },
     nodecard/.style={
         rectangle, rounded corners=3pt, draw=SlateMid!40, fill=SlateLight,
-        line width=0.6pt, inner sep=5pt, align=left, font=\scriptsize
+        line width=0.6pt, inner sep=4.5pt, align=left, font=\scriptsize
     }
 }
 
@@ -153,36 +160,35 @@
 \begin{frame}{The Core Problem}{Real-World Biodiversity Computer Vision at Scale}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
-            \begin{bluecard}
+            \begin{card}
                 \textbf{\color{BlueAccent} Ecological Reality vs. Benchmark Datasets}\\[2pt]
-                \textbullet\ \textbf{Massive Scale:} Millions of citizen-science observations from iNaturalist.\\
-                \textbullet\ \textbf{Severe Class Imbalance:} A few common species have thousands of images; thousands of rare taxa have $< 10$ photos.\\
-                \textbullet\ \textbf{Non-Stationary Environments:} Lighting, seasonal foliage, camera sensors, and geographic shifts continuously distort the visual manifold.
-            \end{bluecard}
-            \vspace{0.2cm}
-            \begin{rosecard}
+                \textbullet\ \textbf{Massive Scale:} Millions of citizen observations from iNaturalist.\\[1pt]
+                \textbullet\ \textbf{Severe Class Imbalance:} A few common species have 10,000+ photos; thousands of rare taxa have $< 10$ records.\\[1pt]
+                \textbullet\ \textbf{Non-Stationary Manifold:} Lighting, seasonal changes, camera sensors, and geographic shifts continuously distort visual features.\\[5pt]
                 \textbf{\color{RoseAccent} The High Cost of Misclassification}\\[2pt]
                 \textbullet\ In ecology and conservation, silent model hallucinations (e.g. confusing an endangered species with an invasive one) cause real harm.
-            \end{rosecard}
+            \end{card}
         \end{column}
         \begin{column}{0.48\textwidth}
             \centering
-            \begin{tcolorbox}[enhanced, colback=white, colframe=SlateMid!30, boxrule=0.6pt, arc=3pt]
-                \textbf{The Long-Tail Problem}\\[2pt]
-                \begin{tikzpicture}[x=0.045cm, y=1.2cm]
-                    \draw[->, thick, color=SlateMid] (0,0) -- (105,0) node[right, font=\tiny] {Species Rank};
-                    \draw[->, thick, color=SlateMid] (0,0) -- (0,1.5) node[above, font=\tiny] {Observations};
-                    \draw[smooth, domain=1:100, color=RoseAccent, line width=1.5pt] 
-                        plot (\x, {1.4 / (\x^0.6)});
-                    \node[pill, fill=RoseAccent!15, draw=RoseAccent] at (70, 0.8) {Tail: $80\%$ Rare Taxa};
+            \begin{tcolorbox}[enhanced, colback=white, colframe=SlateMid!30, boxrule=0.5pt, arc=3pt, left=4pt, right=4pt, top=2pt, bottom=2pt]
+                \textbf{\scriptsize The Long-Tail Challenge}\\[2pt]
+                \centering
+                \begin{tikzpicture}[x=0.038cm, y=0.9cm]
+                    \draw[->, thick, color=SlateMid] (0,0) -- (95,0) node[right, font=\tiny] {Rank};
+                    \draw[->, thick, color=SlateMid] (0,0) -- (0,1.4) node[above, font=\tiny] {Images};
+                    \draw[smooth, domain=1:90, color=RoseAccent, line width=1.4pt] 
+                        plot (\x, {1.3 / (\x^0.58)});
+                    \node[pill, fill=RoseAccent!15, draw=RoseAccent] at (58, 0.75) {Tail: $80\%$ Rare Taxa};
                 \end{tikzpicture}
             \end{tcolorbox}
-            \begin{card}
-                \textbf{Core Engineering Mandates:}\\
-                \textbullet\ \textbf{Zero Split Leakage:} Mathematically pure validation.\\
-                \textbullet\ \textbf{Guaranteed Coverage:} Reject overconfident guesses.\\
-                \textbullet\ \textbf{Closed-Loop Adaptation:} Learn from expert feedback.
-            \end{card}
+            \vspace{0.1cm}
+            \begin{bluecard}
+                \textbf{\color{BlueAccent} Core Architecture Mandates}\\[1pt]
+                \textbullet\ \textbf{Zero Split Leakage:} Mathematically pure validation.\\[1pt]
+                \textbullet\ \textbf{Guaranteed Coverage:} Reject overconfident guesses.\\[1pt]
+                \textbullet\ \textbf{Closed-Loop Adaptation:} Automated retraining.
+            \end{bluecard}
         \end{column}
     \end{columns}
 \end{frame}
@@ -195,21 +201,21 @@
         \begin{column}{0.48\textwidth}
             \begin{rosecard}
                 \textbf{\color{RoseAccent} Traditional Prototype / Toy ML}\\[3pt]
-                \textbullet\ \textbf{Unversioned Data:} Ad-hoc CSVs, manual train/test splits.\\
-                \textbullet\ \textbf{Redundant Compute:} Re-extracting heavy vision backbones repeatedly on every notebook run.\\
-                \textbullet\ \textbf{Raw Softmax Guesses:} Uncalibrated probabilities, forced to predict even on unseen out-of-distribution species.\\
-                \textbullet\ \textbf{Silent Model Decay:} Zero drift monitoring; performance degrades unnoticed over time.\\
-                \textbullet\ \textbf{Manual Retraining:} Hand-crafted scripts triggered arbitrarily when accuracy drops.
+                \textbullet\ \textbf{Unversioned Data:} Ad-hoc CSVs, non-reproducible manual train/test splits.\\[2pt]
+                \textbullet\ \textbf{Redundant Compute:} Heavy vision backbones re-extracted repeatedly on every notebook run.\\[2pt]
+                \textbullet\ \textbf{Raw Softmax Guesses:} Uncalibrated probabilities; silent failure on out-of-distribution species.\\[2pt]
+                \textbullet\ \textbf{Silent Model Decay:} Zero feature logging; distribution drift degrades performance unnoticed.\\[2pt]
+                \textbullet\ \textbf{Manual Retraining:} Hand-crafted scripts triggered arbitrarily on gut feeling.
             \end{rosecard}
         \end{column}
         \begin{column}{0.48\textwidth}
             \begin{greencard}
                 \textbf{\color{GreenAccent} TaxonVision Production MLOps}\\[3pt]
-                \textbullet\ \textbf{Cryptographic DVC Lineage:} Pure 7-stage DAG tracked by MD5 content hashes in \texttt{dvc.lock}.\\
-                \textbullet\ \textbf{Feature Caching:} Pre-computed foundation embeddings cached on NVMe; head training takes seconds.\\
-                \textbullet\ \textbf{Split Conformal Prediction:} Provable coverage sets ($1-\alpha \ge 95\%$) with Helmholtz energy out-of-distribution gating.\\
-                \textbullet\ \textbf{Automated Telemetry \& Drift:} PostgreSQL feature logging, Prometheus metrics, and hourly Evidently drift reports.\\
-                \textbullet\ \textbf{Automated Feedback Loop:} Grafana alert $\to$ Airflow DAG $\to$ Bare-Metal Jenkins GPU retraining.
+                \textbullet\ \textbf{Cryptographic DVC Lineage:} Pure 7-stage DAG tracked by content hashes in \texttt{dvc.lock}.\\[2pt]
+                \textbullet\ \textbf{Feature Caching:} Pre-computed foundation embeddings cached on NVMe; head trains in $<5$s.\\[2pt]
+                \textbullet\ \textbf{Split Conformal Prediction:} Provable coverage sets ($1-\alpha \ge 95\%$) with Helmholtz energy OOD gating.\\[2pt]
+                \textbullet\ \textbf{Automated Telemetry:} PostgreSQL feature logging, Prometheus metrics, and hourly Evidently drift reports.\\[2pt]
+                \textbullet\ \textbf{Closed-Loop Feedback:} Grafana alert $\to$ Airflow DAG $\to$ Bare-Metal Jenkins GPU retraining.
             \end{greencard}
         \end{column}
     \end{columns}
@@ -272,7 +278,8 @@
         \draw[flowarrow] (serv) -- (obs);
         \draw[dasharrow] (serv.south) -- ++(0,-0.3) -| (loop.north);
         \draw[retrainarrow] (obs.south) -- ++(0,-0.3) -| ([xshift=3.5cm]loop.north);
-        \draw[flowarrow, draw=PurpleAccent, line width=1.1pt] (loop.west) -| (data.south);
+        % Route purple arrow cleanly around the outer margin to avoid overlapping loop text
+        \draw[flowarrow, draw=PurpleAccent, line width=1.1pt] (loop.west) -- ++(-0.4, 0) |- (data.west);
     \end{tikzpicture}
 \end{frame}
 
@@ -284,11 +291,11 @@
         \begin{column}{0.48\textwidth}
             \begin{greencard}
                 \textbf{\color{GreenAccent} Pipeline 1: Epistemic Diamond (Production Fast Path)}\\[3pt]
-                \textbullet\ \textbf{Target:} Real-time, ultra-low latency HTTP classification.\\
-                \textbullet\ \textbf{Model:} Frozen vision trunk + Class-Balanced cosine head quantised to INT8 ONNX.\\
+                \textbullet\ \textbf{Target:} Real-time, ultra-low latency HTTP classification.\\[2pt]
+                \textbullet\ \textbf{Model:} Frozen vision trunk + Class-Balanced cosine head quantised to INT8 ONNX.\\[2pt]
                 \textbullet\ \textbf{SLO Ceilings:}
                 \begin{itemize}\scriptsize
-                    \item CPU forward pass: $\le 15\,\text{ms}$ (p95).
+                    \item CPU forward pass: $\le 15\,\text{ms}$ (p95 on P-cores).
                     \item End-to-end API roundtrip: $\le 25\,\text{ms}$ (p95).
                 \end{itemize}
                 \textbullet\ \textbf{Epistemic Shield:} Evaluates conformal prediction sets and flags ambiguity instantly.
@@ -297,9 +304,9 @@
         \begin{column}{0.48\textwidth}
             \begin{purplecard}
                 \textbf{\color{PurpleAccent} Pipeline 2: Taxonomic Knowledge Graph \& VLM}\\[3pt]
-                \textbullet\ \textbf{Target:} Diagnostic triage for highly ambiguous or unseen specimens.\\
-                \textbullet\ \textbf{Engine:} In-memory LanceDB vector index + DuckDB biological hierarchy + Qwen2-VL.\\
-                \textbullet\ \textbf{Zero Retraining:} Exemplars and new taxonomic taxa are inserted dynamically without updating neural weights.\\
+                \textbullet\ \textbf{Target:} Diagnostic triage for highly ambiguous or unseen specimens.\\[2pt]
+                \textbullet\ \textbf{Engine:} In-memory LanceDB vector index + DuckDB biological hierarchy + Qwen2-VL.\\[2pt]
+                \textbullet\ \textbf{Zero Retraining:} Exemplars and new taxonomic taxa are inserted dynamically without updating neural weights.\\[2pt]
                 \textbullet\ \textbf{Off-Hot-Path:} Dispatched asynchronously when Pipeline 1 flags epistemic uncertainty.
             \end{purplecard}
         \end{column}
@@ -312,19 +319,16 @@
 \begin{frame}{Data Engineering \& Open Licensing}{Strict Compliance and Zero-Copy S3 Streaming}
     \begin{columns}[T]
         \begin{column}{0.52\textwidth}
-            \begin{bluecard}
+            \begin{card}
                 \textbf{\color{BlueAccent} Open-Access Citizen Science Pipeline}\\[2pt]
-                \textbullet\ \textbf{Upstream Storage:} Direct HTTP/S3 streaming from Amazon Open Data: \texttt{s3://inaturalist-open-data/}.\\
-                \textbullet\ \textbf{Zero-Copy Memory Transfers:} Parquet metadata loaded into Apache Arrow IPC tables; filtered with embedded DuckDB.\\
-                \textbullet\ \textbf{Ephemeral Imagery:} Specimen JPEGs are streamed into memory, cropped/normalised, and immediately discarded -- never stored as redundant raw image files on disk.
-            \end{bluecard}
-            \vspace{0.15cm}
-            \begin{ambercard}
+                \textbullet\ \textbf{Upstream Storage:} Direct S3 streaming from Amazon Open Data: \texttt{s3://inaturalist-open-data/}.\\[1pt]
+                \textbullet\ \textbf{Zero-Copy Transfers:} Parquet metadata loaded into Apache Arrow IPC tables; filtered with embedded DuckDB.\\[1pt]
+                \textbullet\ \textbf{Ephemeral Imagery:} Specimen JPEGs are streamed into memory, cropped/normalised, and immediately discarded -- never stored as redundant raw image files on disk.\\[5pt]
                 \textbf{\color{AmberAccent} Legal Whitelist \& Attribution Gate (Rule 05)}\\[2pt]
-                \textbullet\ \textbf{Permitted:} \texttt{CC0}, \texttt{CC-BY}, \texttt{CC-BY-NC}.\\
-                \textbullet\ \textbf{Rejected:} \texttt{All-Rights-Reserved}, \texttt{CC-BY-ND}.\\
+                \textbullet\ \textbf{Permitted:} \texttt{CC0}, \texttt{CC-BY}, \texttt{CC-BY-NC}.\\[1pt]
+                \textbullet\ \textbf{Rejected:} \texttt{All-Rights-Reserved}, \texttt{CC-BY-ND}.\\[1pt]
                 \textbullet\ \textbf{Attribution Invariant:} Photographer names and licences are cryptographically tracked and presented on every UI card.
-            \end{ambercard}
+            \end{card}
         \end{column}
         \begin{column}{0.44\textwidth}
             \centering
@@ -348,67 +352,94 @@
 \begin{frame}{The Epistemic Diamond DAG}{Reproducible 7-Stage Pipeline with Zero Split Leakage}
     \centering
     \begin{tikzpicture}[
-        scale=0.92, every node/.style={transform shape},
-        node distance=0.4cm and 0.45cm
+        scale=0.86, every node/.style={transform shape}
     ]
-        \node[nodecard, fill=TealAccent!10, draw=TealAccent] (raw) {\textbf{1. \texttt{ingest}}\\\scriptsize \texttt{raw\_manifest.parquet}};
-        \node[nodecard, fill=AmberAccent!10, draw=AmberAccent, right=of raw] (lic) {\textbf{2. \texttt{audit\_license}}\\\scriptsize \texttt{dataset\_manifest.parquet}};
-        \node[nodecard, fill=BlueAccent!10, draw=BlueAccent, right=of lic] (feat) {\textbf{3. \texttt{extract\_features}}\\\scriptsize 4 Stratified Splits};
+        % Left Ingestion Chain (y=0.0)
+        \node[nodecard, fill=TealAccent!10, draw=TealAccent, text width=2.2cm] (raw) at (0, 0) {
+            \textbf{1. \texttt{ingest}}\\\scriptsize \texttt{raw\_manifest}
+        };
+        \node[nodecard, fill=AmberAccent!10, draw=AmberAccent, text width=2.2cm] (lic) at (2.8, 0) {
+            \textbf{2. \texttt{audit\_license}}\\\scriptsize Verified Parquet
+        };
+        \node[nodecard, fill=BlueAccent!10, draw=BlueAccent, text width=2.3cm] (feat) at (5.7, 0) {
+            \textbf{3. \texttt{extract\_features}}\\\scriptsize 384-D Tensors
+        };
         
-        % 4 splits
-        \node[pill, fill=BlueAccent!15, draw=BlueAccent, above right=0.1cm and 0.6cm of feat] (sp_tr) {Train (70\%)};
-        \node[pill, fill=BlueAccent!15, draw=BlueAccent, right=0.6cm of feat] (sp_val) {Val (10\%)};
-        \node[pill, fill=PurpleAccent!15, draw=PurpleAccent, below right=0.1cm and 0.6cm of feat] (sp_cal) {Cal (10\%)};
-        \node[pill, fill=GreenAccent!15, draw=GreenAccent, below=0.55cm of sp_cal] (sp_test) {Test (10\%)};
+        % The Epistemic Diamond Splits (Column at x=8.2)
+        \node[pill, fill=BlueAccent!15, draw=BlueAccent, text width=1.6cm] (sp_tr) at (8.2, 1.2) {Train (70\%)};
+        \node[pill, fill=BlueAccent!15, draw=BlueAccent, text width=1.6cm] (sp_val) at (8.2, 0.4) {Val (10\%)};
+        \node[pill, fill=PurpleAccent!15, draw=PurpleAccent, text width=1.6cm] (sp_cal) at (8.2, -0.4) {Cal (10\%)};
+        \node[pill, fill=GreenAccent!15, draw=GreenAccent, text width=1.6cm] (sp_test) at (8.2, -1.4) {Test (10\%)};
         
-        \node[nodecard, fill=GreenAccent!10, draw=GreenAccent, right=2.8cm of feat] (train) {\textbf{4. \texttt{train}}\\\scriptsize \texttt{head.pt} (CB-Loss)};
-        \node[nodecard, fill=SlateMid!10, draw=SlateDark, right=of train] (onnx) {\textbf{5. \texttt{export\_onnx}}\\\scriptsize \texttt{model\_int8.onnx}};
-        \node[nodecard, fill=PurpleAccent!10, draw=PurpleAccent, below=0.4cm of onnx] (cal) {\textbf{6. \texttt{calibrate}}\\\scriptsize Quantile $\hat{q}$ \& $\tau_{\text{energy}}$};
-        \node[nodecard, fill=RoseAccent!10, draw=RoseAccent, below=0.4cm of train] (eval) {\textbf{7. \texttt{evaluate}}\\\scriptsize 4-Gate Promotion};
+        % Tier 1: Head Training (x=11.1, y=0.8) & ONNX Export (x=13.8, y=0.8)
+        \node[nodecard, fill=GreenAccent!10, draw=GreenAccent, text width=2.1cm] (train) at (11.0, 0.8) {
+            \textbf{4. \texttt{train}}\\\scriptsize CB-Loss Head
+        };
+        \node[nodecard, fill=SlateMid!10, draw=SlateDark, text width=2.1cm] (onnx) at (13.7, 0.8) {
+            \textbf{5. \texttt{export\_onnx}}\\\scriptsize INT8 Dual Graph
+        };
         
+        % Tier 2: Calibration (x=13.7, y=-0.4)
+        \node[nodecard, fill=PurpleAccent!10, draw=PurpleAccent, text width=2.1cm] (cal) at (13.7, -0.4) {
+            \textbf{6. \texttt{calibrate}}\\\scriptsize Quantile $\hat{q}$ \& $\tau_{\text{energy}}$
+        };
+        
+        % Tier 3: Four-Gate Evaluation & Promotion (x=13.7, y=-1.4)
+        \node[nodecard, fill=RoseAccent!10, draw=RoseAccent, text width=2.1cm] (eval) at (13.7, -1.4) {
+            \textbf{7. \texttt{evaluate}}\\\scriptsize 4-Gate Verdict
+        };
+        
+        % Ingestion flow
         \draw[flowarrow] (raw) -- (lic);
         \draw[flowarrow] (lic) -- (feat);
+        
+        % Diamond split distribution
         \draw[flowarrow] (feat.east) -- (sp_tr.west);
         \draw[flowarrow] (feat.east) -- (sp_val.west);
         \draw[flowarrow] (feat.east) -- (sp_cal.west);
         \draw[flowarrow] (feat.east) -- (sp_test.west);
         
+        % Training consumption
         \draw[flowarrow] (sp_tr.east) -- (train.west);
         \draw[flowarrow] (sp_val.east) -- (train.west);
         \draw[flowarrow] (train) -- (onnx);
-        \draw[flowarrow] (onnx) -- (cal);
+        
+        % Calibration consumption
+        \draw[flowarrow] (onnx.south) -- (cal.north);
         \draw[flowarrow] (sp_cal.east) -- (cal.west);
-        \draw[flowarrow] (cal) -- (eval);
+        
+        % Evaluation & Promotion consumption (Strict orthogonal flow)
+        \draw[flowarrow] (cal.south) -- (eval.north);
         \draw[flowarrow] (sp_test.east) -- (eval.west);
     \end{tikzpicture}
     
-    \vspace{0.3cm}
+    \vspace{0.2cm}
     \begin{bluecard}
         \centering
-        \textbf{Strict Separation of Concerns:} Model updates use solely the \textbf{Train} split; early stopping uses \textbf{Val}; Conformal quantiles are calculated exclusively on \textbf{Cal}; final promotion verdict is rendered on the holdout \textbf{Test} split. Zero leakage!
+        \textbf{Strict Separation of Concerns (Rule 01):} Model updates use solely the \textbf{Train} split; early stopping uses \textbf{Val}; Conformal quantiles are calculated exclusively on \textbf{Cal}; final promotion verdict is rendered on the holdout \textbf{Test} split. Zero leakage!
     \end{bluecard}
 \end{frame}
 
 % ==============================================================================
-% SLIDE 8: Dual-Tier Storage & DVC Topology
+% SLIDE 8: Dual-Tier Storage Topology
 % ==============================================================================
 \begin{frame}{Dual-Tier Storage Topology}{Cloud Collaboration (DagsHub) vs. Local Serving Economics}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
             \begin{bluecard}
                 \textbf{\color{BlueAccent} Tier 1: Cloud Collaboration (DagsHub)}\\[3pt]
-                \textbullet\ \textbf{DVC Remote (\texttt{origin}):} Hosted on DagsHub S3 (\texttt{s3://dvc}).\\
-                \textbullet\ \textbf{Purpose:} Immutable cloud archive for manifests, embeddings, and production ONNX graphs.\\
-                \textbullet\ \textbf{GitHub Actions CI:} Pulls verified checkpoints using \texttt{DAGSHUB\_TOKEN} to run unit tests without accessing private cluster nodes.\\
+                \textbullet\ \textbf{DVC Remote (\texttt{origin}):} Hosted on DagsHub S3 (\texttt{s3://dvc}).\\[2pt]
+                \textbullet\ \textbf{Purpose:} Immutable cloud archive for manifests, embeddings, and production ONNX graphs.\\[2pt]
+                \textbullet\ \textbf{GitHub Actions CI:} Pulls verified checkpoints using \texttt{DAGSHUB\_TOKEN} to run unit tests without accessing private cluster nodes.\\[2pt]
                 \textbullet\ \textbf{MLflow 2.x Mirror:} Public web dashboard for open scientific reproducibility.
             \end{bluecard}
         \end{column}
         \begin{column}{0.48\textwidth}
             \begin{greencard}
                 \textbf{\color{GreenAccent} Tier 2: In-Cluster Storage (Workstation)}\\[3pt]
-                \textbullet\ \textbf{SeaweedFS S3 (\texttt{local-seaweedfs}):} High-throughput S3 store running directly on local NVMe.\\
-                \textbullet\ \textbf{Zero Egress Costs:} Staging 100,000s of feature embeddings incurs zero cloud network latency or billing.\\
-                \textbullet\ \textbf{Self-Hosted MLflow 3.x + PostgreSQL 16:} Private high-performance tracking backend powering live Bayesian Optuna sweeps and model lineage.\\
+                \textbullet\ \textbf{SeaweedFS S3 (\texttt{local-seaweedfs}):} High-throughput S3 store running directly on local NVMe.\\[2pt]
+                \textbullet\ \textbf{Zero Egress Costs:} Staging 100,000s of feature embeddings incurs zero cloud network latency or billing.\\[2pt]
+                \textbullet\ \textbf{Self-Hosted MLflow 3.x + PostgreSQL 16:} Private high-performance tracking backend powering live Bayesian Optuna sweeps and model lineage.\\[2pt]
                 \textbullet\ \textbf{Instant Pod Mounts:} Serving pods load model weights directly over cluster loopback.
             \end{greencard}
         \end{column}
@@ -423,10 +454,10 @@
         \begin{column}{0.48\textwidth}
             \begin{card}
                 \textbf{\color{SlateDark} Physical Hardware Ground Truth (Rule 07)}\\[3pt]
-                \textbullet\ \textbf{GPU:} NVIDIA GeForce RTX 5070 Ti (16 GB GDDR7 VRAM, Blackwell architecture, CUDA runtime 12.8+).\\
-                \textbullet\ \textbf{CPU:} Intel Core i7-14700K (20 cores / 28 threads: 8 Performance-cores, 12 Efficient-cores).\\
-                \textbullet\ \textbf{RAM:} 128 GB DDR5 system memory for in-memory embedding caches.\\
-                \textbullet\ \textbf{Storage:} 2 TB PCIe Gen4 NVMe SSD running BTRFS with transparent compression (\texttt{zstd:3}).\\
+                \textbullet\ \textbf{GPU:} NVIDIA GeForce RTX 5070 Ti (16 GB GDDR7 VRAM, Blackwell architecture, CUDA runtime 12.8+).\\[2pt]
+                \textbullet\ \textbf{CPU:} Intel Core i7-14700K (20 cores / 28 threads: 8 Performance-cores, 12 Efficient-cores).\\[2pt]
+                \textbullet\ \textbf{RAM:} 128 GB DDR5 system memory for in-memory embedding caches.\\[2pt]
+                \textbullet\ \textbf{Storage:} 2 TB PCIe Gen4 NVMe SSD running BTRFS with transparent compression (\texttt{zstd:3}).\\[2pt]
                 \textbullet\ \textbf{OS:} Ubuntu 26.04 LTS on LUKS-encrypted root.
             \end{card}
         \end{column}
@@ -438,7 +469,7 @@
                     \item Threads \texttt{0-15} (P-cores): Hot ONNX numerical matrix inference.
                     \item Threads \texttt{16-27} (E-cores): Asynchronous disk I/O, Arrow streaming, and telemetry scraping.
                 \end{itemize}
-                \textbullet\ \textbf{GPU Memory Partitioning:} PyTorch memory budget capped at $70\%$ ($11.2$\,GB) for training; $4.8$\,GB strictly reserved for INT8 serving.\\
+                \textbullet\ \textbf{GPU Memory Partitioning:} PyTorch memory budget capped at $70\%$ ($11.2$\,GB) for training; $4.8$\,GB strictly reserved for INT8 serving.\\[2pt]
                 \textbullet\ \textbf{Non-CoW Storage Allocation (\texttt{chattr +C}):} Eliminates database and DVC block fragmentation.
             \end{bluecard}
         \end{column}
@@ -453,12 +484,12 @@
         \begin{column}{0.50\textwidth}
             \begin{bluecard}
                 \textbf{\color{BlueAccent} Decoupled Vision Architecture}\\[2pt]
-                \textbullet\ \textbf{Frozen Trunk:} Foundation vision backbone (DINOv2/v3 ViT-Small, $D=384$).\\
-                \textbullet\ \textbf{Lightweight Head:} Cosine-similarity classification head mapping embeddings to species logits.\\
+                \textbullet\ \textbf{Frozen Trunk:} Foundation vision backbone (DINOv2/v3 ViT-Small, $D=384$).\\[2pt]
+                \textbullet\ \textbf{Lightweight Head:} Cosine-similarity classification head mapping embeddings to species logits.\\[2pt]
                 \textbullet\ \textbf{The Feature Caching Insight:}
                 \begin{itemize}\scriptsize
                     \item Passing images through a 22-million-parameter vision transformer takes minutes.
-                    \item Once pre-computed, the representations never change during head training!
+                    \item Once pre-computed, visual representations never change during head training!
                     \item Feature extraction runs \textbf{once}; embeddings are cached to disk as \texttt{.pt} tensors.
                 \end{itemize}
                 \textbullet\ \textbf{Result:} Head training runs in $< 5$ seconds!
@@ -486,35 +517,36 @@
 \begin{frame}{Tackling Class Imbalance: Class-Balanced Loss}{Effective Number of Samples: Intuition Over Raw Counts}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
-            \begin{ambercard}
-                \textbf{\color{AmberAccent} The Pitfall of Inverse Frequency ($1/N$)}\\[3pt]
-                \textbullet\ Simple weighting by $1/N$ fails dramatically when the majority class has $10{,}000$ photos and the minority class has $5$.\\
-                \textbullet\ The loss gradient becomes violently noisy, destroying the representation for common species.
-            \end{ambercard}
-            \vspace{0.2cm}
-            \begin{bluecard}
-                \textbf{\color{BlueAccent} The Intuition of "Effective Samples"}\\[3pt]
-                \textbullet\ The first 5 photos of a butterfly teach the model unique wing patterns and angles.\\
-                \textbullet\ The $10{,}000$th photo of the same butterfly adds almost zero new visual information due to massive pixel overlap.\\
+            \begin{card}
+                \textbf{\color{AmberAccent} The Pitfall of Inverse Frequency ($1/N$)}\\[2pt]
+                \textbullet\ Weighting by $1/N$ fails dramatically when majority classes have 10,000+ photos and rare taxa have 5.\\[1pt]
+                \textbullet\ Gradients become violently noisy, destroying common representations.\\[5pt]
+                \textbf{\color{BlueAccent} The Intuition of "Effective Samples"}\\[2pt]
+                \textbullet\ The first 5 photos of a butterfly teach unique wing patterns and angles.\\[1pt]
+                \textbullet\ The 10,000th photo adds almost zero new visual information due to massive pixel overlap.\\[1pt]
                 \textbullet\ We weight classes by their \textbf{effective visual volume}, not raw counts!
-            \end{bluecard}
+            \end{card}
         \end{column}
         \begin{column}{0.48\textwidth}
             \centering
-            \begin{card}
-                \textbf{Diminishing Returns of Sample Size}\\[2pt]
-                \begin{tikzpicture}[x=0.045cm, y=0.75cm]
-                    \draw[->, thick, color=SlateMid] (0,0) -- (105,0) node[right, font=\tiny] {Raw Count $N$};
-                    \draw[->, thick, color=SlateMid] (0,0) -- (0,1.4) node[above, font=\tiny] {Effective $E_N$};
-                    \draw[smooth, domain=0:100, color=BlueAccent, line width=1.4pt] 
-                        plot (\x, {1.2 * (1 - exp(-0.04 * \x))});
-                    \draw[dashed, color=TextMuted] (0, 1.2) -- (100, 1.2);
-                    \node[pill, fill=BlueAccent!15, draw=BlueAccent] at (60, 0.6) {Saturates at Volume Limit};
-                \end{tikzpicture}\\[3pt]
-                \textbf{Optuna Bayesian Hyperparameter Sweep:}\\
-                \textbullet\ Automatically balances uniform and inverse-frequency weights.\\
+            \begin{tcolorbox}[enhanced, colback=white, colframe=SlateMid!30, boxrule=0.5pt, arc=3pt, left=4pt, right=4pt, top=2pt, bottom=2pt]
+                \textbf{\scriptsize Diminishing Returns of Sample Size}\\[2pt]
+                \centering
+                \begin{tikzpicture}[x=0.038cm, y=0.65cm]
+                    \draw[->, thick, color=SlateMid] (0,0) -- (95,0) node[right, font=\tiny] {$N$};
+                    \draw[->, thick, color=SlateMid] (0,0) -- (0,1.3) node[above, font=\tiny] {$E_N$};
+                    \draw[smooth, domain=0:90, color=BlueAccent, line width=1.4pt] 
+                        plot (\x, {1.15 * (1 - exp(-0.045 * \x))});
+                    \draw[dashed, color=TextMuted] (0, 1.15) -- (90, 1.15);
+                    \node[pill, fill=BlueAccent!15, draw=BlueAccent] at (55, 0.55) {Saturates at Volume Limit};
+                \end{tikzpicture}
+            \end{tcolorbox}
+            \vspace{0.1cm}
+            \begin{bluecard}
+                \textbf{\color{BlueAccent} Optuna Bayesian Sweep}\\[1pt]
+                \textbullet\ Balances uniform and inverse-frequency weights.\\[1pt]
                 \textbullet\ Empirical optimum: $\beta = 0.995927$ in checkpoints.
-            \end{card}
+            \end{bluecard}
         \end{column}
     \end{columns}
 \end{frame}
@@ -527,8 +559,8 @@
         \begin{column}{0.50\textwidth}
             \begin{greencard}
                 \textbf{\color{GreenAccent} Production Quantization \& Latency Budgets}\\[3pt]
-                \textbullet\ \textbf{Dual-Output ONNX Export:} Single forward pass outputs both classification logits and normalized 384-D feature embeddings.\\
-                \textbullet\ \textbf{INT8 Dynamic Quantization:} Calibrated on holdout calibration split; guarantees top-1 accuracy degradation $\le 0.5\%$.\\
+                \textbullet\ \textbf{Dual-Output ONNX Export:} Single forward pass outputs both classification logits and normalized 384-D feature embeddings.\\[2pt]
+                \textbullet\ \textbf{INT8 Dynamic Quantization:} Calibrated on holdout calibration split; guarantees top-1 accuracy degradation $\le 0.5\%$.\\[2pt]
                 \textbullet\ \textbf{Zero-Allocation Hot Path (Rule 02):}
                 \begin{itemize}\scriptsize
                     \item Pre-allocated contiguous C-order NumPy input/output buffers.
@@ -559,17 +591,14 @@
 \begin{frame}{Epistemic Safety: The Problem with Softmax}{Why Deep Neural Networks Fail Silently in Nature}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
-            \begin{rosecard}
-                \textbf{\color{RoseAccent} The Illusion of "Confidence"}\\[3pt]
-                \textbullet\ Softmax forces class probabilities to sum to $1.0$ ($100\%$).\\
-                \textbullet\ When presented with an unseen invasive species, a blank lens, or an accidental photo of a car, standard models do \textbf{not} say "I don't know".\\
-                \textbullet\ Instead, they hallucinate with $98\%$ confidence on whatever class happens to trigger the highest activation!
-            \end{rosecard}
-            \vspace{0.2cm}
-            \begin{bluecard}
-                \textbf{\color{BlueAccent} The Production Requirement}\\[3pt]
-                \textbullet\ We need a rigorous, mathematically guaranteed safety envelope that rejects false confidence before predictions reach end users.
-            \end{bluecard}
+            \begin{card}
+                \textbf{\color{RoseAccent} The Illusion of "Confidence"}\\[2pt]
+                \textbullet\ Softmax forces class probabilities to sum to $1.0$ ($100\%$).\\[1pt]
+                \textbullet\ When presented with an unseen invasive species, a blank lens, or an accidental photo of a car, standard models do \textbf{not} say "I don't know".\\[1pt]
+                \textbullet\ Instead, they hallucinate with $98\%$ confidence on whatever class happens to trigger the highest activation!\\[5pt]
+                \textbf{\color{BlueAccent} The Production Safety Requirement}\\[2pt]
+                \textbullet\ We need a mathematically guaranteed safety envelope that rejects false confidence before predictions reach end users.
+            \end{card}
         \end{column}
         \begin{column}{0.48\textwidth}
             \centering
@@ -593,9 +622,9 @@
         \begin{column}{0.50\textwidth}
             \begin{bluecard}
                 \textbf{\color{BlueAccent} The Conformal Prediction Idea}\\[3pt]
-                \textbullet\ Instead of forcing a single guessed species label, the model outputs an \textbf{adaptive prediction set}.\\
-                \textbullet\ The user defines a safety requirement: e.g. $\mathbf{95\%}$ coverage ($\alpha = 0.05$).\\
-                \textbullet\ \textbf{Mathematical Guarantee (Rule 06):} The true species is mathematically guaranteed to be inside the prediction set $\ge 95\%$ of the time!\\
+                \textbullet\ Instead of forcing a single guessed species label, the model outputs an \textbf{adaptive prediction set}.\\[2pt]
+                \textbullet\ The user defines a safety requirement: e.g. $\mathbf{95\%}$ coverage ($\alpha = 0.05$).\\[2pt]
+                \textbullet\ \textbf{Mathematical Guarantee (Rule 06):} The true species is mathematically guaranteed to be inside the prediction set $\ge 95\%$ of the time!\\[2pt]
                 \textbullet\ No assumptions on data distribution; calibrated strictly on holdout calibration split.
             \end{bluecard}
         \end{column}
@@ -603,10 +632,10 @@
             \begin{card}
                 \textbf{\color{SlateDark} Adaptive Set Scenarios in Serving}\\[4pt]
                 \textbf{Case 1: Decisive ($|C| = 1$)}\\
-                \textbullet\ Set: \texttt{\{"Barn Owl"\}}\\
+                \textbullet\ Set: \{\texttt{"Barn Owl"}\}\\
                 \textbullet\ High confidence; fast autonomous serving.\\[4pt]
                 \textbf{Case 2: Ambiguous ($1 < |C| \le 3$)}\\
-                \textbullet\ Set: \texttt{\{"Common Gull", "Herring Gull"\}}\\
+                \textbullet\ Set: \{\texttt{"Common Gull"}, \texttt{"Herring Gull"}\}\\
                 \textbullet\ Model narrows field to identical sister species.\\[4pt]
                 \textbf{Case 3: Referral ($|C| > 5$ or $|C| = 0$)}\\
                 \textbullet\ Model defers to human triage queue!
@@ -623,23 +652,26 @@
         \begin{column}{0.50\textwidth}
             \begin{bluecard}
                 \textbf{\color{BlueAccent} Energy-Based Out-of-Distribution Gating}\\[3pt]
-                \textbullet\ Computes negative Helmholtz free energy over unconstrained logits.\\
-                \textbullet\ In-distribution species produce low energy; novel organisms, blurred photos, or blank frames produce high energy.\\
-                \textbullet\ Threshold $\tau_{\text{OOD}}$ calibrated to maintain $95\%$ true positive rate on calibration data.\\
+                \textbullet\ Computes negative Helmholtz free energy over unconstrained logits.\\[2pt]
+                \textbullet\ In-distribution species produce low energy; novel organisms, blurred photos, or blank frames produce high energy.\\[2pt]
+                \textbullet\ Threshold $\tau_{\text{OOD}}$ calibrated to maintain $95\%$ true positive rate on calibration data.\\[2pt]
                 \textbullet\ Energy $> \tau_{\text{OOD}} \implies$ Immediate bypass of classification directly to human triage.
             \end{bluecard}
         \end{column}
         \begin{column}{0.46\textwidth}
             \centering
-            \begin{tikzpicture}[node distance=0.35cm]
-                \node[nodecard, text width=4.6cm, fill=white] (input) {\textbf{Inference Request Image}};
-                \node[nodecard, draw=AmberAccent!60, fill=AmberAccent!10, text width=4.6cm, below=of input] (energy) {\textbf{Helmholtz Energy Check}\\$E(x) > \tau_{\text{OOD}}$?};
-                \node[nodecard, draw=RoseAccent!60, fill=RoseAccent!10, text width=2.1cm, below left=0.4cm and 0.05cm of energy] (ood) {\textbf{OOD Flagged}\\\scriptsize Triage Queue};
-                \node[nodecard, draw=GreenAccent!60, fill=GreenAccent!10, text width=2.1cm, below right=0.4cm and 0.05cm of energy] (conf) {\textbf{Conformal Set}\\\scriptsize $|C(x)| \le k_{\text{max}}$?};
+            \begin{tikzpicture}[node distance=0.45cm]
+                \node[nodecard, text width=4.5cm, fill=white] (input) {\textbf{Inference Request Image}\\\scriptsize Normalised $3 \times 224 \times 224$ Tensor};
+                \node[nodecard, draw=AmberAccent!60, fill=AmberAccent!10, text width=4.5cm, below=of input] (energy) {\textbf{Helmholtz Energy Filter}\\$E(x) > \tau_{\text{OOD}}$?};
+                
+                \node[nodecard, draw=RoseAccent!60, fill=RoseAccent!10, text width=2.0cm, below=0.75cm of energy, xshift=-1.25cm] (ood) {\textbf{OOD Flagged}\\\scriptsize Expert Triage};
+                \node[nodecard, draw=GreenAccent!60, fill=GreenAccent!10, text width=2.0cm, below=0.75cm of energy, xshift=1.25cm] (conf) {\textbf{Conformal Set}\\\scriptsize $|C(x)| \le k_{\text{max}}$?};
                 
                 \draw[flowarrow] (input) -- (energy);
-                \draw[flowarrow] (energy) -| node[pill, above] {Yes} (ood);
-                \draw[flowarrow] (energy) -| node[pill, above] {No} (conf);
+                \draw[flowarrow] (energy.south) -| (ood.north) 
+                    node[pos=0.75, left=2pt, font=\tiny\bfseries\color{RoseAccent}] {Yes};
+                \draw[flowarrow] (energy.south) -| (conf.north) 
+                    node[pos=0.75, right=2pt, font=\tiny\bfseries\color{GreenAccent}] {No};
             \end{tikzpicture}
         \end{column}
     \end{columns}
@@ -653,9 +685,9 @@
         \begin{column}{0.48\textwidth}
             \begin{greencard}
                 \textbf{\color{GreenAccent} Unified Dual-Interface Architecture}\\[3pt]
-                \textbullet\ \textbf{Machine REST API:} Strongly typed Pydantic endpoints (\texttt{/api/v1/predict}, \texttt{/explain}, \texttt{/drift/evaluate}, \texttt{/health}).\\
-                \textbullet\ \textbf{Human Operator Dashboard:} Server-rendered Jinja2 + HTMX cockpit at \texttt{/dashboard}; updates dynamically without frontend build ballast.\\
-                \textbullet\ \textbf{Forward-Only Grad-CAM Attribution:} Generates visual attribution heatmaps on demand off the event loop thread.\\
+                \textbullet\ \textbf{Machine REST API:} Strongly typed Pydantic endpoints (\texttt{/api/v1/predict}, \texttt{/explain}, \texttt{/drift/evaluate}, \texttt{/health}).\\[2pt]
+                \textbullet\ \textbf{Human Operator Dashboard:} Server-rendered Jinja2 + HTMX cockpit at \texttt{/dashboard}; updates dynamically without frontend build ballast.\\[2pt]
+                \textbullet\ \textbf{Forward Grad-CAM Attribution:} Generates visual attribution heatmaps on demand off the event loop thread.\\[2pt]
                 \textbullet\ \textbf{Traefik Edge Reverse Proxy:} Handles SSL termination, load balancing, and rate limiting.
             \end{greencard}
         \end{column}
@@ -683,22 +715,22 @@
         \begin{column}{0.50\textwidth}
             \begin{bluecard}
                 \textbf{\color{BlueAccent} Why We Persist Embeddings in Production}\\[3pt]
-                \textbullet\ Detecting representation shift requires analysing feature representations from live traffic.\\
-                \textbullet\ Storing raw photos would exhaust storage and violates user privacy.\\
-                \textbullet\ Instead, TaxonVision persists the \textbf{384-dimensional feature vector} (\texttt{embedding REAL[]}) directly in PostgreSQL.\\
+                \textbullet\ Detecting representation shift requires analysing feature representations from live traffic.\\[2pt]
+                \textbullet\ Storing raw photos would exhaust storage and violates user privacy.\\[2pt]
+                \textbullet\ Instead, TaxonVision persists the \textbf{384-dimensional feature vector} (\texttt{embedding REAL[]}) directly in PostgreSQL.\\[2pt]
                 \textbullet\ \textbf{Event Loop Protection (Rule 08):} Written asynchronously via \texttt{BackgroundTasks} -- request returns in $18\,\text{ms}$ while I/O runs in background.
             \end{bluecard}
         \end{column}
         \begin{column}{0.46\textwidth}
             \begin{card}
-                \textbf{\color{SlateDark} Telemetry Schema (\texttt{predictions} table)}\\[3pt]
+                \textbf{\color{SlateDark} Telemetry Schema (\texttt{predictions} table)}\\[2pt]
                 \textbullet\ \texttt{observation\_id} (UUID primary key)\\
                 \textbullet\ \texttt{created\_at} (Timestamptz index)\\
                 \textbullet\ \texttt{top1\_taxon} \& \texttt{top1\_confidence}\\
                 \textbullet\ \texttt{conformal\_set} (\texttt{TEXT[]} array)\\
                 \textbullet\ \texttt{ood\_energy} \& \texttt{is\_ood} (Boolean)\\
                 \textbullet\ \texttt{latency\_ms} (Measured wall-clock)\\
-                \textbullet\ \textbf{\texttt{embedding} (\texttt{REAL[]}, 384 dimensions)}\\[3pt]
+                \textbullet\ \textbf{\texttt{embedding} (\texttt{REAL[]}, 384 dimensions)}\\[2pt]
                 \scriptsize Ready for instantaneous sliding-window drift queries!
             \end{card}
         \end{column}
@@ -712,21 +744,22 @@
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
             \begin{bluecard}
-                \textbf{\color{BlueAccent} Two-Tier Drift Evaluation Engine}\\[3pt]
-                \textbullet\ \textbf{Tier 1: Wasserstein-1 ($W_1$) on Vector Norms}\\
-                \quad Fast linear-time check on embedding lengths; catches immediate camera/contrast degradation.\\
-                \textbullet\ \textbf{Tier 2: Kernel MMD² Permutation Test}\\
-                \quad Multivariate distribution test ($B=200$ permutations); detects subtle manifold distortion ($p < 0.01$).\\
-                \textbullet\ \textbf{Evidently AI 0.7 HTML Dashboard:}\\
-                \quad Projects 384 dimensions down to 8 PCA components and renders interactive reports (\texttt{reports/drift\_report.html}).
+                \textbf{\color{BlueAccent} Two-Tier Drift Evaluation Engine}\\[2pt]
+                \textbullet\ \textbf{Tier 1: Wasserstein-1 ($W_1$) on Norms}\\[1pt]
+                \quad Fast linear-time check on embedding lengths; catches immediate camera/contrast shift.\\[2pt]
+                \textbullet\ \textbf{Tier 2: Kernel MMD² Permutation Test}\\[1pt]
+                \quad Multivariate distribution test ($B=200$); detects subtle manifold distortion ($p < 0.01$).\\[2pt]
+                \textbullet\ \textbf{Evidently AI 0.7 HTML Dashboard:}\\[1pt]
+                \quad Projects 384 dims to 8 PCA components and renders interactive reports (\texttt{drift\_report.html}).
             \end{bluecard}
         \end{column}
         \begin{column}{0.48\textwidth}
             \begin{greencard}
-                \textbf{\color{GreenAccent} Automated MLflow Tracking Lineage}\\[3pt]
-                \textbullet\ Evaluated hourly by the Airflow DAG \texttt{prediction\_drift\_monitor}.\\
-                \textbullet\ Automatically creates an MLflow run in experiment \texttt{taxon-vision-drift}.\\
-                \textbullet\ Logs metrics (\texttt{drift\_w1}, \texttt{drift\_mmd2}, \texttt{p\_value}), tag \texttt{drift\_detected=true/false}, and attaches the Evidently HTML dashboard as an immutable build artefact.
+                \textbf{\color{GreenAccent} Automated MLflow Tracking Lineage}\\[2pt]
+                \textbullet\ Evaluated hourly by the Airflow DAG \texttt{prediction\_drift\_monitor}.\\[2pt]
+                \textbullet\ Automatically creates an MLflow run in experiment \texttt{taxon-vision-drift}.\\[2pt]
+                \textbullet\ Logs metrics (\texttt{drift\_w1}, \texttt{drift\_mmd2}, \texttt{p\_value}), tag \texttt{drift\_detected=true/false}.\\[2pt]
+                \textbullet\ Attaches the Evidently HTML dashboard as an immutable build artefact.
             \end{greencard}
         \end{column}
     \end{columns}
@@ -739,8 +772,8 @@
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
             \begin{ambercard}
-                \textbf{\color{AmberAccent} Real-Time Metrics \& Dashboards}\\[3pt]
-                \textbullet\ \textbf{Prometheus Pull Scraper:} Scrapes \texttt{/metrics} every 15 seconds across serving and Traefik pods.\\
+                \textbf{\color{AmberAccent} Real-Time Metrics \& Dashboards}\\[2pt]
+                \textbullet\ \textbf{Prometheus Pull Scraper:} Scrapes \texttt{/metrics} every 15 seconds across serving and Traefik pods.\\[2pt]
                 \textbullet\ \textbf{Grafana Cockpit (6 Panels):}
                 \begin{itemize}\scriptsize
                     \item Request rate and status codes (2xx, 4xx, 5xx).
@@ -753,13 +786,13 @@
         \end{column}
         \begin{column}{0.48\textwidth}
             \begin{rosecard}
-                \textbf{\color{RoseAccent} Four Production Alerting Rules}\\[3pt]
+                \textbf{\color{RoseAccent} Four Production Alerting Rules}\\[2pt]
                 \textbullet\ \textbf{\texttt{PredictionLatencyP95High}:}\\
-                \quad p95 latency $> 120\,\text{ms}$ for 5 min (\texttt{warning}).\\
+                \quad p95 latency $> 120\,\text{ms}$ for 5 min (\texttt{warning}).\\[2pt]
                 \textbullet\ \textbf{\texttt{PredictionErrorRatioHigh}:}\\
-                \quad Error ratio $> 5\%$ for 5 min (\texttt{critical}).\\
+                \quad Error ratio $> 5\%$ for 5 min (\texttt{critical}).\\[2pt]
                 \textbullet\ \textbf{\texttt{EmbeddingDriftDetected}:}\\
-                \quad Drift gauge $> 0.5$ (\texttt{critical}, \textbf{action: retrain}).\\
+                \quad Drift gauge $> 0.5$ (\texttt{critical}, \textbf{action: retrain}).\\[2pt]
                 \textbullet\ \textbf{\texttt{DriftMonitorStale}:}\\
                 \quad No drift run in $> 2$ hours (\texttt{warning}).
             \end{rosecard}
@@ -773,42 +806,45 @@
 \begin{frame}{Closed-Loop Retraining Trigger}{Grafana Alert Webhook $\to$ FastAPI Relay $\to$ Airflow 3.0 DAG}
     \centering
     \begin{tikzpicture}[
-        scale=0.92, every node/.style={transform shape},
-        node distance=0.45cm and 0.55cm
+        scale=0.90, every node/.style={transform shape},
+        node distance=0.4cm and 1.1cm
     ]
-        \node[nodecard, draw=AmberAccent!60, fill=AmberAccent!10, text width=2.8cm] (graf) {
+        \node[nodecard, draw=AmberAccent!60, fill=AmberAccent!10, text width=2.3cm] (graf) {
             \textbf{\color{AmberAccent} Grafana Alert}\\
-            \scriptsize Rule: \texttt{EmbeddingDriftDetected}\\
-            Label: \texttt{action=retrain}
+            \scriptsize Rule: \texttt{Drift}\\
+            Label: \texttt{retrain}
         };
         
-        \node[nodecard, text width=3.0cm, right=of graf] (relay) {
-            \textbf{\color{BlueAccent} FastAPI Webhook Relay}\\
-            \scriptsize \texttt{/api/v1/retrain/webhook}\\
-            \textbullet\ Constant-time HMAC token\\
-            \textbullet\ \textbf{6-Hour Cooldown Lock}
+        \node[nodecard, text width=2.5cm, right=of graf] (relay) {
+            \textbf{\color{BlueAccent} FastAPI Webhook}\\
+            \scriptsize \texttt{/retrain/webhook}\\
+            \textbullet\ HMAC token check\\
+            \textbullet\ \textbf{6-Hour Lock}
         };
         
-        \node[nodecard, draw=GreenAccent!60, fill=GreenAccent!10, text width=2.8cm, right=of relay] (air) {
+        \node[nodecard, draw=GreenAccent!60, fill=GreenAccent!10, text width=2.4cm, right=of relay] (air) {
             \textbf{\color{GreenAccent} Airflow 3.0 DAG}\\
-            \scriptsize \texttt{model\_retraining}\\
-            \textbullet\ Merge human feedback\\
-            \textbullet\ Dispatch GPU job
+            \scriptsize \texttt{model\_retrain}\\
+            \textbullet\ Merge feedback\\
+            \textbullet\ Dispatch GPU
         };
         
-        \node[nodecard, draw=RoseAccent!60, fill=RoseAccent!10, text width=2.8cm, right=of air] (jenk) {
+        \node[nodecard, draw=RoseAccent!60, fill=RoseAccent!10, text width=2.4cm, right=of air] (jenk) {
             \textbf{\color{RoseAccent} Bare-Metal Jenkins}\\
             \scriptsize RTX 5070 Ti runner\\
-            \textbullet\ DVC pipeline repro\\
-            \textbullet\ Four-Gate Promotion
+            \textbullet\ DVC repro DAG\\
+            \textbullet\ 4-Gate Check
         };
         
-        \draw[retrainarrow] (graf) -- node[pill, above] {Webhook POST} (relay);
-        \draw[flowarrow] (relay) -- node[pill, above] {REST API} (air);
-        \draw[flowarrow] (air) -- node[pill, above] {Build Job} (jenk);
+        \draw[retrainarrow] (graf.east) -- (relay.west) 
+            node[midway, above=1pt, font=\tiny\bfseries\color{RoseAccent}] {POST};
+        \draw[flowarrow] (relay.east) -- (air.west) 
+            node[midway, above=1pt, font=\tiny\bfseries\color{BlueAccent}] {REST};
+        \draw[flowarrow] (air.east) -- (jenk.west) 
+            node[midway, above=1pt, font=\tiny\bfseries\color{GreenAccent}] {Trigger};
     \end{tikzpicture}
     
-    \vspace{0.4cm}
+    \vspace{0.35cm}
     \begin{bluecard}
         \centering
         \textbf{Anti-Alert-Storm Cooldown Protection:} When sudden environmental drift causes continuous alerting, the atomic 6-hour cooldown window ensures the GPU cluster executes only one retraining run, preventing resource exhaustion.
@@ -822,10 +858,10 @@
     \begin{columns}[T]
         \begin{column}{0.50\textwidth}
             \begin{purplecard}
-                \textbf{\color{PurpleAccent} The Closed-Loop Curation Lifecycle}\\[3pt]
-                \textbullet\ \textbf{1. Epistemic Triage:} Ambiguous sets ($|C| > 3$) and empty sets ($|C| = 0$) are saved to \texttt{data/flagged\_observations/}.\\
-                \textbullet\ \textbf{2. Taxonomist Review:} Taxonomists inspect specimen crops and CAM attribution heatmaps in Label Studio.\\
-                \textbullet\ \textbf{3. Feedback Export:} Label Studio exports verified JSON multi-class annotations.\\
+                \textbf{\color{PurpleAccent} The Closed-Loop Curation Lifecycle}\\[2pt]
+                \textbullet\ \textbf{1. Epistemic Triage:} Ambiguous sets ($|C| > 3$) and empty sets ($|C| = 0$) are saved to \texttt{data/flagged\_observations/}.\\[2pt]
+                \textbullet\ \textbf{2. Taxonomist Review:} Taxonomists inspect specimen crops and CAM attribution heatmaps in Label Studio.\\[2pt]
+                \textbullet\ \textbf{3. Feedback Export:} Label Studio exports verified JSON multi-class annotations.\\[2pt]
                 \textbullet\ \textbf{4. Airflow Ingestion:} The \texttt{model\_retraining} DAG merges feedback, validates open licences, and updates the DVC manifest.
             \end{purplecard}
         \end{column}
@@ -853,7 +889,7 @@
         \begin{column}{0.48\textwidth}
             \begin{rosecard}
                 \textbf{\color{RoseAccent} Why Validation Accuracy Is Not Enough}\\[3pt]
-                \textbullet\ In production, a model can have great accuracy but fail latency budgets, lose conformal coverage, or degrade under INT8 quantization.\\
+                \textbullet\ In production, a model can have great accuracy but fail latency budgets, lose conformal coverage, or degrade under INT8 quantization.\\[3pt]
                 \textbullet\ TaxonVision enforces a strict \textbf{Four-Gate Promotion Verdict} in Stage 7 (\texttt{evaluate.py}) before any model receives the \texttt{@Production} tag.
             \end{rosecard}
         \end{column}
@@ -886,14 +922,14 @@
                 \quad Ruff linting and formatting.\\
                 \quad 203 unit tests with coverage threshold.\\
                 \quad OKF v0.2 documentation conformance.\\
-                \quad Rule 07 Hardware invariant validation.\\
+                \quad Rule 07 Hardware invariant validation.\\[2pt]
                 \textbullet\ Runs on every PR before merge to \texttt{develop}.
             \end{bluecard}
         \end{column}
         \begin{column}{0.48\textwidth}
             \begin{greencard}
                 \textbf{\color{GreenAccent} Heavy GPU Runner (Jenkins on Bare-Metal)}\\[3pt]
-                \textbullet\ Executes DVC pipeline on NVIDIA RTX 5070 Ti.\\
+                \textbullet\ Executes DVC pipeline on NVIDIA RTX 5070 Ti.\\[2pt]
                 \textbullet\ \textbf{Dual DVC Push Sequence:}
                 \begin{itemize}\scriptsize
                     \item \texttt{dvc push -r local-seaweedfs}: In-cluster NVMe S3 update for immediate serving volume mount.
