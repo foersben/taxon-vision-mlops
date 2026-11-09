@@ -58,11 +58,11 @@ services:
       - "--api.dashboard=true"
       - "--api.insecure=true"
     ports:
-      - "80:80"       # Public HTTP entrypoint
+      - "${TRAEFIK_HTTP_PORT:-8088}:80"       # Public HTTP entrypoint (default 8088 avoids rootless port 80 permission denied)
       - "8081:8080"   # Traefik Web UI & Dashboard
       - "9100:9100"   # Traefik Prometheus metrics port
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - "${DOCKER_SOCK:-/run/user/1000/podman/podman.sock}:/var/run/docker.sock:ro"
     restart: unless-stopped
 
   app:
@@ -71,7 +71,7 @@ services:
       dockerfile: deploy/docker/Dockerfile
     container_name: taxon_vision_app
     ports:
-      - "8000:8000"
+      - "${APP_PORT:-8001}:8000"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.app.rule=PathPrefix(`/`)"

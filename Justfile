@@ -329,6 +329,13 @@ up-dev:
 down:
 	docker compose down
 
+# Stop and purge all containers, networks, volumes, and rootless bind-mount files
+[group("app")]
+clean-docker:
+	@docker compose down -v --remove-orphans
+	@podman unshare rm -rf data/postgres/* data/seaweedfs/* 2>/dev/null || rm -rf data/postgres/* data/seaweedfs/* 2>/dev/null || true
+	@echo "==> Purged all TaxonVision containers, volumes, networks, and persistent data files."
+
 # Follow live logs from Docker Compose microservices
 [group("app")]
 logs:
