@@ -256,6 +256,19 @@ async def predict_species(
         )
         background_tasks.add_task(get_telemetry_store().record, rec)
         PREDICTION_COUNTER.labels(status="success").inc()
+        logger.info(
+            "Prediction completed successfully for %s",
+            file.filename,
+            extra={
+                "endpoint": "/api/v1/predict",
+                "observation_id": obs_id,
+                "latency_ms": round(latency, 2),
+                "taxon_id": pred.get("top1_idx"),
+                "is_ood": pred.get("is_ood", False),
+                "conformal_size": len(pred.get("conformal_set", [])),
+                "routing_tier": pred.get("routing_tier", "DECISIVE"),
+            },
+        )
         return _build_live_prediction(pred, latency, cam_base64)
     except InvalidImageError as img_err:
         logger.warning("Rejected undecodable upload %s: %s", file.filename, img_err)

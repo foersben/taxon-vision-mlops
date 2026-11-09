@@ -25,6 +25,7 @@ from taxon_vision.config import get_settings
 from taxon_vision.service.inference import get_image_transform, load_taxa_catalog, reset_model_caches
 from taxon_vision.service.routes import drift, explain, health, predict, retrain, train, views
 from taxon_vision.service.storage import MemoryImageCache, get_image_cache
+from taxon_vision.service.structured_logging import configure_structured_logging
 from taxon_vision.service.telemetry_store import close_telemetry_store, get_telemetry_store
 
 
@@ -38,6 +39,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     Yields:
         None during the active lifetime of the ASGI server.
     """
+    configure_structured_logging()
     load_taxa_catalog()
     get_image_transform()
     get_telemetry_store()

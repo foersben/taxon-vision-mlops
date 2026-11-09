@@ -159,6 +159,37 @@
           "refId": "A"
         }
       ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 17 },
+      "id": 9,
+      "title": "Live Application Logs & Triage Traces",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "Loki" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 18 },
+      "id": 10,
+      "title": "Real-Time Inference Logs",
+      "type": "logs",
+      "options": {
+        "showLabels": false,
+        "showCommonLabels": true,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "Loki" },
+          "editorMode": "code",
+          "expr": "{job=\"taxon-vision\"}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ]
     }
   ],
   "schemaVersion": 39,

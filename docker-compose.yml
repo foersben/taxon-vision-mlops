@@ -86,10 +86,12 @@ services:
       - TAXON_RETRAIN_WEBHOOK_SECRET=${TAXON_RETRAIN_WEBHOOK_SECRET:-dev-secret-token}
       - MLFLOW_TRACKING_URI=http://mlflow-server:5000
     volumes:
+      - ./src:/app/src:ro
       - ./data/flagged_observations:/app/data/flagged_observations
       - ./models/checkpoints:/app/models/checkpoints
       - ./data/sample:/app/data/sample
       - ./data/embeddings:/app/data/embeddings:ro
+      - ./data/logs:/app/data/logs
     depends_on:
       seaweedfs:
         condition: service_started
@@ -209,6 +211,29 @@ services:
       - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
     depends_on:
       - prometheus
+      - loki
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:latest
+    container_name: taxon_loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/loki.yaml
+    volumes:
+      - ./config/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki_data:/loki
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:latest
+    container_name: taxon_promtail
+    command: -config.file=/etc/promtail/promtail.yaml
+    volumes:
+      - ./config/promtail.yaml:/etc/promtail/promtail.yaml:ro
+      - ./data/logs:/var/log/app:ro
+    depends_on:
+      - loki
     restart: unless-stopped
 
   postgres:
@@ -296,3 +321,4 @@ services:
 volumes:
   prometheus_data:
   grafana_data:
+  loki_data:
