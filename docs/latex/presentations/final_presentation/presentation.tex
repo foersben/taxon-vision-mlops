@@ -15,6 +15,7 @@
 \usepackage{booktabs}
 \usepackage{array}
 \usepackage{ragged2e}
+\usepackage{amssymb}
 \usepackage{tikz}
 \usetikzlibrary{shapes.geometric,arrows.meta,positioning,fit,calc,backgrounds,shadows.blur}
 \usepackage{xcolor}
@@ -125,6 +126,8 @@
     dasharrow/.style={flowarrow, dashed, draw=BlueAccent},
     retrainarrow/.style={flowarrow, draw=RoseAccent, line width=0.9pt},
     syncarrow/.style={flowarrow, draw=GreenAccent, line width=0.9pt},
+    passarrow/.style={flowarrow, draw=GreenAccent, line width=0.9pt},
+    blockarrow/.style={flowarrow, draw=RoseAccent, line width=0.9pt},
     pill/.style={
         rectangle, rounded corners=2pt, fill=white, draw=SlateMid!40,
         inner sep=2pt, font=\tiny\bfseries, align=center
@@ -243,7 +246,7 @@
                 \textbullet\ \textbf{Conformal Sets:} Finite-sample quantile sets ($1-\alpha \ge 95\%$).\\[3pt]
                 \textbullet\ \textbf{Helmholtz Energy:} Logit-based out-of-distribution rejection.\\[3pt]
                 \textbullet\ \textbf{Dual Serving:} REST API and Jinja2/HTMX dashboard.\\[3pt]
-                \textbullet\ \textbf{Explainability:} On-demand Forward Grad-CAM heatmaps.
+                \textbullet\ \textbf{Explainability:} On-demand Forward-Only CAM heatmaps.
             \end{greencard}
         \end{column}
         \begin{column}{0.32\textwidth}
@@ -391,7 +394,7 @@
         % Retraining Triggers
         \draw[flowarrow] (ls) -- (air_retrain);
         \draw[retrainarrow] (air_drift) -- (air_retrain);
-        \draw[retrainarrow] (graf.east) -- ++(0.35, 0) |- ([yshift=3pt]air_retrain.north west);
+        \draw[retrainarrow] (graf.east) -- ++(0.35, 0) |- ([yshift=5pt]air_retrain.west);
         \draw[flowarrow] (air_retrain) -- (jenk);
 
         % Storage & Cloud Sync
@@ -417,29 +420,83 @@
 % ==============================================================================
 \begin{frame}{Data Plane \& Licence Governance}{Zero-Copy S3 Streaming \& Open Licences}
     \begin{columns}[T]
-        \begin{column}{0.52\textwidth}
+        % Left Column: Concepts & Guarantees
+        \begin{column}{0.46\textwidth}
             \begin{card}
-                \textbf{\color{BlueAccent} Zero-Copy Ingestion Flow}\\[2pt]
-                \textbullet\ \textbf{Amazon S3 Streaming:} Direct manifest and crop streaming from \texttt{s3://inaturalist-open-data/}.\\[2pt]
-                \textbullet\ \textbf{Apache Arrow IPC:} High-speed in-memory tabular processing with embedded DuckDB filtering.\\[2pt]
-                \textbullet\ \textbf{Ephemeral Images:} Raw JPEGs are normalized into tensor memory and discarded -- never stored as duplicate disk files.\\[6pt]
-                \textbf{\color{AmberAccent} Licence Compliance Gate}\\[2pt]
-                \textbullet\ \textbf{Whitelisted:} \texttt{CC0}, \texttt{CC-BY}, \texttt{CC-BY-NC}.\\[2pt]
-                \textbullet\ \textbf{Rejected:} \texttt{All-Rights-Reserved}, \texttt{CC-BY-ND}.\\[2pt]
-                \textbullet\ \textbf{Attribution Invariant:} Photographer credit preserved across all manifest stages and API endpoints.
+                \textbf{\color{BlueAccent} Zero-Copy Ingestion Flow}\\[3pt]
+                \textbullet\ \textbf{Direct S3 Streaming:} Ingests batches from \texttt{s3://inaturalist-open-data} without downloading full tarballs.\\[3pt]
+                \textbullet\ \textbf{In-Memory Arrow IPC:} DuckDB filters observations in RAM; image buffers are processed ephemerally.\\[3pt]
+                \textbullet\ \textbf{Attribution Invariant:} Retains photographer name and licence code across every manifest stage.\\[5pt]
+                \textbf{\color{GreenAccent} Governance Guarantee:} Only verified Creative Commons assets enter the Epistemic DAG. Zero unverified records admitted.
             \end{card}
         \end{column}
-        \begin{column}{0.44\textwidth}
+
+        % Right Column: Crystal Clear Visual Funnel
+        \begin{column}{0.52\textwidth}
             \centering
-            \begin{tikzpicture}[node distance=0.45cm]
-                \node[nodecard, text width=4.5cm, fill=white] (s3) {\textbf{Amazon S3 Open Data}\\\scriptsize 100M+ Biological Observations};
-                \node[nodecard, text width=4.5cm, fill=TealAccent!10, draw=TealAccent, below=of s3] (ingest) {\textbf{Stage 1: \texttt{ingest}}\\\scriptsize Snappy Parquet Manifest};
-                \node[nodecard, text width=4.5cm, fill=AmberAccent!10, draw=AmberAccent, below=of ingest] (audit) {\textbf{Stage 2: \texttt{audit\_license}}\\\scriptsize Purge non-compliant records};
-                \node[nodecard, text width=4.5cm, fill=GreenAccent!10, draw=GreenAccent, below=of audit] (clean) {\textbf{Verified Manifest}\\\scriptsize \texttt{dataset\_manifest.parquet}};
+            \begin{tikzpicture}[
+                scale=0.84, every node/.style={transform shape}
+            ]
+                % Top Node: S3 Open Data
+                \node[sysbox, draw=BlueAccent!70, fill=BlueAccent!10, text width=5.5cm] (s3) at (2.75, 3.35) {
+                    \textbf{\color{BlueAccent} Amazon S3 Open Data Bucket}\\[1pt]
+                    {\tiny \texttt{s3://inaturalist-open-data} $\cdot$ 100M+ Biological Observations}
+                };
+
+                % Middle Top: Arrow Stream Engine
+                \node[sysbox, draw=TealAccent!70, fill=TealAccent!10, text width=5.5cm] (arrow) at (2.75, 2.30) {
+                    \textbf{\color{TealAccent} Apache Arrow IPC \& DuckDB Kernel}\\[1pt]
+                    {\tiny In-Memory Predicate Filtering $\cdot$ Zero Intermediate Files on Disk}
+                };
+
+                % Compliance Gate
+                \node[diamond, aspect=2.4, draw=AmberAccent, fill=AmberAccent!15, inner sep=2.5pt, font=\scriptsize\bfseries] (gate) at (2.75, 1.10) {
+                    Licence Audit Gate
+                };
+
+                % Branch Left: Admitted
+                \node[sysbox, draw=GreenAccent, fill=GreenAccent!10, text width=2.5cm] (admit) at (1.25, -0.30) {
+                    \textbf{\color{GreenAccent} Admitted Licences}\\[2pt]
+                    {\tiny \texttt{CC0} $\cdot$ Public Domain}\\[1pt]
+                    {\tiny \texttt{CC-BY} $\cdot$ Attribution}\\[1pt]
+                    {\tiny \texttt{CC-BY-NC} $\cdot$ Non-Comm.}
+                };
+
+                % Branch Right: Purged
+                \node[sysbox, draw=RoseAccent, fill=RoseAccent!10, text width=2.5cm] (reject) at (4.25, -0.30) {
+                    \textbf{\color{RoseAccent} Purged Licences}\\[2pt]
+                    {\tiny \texttt{All-Rights-Reserved}}\\[1pt]
+                    {\tiny \texttt{CC-BY-ND} (No Derivs)}\\[1pt]
+                    {\tiny Unspecified Rights}
+                };
+
+                % Bottom Left: Verified Manifest
+                \node[sysbox, draw=GreenAccent!80, fill=GreenAccent!15, text width=2.5cm] (out) at (1.25, -1.70) {
+                    \textbf{\color{GreenAccent} Verified Manifest}\\[1pt]
+                    {\tiny \texttt{dataset\_manifest}}\\[1pt]
+                    {\tiny Snappy Parquet $\cdot$ DVC MD5}
+                };
+
+                % Bottom Right: Purge Sink
+                \node[sysbox, draw=RoseAccent!80, fill=RoseAccent!15, text width=2.5cm] (sink) at (4.25, -1.70) {
+                    \textbf{\color{RoseAccent} Purge Barrier}\\[1pt]
+                    {\tiny 0 Non-Compliant Admitted}\\[1pt]
+                    {\tiny Dropped from Pipeline}
+                };
+
+                % Connections
+                \draw[flowarrow] (s3) -- (arrow);
+                \draw[flowarrow] (arrow) -- (gate);
                 
-                \draw[flowarrow] (s3) -- (ingest);
-                \draw[flowarrow] (ingest) -- (audit);
-                \draw[flowarrow] (audit) -- node[pill, right] {0 Non-Compliant} (clean);
+                \draw[passarrow, draw=GreenAccent, line width=1.0pt] (gate.west) -| (admit.north);
+                \node[above=1.5pt, font=\tiny\bfseries\color{GreenAccent}] at ($(gate.west)!0.5!(admit.north |- gate.west)$) {Admitted};
+                
+                \draw[retrainarrow, line width=1.0pt] (gate.east) -| (reject.north);
+                \node[above=1.5pt, font=\tiny\bfseries\color{RoseAccent}] at ($(gate.east)!0.5!(reject.north |- gate.east)$) {Purged};
+
+                \draw[passarrow, draw=GreenAccent, line width=1.0pt] (admit) -- (out);
+                \draw[retrainarrow, line width=1.0pt] (reject) -- (sink);
+
             \end{tikzpicture}
         \end{column}
     \end{columns}
@@ -451,58 +508,78 @@
 \begin{frame}{The Epistemic Diamond DAG}{7-Stage DAG with Zero Split Leakage}
     \centering
     \begin{tikzpicture}[
-        scale=0.86, every node/.style={transform shape}
+        scale=0.88, every node/.style={transform shape}
     ]
-        % Left Ingestion Chain (y=0.0)
+        % Stages 1-3 Ingestion & Extraction (y=0.0)
         \node[nodecard, fill=TealAccent!10, draw=TealAccent, text width=2.1cm] (raw) at (0, 0) {
-            \textbf{1. \texttt{ingest}}\\\scriptsize \texttt{raw\_manifest}
+            \textbf{1. \texttt{ingest}}\\[1pt]{\tiny \texttt{raw\_manifest}}
         };
-        \node[nodecard, fill=AmberAccent!10, draw=AmberAccent, text width=2.2cm] (lic) at (2.7, 0) {
-            \textbf{2. \texttt{audit\_license}}\\\scriptsize Verified Parquet
+        \node[nodecard, fill=AmberAccent!10, draw=AmberAccent, text width=2.1cm] (lic) at (2.6, 0) {
+            \textbf{2. \texttt{audit\_license}}\\[1pt]{\tiny Verified Parquet}
         };
-        \node[nodecard, fill=BlueAccent!10, draw=BlueAccent, text width=2.6cm] (feat) at (5.7, 0) {
-            \textbf{3. \texttt{extract\_features}}\\\scriptsize 384-D Tensors
-        };
-        
-        % The Epistemic Diamond Splits (Column at x=8.2)
-        \node[pill, fill=BlueAccent!15, draw=BlueAccent, text width=1.6cm] (sp_tr) at (8.2, 1.2) {Train (70\%)};
-        \node[pill, fill=BlueAccent!15, draw=BlueAccent, text width=1.6cm] (sp_val) at (8.2, 0.4) {Val (10\%)};
-        \node[pill, fill=PurpleAccent!15, draw=PurpleAccent, text width=1.6cm] (sp_cal) at (8.2, -0.4) {Cal (10\%)};
-        \node[pill, fill=GreenAccent!15, draw=GreenAccent, text width=1.6cm] (sp_test) at (8.2, -1.4) {Test (10\%)};
-        
-        % Downstream Training & Serving Nodes
-        \node[nodecard, fill=GreenAccent!10, draw=GreenAccent, text width=2.1cm] (train) at (11.0, 0.8) {
-            \textbf{4. \texttt{train}}\\\scriptsize CB-Loss Head
-        };
-        \node[nodecard, fill=SlateMid!10, draw=SlateDark, text width=2.1cm] (onnx) at (13.7, 0.8) {
-            \textbf{5. \texttt{export\_onnx}}\\\scriptsize INT8 Dual Graph
-        };
-        \node[nodecard, fill=PurpleAccent!10, draw=PurpleAccent, text width=2.1cm] (cal) at (13.7, -0.4) {
-            \textbf{6. \texttt{calibrate}}\\\scriptsize Quantile $\hat{q}$ \& $\tau_{\text{energy}}$
-        };
-        \node[nodecard, fill=RoseAccent!10, draw=RoseAccent, text width=2.1cm] (eval) at (13.7, -1.4) {
-            \textbf{7. \texttt{evaluate}}\\\scriptsize 4-Gate Verdict
+        \node[nodecard, fill=BlueAccent!10, draw=BlueAccent, text width=2.3cm] (feat) at (5.3, 0) {
+            \textbf{3. \texttt{extract\_features}}\\[1pt]{\tiny 384-D Tensors}
         };
         
+        % The Epistemic Diamond 4 Stratified Splits (Column at x=8.1)
+        \node[pill, fill=BlueAccent!15, draw=BlueAccent, text width=1.7cm] (sp_tr) at (8.1, 1.25) {Train (70\%)};
+        \node[pill, fill=BlueAccent!15, draw=BlueAccent, text width=1.7cm] (sp_val) at (8.1, 0.45) {Val (10\%)};
+        \node[pill, fill=PurpleAccent!15, draw=PurpleAccent, text width=1.7cm] (sp_cal) at (8.1, -0.45) {Cal (10\%)};
+        \node[pill, fill=GreenAccent!15, draw=GreenAccent, text width=1.7cm] (sp_test) at (8.1, -1.35) {Test (10\%)};
+        
+        % Stage 4: train (x=10.8, y=0.85)
+        \node[nodecard, fill=GreenAccent!10, draw=GreenAccent, text width=2.1cm] (train) at (10.8, 0.85) {
+            \textbf{4. \texttt{train}}\\[1pt]{\tiny Head + HPO}
+        };
+
+        % Column at x=13.5: Downstream Model Transformation & Evaluation Chain
+        \node[nodecard, fill=SlateMid!10, draw=SlateDark, text width=2.2cm] (onnx) at (13.5, 0.85) {
+            \textbf{5. \texttt{export\_onnx}}\\[1pt]{\tiny INT8 Dual Graph}
+        };
+        \node[nodecard, fill=PurpleAccent!10, draw=PurpleAccent, text width=2.2cm] (cal) at (13.5, -0.45) {
+            \textbf{6. \texttt{calibrate}}\\[1pt]{\tiny Quantiles $\hat{q}$ \& $\tau_{\text{OOD}}$}
+        };
+        \node[nodecard, fill=RoseAccent!10, draw=RoseAccent, text width=2.2cm] (eval) at (13.5, -1.35) {
+            \textbf{7. \texttt{evaluate}}\\[1pt]{\tiny 4-Gate Verdict}
+        };
+        
+        % Ingestion connections
         \draw[flowarrow] (raw) -- (lic);
         \draw[flowarrow] (lic) -- (feat);
+        
+        % Fan out to 4 splits
         \draw[flowarrow] (feat.east) -- (sp_tr.west);
         \draw[flowarrow] (feat.east) -- (sp_val.west);
         \draw[flowarrow] (feat.east) -- (sp_cal.west);
         \draw[flowarrow] (feat.east) -- (sp_test.west);
-        \draw[flowarrow] (sp_tr.east) -- (train.west);
-        \draw[flowarrow] (sp_val.east) -- (train.west);
+
+        % Split routing to train
+        \draw[flowarrow] (sp_tr.east) -- ([yshift=3pt]train.west);
+        \draw[flowarrow] (sp_val.east) -- ([yshift=-3pt]train.west);
+
+        % Training to ONNX
         \draw[flowarrow] (train) -- (onnx);
-        \draw[flowarrow] (onnx.south) -- (cal.north);
-        \draw[flowarrow] (sp_cal.east) -- (cal.west);
-        \draw[flowarrow] (cal.south) -- (eval.north);
-        \draw[flowarrow] (sp_test.east) -- (eval.west);
+
+        % ONNX down to Calibrate
+        \draw[flowarrow] (onnx) -- (cal);
+
+        % Cal split to Calibrate with artifact pill
+        \draw[flowarrow] (sp_cal.east) -- (cal.west)
+            node[midway, pill, fill=PurpleAccent!5, draw=PurpleAccent!40] {\tiny \texttt{cal.pt}};
+
+        % Calibrate down to Evaluate
+        \draw[flowarrow] (cal) -- (eval);
+
+        % Test split to Evaluate with artifact pill
+        \draw[flowarrow] (sp_test.east) -- (eval.west)
+            node[midway, pill, fill=GreenAccent!5, draw=GreenAccent!40] {\tiny \texttt{test.pt}};
+
     \end{tikzpicture}
     
-    \vspace{0.2cm}
+    \vspace{0.3cm}
     \begin{bluecard}
         \centering
-        \textbf{Strict Split Isolation:} \textbf{Train} updates head weights; \textbf{Val} guides Optuna HPO early stopping; \textbf{Cal} quantiles conformal coverage; \textbf{Test} renders final promotion verdict. Zero leakage!
+        \textbf{Epistemic Diamond Split Invariant:} \textbf{Train} updates head weights; \textbf{Val} guides Optuna early stopping; \textbf{Cal} quantiles conformal coverage; \textbf{Test} renders final promotion verdict. Zero leakage!
     \end{bluecard}
 \end{frame}
 
@@ -607,25 +684,66 @@
 % ==============================================================================
 \begin{frame}{Epistemic Safety: Softmax Failure}{Why Deep Neural Networks Fail Silently in Nature}
     \begin{columns}[T]
-        \begin{column}{0.48\textwidth}
+        \begin{column}{0.44\textwidth}
             \begin{card}
-                \textbf{\color{RoseAccent} The Illusion of Softmax ``Confidence''}\\[2pt]
-                \textbullet\ Softmax mathematically forces probabilities to sum to $1.0$ ($100\%$).\\[2pt]
-                \textbullet\ On unseen species, camera glare, or corrupt images, standard models \textbf{cannot} say ``I don't know''.\\[2pt]
-                \textbullet\ Result: High-confidence ($>95\%$) silent hallucinations on completely wrong taxa!\\[6pt]
-                \textbf{\color{BlueAccent} The Production Safety Imperative}\\[2pt]
-                \textbullet\ We require a mathematical safety envelope that rejects false certainty before predictions reach end users.
+                \textbf{\color{RoseAccent} The Illusion of Softmax ``Confidence''}\\[4pt]
+                \textbullet\ Softmax mathematically forces output probabilities to sum to $1.0$ ($100\%$).\\[4pt]
+                \textbullet\ When presented with unseen organisms or camera glare, standard models \textbf{cannot abstain}.\\[4pt]
+                \textbullet\ \textbf{Result:} High-confidence ($>98\%$) silent hallucinations on completely wrong taxa!\\[8pt]
+                \textbf{\color{BlueAccent} The Operational Safety Requirement}\\[3pt]
+                \textbullet\ Production vision systems must reject false certainty and defer ambiguous cases to human experts.
             \end{card}
         \end{column}
-        \begin{column}{0.48\textwidth}
+        
+        \begin{column}{0.54\textwidth}
             \centering
-            \begin{tikzpicture}[node distance=0.45cm]
-                \node[nodecard, text width=4.8cm, fill=white] (img) {\textbf{Unseen Taxon / Camera Noise}\\\scriptsize Out-of-Distribution Observation};
-                \node[nodecard, draw=RoseAccent!60, fill=RoseAccent!10, text width=4.8cm, below=of img] (naive) {\textbf{Standard Softmax Model}\\\scriptsize "Bald Eagle" ($98.7\%$ Confidence)\\\textcolor{RoseAccent}{\textbf{Silent False Positive!}}};
-                \node[nodecard, draw=GreenAccent!60, fill=GreenAccent!10, text width=4.8cm, below=of naive] (safe) {\textbf{TaxonVision Safety Engine}\\\scriptsize Helmholtz Energy: \textcolor{RoseAccent}{\textbf{OOD Detected}}\\\scriptsize Conformal Set: \textcolor{BlueAccent}{\textbf{Empty / Triage}}\\\textcolor{GreenAccent}{\textbf{Routed to Human Expert!}}};
-                
-                \draw[flowarrow] (img) -- (naive);
-                \draw[retrainarrow] (naive) -- (safe);
+            \begin{tikzpicture}[
+                scale=0.88, every node/.style={transform shape}
+            ]
+                % Top: Input image
+                \node[sysbox, text width=5.6cm] (img) at (2.9, 2.5) {
+                    \textbf{Unseen Taxon / Camera Noise}\\[1pt]
+                    {\tiny Live Out-of-Distribution Query Observation}
+                };
+
+                % Branch Left: Naive Softmax
+                \node[sysbox, draw=RoseAccent!70, fill=RoseAccent!10, text width=2.7cm] (naive) at (1.35, 0.4) {
+                    \textbf{\color{RoseAccent} Standard Softmax}\\[3pt]
+                    {\tiny ``Bald Eagle'' ($98.7\%$)}\\[4pt]
+                    \textbf{\tiny\color{RoseAccent} $\times$ Silent False Positive!}\\[2pt]
+                    {\tiny Misleads survey data}
+                };
+
+                % Branch Right: TaxonVision Safety Engine
+                \node[sysbox, draw=GreenAccent!80, fill=GreenAccent!10, text width=2.7cm] (safe) at (4.45, 0.4) {
+                    \textbf{\color{GreenAccent} Epistemic Engine}\\[3pt]
+                    {\tiny Energy: \textbf{\color{RoseAccent}OOD ($E > \tau$)}}\\[1pt]
+                    {\tiny Conformal: \textbf{\color{BlueAccent}$|C(X)| = 0$}}\\[4pt]
+                    \textbf{\tiny\color{GreenAccent} \checkmark{} Expert Review!}\\[2pt]
+                    {\tiny Queued to Label Studio}
+                };
+
+                % Outcome Comparison Summary
+                \node[sysbox, draw=SlateMid!30, fill=SlateLight, text width=5.8cm] (verdict) at (2.9, -1.3) {
+                    \centering
+                    \textbf{\scriptsize Core Contrast: Silent Hallucination vs. Calibrated Abstention}\\[1pt]
+                    {\tiny Softmax forces a guess $\cdot$ TaxonVision guarantees coverage or defers}
+                };
+
+                % Fork arrows from img
+                \coordinate (fork) at (2.9, 1.65);
+                \draw[flowarrow, draw=SlateDark!70] (img.south) -- (fork);
+                \draw[retrainarrow] (fork) -| (naive.north);
+                \draw[passarrow] (fork) -| (safe.north);
+
+                % Explicit labels on horizontal segments
+                \node[above=1.5pt, font=\tiny\bfseries\color{RoseAccent}] at (2.125, 1.65) {Unchecked};
+                \node[above=1.5pt, font=\tiny\bfseries\color{GreenAccent}] at (3.675, 1.65) {Calibrated};
+
+                % Clean perpendicular vertical drops into verdict
+                \draw[flowarrow, draw=SlateDark!40] (naive.south) -- (naive.south |- verdict.north);
+                \draw[flowarrow, draw=SlateDark!40] (safe.south) -- (safe.south |- verdict.north);
+
             \end{tikzpicture}
         \end{column}
     \end{columns}
@@ -682,14 +800,16 @@
                 \node[nodecard, text width=4.5cm, fill=white] (input) {\textbf{Inference Request Image}\\\scriptsize Normalised $3 \times 224 \times 224$ Tensor};
                 \node[nodecard, draw=AmberAccent!60, fill=AmberAccent!10, text width=4.5cm, below=of input] (energy) {\textbf{Helmholtz Energy Filter}\\$E(x) > \tau_{\text{OOD}}$?};
                 
-                \node[nodecard, draw=RoseAccent!60, fill=RoseAccent!10, text width=2.0cm, below=0.75cm of energy, xshift=-1.25cm] (ood) {\textbf{OOD Flagged}\\\scriptsize Expert Triage};
-                \node[nodecard, draw=GreenAccent!60, fill=GreenAccent!10, text width=2.0cm, below=0.75cm of energy, xshift=1.25cm] (conf) {\textbf{Conformal Set}\\\scriptsize $|C(x)| \le k_{\text{max}}$?};
+                \node[nodecard, draw=RoseAccent!60, fill=RoseAccent!10, text width=2.0cm, below=0.85cm of energy, xshift=-1.25cm] (ood) {\textbf{OOD Flagged}\\\scriptsize Expert Triage};
+                \node[nodecard, draw=GreenAccent!60, fill=GreenAccent!10, text width=2.0cm, below=0.85cm of energy, xshift=1.25cm] (conf) {\textbf{Conformal Set}\\\scriptsize $|C(x)| \le k_{\text{max}}$?};
                 
+                \coordinate (fork) at ([yshift=-0.35cm]energy.south);
                 \draw[flowarrow] (input) -- (energy);
-                \draw[flowarrow] (energy.south) -| (ood.north) 
-                    node[pos=0.75, left=2pt, font=\tiny\bfseries\color{RoseAccent}] {Yes};
-                \draw[flowarrow] (energy.south) -| (conf.north) 
-                    node[pos=0.75, right=2pt, font=\tiny\bfseries\color{GreenAccent}] {No};
+                \draw[line width=0.8pt, draw=SlateDark!70] (energy.south) -- (fork);
+                \draw[retrainarrow] (fork) -| (ood.north);
+                \draw[passarrow] (fork) -| (conf.north);
+                \node[above=1.5pt, font=\tiny\bfseries\color{RoseAccent}] at ($(fork)!0.5!(ood.north |- fork)$) {Yes};
+                \node[above=1.5pt, font=\tiny\bfseries\color{GreenAccent}] at ($(fork)!0.5!(conf.north |- fork)$) {No};
             \end{tikzpicture}
         \end{column}
     \end{columns}
@@ -705,7 +825,7 @@
                 \textbf{\color{GreenAccent} Unified Dual-Interface Architecture}\\[3pt]
                 \textbullet\ \textbf{Machine REST API:} Strongly typed Pydantic endpoints (\texttt{/api/v1/predict}, \texttt{/explain}, \texttt{/drift/evaluate}).\\[2pt]
                 \textbullet\ \textbf{Operator Dashboard:} Server-rendered Jinja2 + HTMX cockpit at \texttt{/dashboard}; zero JavaScript build complexity.\\[2pt]
-                \textbullet\ \textbf{Forward Grad-CAM Attribution:} Generates visual attribution heatmaps on demand off the event loop thread.\\[2pt]
+                \textbullet\ \textbf{Forward-Only CAM Attribution:} Generates gradient-free spatial projection heatmaps ($<3\,\text{ms}$) on demand off the event loop thread.\\[2pt]
                 \textbullet\ \textbf{Traefik Edge Reverse Proxy:} Handles SSL termination, load balancing, and rate limiting.
             \end{greencard}
         \end{column}
@@ -874,26 +994,74 @@
 % ==============================================================================
 \begin{frame}{Human-in-the-Loop Active Learning}{Active Learning \& Review via Label Studio}
     \begin{columns}[T]
-        \begin{column}{0.50\textwidth}
+        \begin{column}{0.44\textwidth}
             \begin{purplecard}
-                \textbf{\color{PurpleAccent} The Closed Curation Lifecycle}\\[2pt]
-                \textbullet\ \textbf{1. Epistemic Triage:} Ambiguous sets ($|C| > 3$) and empty sets ($|C| = 0$) are saved to \texttt{data/flagged\_observations/}.\\[2pt]
-                \textbullet\ \textbf{2. Taxonomist Review:} Taxonomists inspect specimen crops and CAM attribution heatmaps in Label Studio.\\[2pt]
-                \textbullet\ \textbf{3. Feedback Export:} Label Studio exports verified JSON multi-class annotations.\\[2pt]
-                \textbullet\ \textbf{4. Airflow Ingestion:} The \texttt{model\_retraining} DAG merges feedback, validates open licences, and updates the DVC manifest.
+                \textbf{\color{PurpleAccent} The Curation Lifecycle}\\[3pt]
+                \textbullet\ \textbf{1. Epistemic Triage:}\\
+                Ambiguous ($|C| > 3$) or OOD energy observations route to review queue.\\[3pt]
+                \textbullet\ \textbf{2. Expert Verification:}\\
+                Taxonomists inspect morphology \& forward-only CAM in Label Studio.\\[3pt]
+                \textbullet\ \textbf{3. Feedback Merge:}\\
+                Airflow verifies open licences and expands training manifest.
             \end{purplecard}
+            \vspace{0.15cm}
+            \begin{card}
+                \centering\scriptsize
+                \textbf{Core Benefit:} Focuses expensive human expert hours exclusively on borderline cases where the model lacks coverage.
+            \end{card}
         \end{column}
-        \begin{column}{0.46\textwidth}
+        
+        \begin{column}{0.54\textwidth}
             \centering
-            \begin{tikzpicture}[node distance=0.45cm]
-                \node[nodecard, text width=4.6cm, fill=white] (flag) {\textbf{Serving Flags Uncertainty}\\\scriptsize Conformal Ambiguity or Energy OOD};
-                \node[nodecard, draw=PurpleAccent!60, fill=PurpleAccent!10, text width=4.6cm, below=of flag] (ls) {\textbf{Label Studio Triage}\\\scriptsize Domain Taxonomist Verification};
-                \node[nodecard, draw=BlueAccent!60, fill=BlueAccent!10, text width=4.6cm, below=of ls] (air) {\textbf{Airflow Feedback Merge}\\\scriptsize Licence Audit \& Manifest Expansion};
-                \node[nodecard, draw=GreenAccent!60, fill=GreenAccent!10, text width=4.6cm, below=of air] (retrain) {\textbf{GPU Retraining Trigger}\\\scriptsize New Model Covers Previous Gaps!};
-                
-                \draw[flowarrow] (flag) -- (ls);
-                \draw[flowarrow] (ls) -- (air);
-                \draw[flowarrow] (air) -- (retrain);
+            \begin{tikzpicture}[
+                scale=0.85, every node/.style={transform shape}
+            ]
+                % Node 1: Top-Left (Serving)
+                \node[sysbox, draw=BlueAccent!70, fill=BlueAccent!10, text width=2.7cm] (serv) at (1.35, 1.25) {
+                    \textbf{\color{BlueAccent} 1. Model Serving}\\[2pt]
+                    {\tiny Flags Empty / Ambiguous}\\[1pt]
+                    {\tiny Energy OOD Gating}
+                };
+
+                % Node 2: Top-Right (Label Studio)
+                \node[sysbox, draw=PurpleAccent!70, fill=PurpleAccent!10, text width=2.7cm] (ls) at (5.05, 1.25) {
+                    \textbf{\color{PurpleAccent} 2. Label Studio}\\[2pt]
+                    {\tiny Taxonomist Audit}\\[1pt]
+                    {\tiny Forward-Only CAM}
+                };
+
+                % Node 3: Bottom-Right (Airflow Feedback Merge)
+                \node[sysbox, draw=TealAccent!70, fill=TealAccent!10, text width=2.7cm] (merge) at (5.05, -1.25) {
+                    \textbf{\color{TealAccent} 3. Airflow Ingest}\\[2pt]
+                    {\tiny Open Licence Filter}\\[1pt]
+                    {\tiny Manifest Expansion}
+                };
+
+                % Node 4: Bottom-Left (Retraining DAG)
+                \node[sysbox, draw=GreenAccent!70, fill=GreenAccent!10, text width=2.7cm] (retrain) at (1.35, -1.25) {
+                    \textbf{\color{GreenAccent} 4. Retraining DAG}\\[2pt]
+                    {\tiny DVC Execution}\\[1pt]
+                    {\tiny 4-Gate Promotion}
+                };
+
+                % Central Badge
+                \node[circle, draw=PurpleAccent!40, fill=PurpleAccent!5, inner sep=4pt, font=\tiny\bfseries\color{PurpleAccent}, align=center] at (3.20, 0.0) {
+                    Active\\Learning\\Loop
+                };
+
+                % Clockwise Arrows with ample clearance
+                \draw[flowarrow, draw=PurpleAccent, line width=0.9pt] (serv.east) -- (ls.west)
+                    node[midway, above=2pt, font=\tiny\bfseries\color{PurpleAccent}] {Triage};
+
+                \draw[flowarrow, draw=BlueAccent, line width=0.9pt] (ls.south) -- (merge.north)
+                    node[midway, right=2pt, font=\tiny\bfseries\color{BlueAccent}] {Verified JSON};
+
+                \draw[flowarrow, draw=TealAccent, line width=0.9pt] (merge.west) -- (retrain.east)
+                    node[midway, below=2pt, font=\tiny\bfseries\color{TealAccent}] {Retrain Trigger};
+
+                \draw[passarrow] (retrain.north) -- (serv.south)
+                    node[midway, left=2pt, font=\tiny\bfseries\color{GreenAccent}] {New Checkpoint};
+
             \end{tikzpicture}
         \end{column}
     \end{columns}
@@ -953,7 +1121,7 @@
                 \textbullet\ 95\% Coverage Guarantee\\
                 \textbullet\ Helmholtz Energy Filter\\
                 \textbullet\ Unified FastAPI/HTMX\\
-                \textbullet\ Forward Grad-CAM CAM
+                \textbullet\ Forward-Only CAM
             \end{greencard}
         \end{column}
         \begin{column}{0.32\textwidth}
@@ -970,10 +1138,10 @@
         \end{column}
     \end{columns}
     
-    \vspace{0.4cm}
+    \vspace{0.35cm}
     \begin{card}
-        \centering
-        \textbf{Key Takeaway:} Production MLOps is not about training a model once in a notebook; it is about building a self-monitoring, self-healing, mathematically safe engineering loop.
+        \centering\footnotesize
+        \textbf{Operational Reliability Axiom:} Real-world vision robustness is governed not by peak validation accuracy, but by deterministic epistemic safety envelopes: split conformal coverage guarantees, representation manifold drift tracking, and automated retraining pipelines.
     \end{card}
 \end{frame}
 
