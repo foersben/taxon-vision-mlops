@@ -255,7 +255,7 @@
                 \textbf{\color{PurpleAccent} Phase 3: Closed Loop}\\[2pt]
                 \textbf{\scriptsize Drift, Alerts \& Retraining}\\[4pt]
                 \RaggedRight\scriptsize
-                \textbullet\ \textbf{Vector Telemetry:} Async PostgreSQL logging of 384-D vectors.\\[3pt]
+                \textbullet\ \textbf{Inference Telemetry:} Async PostgreSQL logging of 384-D feature arrays.\\[3pt]
                 \textbullet\ \textbf{Real-Time Cockpit:} Prometheus TSDB + 6-Panel Grafana.\\[3pt]
                 \textbullet\ \textbf{Drift Detection:} Evidently AI $W_1$ \& Kernel MMD$^2$ tests.\\[3pt]
                 \textbullet\ \textbf{Auto Retraining:} Grafana Webhook Relay $\to$ Airflow 3.0.\\[3pt]
@@ -346,7 +346,7 @@
         % COLUMN 2: Telemetry & Cluster Storage (x = 4.4)
         % ======================================================================
         \node[sysbox, draw=AmberAccent!60, fill=AmberAccent!5, text width=2.3cm] (prom) at (4.4, 1.15) {\textbf{Prometheus TSDB}\\[1pt]{\tiny Scrapes \texttt{/metrics}}};
-        \node[sysbox, draw=AmberAccent!60, fill=AmberAccent!5, text width=2.3cm] (pg) at (4.4, 0.05) {\textbf{PostgreSQL 16}\\[1pt]{\tiny 384-D Vector Log}};
+        \node[sysbox, draw=AmberAccent!60, fill=AmberAccent!5, text width=2.3cm] (pg) at (4.4, 0.05) {\textbf{PostgreSQL 16}\\[1pt]{\tiny 384-D Feature Log}};
         \node[sysbox, draw=PurpleAccent!60, fill=PurpleAccent!5, text width=2.3cm] (mlflow) at (4.4, -1.2) {\textbf{MLflow 3.x}\\[1pt]{\tiny Experiment Registry}};
 
         % ======================================================================
@@ -658,7 +658,7 @@
                 \textbullet\ \textbf{TPE Sampler (Parzen Estimator):}\\
                 Models $P(x \mid y)$ to steer proposals toward high PR-AUC regions instead of random search.\\[3pt]
                 \textbullet\ \textbf{ASHA Pruner (Successive Halving):}\\
-                Terminates unviable trials at epoch 2, eliminating wasted compute on poor configurations.\\[3pt]
+                Terminates unviable trials at epoch 3, eliminating wasted compute on poor configurations.\\[3pt]
                 \textbullet\ \textbf{Cached Embedding Synergy:}\\
                 Training on cached 384-D tensors takes $<0.5\,\text{s}$/epoch; a 100-trial study finishes in \textbf{$<3$ minutes}!\\[3pt]
                 \textbullet\ \textbf{MLflow Registry Integration:}\\
@@ -682,7 +682,7 @@
                 \node[sysbox, draw=RoseAccent!70, fill=RoseAccent!10, text width=2.6cm] (t1) at (1.35, 1.2) {
                     \textbf{\color{RoseAccent} Trial 14 (Unviable)}\\[2pt]
                     {\tiny LR: $10^{-1}$ $\cdot$ Scale: 8.0}\\[2pt]
-                    \textbf{\tiny\color{RoseAccent} $\times$ ASHA Pruned (Ep 2)}\\[1pt]
+                    \textbf{\tiny\color{RoseAccent} $\times$ ASHA Pruned (Ep 3)}\\[1pt]
                     {\tiny Early abort saves GPU}
                 };
 
@@ -846,7 +846,7 @@
                 \textbf{Case 2: Ambiguous ($1 < |C| \le 3$)}\\
                 \textbullet\ Set: \{\texttt{"Common Gull"}, \texttt{"Herring Gull"}\}\\
                 \textbullet\ Narrows search to sister species.\\[4pt]
-                \textbf{Case 3: Referral ($|C| > 5$ or $|C| = 0$)}\\
+                \textbf{Case 3: Referral ($|C| > 3$ or $|C| = 0$)}\\
                 \textbullet\ Model defers to human triage queue!
             \end{card}
         \end{column}
@@ -1042,8 +1042,8 @@
                 \node[sysbox, draw=GreenAccent!80, fill=GreenAccent!10, text width=2.6cm] (resp) at (1.35, 1.85) {
                     \textbf{\color{GreenAccent} Client Response}\\[2pt]
                     {\tiny Zero Latency Overhead}\\[1pt]
-                    \textbf{\tiny\color{GreenAccent} \checkmark{} Sub-15ms Round-Trip}\\[1pt]
-                    {\tiny JSON predictions delivered}
+                    \textbf{\tiny\color{GreenAccent} \checkmark{} Sub-25ms Round-Trip}\\[1pt]
+                    {\tiny 18.4\,ms p95 $\cdot$ JSON delivered}
                 };
 
                 % Middle Right: Async Background Task
