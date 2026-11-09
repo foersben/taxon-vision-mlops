@@ -339,7 +339,7 @@
         % ======================================================================
         \node[sysbox, text width=2.1cm] (usr) at (1.3, 2.2) {\textbf{Field Observers}\\[1pt]{\tiny Web \& Mobile Apps}};
         \node[sysbox, draw=BlueAccent!60, fill=BlueAccent!5, text width=2.1cm] (trf) at (1.3, 1.15) {\textbf{Traefik v3.1}\\[1pt]{\tiny Ingress Gateway}};
-        \node[sysbox, draw=BlueAccent, fill=BlueAccent!10, text width=2.1cm] (api) at (1.3, 0.05) {\textbf{FastAPI Service}\\[1pt]{\tiny INT8 ONNX Engine}};
+        \node[sysbox, draw=BlueAccent, fill=BlueAccent!10, text width=2.1cm] (api) at (1.3, 0.05) {\textbf{FastAPI Service}\\[1pt]{\tiny INT8 ONNX $\cdot$ Redis}};
         \node[sysbox, draw=TealAccent!60, fill=TealAccent!5, text width=2.1cm] (ui) at (1.3, -1.2) {\textbf{HTMX Dashboard}\\[1pt]{\tiny Operator Cockpit}};
 
         % ======================================================================
@@ -352,7 +352,7 @@
         % ======================================================================
         % COLUMN 3: Cockpit, Drift & In-Cluster S3 (x = 7.5)
         % ======================================================================
-        \node[sysbox, draw=AmberAccent, fill=AmberAccent!10, text width=2.4cm] (graf) at (7.5, 1.15) {\textbf{Grafana Cockpit}\\[1pt]{\tiny 6 Panels $\cdot$ Alerts}};
+        \node[sysbox, draw=AmberAccent, fill=AmberAccent!10, text width=2.4cm] (graf) at (7.5, 1.15) {\textbf{Grafana Cockpit}\\[1pt]{\tiny Sablier Scale-to-0}};
         \node[sysbox, draw=AmberAccent, fill=AmberAccent!10, text width=2.4cm] (air_drift) at (7.5, 0.05) {\textbf{Airflow Drift DAG}\\[1pt]{\tiny Evidently AI Report}};
         \node[sysbox, draw=PurpleAccent, fill=PurpleAccent!10, text width=2.4cm] (seaweed) at (7.5, -1.2) {\textbf{SeaweedFS S3}\\[1pt]{\tiny In-Cluster NVMe Store}};
 
@@ -361,7 +361,7 @@
         % ======================================================================
         \node[sysbox, draw=PurpleAccent!80, fill=PurpleAccent!10, text width=2.4cm] (ls) at (10.7, 1.15) {\textbf{Label Studio}\\[1pt]{\tiny Taxonomist Review}};
         \node[sysbox, draw=RoseAccent!60, fill=RoseAccent!5, text width=2.4cm] (air_retrain) at (10.7, 0.05) {\textbf{Airflow Retrain DAG}\\[1pt]{\tiny Feedback Merge}};
-        \node[sysbox, draw=RoseAccent, fill=RoseAccent!10, text width=2.4cm] (jenk) at (10.7, -1.2) {\textbf{Bare-Metal Jenkins}\\[1pt]{\tiny GPU Retrain Runner}};
+        \node[sysbox, draw=RoseAccent, fill=RoseAccent!10, text width=2.4cm] (jenk) at (10.7, -1.2) {\textbf{Jenkins (k3s)}\\[1pt]{\tiny Ephemeral GPU Pod}};
 
         % ======================================================================
         % COLUMN 5: Cloud Collaboration (DagsHub) (x = 13.9)
@@ -406,10 +406,10 @@
 
         % Background groupings
         \begin{scope}[on background layer]
-            \node[groupbox, fill=BlueAccent!3, draw=BlueAccent!30, fit=(usr) (trf) (api) (ui), label={[font=\tiny\bfseries\color{BlueAccent}]below:1. Serving Plane}] {};
+            \node[groupbox, fill=BlueAccent!3, draw=BlueAccent!30, fit=(usr) (trf) (api) (ui), label={[font=\tiny\bfseries\color{BlueAccent}]below:1. k3s Serving Plane}] {};
             \node[groupbox, fill=AmberAccent!3, draw=AmberAccent!30, fit=(prom) (pg) (graf) (air_drift), label={[font=\tiny\bfseries\color{AmberAccent}]above:2. Observability \& Drift}] {};
             \node[groupbox, fill=PurpleAccent!3, draw=PurpleAccent!30, fit=(mlflow) (seaweed), label={[font=\tiny\bfseries\color{PurpleAccent}]below:3. Cluster Registry \& S3}] {};
-            \node[groupbox, fill=RoseAccent!3, draw=RoseAccent!30, fit=(ls) (air_retrain) (jenk), label={[font=\tiny\bfseries\color{RoseAccent}]below:4. Retraining Loop}] {};
+            \node[groupbox, fill=RoseAccent!3, draw=RoseAccent!30, fit=(ls) (air_retrain) (jenk), label={[font=\tiny\bfseries\color{RoseAccent}]below:4. k3s Retraining Loop}] {};
             \node[groupbox, fill=GreenAccent!3, draw=GreenAccent!30, fit=(gha) (dagshub) (dag_mlflow), label={[font=\tiny\bfseries\color{GreenAccent}]above:5. Cloud Archive}] {};
         \end{scope}
     \end{tikzpicture}
@@ -645,7 +645,79 @@
 \end{frame}
 
 % ==============================================================================
-% SLIDE 11: Latency Optimization: Zero-Allocation INT8 ONNX
+% SLIDE 11: Bayesian Hyperparameter Optimization: Optuna TPE & ASHA
+% ==============================================================================
+\begin{frame}{Bayesian Tuning: Optuna}{TPE Search \& ASHA Pruning on Cached Manifolds}
+    \begin{columns}[T]
+        % Left Column: Theory & Mechanisms
+        \begin{column}{0.46\textwidth}
+            \begin{tcolorbox}[enhanced, colback=SlateLight, colframe=BlueAccent!50, boxrule=0.6pt, arc=3pt, left=6pt, right=6pt, top=5pt, bottom=5pt]
+                \raggedright\footnotesize
+                \textbf{\color{BlueAccent} Bayesian Hyperparameter Search}\\[3pt]
+                \textbullet\ \textbf{TPE Sampler (Parzen Estimator):}\\
+                Models $P(x \mid y)$ to steer proposals toward high PR-AUC regions instead of random search.\\[3pt]
+                \textbullet\ \textbf{ASHA Pruner (Successive Halving):}\\
+                Terminates unviable trials at epoch 2, eliminating wasted compute on poor configurations.\\[3pt]
+                \textbullet\ \textbf{Cached Embedding Synergy:}\\
+                Training on cached 384-D tensors takes $<0.5\,\text{s}$/epoch; a 100-trial study finishes in \textbf{$<3$ minutes}!\\[3pt]
+                \textbullet\ \textbf{MLflow Registry Integration:}\\
+                Every trial tracks params, PR-AUC, and pruning state; the optimal head is tagged for ONNX export.
+            \end{tcolorbox}
+        \end{column}
+
+        % Right Column: Search & Pruning Visual
+        \begin{column}{0.52\textwidth}
+            \centering
+            \begin{tikzpicture}[
+                scale=0.86, every node/.style={transform shape}
+            ]
+                % Top: Optuna Study Master
+                \node[sysbox, draw=BlueAccent!70, fill=BlueAccent!10, text width=5.6cm] (opt) at (2.9, 3.1) {
+                    \textbf{\color{BlueAccent} Optuna Bayesian Study Coordinator}\\[1pt]
+                    {\tiny \texttt{TPESampler} (Seed 42) $\cdot$ \texttt{SuccessiveHalvingPruner} (ASHA)}
+                };
+
+                % Middle Left: Pruned Trial
+                \node[sysbox, draw=RoseAccent!70, fill=RoseAccent!10, text width=2.6cm] (t1) at (1.35, 1.2) {
+                    \textbf{\color{RoseAccent} Trial 14 (Unviable)}\\[2pt]
+                    {\tiny LR: $10^{-1}$ $\cdot$ Scale: 8.0}\\[2pt]
+                    \textbf{\tiny\color{RoseAccent} $\times$ ASHA Pruned (Ep 2)}\\[1pt]
+                    {\tiny Early abort saves GPU}
+                };
+
+                % Middle Right: Optimal Trial
+                \node[sysbox, draw=GreenAccent!70, fill=GreenAccent!10, text width=2.6cm] (t2) at (4.45, 1.2) {
+                    \textbf{\color{GreenAccent} Trial 42 (Optimal)}\\[2pt]
+                    {\tiny LR: $3 \cdot 10^{-3}$ $\cdot$ Scale: 24.5}\\[2pt]
+                    \textbf{\tiny\color{GreenAccent} \checkmark{} Completed (Ep 10)}\\[1pt]
+                    {\tiny Macro PR-AUC: 0.942}
+                };
+
+                % Bottom: Registration
+                \node[sysbox, draw=PurpleAccent!70, fill=PurpleAccent!10, text width=5.6cm] (out) at (2.9, -0.7) {
+                    \textbf{\color{PurpleAccent} Best Parameters Registered to MLflow}\\[1pt]
+                    {\tiny Frozen to \texttt{best\_hyperparams.yaml} $\cdot$ Passed to \texttt{export\_onnx}}
+                };
+
+                % Arrows
+                \coordinate (fork) at (2.9, 2.3);
+                \draw[flowarrow] (opt.south) -- (fork);
+                \draw[retrainarrow] (fork) -| (t1.north)
+                    node[pos=0.25, above=1pt, font=\tiny\bfseries\color{RoseAccent}] {Sample};
+                \draw[passarrow] (fork) -| (t2.north)
+                    node[pos=0.25, above=1pt, font=\tiny\bfseries\color{GreenAccent}] {Sample};
+
+                \draw[flowarrow, draw=SlateDark!40] (t1.south) -- (t1.south |- out.north);
+                \draw[passarrow] (t2.south) -- (t2.south |- out.north)
+                    node[midway, right=1pt, font=\tiny\bfseries\color{GreenAccent}] {Best Model};
+
+            \end{tikzpicture}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+% ==============================================================================
+% SLIDE 12: Latency Optimization: Zero-Allocation INT8 ONNX
 % ==============================================================================
 \begin{frame}{Zero-Allocation INT8 Inference}{Sub-15ms Low-Latency Inference Under SLOs}
     \begin{columns}[T]
@@ -825,7 +897,7 @@
                 \textbf{\color{GreenAccent} Unified Dual-Interface Architecture}\\[3pt]
                 \textbullet\ \textbf{Machine REST API:} Strongly typed Pydantic endpoints (\texttt{/api/v1/predict}, \texttt{/explain}, \texttt{/drift/evaluate}).\\[2pt]
                 \textbullet\ \textbf{Operator Dashboard:} Server-rendered Jinja2 + HTMX cockpit at \texttt{/dashboard}; zero JavaScript build complexity.\\[2pt]
-                \textbullet\ \textbf{Forward-Only CAM Attribution:} Generates gradient-free spatial projection heatmaps ($<3\,\text{ms}$) on demand off the event loop thread.\\[2pt]
+                \textbullet\ \textbf{Forward-Only CAM:} Generates gradient-free spatial projection heatmaps ($<3\,\text{ms}$) on demand off the event loop thread.\\[2pt]
                 \textbullet\ \textbf{Traefik Edge Reverse Proxy:} Handles SSL termination, load balancing, and rate limiting.
             \end{greencard}
         \end{column}
@@ -846,7 +918,96 @@
 \end{frame}
 
 % ==============================================================================
-% SLIDE 16: Telemetry & PostgreSQL Feature Persistence
+% SLIDE 17: k3s Cluster & Scale-to-Zero Topology
+% ==============================================================================
+\begin{frame}{k3s Cluster Architecture}{Scale-to-Zero via Sablier \& Redis Image Cache}
+    \begin{columns}[T]
+        % Left Column: Architecture Principles
+        \begin{column}{0.46\textwidth}
+            \begin{tcolorbox}[enhanced, colback=SlateLight, colframe=BlueAccent!50, boxrule=0.6pt, arc=3pt, left=6pt, right=6pt, top=3pt, bottom=3pt]
+                \raggedright\footnotesize
+                \textbf{\color{BlueAccent} Lightweight Edge Orchestration}\\[2pt]
+                \textbullet\ \textbf{k3s Edge Cluster:}\\
+                $<512$\,MB control plane, Traefik v3.1 ingress controller, non-root container isolation.\\[2pt]
+                \textbullet\ \textbf{Always-Warm Serving Plane:}\\
+                FastAPI replicas keep INT8 ONNX engine pre-warmed for deterministic $<15\,\text{ms}$ inference.\\[2pt]
+                \textbullet\ \textbf{Scale-to-Zero via Sablier:}\\
+                Dashboards (Optuna, Grafana, Evidently) consume \textbf{0 CPU/RAM} when idle. Auto-wakes $0 \to 1$ on HTTP ingress with 15m session lease.\\[2pt]
+                \textbullet\ \textbf{Distributed Redis Image Cache:}\\
+                Shared SHA-256 buffer (\texttt{taxon:img:*}, LRU eviction) eliminates duplicate image transfers for Forward CAM heatmaps across pods.
+            \end{tcolorbox}
+        \end{column}
+
+        % Right Column: Visual Routing Diagram
+        \begin{column}{0.52\textwidth}
+            \centering
+            \begin{tikzpicture}[
+                scale=0.82, every node/.style={transform shape}
+            ]
+                % Top: Traefik Ingress
+                \node[sysbox, draw=SlateDark, fill=white, text width=6.6cm] (ing) at (3.5, 3.4) {
+                    \textbf{Traefik v3.1 Ingress Gateway}\\[1pt]
+                    {\tiny PathPrefix Ingress Routing $\cdot$ TLS Termination}
+                };
+
+                % ==============================================================
+                % LEFT TRACK: Production Serving Plane (x = 1.7)
+                % ==============================================================
+                \node[sysbox, draw=BlueAccent!80, fill=BlueAccent!10, text width=3.0cm] (api) at (1.7, 1.8) {
+                    \textbf{\color{BlueAccent} FastAPI Serving Pods}\\[1pt]
+                    {\tiny \textbf{Always Warm} (2 Replicas)}\\[1pt]
+                    {\tiny INT8 ONNX Engine $\cdot$ $<15$\,ms}
+                };
+
+                \node[sysbox, draw=RoseAccent!80, fill=RoseAccent!10, text width=3.0cm] (redis) at (1.7, 0.2) {
+                    \textbf{\color{RoseAccent} Redis Image Cache}\\[1pt]
+                    {\tiny SHA-256 Content-Addressed}\\[1pt]
+                    {\tiny Shared Cross-Pod Heatmaps}
+                };
+
+                % ==============================================================
+                % RIGHT TRACK: Lazy Dashboard Plane (x = 5.3)
+                % ==============================================================
+                \node[sysbox, draw=AmberAccent!80, fill=AmberAccent!10, text width=3.1cm] (sab) at (5.3, 1.8) {
+                    \textbf{\color{AmberAccent} Sablier Scale-to-Zero}\\[1pt]
+                    {\tiny Traefik Ingress Middleware}\\[1pt]
+                    {\tiny Wakes $0 \to 1$ $\cdot$ 15m Lease}
+                };
+
+                \node[sysbox, draw=PurpleAccent!80, fill=PurpleAccent!10, text width=3.1cm] (dash) at (5.3, 0.2) {
+                    \textbf{\color{PurpleAccent} Lazy Dashboards (0 Idle)}\\[1pt]
+                    {\tiny Optuna $\cdot$ Grafana $\cdot$ Evidently}\\[1pt]
+                    {\tiny Zero Idle CPU \& Memory}
+                };
+
+                % Arrows - Ingress splits to the two tracks
+                \draw[passarrow] (ing.south -| api.north) -- (api.north)
+                    node[midway, left=1pt, font=\tiny\bfseries\color{GreenAccent}] {/predict, /explain};
+
+                \draw[flowarrow, draw=AmberAccent, line width=0.9pt] (ing.south -| sab.north) -- (sab.north)
+                    node[midway, right=1pt, font=\tiny\bfseries\color{AmberAccent}] {/optuna, /grafana};
+
+                % Left track internal: API <-> Redis
+                \draw[{Stealth[scale=0.8]}-{Stealth[scale=0.8]}, line width=0.8pt, draw=RoseAccent] (api.south) -- (redis.north)
+                    node[midway, right=1pt, font=\tiny\bfseries\color{RoseAccent}] {Fast Buffer};
+
+                % Right track internal: Sablier -> Dashboards
+                \draw[flowarrow, draw=AmberAccent!90] (sab.south) -- (dash.north)
+                    node[midway, right=1pt, font=\tiny\bfseries\color{AmberAccent}] {Wake on HTTP};
+
+                % Background groupings
+                \begin{scope}[on background layer]
+                    \node[groupbox, fill=BlueAccent!4, draw=BlueAccent!30, fit=(api) (redis), label={[font=\tiny\bfseries\color{BlueAccent}]below:1. Serving Plane (Hot)}] {};
+                    \node[groupbox, fill=AmberAccent!4, draw=AmberAccent!30, fit=(sab) (dash), label={[font=\tiny\bfseries\color{AmberAccent}]below:2. Lazy Cockpits (Scale-to-Zero)}] {};
+                \end{scope}
+
+            \end{tikzpicture}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+% ==============================================================================
+% SLIDE 18: Telemetry & PostgreSQL Feature Persistence
 % ==============================================================================
 \begin{frame}{Vector Telemetry \& Persistence}{Asynchronous PostgreSQL Vector Persistence}
     \begin{columns}[T]
@@ -856,7 +1017,7 @@
                 \textbullet\ Detecting representation shift requires analysing feature manifolds from live traffic.\\[2pt]
                 \textbullet\ Storing raw citizen photos wastes storage and violates privacy.\\[2pt]
                 \textbullet\ TaxonVision persists the \textbf{384-dimensional feature vector} (\texttt{embedding REAL[]}) directly in PostgreSQL.\\[2pt]
-                \textbullet\ \textbf{Event Loop Protection:} Written asynchronously via \texttt{BackgroundTasks} -- request returns in $18\,\text{ms}$ while I/O runs in background.
+                \textbullet\ \textbf{Event Loop Protection:} Written asynchronously via \texttt{BackgroundTasks} - request returns in $18\,\text{ms}$ while I/O runs in background.
             \end{bluecard}
         \end{column}
         \begin{column}{0.46\textwidth}
@@ -967,9 +1128,9 @@
             \textbullet\ Dispatch GPU
         };
         
-        \node[nodecard, draw=RoseAccent!60, fill=RoseAccent!10, text width=2.4cm, right=of air] (jenk) {
-            \textbf{\color{RoseAccent} Bare-Metal Jenkins}\\
-            \scriptsize GPU runner\\
+        \node[nodecard, draw=RoseAccent!60, fill=RoseAccent!10, text width=2.5cm, right=of air] (jenk) {
+            \textbf{\color{RoseAccent} Jenkins (k3s Pod)}\\
+            \scriptsize Ephemeral GPU Pod\\
             \textbullet\ DVC repro DAG\\
             \textbullet\ 4-Gate Check
         };
@@ -1105,10 +1266,10 @@
                 \centering
                 \textbf{\color{BlueAccent} 1. Robust MLOps}\\[3pt]
                 \scriptsize
+                \textbullet\ k3s \& Sablier Scale-to-Zero\\
                 \textbullet\ 7-Stage DVC Pipeline\\
                 \textbullet\ Dual-Tier S3 Remote\\
                 \textbullet\ MLflow 3.x Registry\\
-                \textbullet\ Zero-Copy NVMe Cache\\
                 \textbullet\ Pure Pixi Toolchain
             \end{bluecard}
         \end{column}
@@ -1118,9 +1279,9 @@
                 \textbf{\color{GreenAccent} 2. Speed \& Safety}\\[3pt]
                 \scriptsize
                 \textbullet\ Sub-15ms INT8 ONNX\\
+                \textbullet\ Optuna TPE \& ASHA\\
+                \textbullet\ Redis Distributed Cache\\
                 \textbullet\ 95\% Coverage Guarantee\\
-                \textbullet\ Helmholtz Energy Filter\\
-                \textbullet\ Unified FastAPI/HTMX\\
                 \textbullet\ Forward-Only CAM
             \end{greencard}
         \end{column}
@@ -1130,10 +1291,10 @@
                 \textbf{\color{PurpleAccent} 3. Closed Loop}\\[3pt]
                 \scriptsize
                 \textbullet\ Postgres 384-D Ingestion\\
-                \textbullet\ Evidently 0.7 Drift\\
+                \textbullet\ Evidently 0.7 Drift DAG\\
                 \textbullet\ Grafana Webhook Relay\\
                 \textbullet\ Label Studio Active Learn\\
-                \textbullet\ 4-Gate Auto Retraining
+                \textbullet\ Jenkins k3s Ephemeral GPU
             \end{purplecard}
         \end{column}
     \end{columns}
