@@ -425,7 +425,7 @@
             \begin{card}
                 \textbf{\color{BlueAccent} Zero-Copy Ingestion Flow}\\[3pt]
                 \textbullet\ \textbf{Direct S3 Streaming:} Ingests batches from \texttt{s3://inaturalist-open-data} without downloading full tarballs.\\[3pt]
-                \textbullet\ \textbf{In-Memory Arrow IPC:} DuckDB filters observations in RAM; image buffers are processed ephemerally.\\[3pt]
+                \textbullet\ \textbf{In-Memory Arrow IPC:} Polars filters observations in RAM; image buffers are processed ephemerally.\\[3pt]
                 \textbullet\ \textbf{Attribution Invariant:} Retains photographer name and licence code across every manifest stage.\\[5pt]
                 \textbf{\color{GreenAccent} Governance Guarantee:} Only verified Creative Commons assets enter the Epistemic DAG. Zero unverified records admitted.
             \end{card}
@@ -445,7 +445,7 @@
 
                 % Middle Top: Arrow Stream Engine
                 \node[sysbox, draw=TealAccent!70, fill=TealAccent!10, text width=5.5cm] (arrow) at (2.75, 2.30) {
-                    \textbf{\color{TealAccent} Apache Arrow IPC \& DuckDB Kernel}\\[1pt]
+                    \textbf{\color{TealAccent} Apache Arrow IPC \& Polars Engine}\\[1pt]
                     {\tiny In-Memory Predicate Filtering $\cdot$ Zero Intermediate Files on Disk}
                 };
 
