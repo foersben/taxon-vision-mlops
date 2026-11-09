@@ -210,24 +210,42 @@ flowchart LR
         Airflow -.->|Trigger Retraining DAG| Jenkins["Bare-Metal Jenkins<br/>(NVIDIA RTX 5070 Ti)"]
     end
 
+    subgraph ActiveLearning ["Active Learning & Retraining Loop"]
+        FastAPI -->|"Flag Ambiguous / OOD"| LabelStudio["Label Studio<br/>(Expert Taxonomist Triage)"]
+        LabelStudio -->|"Verified JSON Export"| AirflowRetrain["Airflow model_retraining DAG<br/>(merge_human_feedback)"]
+        AirflowRetrain -.->|"Trigger GPU Job"| Jenkins["Bare-Metal Jenkins<br/>(NVIDIA RTX 5070 Ti)"]
+    end
+
+    subgraph ObservabilityLayer ["Telemetry & Drift Engine"]
+        FastAPI -.->|Async Feature Logging| PG["PostgreSQL 16"]
+        FastAPI -.->|Request Latencies & Set Sizes| Prom["Prometheus TSDB"]
+        Prom --> Grafana["Grafana Cockpit (6 Panels)"]
+        PG --> AirflowDrift["Airflow Hourly Drift Monitor"]
+        AirflowDrift -->|Evidently 0.7 PCA| DriftReport["Evidently Drift Report"]
+        AirflowDrift -.->|"Sustained Drift Alert"| AirflowRetrain
+    end
+
     subgraph InternalStorage ["Cluster Storage & Registry"]
         FastAPI -.-> MLflow["MLflow 3.16.0 Registry"]
         MLflow -.-> S3["Local SeaweedFS S3 Store"]
-        Jenkins -->|"Fast Zero-Egress DVC"| S3
+        Jenkins -->|"dvc push (local)"| S3
     end
 
     subgraph CloudStorage ["Cloud Collaboration & CI (DagsHub)"]
-        GHA["GitHub Actions CI"] -->|"dvc pull (DAGSHUB_TOKEN)"| DagsHubDVC["DagsHub DVC Remote<br/>(s3://dvc)"]
+        Jenkins -->|"dvc push -r origin"| DagsHubDVC["DagsHub DVC Remote<br/>(s3://dvc)"]
+        GHA["GitHub Actions CI"] -->|"dvc pull (DAGSHUB_TOKEN)"| DagsHubDVC
         Dev["Developer Workstation"] -->|"dvc push / pull"| DagsHubDVC
         FastAPI -.->|"Mirror / Public View"| DagsHubMLflow["DagsHub MLflow 2.x<br/>(Public Dashboard)"]
     end
 
     classDef core fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
-    classDef obs fill:#0f172a,stroke:#10b981,stroke-width:1px,color:#e2e8f0;
+    classDef loop fill:#1e1b4b,stroke:#ec4899,stroke-width:2px,color:#f8fafc;
+    classDef obs fill:#0f172a,stroke:#f59e0b,stroke-width:1px,color:#e2e8f0;
     classDef store fill:#1e1b4b,stroke:#8b5cf6,stroke-width:2px,color:#f8fafc;
     classDef cloud fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc;
     class Traefik,FastAPI,Dashboard core;
-    class PG,Prom,Grafana,Airflow,DriftReport,Jenkins obs;
+    class LabelStudio,AirflowRetrain,Jenkins loop;
+    class PG,Prom,Grafana,AirflowDrift,DriftReport obs;
     class MLflow,S3 store;
     class GHA,Dev,DagsHubDVC,DagsHubMLflow cloud;
 ```
@@ -239,7 +257,7 @@ flowchart LR
 
 ### 2. Experiment Tracking & Four-Gate Model Promotion
 
-* **Centralized Registry:** Self-hosted MLflow 3.16.0 backed by PostgreSQL 16 for experiment parameters/metrics and SeaweedFS (S3-compatible) for tensor checkpoints and ONNX graphs.
+* **Centralised Registry:** Self-hosted MLflow 3.16.0 backed by PostgreSQL 16 for experiment parameters/metrics and SeaweedFS (S3-compatible) for tensor checkpoints and ONNX graphs.
 * **Automated Four-Gate Promotion:** Models must strictly pass four automated gates before receiving the `@Production` alias:
   1. *Accuracy Degradation Gate:* Top-1 accuracy drop between FP32 baseline and INT8 quantized ONNX graph $\le 3.0\%$.
   2. *Statistical Coverage Gate:* Empirical coverage on holdout calibration/test splits $\ge 1 - \alpha - 0.05$ ($90.0\%$).
@@ -265,6 +283,24 @@ To balance public reproducibility and CI automation with high-throughput local G
 * **Internal Bare-Metal Tier (Cluster & Workstation):**
     * *Local SeaweedFS S3 Remote (`local-seaweedfs`):* Cluster-internal S3-compatible object store (`http://seaweedfs:8333`). Eliminates cloud bandwidth latency and egress costs by staging multi-gigabyte embeddings and intermediate checkpoints directly over the local NVMe bus during continuous training.
     * *Self-Hosted MLflow 3.16.0 + PostgreSQL 16:* Private high-performance tracking server powering live Bayesian Optuna sweeps, native MLflow 3.x First-Class `LoggedModel` lineage, and automated Four-Gate promotion tags (`@Production`, `@Challenger`, `@Archived`).
+
+### 5. Automated Retraining & Human-in-the-Loop Feedback (Label Studio → Airflow → Jenkins → DagsHub)
+
+TaxonVision couples automated out-of-distribution (OOD) routing and conformal triage with a closed-loop human-in-the-loop (HITL) annotation and retraining architecture:
+
+* **Conformal Triage & Label Studio Ingestion:**
+    * During production serving, observations flagged by Split Conformal Prediction (prediction sets exceeding the ambiguity ceiling $|C(x)| > k_{\text{max}}$ or empty sets $|C(x)| = 0$) or the Helmholtz energy filter ($E(x) > \tau_{\text{ood}}$) are routed directly to human review queue storage (`data/flagged_observations/`).
+    * Domain taxonomists review and verify flagged observations in Label Studio, exporting verified multi-class annotations as structured JSON records (`data/flagged_observations/label_studio_export.json`).
+* **Airflow Feedback Integration DAG:**
+    * The `model_retraining` Airflow DAG parses the Label Studio feedback batch via `merge_human_feedback` (`src/taxon_vision/active_learning/feedback.py`).
+    * Observations are filtered to strip any lingering out-of-distribution noise, validated against the open-licensing whitelist (CC0, CC-BY, CC-BY-NC) with full photographer attribution preservation, and merged atomically into `dataset_manifest.parquet`.
+* **Bare-Metal Jenkins Retraining & Dual DVC Push:**
+    * Upon manifest updating - or when the hourly Evidently drift monitor detects sustained representation shift - Airflow dispatches the headless GPU retraining pipeline (`scripts/ci/jenkins_gpu_train.sh`) to the bare-metal Jenkins runner on `hive-mind`.
+    * Training executes on the NVIDIA GeForce RTX 5070 Ti, re-extracting split embeddings, optimising cosine classification heads via Optuna Bayesian sweeps, calibrating conformal quantiles, and exporting INT8 ONNX graphs.
+    * Once validated against the Four-Gate Promotion criteria, Jenkins triggers a **dual DVC push**:
+        * `dvc push -r local-seaweedfs`: Instantly updates cluster-internal SeaweedFS storage for zero-egress serving pod mounting.
+        * `dvc push -r origin`: Synchronises the updated manifests, embeddings, and production ONNX graphs to DagsHub Cloud S3.
+    * Jenkins automatically commits the updated `dvc.lock`, promotion metadata, and evaluation artefacts back to Git (`git push origin HEAD:develop`), completing the closed-loop MLOps cycle.
 
 ---
 
