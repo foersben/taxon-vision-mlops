@@ -8,7 +8,8 @@
 \usefonttheme{structurebold}
 
 \usepackage[utf8]{inputenc}
-\usepackage{helvet}
+\usepackage{tgheros}
+\usepackage{microtype}
 \renewcommand{\familydefault}{\sfdefault}
 \usepackage{graphicx}
 \usepackage{booktabs}
@@ -30,7 +31,7 @@
 \definecolor{PurpleAccent}{HTML}{7C3AED} % Royal purple / active learning
 \definecolor{TealAccent}{HTML}{0D9488}   % Teal / data engineering
 \definecolor{TextMain}{HTML}{1E293B}     % Primary text
-\definecolor{TextMuted}{HTML}{64748B}    % Secondary muted text
+\definecolor{TextMuted}{HTML}{94A3B8}    % Secondary muted text (high contrast on dark slate)
 
 % --- Beamer Color Mappings ---
 \setbeamercolor{normal text}{fg=TextMain,bg=white}
@@ -46,19 +47,28 @@
 
 \setbeamertemplate{frametitle}{%
     \nointerlineskip
-    \begin{beamercolorbox}[wd=\paperwidth,ht=28pt,dp=6pt,leftskip=14pt,rightskip=14pt]{frametitle}
-        {\large\bfseries\insertframetitle}
-        \ifx\insertframesubtitle\@empty\else
-            \\[2pt]{\footnotesize\color{TextMuted!40}\insertframesubtitle}
-        \fi
+    \begin{beamercolorbox}[wd=\paperwidth,ht=30pt,dp=8pt,leftskip=14pt,rightskip=14pt]{frametitle}
+        \begin{minipage}[c][30pt][c]{0.50\textwidth}
+            \raggedright
+            \vspace*{-2.0pt}%
+            {\large\bfseries\color{white}\insertframetitle}
+        \end{minipage}%
+        \hfill
+        \begin{minipage}[c][30pt][c]{0.47\textwidth}
+            \raggedright
+            \vspace*{2.0pt}%
+            \ifx\insertframesubtitle\@empty\else
+                {\footnotesize\color{TextMuted}\insertframesubtitle}
+            \fi
+        \end{minipage}
     \end{beamercolorbox}
 }
 
 \setbeamertemplate{footline}{%
     \begin{beamercolorbox}[wd=\paperwidth,ht=14pt,dp=4pt,leftskip=14pt,rightskip=14pt]{normal text}
-        {\tiny\color{TextMuted}\textbf{TaxonVision} $\cdot$ Production MLOps Architecture}
+        {\tiny\color{TextMuted!80}\textbf{TaxonVision} $\cdot$ Production Biodiversity MLOps Architecture}
         \hfill
-        {\tiny\color{TextMuted}\insertframenumber{} / \inserttotalframenumber}
+        {\tiny\color{TextMuted!80}\insertframenumber{} / \inserttotalframenumber}
     \end{beamercolorbox}
 }
 
@@ -111,9 +121,10 @@
 
 % --- Custom TikZ Component Styles ---
 \tikzset{
-    flowarrow/.style={-{Stealth[scale=0.9, length=4.5pt, width=3.5pt]}, line width=1.0pt, draw=SlateDark!70},
+    flowarrow/.style={-{Stealth[scale=0.8, length=4.0pt, width=3.0pt]}, line width=0.8pt, draw=SlateDark!70},
     dasharrow/.style={flowarrow, dashed, draw=BlueAccent},
-    retrainarrow/.style={flowarrow, draw=RoseAccent, line width=1.2pt},
+    retrainarrow/.style={flowarrow, draw=RoseAccent, line width=0.9pt},
+    syncarrow/.style={flowarrow, draw=GreenAccent, line width=0.9pt},
     pill/.style={
         rectangle, rounded corners=2pt, fill=white, draw=SlateMid!40,
         inner sep=2pt, font=\tiny\bfseries, align=center
@@ -121,6 +132,13 @@
     nodecard/.style={
         rectangle, rounded corners=3pt, draw=SlateMid!40, fill=SlateLight,
         line width=0.6pt, inner sep=4.5pt, align=left, font=\scriptsize
+    },
+    sysbox/.style={
+        rectangle, rounded corners=3pt, draw=SlateMid!35, fill=white,
+        line width=0.5pt, inner sep=3.5pt, align=center, font=\scriptsize
+    },
+    groupbox/.style={
+        rectangle, rounded corners=4pt, line width=0.6pt, inner sep=3.5pt
     }
 }
 
@@ -141,7 +159,7 @@
     \begin{center}
         {\Huge\bfseries\color{SlateDark} TaxonVision}\\[4pt]
         {\large\bfseries\color{BlueAccent} Production Biodiversity MLOps Architecture}\\[6pt]
-        {\footnotesize\color{TextMuted} High-Throughput Vision $\cdot$ Split Conformal Safety $\cdot$ Automated Closed Loop}
+        {\footnotesize\color{TextMuted!90} High-Throughput Vision $\cdot$ Split Conformal Safety $\cdot$ Automated Closed Loop}
         
         \vspace{0.6cm}
         \begin{tikzpicture}[node distance=0.4cm and 0.4cm]
@@ -159,12 +177,93 @@
         
         \vspace{0.7cm}
         {\small\textbf{Benjamin Förster}}\\[2pt]
-        {\scriptsize\color{TextMuted} Final MLOps Project Presentation \& Architecture Defense}
+        {\scriptsize\color{TextMuted!90} Final MLOps Project Presentation \& Architecture Defense}
     \end{center}
 \end{frame}
 
 % ==============================================================================
-% SLIDE 2: The Core Challenge: Real-World Biodiversity
+% SLIDE 2: Project Mission & Problem Statement
+% ==============================================================================
+\begin{frame}{The Mission: Biodiversity MLOps}{Why Real-World Data Demands Resilient Systems}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{card}
+                \textbf{\color{BlueAccent} The Ecological Problem}\\[3pt]
+                \textbullet\ \textbf{Biodiversity Crisis:} Tracking species loss requires classifying millions of wild citizen-science observations at global scale.\\[3pt]
+                \textbullet\ \textbf{Why Standard ML Fails in Nature:}
+                \begin{itemize}\scriptsize
+                    \item Extreme long-tail class imbalance ($80\%$ rare taxa).
+                    \item Continuous visual drift (lighting, camera sensors, seasons).
+                    \item Severe risk of silent false positives on unknown taxa.
+                \end{itemize}
+                \vspace{0.25cm}
+                \textbf{\color{RoseAccent} The High Cost of Hallucinations:}\\[2pt]
+                Misclassifying an endangered organism as common ruins survey datasets and compromises conservation policy.
+            \end{card}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{greencard}
+                \textbf{\color{GreenAccent} Our Core Engineering Mission}\\[3pt]
+                \textbullet\ \textbf{1. Strict Data Reproducibility:} End-to-end versioned DVC DAG from raw S3 open data to registered model checkpoints.\\[3pt]
+                \textbullet\ \textbf{2. Epistemic Safety Envelopes:} Mathematical coverage guarantee ($1-\alpha \ge 95\%$) via Split Conformal Prediction + OOD gating.\\[3pt]
+                \textbullet\ \textbf{3. Self-Healing Retraining Loop:} Continuous feature drift detection (Evidently AI) triggering automated retraining pipelines.
+                \vspace{0.25cm}
+                \tcblower
+                \centering\textbf{\color{SlateMid} Production Objective:} A hardened, self-monitoring MLOps engine operating safely in the wild.
+            \end{greencard}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+% ==============================================================================
+% SLIDE 3: Engineering Tasks & Architectural Roadmap
+% ==============================================================================
+\begin{frame}{Curriculum \& System Roadmap}{Three Core Phases \& Architectural Milestones}
+    \begin{columns}[T]
+        \begin{column}{0.32\textwidth}
+            \begin{bluecard}
+                \centering
+                \textbf{\color{BlueAccent} Phase 1: Foundation}\\[2pt]
+                \textbf{\scriptsize Data Plane \& Reproducibility}\\[4pt]
+                \RaggedRight\scriptsize
+                \textbullet\ \textbf{S3 Streaming:} Direct ingest from open data bucket.\\[3pt]
+                \textbullet\ \textbf{Licence Audit:} Creative Commons filter (CC0, CC-BY, CC-BY-NC).\\[3pt]
+                \textbullet\ \textbf{DVC 7-Stage DAG:} Strict MD5 tracking \& zero split leakage.\\[3pt]
+                \textbullet\ \textbf{Feature Caching:} Pre-computed DINOv2 embeddings on NVMe.\\[3pt]
+                \textbullet\ \textbf{Bayesian HPO:} Optuna sweeps with MLflow tracking.
+            \end{bluecard}
+        \end{column}
+        \begin{column}{0.32\textwidth}
+            \begin{greencard}
+                \centering
+                \textbf{\color{GreenAccent} Phase 2: Safety \& Serving}\\[2pt]
+                \textbf{\scriptsize Low-Latency Inference}\\[4pt]
+                \RaggedRight\scriptsize
+                \textbullet\ \textbf{INT8 Quantization:} Dual-output ONNX ($<15\,\text{ms}$ CPU SLO).\\[3pt]
+                \textbullet\ \textbf{Conformal Sets:} Finite-sample quantile sets ($1-\alpha \ge 95\%$).\\[3pt]
+                \textbullet\ \textbf{Helmholtz Energy:} Logit-based out-of-distribution rejection.\\[3pt]
+                \textbullet\ \textbf{Dual Serving:} REST API and Jinja2/HTMX dashboard.\\[3pt]
+                \textbullet\ \textbf{Explainability:} On-demand Forward Grad-CAM heatmaps.
+            \end{greencard}
+        \end{column}
+        \begin{column}{0.32\textwidth}
+            \begin{purplecard}
+                \centering
+                \textbf{\color{PurpleAccent} Phase 3: Closed Loop}\\[2pt]
+                \textbf{\scriptsize Drift, Alerts \& Retraining}\\[4pt]
+                \RaggedRight\scriptsize
+                \textbullet\ \textbf{Vector Telemetry:} Async PostgreSQL logging of 384-D vectors.\\[3pt]
+                \textbullet\ \textbf{Real-Time Cockpit:} Prometheus TSDB + 6-Panel Grafana.\\[3pt]
+                \textbullet\ \textbf{Drift Detection:} Evidently AI $W_1$ \& Kernel MMD$^2$ tests.\\[3pt]
+                \textbullet\ \textbf{Auto Retraining:} Grafana Webhook Relay $\to$ Airflow 3.0.\\[3pt]
+                \textbullet\ \textbf{Active Learning:} Label Studio triage for uncertain sets.
+            \end{purplecard}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+% ==============================================================================
+% SLIDE 4: The Domain Challenge
 % ==============================================================================
 \begin{frame}{The Domain Challenge}{Why Standard Computer Vision Fails in the Wild}
     \begin{columns}[T]
@@ -189,34 +288,34 @@
         \begin{column}{0.48\textwidth}
             \begin{card}
                 \textbf{\color{BlueAccent} Three Production Realities}\\[3pt]
-                \textbullet\ \textbf{Severe Class Imbalance:} A few common taxa have 10,000+ photos; thousands of rare species have $<10$.\\[3pt]
-                \textbullet\ \textbf{Continuous Feature Drift:} Lighting, seasonal changes, camera sensors, and geographic shifts constantly distort the visual manifold.\\[3pt]
-                \textbullet\ \textbf{Novelty \& Noise:} Users submit unseen insects, blurred frames, and blank shots -- the model must abstain!
+                \textbullet\ \textbf{Severe Class Imbalance:} A few common taxa have 10,000+ photos; thousands of rare species have $<10$.\\[4pt]
+                \textbullet\ \textbf{Continuous Feature Drift:} Lighting, seasonal changes, camera sensors, and geographic shifts constantly distort the visual manifold.\\[4pt]
+                \textbullet\ \textbf{Novelty \& Noise:} Users submit unseen species, blur, and blank shots -- the model must abstain!
             \end{card}
         \end{column}
     \end{columns}
 \end{frame}
 
 % ==============================================================================
-% SLIDE 3: The MLOps Paradigm Shift
+% SLIDE 5: The MLOps Paradigm Shift
 % ==============================================================================
-\begin{frame}{The MLOps Paradigm Shift}{From Notebook Prototypes to an Engineered Production System}
+\begin{frame}{The MLOps Paradigm Shift}{From Notebook Scripts to Production Systems}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
             \begin{rosecard}
                 \textbf{\color{RoseAccent} Prototype / Toy Machine Learning}\\[4pt]
-                \textbullet\ \textbf{Unversioned Data:} Ad-hoc CSVs, non-reproducible manual train/test splits.\\[3pt]
-                \textbullet\ \textbf{Redundant Compute:} Heavy vision backbones re-extracted on every run.\\[3pt]
-                \textbullet\ \textbf{Raw Softmax Guesses:} Uncalibrated probabilities, forced to predict on unknown classes.\\[3pt]
+                \textbullet\ \textbf{Unversioned Data:} Ad-hoc CSVs, non-reproducible manual train/test splits.\\[4pt]
+                \textbullet\ \textbf{Redundant Compute:} Heavy vision backbones re-extracted on every run.\\[4pt]
+                \textbullet\ \textbf{Raw Softmax Guesses:} Uncalibrated probabilities, forced to predict on unknown classes.\\[4pt]
                 \textbullet\ \textbf{Silent Decay:} Zero drift monitoring; model silently fails in production.
             \end{rosecard}
         \end{column}
         \begin{column}{0.48\textwidth}
             \begin{greencard}
                 \textbf{\color{GreenAccent} TaxonVision Production MLOps}\\[4pt]
-                \textbullet\ \textbf{DVC Versioned DAG:} 7 pure stages cryptographically tracked by MD5 hashes.\\[3pt]
-                \textbullet\ \textbf{Zero-Copy Feature Caching:} Pre-computed foundation embeddings cached on NVMe.\\[3pt]
-                \textbullet\ \textbf{Conformal Safety Sets:} Guaranteed coverage ($1-\alpha \ge 95\%$) with Energy OOD filter.\\[3pt]
+                \textbullet\ \textbf{DVC Versioned DAG:} 7 pure stages cryptographically tracked by MD5 hashes.\\[4pt]
+                \textbullet\ \textbf{Zero-Copy Feature Caching:} Pre-computed foundation embeddings cached on NVMe.\\[4pt]
+                \textbullet\ \textbf{Conformal Safety Sets:} Guaranteed coverage ($1-\alpha \ge 95\%$) with Energy OOD filter.\\[4pt]
                 \textbullet\ \textbf{Closed Retraining Loop:} Automated alerts $\to$ Airflow DAG $\to$ GPU retraining.
             \end{greencard}
         \end{column}
@@ -224,70 +323,99 @@
 \end{frame}
 
 % ==============================================================================
-% SLIDE 4: End-to-End System Architecture
+% SLIDE 6: Complete MLOps & Production Infrastructure
 % ==============================================================================
-\begin{frame}{End-to-End System Architecture}{The Five Operational Planes of TaxonVision}
+\begin{frame}{Complete MLOps Infrastructure}{Unified Serving, Telemetry, Storage \& Retraining}
     \centering
+    \vspace{-0.1cm}
     \begin{tikzpicture}[
-        scale=0.88, every node/.style={transform shape},
-        node distance=0.35cm and 0.4cm
+        scale=0.83, every node/.style={transform shape}
     ]
-        % Plane 1: Data & Versioning
-        \node[nodecard, draw=BlueAccent!60, fill=BlueAccent!5, text width=2.5cm] (data) {
-            \textbf{\color{BlueAccent} 1. Data Plane}\\
-            \textbullet\ iNaturalist S3\\
-            \textbullet\ Licence Audit Gate\\
-            \textbullet\ DVC DAG (7 Stages)
-        };
-        
-        % Plane 2: Training & Tuning
-        \node[nodecard, draw=GreenAccent!60, fill=GreenAccent!5, text width=2.6cm, right=of data] (train) {
-            \textbf{\color{GreenAccent} 2. Training Plane}\\
-            \textbullet\ DINOv2 Trunk\\
-            \textbullet\ Optuna Bayesian HPO\\
-            \textbullet\ MLflow Registry\\
-            \textbullet\ INT8 PTQ ONNX
-        };
-        
-        % Plane 3: Serving & Safety
-        \node[nodecard, text width=2.6cm, right=of train] (serv) {
-            \textbf{\color{SlateDark} 3. Serving Plane}\\
-            \textbullet\ FastAPI ($<25$ms)\\
-            \textbullet\ Conformal Safety Set\\
-            \textbullet\ Helmholtz Energy OOD\\
-            \textbullet\ Forward Grad-CAM
-        };
-        
-        % Plane 4: Observability
-        \node[nodecard, draw=AmberAccent!60, fill=AmberAccent!5, text width=2.6cm, right=of serv] (obs) {
-            \textbf{\color{AmberAccent} 4. Telemetry Plane}\\
-            \textbullet\ 384-D Vector Ingest\\
-            \textbullet\ Prometheus Metrics\\
-            \textbullet\ Evidently AI Drift\\
-            \textbullet\ Airflow Hourly DAG
-        };
-        
-        % Plane 5: Feedback Loop
-        \node[nodecard, draw=PurpleAccent!60, fill=PurpleAccent!5, text width=11.8cm, below=0.6cm of $(train.south)!0.5!(serv.south)$] (loop) {
-            \centering
-            \textbf{\color{PurpleAccent} 5. Closed-Loop Retraining \& Active Learning Loop}\\[2pt]
-            \textbullet\ \textbf{Ambiguous Triage:} Flagged to Label Studio $\to$ Taxonomist Review $\to$ Manifest Update\\
-            \textbullet\ \textbf{Drift Retraining:} Grafana Alert $\to$ FastAPI Relay (6h Lock) $\to$ Airflow $\to$ GPU Runner
-        };
-        
-        \draw[flowarrow] (data) -- (train);
-        \draw[flowarrow] (train) -- (serv);
-        \draw[flowarrow] (serv) -- (obs);
-        \draw[dasharrow] (serv.south) -- ++(0,-0.3) -| (loop.north);
-        \draw[retrainarrow] (obs.south) -- ++(0,-0.3) -| ([xshift=3.5cm]loop.north);
-        \draw[flowarrow, draw=PurpleAccent, line width=1.1pt] (loop.west) -- ++(-0.4, 0) |- (data.west);
+        % ======================================================================
+        % COLUMN 1: Ingress & Serving (x = 1.3)
+        % ======================================================================
+        \node[sysbox, text width=2.1cm] (usr) at (1.3, 2.2) {\textbf{Field Observers}\\[1pt]{\tiny Web \& Mobile Apps}};
+        \node[sysbox, draw=BlueAccent!60, fill=BlueAccent!5, text width=2.1cm] (trf) at (1.3, 1.15) {\textbf{Traefik v3.1}\\[1pt]{\tiny Ingress Gateway}};
+        \node[sysbox, draw=BlueAccent, fill=BlueAccent!10, text width=2.1cm] (api) at (1.3, 0.05) {\textbf{FastAPI Service}\\[1pt]{\tiny INT8 ONNX Engine}};
+        \node[sysbox, draw=TealAccent!60, fill=TealAccent!5, text width=2.1cm] (ui) at (1.3, -1.2) {\textbf{HTMX Dashboard}\\[1pt]{\tiny Operator Cockpit}};
+
+        % ======================================================================
+        % COLUMN 2: Telemetry & Cluster Storage (x = 4.4)
+        % ======================================================================
+        \node[sysbox, draw=AmberAccent!60, fill=AmberAccent!5, text width=2.3cm] (prom) at (4.4, 1.15) {\textbf{Prometheus TSDB}\\[1pt]{\tiny Scrapes \texttt{/metrics}}};
+        \node[sysbox, draw=AmberAccent!60, fill=AmberAccent!5, text width=2.3cm] (pg) at (4.4, 0.05) {\textbf{PostgreSQL 16}\\[1pt]{\tiny 384-D Vector Log}};
+        \node[sysbox, draw=PurpleAccent!60, fill=PurpleAccent!5, text width=2.3cm] (mlflow) at (4.4, -1.2) {\textbf{MLflow 3.x}\\[1pt]{\tiny Experiment Registry}};
+
+        % ======================================================================
+        % COLUMN 3: Cockpit, Drift & In-Cluster S3 (x = 7.5)
+        % ======================================================================
+        \node[sysbox, draw=AmberAccent, fill=AmberAccent!10, text width=2.4cm] (graf) at (7.5, 1.15) {\textbf{Grafana Cockpit}\\[1pt]{\tiny 6 Panels $\cdot$ Alerts}};
+        \node[sysbox, draw=AmberAccent, fill=AmberAccent!10, text width=2.4cm] (air_drift) at (7.5, 0.05) {\textbf{Airflow Drift DAG}\\[1pt]{\tiny Evidently AI Report}};
+        \node[sysbox, draw=PurpleAccent, fill=PurpleAccent!10, text width=2.4cm] (seaweed) at (7.5, -1.2) {\textbf{SeaweedFS S3}\\[1pt]{\tiny In-Cluster NVMe Store}};
+
+        % ======================================================================
+        % COLUMN 4: Active Learning & Retraining Loop (x = 10.7)
+        % ======================================================================
+        \node[sysbox, draw=PurpleAccent!80, fill=PurpleAccent!10, text width=2.4cm] (ls) at (10.7, 1.15) {\textbf{Label Studio}\\[1pt]{\tiny Taxonomist Review}};
+        \node[sysbox, draw=RoseAccent!60, fill=RoseAccent!5, text width=2.4cm] (air_retrain) at (10.7, 0.05) {\textbf{Airflow Retrain DAG}\\[1pt]{\tiny Feedback Merge}};
+        \node[sysbox, draw=RoseAccent, fill=RoseAccent!10, text width=2.4cm] (jenk) at (10.7, -1.2) {\textbf{Bare-Metal Jenkins}\\[1pt]{\tiny GPU Retrain Runner}};
+
+        % ======================================================================
+        % COLUMN 5: Cloud Collaboration (DagsHub) (x = 13.9)
+        % ======================================================================
+        \node[sysbox, draw=GreenAccent!60, fill=GreenAccent!5, text width=2.1cm] (gha) at (13.9, 1.15) {\textbf{GitHub Actions}\\[1pt]{\tiny Cloud CPU Gates}};
+        \node[sysbox, draw=GreenAccent, fill=GreenAccent!10, text width=2.1cm] (dagshub) at (13.9, 0.05) {\textbf{DagsHub S3}\\[1pt]{\tiny \texttt{s3://dvc} Remote}};
+        \node[sysbox, draw=GreenAccent!60, fill=GreenAccent!5, text width=2.1cm] (dag_mlflow) at (13.9, -1.2) {\textbf{MLflow 2.x Mirror}\\[1pt]{\tiny Public Dashboard}};
+
+        % ======================================================================
+        % Connections
+        % ======================================================================
+        % Ingress Flow
+        \draw[flowarrow] (usr) -- (trf);
+        \draw[flowarrow] (trf) -- (api);
+        \draw[flowarrow] (api) -- (ui);
+
+        % API Outgoing to Telemetry / Storage (via clean east corridor)
+        \draw[dasharrow] (api.east) -- ++(0.3, 0) |- (prom.west);
+        \draw[dasharrow] (api.east) -- (pg.west);
+        \draw[dasharrow] (api.east) -- ++(0.3, 0) |- (mlflow.west);
+
+        % Upper bypass for OOD Triage to Label Studio (routing cleanly over top)
+        \draw[retrainarrow] (api.west) -- ++(-0.45, 0) |- ([yshift=0.80cm]usr.north) -| (ls.north)
+            node[pos=0.25, above, font=\tiny\bfseries\color{RoseAccent}] {OOD / Ambiguous Sets};
+
+        % Telemetry & Drift
+        \draw[flowarrow] (prom) -- (graf);
+        \draw[flowarrow] (pg) -- (air_drift);
+
+        % Retraining Triggers
+        \draw[flowarrow] (ls) -- (air_retrain);
+        \draw[retrainarrow] (air_drift) -- (air_retrain);
+        \draw[retrainarrow] (graf.east) -- ++(0.35, 0) |- ([yshift=3pt]air_retrain.north west);
+        \draw[flowarrow] (air_retrain) -- (jenk);
+
+        % Storage & Cloud Sync
+        \draw[dasharrow] (mlflow) -- (seaweed);
+        \draw[syncarrow] (jenk.west) -- (seaweed.east);
+        \draw[syncarrow] (jenk.east) -- ++(0.3, 0) |- (dagshub.west);
+        \draw[flowarrow] (gha) -- (dagshub);
+        \draw[flowarrow] (dagshub) -- (dag_mlflow);
+
+        % Background groupings
+        \begin{scope}[on background layer]
+            \node[groupbox, fill=BlueAccent!3, draw=BlueAccent!30, fit=(usr) (trf) (api) (ui), label={[font=\tiny\bfseries\color{BlueAccent}]below:1. Serving Plane}] {};
+            \node[groupbox, fill=AmberAccent!3, draw=AmberAccent!30, fit=(prom) (pg) (graf) (air_drift), label={[font=\tiny\bfseries\color{AmberAccent}]above:2. Observability \& Drift}] {};
+            \node[groupbox, fill=PurpleAccent!3, draw=PurpleAccent!30, fit=(mlflow) (seaweed), label={[font=\tiny\bfseries\color{PurpleAccent}]below:3. Cluster Registry \& S3}] {};
+            \node[groupbox, fill=RoseAccent!3, draw=RoseAccent!30, fit=(ls) (air_retrain) (jenk), label={[font=\tiny\bfseries\color{RoseAccent}]below:4. Retraining Loop}] {};
+            \node[groupbox, fill=GreenAccent!3, draw=GreenAccent!30, fit=(gha) (dagshub) (dag_mlflow), label={[font=\tiny\bfseries\color{GreenAccent}]above:5. Cloud Archive}] {};
+        \end{scope}
     \end{tikzpicture}
 \end{frame}
 
 % ==============================================================================
-% SLIDE 5: Data Plane: S3 Streaming & License Auditing
+% SLIDE 7: Data Plane: S3 Streaming & License Auditing
 % ==============================================================================
-\begin{frame}{Data Plane: Ingestion \& Licensing Compliance}{Zero-Copy S3 Streaming and Strict Creative Commons Governance}
+\begin{frame}{Data Plane \& Licence Governance}{Zero-Copy S3 Streaming \& Open Licences}
     \begin{columns}[T]
         \begin{column}{0.52\textwidth}
             \begin{card}
@@ -295,7 +423,7 @@
                 \textbullet\ \textbf{Amazon S3 Streaming:} Direct manifest and crop streaming from \texttt{s3://inaturalist-open-data/}.\\[2pt]
                 \textbullet\ \textbf{Apache Arrow IPC:} High-speed in-memory tabular processing with embedded DuckDB filtering.\\[2pt]
                 \textbullet\ \textbf{Ephemeral Images:} Raw JPEGs are normalized into tensor memory and discarded -- never stored as duplicate disk files.\\[6pt]
-                \textbf{\color{AmberAccent} License Compliance Gate (Rule 05)}\\[2pt]
+                \textbf{\color{AmberAccent} Licence Compliance Gate}\\[2pt]
                 \textbullet\ \textbf{Whitelisted:} \texttt{CC0}, \texttt{CC-BY}, \texttt{CC-BY-NC}.\\[2pt]
                 \textbullet\ \textbf{Rejected:} \texttt{All-Rights-Reserved}, \texttt{CC-BY-ND}.\\[2pt]
                 \textbullet\ \textbf{Attribution Invariant:} Photographer credit preserved across all manifest stages and API endpoints.
@@ -318,21 +446,21 @@
 \end{frame}
 
 % ==============================================================================
-% SLIDE 6: The Epistemic Diamond DAG (DVC Versioning)
+% SLIDE 8: The Epistemic Diamond DAG (DVC Versioning)
 % ==============================================================================
-\begin{frame}{The Epistemic Diamond DAG}{7-Stage Reproducible Pipeline with Zero Split Leakage}
+\begin{frame}{The Epistemic Diamond DAG}{7-Stage DAG with Zero Split Leakage}
     \centering
     \begin{tikzpicture}[
         scale=0.86, every node/.style={transform shape}
     ]
         % Left Ingestion Chain (y=0.0)
-        \node[nodecard, fill=TealAccent!10, draw=TealAccent, text width=2.2cm] (raw) at (0, 0) {
+        \node[nodecard, fill=TealAccent!10, draw=TealAccent, text width=2.1cm] (raw) at (0, 0) {
             \textbf{1. \texttt{ingest}}\\\scriptsize \texttt{raw\_manifest}
         };
-        \node[nodecard, fill=AmberAccent!10, draw=AmberAccent, text width=2.2cm] (lic) at (2.8, 0) {
+        \node[nodecard, fill=AmberAccent!10, draw=AmberAccent, text width=2.2cm] (lic) at (2.7, 0) {
             \textbf{2. \texttt{audit\_license}}\\\scriptsize Verified Parquet
         };
-        \node[nodecard, fill=BlueAccent!10, draw=BlueAccent, text width=2.3cm] (feat) at (5.7, 0) {
+        \node[nodecard, fill=BlueAccent!10, draw=BlueAccent, text width=2.6cm] (feat) at (5.7, 0) {
             \textbf{3. \texttt{extract\_features}}\\\scriptsize 384-D Tensors
         };
         
@@ -374,14 +502,14 @@
     \vspace{0.2cm}
     \begin{bluecard}
         \centering
-        \textbf{Strict Split Isolation (Rule 01):} \textbf{Train} updates head weights; \textbf{Val} guides Optuna HPO early stopping; \textbf{Cal} quantiles conformal coverage; \textbf{Test} renders final promotion verdict. Zero leakage!
+        \textbf{Strict Split Isolation:} \textbf{Train} updates head weights; \textbf{Val} guides Optuna HPO early stopping; \textbf{Cal} quantiles conformal coverage; \textbf{Test} renders final promotion verdict. Zero leakage!
     \end{bluecard}
 \end{frame}
 
 % ==============================================================================
-% SLIDE 7: Dual-Tier Storage Architecture
+% SLIDE 9: Dual-Tier Storage Architecture
 % ==============================================================================
-\begin{frame}{Dual-Tier Storage Topology}{Cloud Collaboration (DagsHub) vs. Local Serving Economics}
+\begin{frame}{Dual-Tier Storage Topology}{DagsHub Cloud S3 vs. Local NVMe Store}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
             \begin{bluecard}
@@ -405,9 +533,9 @@
 \end{frame}
 
 % ==============================================================================
-% SLIDE 8: Feature Caching & Model Architecture
+% SLIDE 10: Feature Caching & Model Architecture
 % ==============================================================================
-\begin{frame}{Model Architecture \& Feature Caching}{Accelerating Iteration Velocity by 100x}
+\begin{frame}{Feature Caching \& Rapid Training}{Decoupled Vision Trunk \& Sub-5s Head Training}
     \begin{columns}[T]
         \begin{column}{0.50\textwidth}
             \begin{bluecard}
@@ -440,9 +568,9 @@
 \end{frame}
 
 % ==============================================================================
-% SLIDE 9: Latency Optimization: Zero-Allocation INT8 ONNX
+% SLIDE 11: Latency Optimization: Zero-Allocation INT8 ONNX
 % ==============================================================================
-\begin{frame}{Latency Optimization: Zero-Allocation INT8 ONNX}{Deterministic Low-Latency Inference Under Strict Production SLOs}
+\begin{frame}{Zero-Allocation INT8 Inference}{Sub-15ms Low-Latency Inference Under SLOs}
     \begin{columns}[T]
         \begin{column}{0.32\textwidth}
             \statbox{GreenAccent}{11.8 ms}{CPU p95 (Budget: $\le 15$ ms)}
@@ -451,7 +579,7 @@
             \statbox{GreenAccent}{6.2 ms}{GPU p95 (Budget: $\le 10$ ms)}
         \end{column}
         \begin{column}{0.32\textwidth}
-            \statbox{GreenAccent}{18.4 ms}{Microservice p95 (Budget: $\le 25$ ms)}
+            \statbox{GreenAccent}{18.4 ms}{API p95 (Budget: $\le 25$ ms)}
         \end{column}
     \end{columns}
     
@@ -466,7 +594,7 @@
         \end{column}
         \begin{column}{0.48\textwidth}
             \begin{greencard}
-                \textbf{\color{GreenAccent} Zero-Allocation Discipline (Rule 02)}\\[2pt]
+                \textbf{\color{GreenAccent} Zero-Allocation Discipline}\\[2pt]
                 \textbullet\ Pre-allocated contiguous C-order NumPy arrays for input and prediction buffers.\\[2pt]
                 \textbullet\ Zero Python dictionary boxing or dynamic list allocations inside high-frequency serving loops.
             \end{greencard}
@@ -475,15 +603,15 @@
 \end{frame}
 
 % ==============================================================================
-% SLIDE 10: Epistemic Safety: Why We Cannot Trust Softmax
+% SLIDE 12: Epistemic Safety: Why We Cannot Trust Softmax
 % ==============================================================================
-\begin{frame}{Epistemic Safety: The Problem with Softmax}{Why Deep Neural Networks Fail Silently in Nature}
+\begin{frame}{Epistemic Safety: Softmax Failure}{Why Deep Neural Networks Fail Silently in Nature}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
             \begin{card}
-                \textbf{\color{RoseAccent} The Illusion of Softmax "Confidence"}\\[2pt]
+                \textbf{\color{RoseAccent} The Illusion of Softmax ``Confidence''}\\[2pt]
                 \textbullet\ Softmax mathematically forces probabilities to sum to $1.0$ ($100\%$).\\[2pt]
-                \textbullet\ On unseen species, camera glare, or corrupt images, standard models \textbf{cannot} say "I don't know".\\[2pt]
+                \textbullet\ On unseen species, camera glare, or corrupt images, standard models \textbf{cannot} say ``I don't know''.\\[2pt]
                 \textbullet\ Result: High-confidence ($>95\%$) silent hallucinations on completely wrong taxa!\\[6pt]
                 \textbf{\color{BlueAccent} The Production Safety Imperative}\\[2pt]
                 \textbullet\ We require a mathematical safety envelope that rejects false certainty before predictions reach end users.
@@ -504,16 +632,16 @@
 \end{frame}
 
 % ==============================================================================
-% SLIDE 11: Split Conformal Prediction
+% SLIDE 13: Split Conformal Prediction
 % ==============================================================================
-\begin{frame}{Split Conformal Prediction Made Simple}{Mathematically Guaranteed Coverage Sets Instead of Single Guesses}
+\begin{frame}{Split Conformal Prediction Sets}{Guaranteed Coverage Sets Instead of Guesses}
     \begin{columns}[T]
         \begin{column}{0.50\textwidth}
             \begin{bluecard}
                 \textbf{\color{BlueAccent} The Conformal Prediction Guarantee}\\[3pt]
                 \textbullet\ Instead of forcing a single guessed species, the model outputs an \textbf{adaptive prediction set} $C(X)$.\\[2pt]
                 \textbullet\ The user specifies a safety confidence: e.g. $\mathbf{95\%}$ coverage ($\alpha = 0.05$).\\[2pt]
-                \textbullet\ \textbf{Mathematical Guarantee (Rule 06):} The true species is mathematically guaranteed to be in the set $\ge 95\%$ of the time:\\[1pt]
+                \textbullet\ \textbf{Mathematical Guarantee:} The true species is mathematically guaranteed to be in the set $\ge 95\%$ of the time:\\[1pt]
                 \quad $P(Y \in C(X)) \ge 1 - \alpha$\\[2pt]
                 \textbullet\ Calibrated strictly on the holdout \textbf{Calibration split}.
             \end{bluecard}
@@ -535,9 +663,9 @@
 \end{frame}
 
 % ==============================================================================
-% SLIDE 12: Out-of-Distribution Gating: Helmholtz Energy
+% SLIDE 14: Out-of-Distribution Gating: Helmholtz Energy
 % ==============================================================================
-\begin{frame}{Out-of-Distribution Gating}{Helmholtz Energy Filter and Human Referral Boundary}
+\begin{frame}{Out-of-Distribution Gating}{Helmholtz Energy Filter \& Expert Referral}
     \begin{columns}[T]
         \begin{column}{0.50\textwidth}
             \begin{bluecard}
@@ -568,9 +696,9 @@
 \end{frame}
 
 % ==============================================================================
-% SLIDE 13: Unified Serving: REST API & HTMX Dashboard
+% SLIDE 15: Unified Serving: REST API & HTMX Dashboard
 % ==============================================================================
-\begin{frame}{Unified Serving: REST API \& HTMX Dashboard}{Dual-Interface Microservice Without Frontend Build Ballast}
+\begin{frame}{Unified Serving: REST API \& HTMX}{Dual-Interface Service Without Build Ballast}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
             \begin{greencard}
@@ -598,9 +726,9 @@
 \end{frame}
 
 % ==============================================================================
-% SLIDE 14: Telemetry & PostgreSQL Feature Persistence
+% SLIDE 16: Telemetry & PostgreSQL Feature Persistence
 % ==============================================================================
-\begin{frame}{Telemetry \& Database Feature Persistence}{Asynchronous PostgreSQL Ingestion Without Serving Latency Penalty}
+\begin{frame}{Vector Telemetry \& Persistence}{Asynchronous PostgreSQL Vector Persistence}
     \begin{columns}[T]
         \begin{column}{0.50\textwidth}
             \begin{bluecard}
@@ -608,7 +736,7 @@
                 \textbullet\ Detecting representation shift requires analysing feature manifolds from live traffic.\\[2pt]
                 \textbullet\ Storing raw citizen photos wastes storage and violates privacy.\\[2pt]
                 \textbullet\ TaxonVision persists the \textbf{384-dimensional feature vector} (\texttt{embedding REAL[]}) directly in PostgreSQL.\\[2pt]
-                \textbullet\ \textbf{Event Loop Protection (Rule 08):} Written asynchronously via \texttt{BackgroundTasks} -- request returns in $18\,\text{ms}$ while I/O runs in background.
+                \textbullet\ \textbf{Event Loop Protection:} Written asynchronously via \texttt{BackgroundTasks} -- request returns in $18\,\text{ms}$ while I/O runs in background.
             \end{bluecard}
         \end{column}
         \begin{column}{0.46\textwidth}
@@ -628,9 +756,9 @@
 \end{frame}
 
 % ==============================================================================
-% SLIDE 15: Automated Drift Detection: Evidently AI
+% SLIDE 17: Automated Drift Detection: Evidently AI
 % ==============================================================================
-\begin{frame}{Automated Drift Detection in Practice}{Two-Tier Hypothesis Testing and Evidently AI Lineage}
+\begin{frame}{Automated Drift Detection}{Two-Tier Hypothesis Testing \& Evidently AI}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
             \begin{bluecard}
@@ -656,9 +784,9 @@
 \end{frame}
 
 % ==============================================================================
-% SLIDE 16: Prometheus & Grafana Observability Cockpit
+% SLIDE 18: Prometheus & Grafana Observability Cockpit
 % ==============================================================================
-\begin{frame}{Prometheus \& Grafana Observability Cockpit}{Real-Time Operational Monitoring and Four Alerting Rules}
+\begin{frame}{Prometheus \& Grafana Cockpit}{Real-Time Operational Monitoring \& Alerts}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
             \begin{ambercard}
@@ -691,9 +819,9 @@
 \end{frame}
 
 % ==============================================================================
-% SLIDE 17: Closed-Loop Retraining: Grafana Webhook to Airflow
+% SLIDE 19: Closed-Loop Retraining: Grafana Webhook to Airflow
 % ==============================================================================
-\begin{frame}{Closed-Loop Retraining Trigger}{Grafana Alert Webhook $\to$ FastAPI Relay $\to$ Airflow 3.0 DAG}
+\begin{frame}{Closed-Loop Retraining Trigger}{Grafana Alert Webhook to Airflow 3.0 DAG}
     \centering
     \begin{tikzpicture}[
         scale=0.90, every node/.style={transform shape},
@@ -721,7 +849,7 @@
         
         \node[nodecard, draw=RoseAccent!60, fill=RoseAccent!10, text width=2.4cm, right=of air] (jenk) {
             \textbf{\color{RoseAccent} Bare-Metal Jenkins}\\
-            \scriptsize RTX 5070 Ti runner\\
+            \scriptsize GPU runner\\
             \textbullet\ DVC repro DAG\\
             \textbullet\ 4-Gate Check
         };
@@ -742,9 +870,9 @@
 \end{frame}
 
 % ==============================================================================
-% SLIDE 18: Human-in-the-Loop Active Learning
+% SLIDE 20: Human-in-the-Loop Active Learning
 % ==============================================================================
-\begin{frame}{Human-in-the-Loop Active Learning}{Turning Uncertain Predictions into Retraining Fuel}
+\begin{frame}{Human-in-the-Loop Active Learning}{Active Learning \& Review via Label Studio}
     \begin{columns}[T]
         \begin{column}{0.50\textwidth}
             \begin{purplecard}
@@ -772,9 +900,9 @@
 \end{frame}
 
 % ==============================================================================
-% SLIDE 19: Four-Gate Model Promotion Verdict
+% SLIDE 21: Four-Gate Model Promotion Verdict
 % ==============================================================================
-\begin{frame}{Four-Gate Model Promotion Verdict}{Strict Automated Quality Verification Before Production Alias}
+\begin{frame}{Four-Gate Model Promotion Verdict}{Automated Multi-Objective Quality Verification}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
             \begin{rosecard}
@@ -800,9 +928,9 @@
 \end{frame}
 
 % ==============================================================================
-% SLIDE 20: Summary & Core Architecture Achievements
+% SLIDE 22: Summary & Core Architecture Achievements
 % ==============================================================================
-\begin{frame}{Summary: The Three Pillars of TaxonVision MLOps}{Robust Foundations, Epistemic Safety, and Closed-Loop Automation}
+\begin{frame}{Summary: Three Pillars of MLOps}{Foundations, Epistemic Safety \& Automation}
     \begin{columns}[T]
         \begin{column}{0.32\textwidth}
             \begin{bluecard}
@@ -850,7 +978,7 @@
 \end{frame}
 
 % ==============================================================================
-% SLIDE 21: Live Demonstration & Q&A
+% SLIDE 23: Live Demonstration & Q&A
 % ==============================================================================
 \begin{frame}[plain]
     \vspace{0.5cm}
@@ -868,7 +996,7 @@
         
         \vspace{0.8cm}
         {\small\textbf{Thank you for your attention!}}\\[2pt]
-        {\footnotesize\color{TextMuted} We now transition to the live system demonstration and jury questions.}
+        {\footnotesize\color{TextMuted!90} We now transition to the live system demonstration and jury questions.}
     \end{center}
 \end{frame}
 
