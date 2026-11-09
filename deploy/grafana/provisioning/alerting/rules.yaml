@@ -20,7 +20,7 @@ contactPoints:
         settings:
           url: "http://app:8000/api/v1/retrain/webhook"
           httpMethod: "POST"
-          authorization_credentials: "${TAXON_RETRAIN_WEBHOOK_SECRET:-dev_retrain_secret}"
+          authorization_credentials: "${TAXON_RETRAIN_WEBHOOK_SECRET:-dev-secret-token}"
           authorization_scheme: "Bearer"
 
 # ==============================================================================
@@ -66,6 +66,7 @@ groups:
             datasourceUid: __expr__
             model:
               type: threshold
+              expression: A
               conditions:
                 - evaluator:
                     type: gt
@@ -98,6 +99,7 @@ groups:
             datasourceUid: __expr__
             model:
               type: threshold
+              expression: A
               conditions:
                 - evaluator:
                     type: gt
@@ -130,6 +132,7 @@ groups:
             datasourceUid: __expr__
             model:
               type: threshold
+              expression: A
               conditions:
                 - evaluator:
                     type: gt
@@ -163,6 +166,7 @@ groups:
             datasourceUid: __expr__
             model:
               type: threshold
+              expression: A
               conditions:
                 - evaluator:
                     type: gt

@@ -83,6 +83,7 @@ services:
       - TAXON_OPTUNA_STORAGE_URI=postgresql+psycopg://optuna:taxon_optuna_pass@postgres:5432/optuna
       - TAXON_TELEMETRY__DATABASE_URL=postgresql+psycopg://telemetry:taxon_telemetry_pass@postgres:5432/telemetry
       - TAXON_ALLOW_UNTRAINED_FALLBACK=true
+      - TAXON_RETRAIN_WEBHOOK_SECRET=${TAXON_RETRAIN_WEBHOOK_SECRET:-dev-secret-token}
       - MLFLOW_TRACKING_URI=http://mlflow-server:5000
     volumes:
       - ./data/flagged_observations:/app/data/flagged_observations
@@ -201,6 +202,7 @@ services:
       - "3000:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      - TAXON_RETRAIN_WEBHOOK_SECRET=${TAXON_RETRAIN_WEBHOOK_SECRET:-dev-secret-token}
     volumes:
       - grafana_data:/var/lib/grafana
       - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
