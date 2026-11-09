@@ -232,7 +232,7 @@
                 \textbullet\ \textbf{S3 Streaming:} Direct ingest from open data bucket.\\[3pt]
                 \textbullet\ \textbf{Licence Audit:} Creative Commons filter (CC0, CC-BY, CC-BY-NC).\\[3pt]
                 \textbullet\ \textbf{DVC 7-Stage DAG:} Strict MD5 tracking \& zero split leakage.\\[3pt]
-                \textbullet\ \textbf{Feature Caching:} Pre-computed DINOv2 embeddings on NVMe.\\[3pt]
+                \textbullet\ \textbf{Feature Caching:} Pre-computed DINOv3 embeddings on NVMe.\\[3pt]
                 \textbullet\ \textbf{Bayesian HPO:} Optuna sweeps with MLflow tracking.
             \end{bluecard}
         \end{column}
@@ -423,10 +423,10 @@
         % Left Column: Concepts & Guarantees
         \begin{column}{0.46\textwidth}
             \begin{card}
-                \textbf{\color{BlueAccent} Zero-Copy Ingestion Flow}\\[3pt]
-                \textbullet\ \textbf{Direct S3 Streaming:} Ingests batches from \texttt{s3://inaturalist-open-data} without downloading full tarballs.\\[3pt]
-                \textbullet\ \textbf{In-Memory Arrow IPC:} Polars filters observations in RAM; image buffers are processed ephemerally.\\[3pt]
-                \textbullet\ \textbf{Attribution Invariant:} Retains photographer name and licence code across every manifest stage.\\[5pt]
+                \textbf{\color{BlueAccent} Zero-Copy Ingestion Flow}\\[2pt]
+                \textbullet\ \textbf{Direct S3 Streaming:} Ingests batches from \texttt{s3://inaturalist-open-data} without downloading full tarballs.\\[2pt]
+                \textbullet\ \textbf{In-Memory Arrow IPC:} Polars filters observations in RAM; image buffers are processed ephemerally.\\[2pt]
+                \textbullet\ \textbf{Attribution Invariant:} Retains photographer name and licence code across every manifest stage.\\[3pt]
                 \textbf{\color{GreenAccent} Governance Guarantee:} Only verified Creative Commons assets enter the Epistemic DAG. Zero unverified records admitted.
             \end{card}
         \end{column}
@@ -438,32 +438,32 @@
                 scale=0.84, every node/.style={transform shape}
             ]
                 % Top Node: S3 Open Data
-                \node[sysbox, draw=BlueAccent!70, fill=BlueAccent!10, text width=5.5cm] (s3) at (2.75, 3.35) {
+                \node[sysbox, draw=BlueAccent!70, fill=BlueAccent!10, text width=5.6cm] (s3) at (2.75, 3.45) {
                     \textbf{\color{BlueAccent} Amazon S3 Open Data Bucket}\\[1pt]
                     {\tiny \texttt{s3://inaturalist-open-data} $\cdot$ 100M+ Biological Observations}
                 };
 
                 % Middle Top: Arrow Stream Engine
-                \node[sysbox, draw=TealAccent!70, fill=TealAccent!10, text width=5.5cm] (arrow) at (2.75, 2.30) {
+                \node[sysbox, draw=TealAccent!70, fill=TealAccent!10, text width=5.6cm] (arrow) at (2.75, 2.45) {
                     \textbf{\color{TealAccent} Apache Arrow IPC \& Polars Engine}\\[1pt]
                     {\tiny In-Memory Predicate Filtering $\cdot$ Zero Intermediate Files on Disk}
                 };
 
                 % Compliance Gate
-                \node[diamond, aspect=2.4, draw=AmberAccent, fill=AmberAccent!15, inner sep=2.5pt, font=\scriptsize\bfseries] (gate) at (2.75, 1.10) {
+                \node[diamond, aspect=2.4, draw=AmberAccent, fill=AmberAccent!15, inner sep=2.5pt, font=\scriptsize\bfseries] (gate) at (2.75, 1.30) {
                     Licence Audit Gate
                 };
 
-                % Branch Left: Admitted
-                \node[sysbox, draw=GreenAccent, fill=GreenAccent!10, text width=2.5cm] (admit) at (1.25, -0.30) {
+                % Branch Left: Admitted (x = 1.05)
+                \node[sysbox, draw=GreenAccent, fill=GreenAccent!10, text width=2.4cm] (admit) at (1.05, -0.35) {
                     \textbf{\color{GreenAccent} Admitted Licences}\\[2pt]
                     {\tiny \texttt{CC0} $\cdot$ Public Domain}\\[1pt]
                     {\tiny \texttt{CC-BY} $\cdot$ Attribution}\\[1pt]
                     {\tiny \texttt{CC-BY-NC} $\cdot$ Non-Comm.}
                 };
 
-                % Branch Right: Purged
-                \node[sysbox, draw=RoseAccent, fill=RoseAccent!10, text width=2.5cm] (reject) at (4.25, -0.30) {
+                % Branch Right: Purged (x = 4.45)
+                \node[sysbox, draw=RoseAccent, fill=RoseAccent!10, text width=2.4cm] (reject) at (4.45, -0.35) {
                     \textbf{\color{RoseAccent} Purged Licences}\\[2pt]
                     {\tiny \texttt{All-Rights-Reserved}}\\[1pt]
                     {\tiny \texttt{CC-BY-ND} (No Derivs)}\\[1pt]
@@ -471,14 +471,14 @@
                 };
 
                 % Bottom Left: Verified Manifest
-                \node[sysbox, draw=GreenAccent!80, fill=GreenAccent!15, text width=2.5cm] (out) at (1.25, -1.70) {
+                \node[sysbox, draw=GreenAccent!80, fill=GreenAccent!15, text width=2.4cm] (out) at (1.05, -1.75) {
                     \textbf{\color{GreenAccent} Verified Manifest}\\[1pt]
                     {\tiny \texttt{dataset\_manifest}}\\[1pt]
                     {\tiny Snappy Parquet $\cdot$ DVC MD5}
                 };
 
                 % Bottom Right: Purge Sink
-                \node[sysbox, draw=RoseAccent!80, fill=RoseAccent!15, text width=2.5cm] (sink) at (4.25, -1.70) {
+                \node[sysbox, draw=RoseAccent!80, fill=RoseAccent!15, text width=2.4cm] (sink) at (4.45, -1.75) {
                     \textbf{\color{RoseAccent} Purge Barrier}\\[1pt]
                     {\tiny 0 Non-Compliant Admitted}\\[1pt]
                     {\tiny Dropped from Pipeline}
@@ -488,11 +488,12 @@
                 \draw[flowarrow] (s3) -- (arrow);
                 \draw[flowarrow] (arrow) -- (gate);
                 
-                \draw[passarrow, draw=GreenAccent, line width=1.0pt] (gate.west) -| (admit.north);
-                \node[above=1.5pt, font=\tiny\bfseries\color{GreenAccent}] at ($(gate.west)!0.5!(admit.north |- gate.west)$) {Admitted};
+                % Left / Right Exit from Diamond Tips
+                \draw[passarrow, rounded corners=3pt] (gate.west) -| (admit.north)
+                    node[pos=0.35, above=1pt, font=\tiny\bfseries\color{GreenAccent}] {Admitted};
                 
-                \draw[retrainarrow, line width=1.0pt] (gate.east) -| (reject.north);
-                \node[above=1.5pt, font=\tiny\bfseries\color{RoseAccent}] at ($(gate.east)!0.5!(reject.north |- gate.east)$) {Purged};
+                \draw[retrainarrow, rounded corners=3pt] (gate.east) -| (reject.north)
+                    node[pos=0.35, above=1pt, font=\tiny\bfseries\color{RoseAccent}] {Purged};
 
                 \draw[passarrow, draw=GreenAccent, line width=1.0pt] (admit) -- (out);
                 \draw[retrainarrow, line width=1.0pt] (reject) -- (sink);
@@ -617,7 +618,7 @@
         \begin{column}{0.50\textwidth}
             \begin{bluecard}
                 \textbf{\color{BlueAccent} Decoupled Vision Architecture}\\[2pt]
-                \textbullet\ \textbf{Frozen Trunk:} Foundation vision backbone (DINOv2 ViT-Small, $D=384$).\\[2pt]
+                \textbullet\ \textbf{Frozen Trunk:} Foundation vision backbone (DINOv3 ViT-Small, $D=384$).\\[2pt]
                 \textbullet\ \textbf{Lightweight Head:} Cosine-similarity classification head mapping embeddings to species logits.\\[2pt]
                 \textbullet\ \textbf{The Feature Caching Strategy:}
                 \begin{itemize}\scriptsize
@@ -632,7 +633,7 @@
             \centering
             \begin{tikzpicture}[node distance=0.45cm]
                 \node[nodecard, text width=4.5cm, fill=white] (img) {\textbf{Raw Citizen Photos}\\\scriptsize S3 Image Stream};
-                \node[nodecard, text width=4.5cm, fill=BlueAccent!10, draw=BlueAccent, below=of img] (vit) {\textbf{Vision Trunk (DINOv2)}\\\scriptsize Run ONCE (Feature Extraction)};
+                \node[nodecard, text width=4.5cm, fill=BlueAccent!10, draw=BlueAccent, below=of img] (vit) {\textbf{Vision Trunk (DINOv3)}\\\scriptsize Run ONCE (Feature Extraction)};
                 \node[nodecard, text width=4.5cm, fill=TealAccent!10, draw=TealAccent, below=of vit] (cache) {\textbf{Cached 384-D Tensors}\\\scriptsize \texttt{train\_embeddings.pt}};
                 \node[nodecard, text width=4.5cm, fill=GreenAccent!10, draw=GreenAccent, below=of cache] (head) {\textbf{Cosine Head Training}\\\scriptsize Run 100x via Optuna ($<5$s)};
                 
@@ -1007,31 +1008,82 @@
 \end{frame}
 
 % ==============================================================================
-% SLIDE 18: Telemetry & PostgreSQL Feature Persistence
+% SLIDE 18: Inference Telemetry & Audit Log
 % ==============================================================================
-\begin{frame}{Vector Telemetry \& Persistence}{Asynchronous PostgreSQL Vector Persistence}
+\begin{frame}{Inference Telemetry \& Audit Log}{Non-Blocking Storage for Drift \& Triage}
     \begin{columns}[T]
-        \begin{column}{0.50\textwidth}
-            \begin{bluecard}
-                \textbf{\color{BlueAccent} Why Persist 384-D Embeddings?}\\[3pt]
-                \textbullet\ Detecting representation shift requires analysing feature manifolds from live traffic.\\[2pt]
-                \textbullet\ Storing raw citizen photos wastes storage and violates privacy.\\[2pt]
-                \textbullet\ TaxonVision persists the \textbf{384-dimensional feature vector} (\texttt{embedding REAL[]}) directly in PostgreSQL.\\[2pt]
-                \textbullet\ \textbf{Event Loop Protection:} Written asynchronously via \texttt{BackgroundTasks} - request returns in $18\,\text{ms}$ while I/O runs in background.
-            \end{bluecard}
-        \end{column}
+        % Left Column: Concepts & Guarantees
         \begin{column}{0.46\textwidth}
             \begin{card}
-                \textbf{\color{SlateDark} Telemetry Schema (\texttt{predictions} table)}\\[2pt]
-                \textbullet\ \texttt{observation\_id} (UUID primary key)\\
-                \textbullet\ \texttt{created\_at} (Timestamptz index)\\
-                \textbullet\ \texttt{top1\_taxon} \& \texttt{top1\_confidence}\\
-                \textbullet\ \texttt{conformal\_set} (\texttt{TEXT[]} array)\\
-                \textbullet\ \texttt{ood\_energy} \& \texttt{is\_ood} (Boolean)\\
-                \textbullet\ \texttt{latency\_ms} (Measured wall-clock)\\
-                \textbullet\ \textbf{\texttt{embedding} (\texttt{REAL[]}, 384 dimensions)}\\[2pt]
-                \scriptsize Ready for instantaneous sliding-window drift queries!
+                \raggedright\footnotesize
+                \textbf{\color{BlueAccent} Non-Blocking Telemetry Ingestion}\\[3pt]
+                \textbullet\ \textbf{Event-Loop Protection:}\\
+                Synchronous database writes would stall live HTTP requests. Inference records are offloaded asynchronously via FastAPI \texttt{BackgroundTasks}.\\[3pt]
+                \textbullet\ \textbf{Compact Feature Persistence:}\\
+                Storing raw images ($>2$\,MB) wastes disk and creates privacy issues. Storing only the 384-D feature array (\texttt{REAL[]}, 1.5\,KB) is fast and lightweight.\\[3pt]
+                \textbullet\ \textbf{Drift \& Audit Lineage:}\\
+                Every record preserves observation ID, top-1 taxon, conformal set, energy, and latency for downstream hypothesis testing.
             \end{card}
+        \end{column}
+
+        % Right Column: Visual Diagram
+        \begin{column}{0.52\textwidth}
+            \centering
+            \begin{tikzpicture}[
+                scale=0.84, every node/.style={transform shape}
+            ]
+                % Top Node: FastAPI Inference
+                \node[sysbox, draw=BlueAccent!70, fill=BlueAccent!10, text width=5.6cm] (api) at (2.9, 3.65) {
+                    \textbf{\color{BlueAccent} FastAPI Prediction Route (\texttt{/predict})}\\[1pt]
+                    {\tiny INT8 ONNX Forward Pass $\cdot$ Conformal Sets $\cdot$ Energy Filter}
+                };
+
+                % Middle Left: Immediate Client Response
+                \node[sysbox, draw=GreenAccent!80, fill=GreenAccent!10, text width=2.6cm] (resp) at (1.35, 1.85) {
+                    \textbf{\color{GreenAccent} Client Response}\\[2pt]
+                    {\tiny Zero Latency Overhead}\\[1pt]
+                    \textbf{\tiny\color{GreenAccent} \checkmark{} Sub-15ms Round-Trip}\\[1pt]
+                    {\tiny JSON predictions delivered}
+                };
+
+                % Middle Right: Async Background Task
+                \node[sysbox, draw=PurpleAccent!80, fill=PurpleAccent!10, text width=2.6cm] (bg) at (4.45, 1.85) {
+                    \textbf{\color{PurpleAccent} Background Worker}\\[2pt]
+                    {\tiny \texttt{BackgroundTasks}}\\[1pt]
+                    \textbf{\tiny\color{PurpleAccent} Non-Blocking I/O}\\[1pt]
+                    {\tiny Offloaded to threadpool}
+                };
+
+                % Bottom Node: PostgreSQL Predictions Table
+                \node[sysbox, draw=SlateDark, fill=SlateLight, text width=5.6cm] (pg) at (2.9, 0.05) {
+                    \textbf{PostgreSQL Audit Table (\texttt{predictions})}\\[1pt]
+                    {\tiny \texttt{observation\_id} $\cdot$ \texttt{top1} $\cdot$ \texttt{conformal\_set} $\cdot$ \texttt{latency\_ms} $\cdot$ \texttt{embedding REAL[]}}\\[2pt]
+                    {\tiny \textbf{1.5\,KB/row} (vs 2\,MB raw image) $\cdot$ Compact Feature Representation}
+                };
+
+                % Bottom Sub-Node: Airflow Drift Query
+                \node[sysbox, draw=AmberAccent!80, fill=AmberAccent!10, text width=5.6cm] (air) at (2.9, -1.35) {
+                    \textbf{\color{AmberAccent} Airflow Hourly Drift Monitor DAG}\\[1pt]
+                    {\tiny Sliding window SQL batch $\implies$ Wasserstein-1 \& Kernel MMD$^2$}
+                };
+
+                % Connections
+                \coordinate (fork) at (2.9, 2.75);
+                \draw[line width=0.8pt, draw=SlateDark!70] (api.south) -- (fork);
+                
+                \draw[passarrow, rounded corners=3pt] (fork) -| (resp.north)
+                    node[pos=0.45, above=1pt, font=\tiny\bfseries\color{GreenAccent}] {Immediate};
+                
+                \draw[flowarrow, draw=PurpleAccent, line width=0.9pt, rounded corners=3pt] (fork) -| (bg.north)
+                    node[pos=0.45, above=1pt, font=\tiny\bfseries\color{PurpleAccent}] {Asynchronous};
+
+                \draw[dasharrow, draw=PurpleAccent] (bg.south) -- (pg.north -| bg.south)
+                    node[midway, right=2pt, font=\tiny\bfseries\color{PurpleAccent}] {Batch Write};
+
+                \draw[flowarrow, draw=AmberAccent] (pg.south) -- (air.north)
+                    node[midway, right=2pt, font=\tiny\bfseries\color{AmberAccent}] {Sliding Window Query};
+
+            \end{tikzpicture}
         \end{column}
     \end{columns}
 \end{frame}
