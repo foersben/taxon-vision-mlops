@@ -4,16 +4,16 @@ metadata:
   name: taxon-vision-serving
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   template:
     spec:
       containers:
       - name: api-service
         resources:
           requests:
-            cpu: "100m"
-            memory: "512Mi"
-            nvidia.com/gpu: "1"
+            cpu: "200m"
+            memory: "1Gi"
           limits:
-            cpu: "1"
-            memory: "1024Mi"
-            nvidia.com/gpu: "1"
+            cpu: "2"
+            memory: "4Gi"

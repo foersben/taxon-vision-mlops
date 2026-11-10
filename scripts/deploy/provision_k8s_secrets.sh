@@ -83,11 +83,11 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ "${MOCK_MODE}" == "true" ]]; then
-    OPTUNA_STORAGE_URI="postgresql+psycopg://optuna:mock_optuna_pass@postgres:5432/optuna"
-    TELEMETRY_DATABASE_URL="postgresql+psycopg://telemetry:mock_telemetry_pass@postgres:5432/telemetry"
+    OPTUNA_STORAGE_URI="postgresql+psycopg://optuna:taxon_optuna_pass@postgres.taxon-vision.svc.cluster.local:5432/optuna"
+    TELEMETRY_DATABASE_URL="postgresql+psycopg://telemetry:taxon_telemetry_pass@postgres.taxon-vision.svc.cluster.local:5432/telemetry"
     INTERNAL_API_TOKEN="mock_internal_token_secret_1234567890"
     RETRAIN_WEBHOOK_SECRET="mock_retrain_webhook_secret_abcdef"
-    POSTGRES_PASSWORD="mock_postgres_password"
+    POSTGRES_PASSWORD="taxon_super_secret"
     AIRFLOW_FERNET_KEY=$(echo -n "01234567890123456789012345678901" | base64)
     AIRFLOW_JWT_SECRET="mock_airflow_jwt_secret_key_32bytes"
     JENKINS_API_TOKEN="mock_jenkins_api_token"

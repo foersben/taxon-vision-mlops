@@ -151,7 +151,9 @@ def _apply_direct_env_overrides(config_data: dict[str, Any]) -> dict[str, Any]:
     if env_telemetry_uri is not None:
         telemetry_overrides["database_url"] = env_telemetry_uri
 
-    env_fallback = os.getenv("TAXON_TELEMETRY_ALLOW_IN_MEMORY_FALLBACK")
+    env_fallback = os.getenv("TAXON_TELEMETRY_ALLOW_IN_MEMORY_FALLBACK") or os.getenv(
+        "TAXON_TELEMETRY__ALLOW_IN_MEMORY_FALLBACK"
+    )
     if env_fallback is not None:
         telemetry_overrides["allow_in_memory_fallback"] = env_fallback.strip().lower() in ("true", "1", "yes")
 
