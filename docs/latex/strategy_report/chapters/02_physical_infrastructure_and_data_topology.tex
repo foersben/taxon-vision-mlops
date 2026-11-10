@@ -26,16 +26,26 @@ The host (\texttt{hive-mind}) runs Ubuntu 26.04.1 LTS (codename \textit{resolute
 \section{GPU Partitioning and Memory Budget}
 \label{sec:gpu_partitioning}
 
-Consumer GPUs do not support hardware Multi-Instance GPU (MIG) partitioning. Without further measures, a Kubernetes pod requesting one GPU would therefore lock the entire device and starve every co-located workload. The cluster consequently uses the time-slicing mode of the NVIDIA Kubernetes device plugin, which advertises the single physical GPU as four virtual devices. Time-slicing multiplexes compute cycles but does not isolate memory: all slices share the same VRAM. Isolation is therefore enforced in software, by capping the fraction $f$ of device memory available to the training process through the PyTorch per-process memory fraction. With $f = 0.7$ and a device memory of $M_{\text{VRAM}} = 16\text{ GB}$, the training budget evaluates to
-\[
-M_{\text{train}} = f \cdot M_{\text{VRAM}} = 0.7 \times 16\text{ GB} = 11.2\text{ GB},
-\]
-which leaves $M_{\text{VRAM}} - M_{\text{train}} = 4.8\text{ GB}$ for the INT8 ONNX serving process and the display server. The latter reserve is comfortably larger than the serving footprint of $\le 1.6\text{ GB}$ derived in Table~\ref{tab:rag_latency}. To guarantee that heavier secondary models do not violate this envelope, the auxiliary visual language model (\texttt{taxon-vision-vlm}) either scales to zero during active Jenkins GPU training windows or executes quantised VLM synthesis directly on the 16 host P-cores and 128~GB DDR5 system memory, maintaining the active GPU serving footprint strictly $\le 1.6\text{ GB}$ VRAM.
+Consumer GPUs do not support hardware Multi-Instance GPU (MIG) partitioning. Without further measures, a Kubernetes pod requesting one GPU would therefore lock the entire device and starve every co-located workload. The cluster consequently uses the time-slicing mode of the NVIDIA Kubernetes device plugin, which advertises the single physical GPU as four virtual devices. Time-slicing multiplexes compute cycles but does not isolate memory: all slices share the same VRAM.
+
+Workload allocation across these four virtual slots is strictly codified:
+\begin{enumerate}
+    \item \textbf{Jenkins CI Compute Slot (1 Virtual GPU):} Allocated exclusively to ephemeral GPU worker pods (\nolinkurl{deploy/k8s/jenkins-gpu-pod.yaml}) during DVC feature extraction, Bayesian Optuna sweeps, and Stage~7 holdout evaluation. Memory isolation is enforced in software by capping the PyTorch per-process memory fraction to $f = 0.7$, establishing an upper bound of $M_{\text{train}} = f \cdot M_{\text{VRAM}} = 0.7 \times 16\text{ GB} = 11.2\text{ GB}$.
+    \item \textbf{Production Serving Gateway (2 Virtual GPUs):} Allocated to the two production \texttt{taxon-vision-serving} replicas in the \texttt{taxon-vision} namespace, guaranteeing hardware-accelerated INT8 ONNX execution within an isolated $4.8\text{ GB}$ envelope ($\le 1.6\text{ GB}$ per serving replica).
+    \item \textbf{Multimodal Headroom Slot (1 Virtual GPU):} Reserved for the auxiliary Vision-Language Model (\texttt{taxon-vision-vlm}) or future batch retrieval expansion.
+\end{enumerate}
+
+Crucially, to eliminate resource contention between deployment verification and active CI/CD jobs, the platform enforces a strict \textbf{CPU Staging Discipline}: pods deployed into namespace \texttt{taxon-\allowbreak vision-\allowbreak staging} via Kustomize overlay (\texttt{deploy/k8s/overlays/}\allowbreak\texttt{staging/}\allowbreak\texttt{patch-replicas.yaml}) request zero GPU resources (\texttt{nvidia.com/gpu: 0}). Staging verification executes entirely on the host P-cores. This invariant guarantees that automated Jenkins test builds never fail due to agent offline timeouts or GPU slot starvation caused by staging environments.
 
 \section{Access Topology and Edge Security}
 \label{sec:access_topology}
 
 The host exposes no inbound port to the public internet. Both the CI/CD controller and the operator-facing service are reached through outbound-initiated Cloudflare Tunnels, so that no router port forwarding and no dynamic DNS record is required. A Web Application Firewall rule at the Cloudflare edge restricts the controller hostname (\texttt{jenkins.benjamin-foerster.eu}) to authenticated GitHub webhook deliveries, whilst the operator dashboard and REST API are served live at \texttt{https://taxon.benjamin-foerster.eu} routing directly to Kubernetes NodePort 30080 behind an identity-aware Zero Trust access policy. Remote maintenance after a reboot is possible despite the encrypted root volume, because a minimal SSH daemon (Dropbear) in the initial ramdisk accepts the unlock passphrase before the root file system is mounted.
+
+\subsection{Secret Governance and Vault Provisioning}
+\label{sec:secret_governance}
+
+To satisfy zero-trust security invariants without hardcoding cryptographic credentials in version control, sensitive cluster tokens (PostgreSQL passwords, MLflow basic auth, Airflow administrative keys, DagsHub access tokens, and webhook HMAC secrets) are provisioned through a unified script (\nolinkurl{scripts/infrastructure/provision_k8s_secrets.sh}). The provisioning engine generates cryptographic secrets deterministically, applying base64 payloads directly to Kubernetes \texttt{Secret} objects across the \texttt{taxon-vision} and \texttt{taxon-vision-staging} namespaces whilst preventing token leakage into git history or build logs.
 
 \section{Cryptographic Storage Economics}
 A primary architectural constraint for open-source and low-budget MLOps is data storage costs. The platform standardises on DagsHub as the central management plane, which enforces a 20 GB free-tier storage limit on its DVC remote. This limit is fully viable, provided that the pipeline enforces a strict physical separation between bulk raw observation streams and versioned metadata artefacts.
@@ -104,8 +114,11 @@ To prevent physical block fragmentation across the NVMe bus, the underlying pers
 
 DVC synchronisation is partitioned strictly across two distinct remotes:
 \begin{itemize}
-    \item \textbf{The In-Cluster High-Throughput Remote (\texttt{local-seaweedfs}):} Targeting \texttt{s3://taxon-dvc-cache} at \texttt{http://seaweedfs.taxon-vision.svc.cluster.local:8333}. Dedicated to multi-gigabyte embedding caches (\texttt{train\_embeddings.pt}, \texttt{val\_embeddings.pt}, \texttt{cal\_embeddings.pt}, \texttt{test\_embeddings.pt}), enabling zero-egress, wire-speed caching for Bayesian hyperparameter optimisation sweeps.
-    \item \textbf{The Public Lineage Remote (\texttt{origin}):} Targeting \texttt{s3://dvc} at DagsHub. Dedicated to release model checkpoints (\texttt{head.pt}) and INT8 quantised runtimes (\texttt{model\_int8.onnx}).
+    \item \textbf{The In-Cluster High-Throughput Remote (\texttt{local-seaweedfs}):}\\
+    Targeting \nolinkurl{s3://taxon-dvc-cache} at the internal cluster FQDN:\\
+    \url{http://seaweedfs.taxon-vision.svc.cluster.local:8333}.\\
+    This remote is dedicated to multi-gigabyte embedding caches (\nolinkurl{train_embeddings.pt}, \nolinkurl{val_embeddings.pt}, \nolinkurl{cal_embeddings.pt}, \nolinkurl{test_embeddings.pt}), enabling zero-egress, wire-speed caching for Bayesian hyperparameter optimisation sweeps.
+    \item \textbf{The Public Lineage Remote (\texttt{origin}):} Targeting \nolinkurl{s3://dvc} at DagsHub. Dedicated to release model checkpoints (\nolinkurl{head.pt}) and INT8 quantised runtimes (\nolinkurl{model_int8.onnx}).
 \end{itemize}
 
 \subsection{In-Cluster Ephemeral Upload Cache: Redis Architecture and Split-Brain Elimination}
@@ -133,7 +146,7 @@ To resolve this split-brain without imposing sticky sessions or heavy cloud obje
     \]
     This guarantees zero memory leak accumulation without requiring background thread garbage-collection loops in Python.
     \item \textbf{Sub-Millisecond Retrieval:} Any serving pod can retrieve the cached image payload in sub-millisecond latency ($t_{\text{redis}} < 0.5\text{ ms}$ over localhost loopback/cluster SDN), enabling Pod~2 to compute Grad-CAM overlays seamlessly.
-    \item \textbf{Graceful Degradation:} If the Redis service becomes temporarily unreachable, the \texttt{UploadCache} component automatically falls back to local in-memory caching and logs a structured warning, ensuring service resilience during cache restarts.
+    \item \textbf{Graceful Degradation:} If the Redis service becomes temporarily unreachable, the upload cache component (\texttt{UploadCache}) automatically falls back to local in-memory caching and logs a structured warning, ensuring service resilience during cache restarts.
 \end{itemize}
 
 \section{Consolidated Relational and Telemetry Data Topology}
@@ -141,7 +154,7 @@ To resolve this split-brain without imposing sticky sessions or heavy cloud obje
 
 Early system prototypes fragmented state persistence across multiple disconnected SQLite databases (\nolinkurl{mlflow.db}, \nolinkurl{optuna_studies.db}, local telemetry logs). Under high-frequency concurrent traffic -- such as parallel Bayesian hyperparameter trials running concurrently with live inference telemetry writes and Airflow scheduler heartbeats -- SQLite's file-level locking mechanism inevitably induced write-lock contention (\texttt{database is locked}) and transaction timeouts on host NVMe storage.
 
-To establish enterprise ACID transaction durability without introducing unwieldy operational overhead, the platform consolidates all relational and time-series metadata into a single, high-performance \textbf{PostgreSQL 16} cluster (\texttt{postgres:16-alpine}) hosted in-cluster. Operating with an active memory footprint of less than 80~MB RAM (dispelling the misconception that PostgreSQL imposes an intolerable 1.0 to 2.0~GB overhead for single-node deployments), the cluster establishes four strictly isolated logical databases provisioned during initialization:
+To establish enterprise ACID transaction durability without introducing unwieldy operational overhead, the platform consolidates all relational and time-series metadata into a single, high-performance \textbf{PostgreSQL 16} cluster (\texttt{postgres:16-alpine}) hosted in-cluster. Operating with an active memory footprint of less than 80~MB RAM (dispelling the misconception that PostgreSQL imposes an intolerable 1.0 to 2.0~GB overhead for single-node deployments), the cluster establishes four strictly isolated logical databases provisioned during initialisation:
 \begin{enumerate}
     \item \textbf{\texttt{mlflow}:} Serves as the primary metadata tracking backend for the self-hosted MLflow 3.x tracking proxy server, managing experiment runs, first-class \texttt{LoggedModel} entities, 4-split dataset lineage records, and logged metric parameters.
     \item \textbf{\texttt{airflow}:} Backs the Apache Airflow 3 control plane under the \texttt{LocalExecutor}, maintaining stateful DAG definitions, task instance execution states, and connection credential vaults.

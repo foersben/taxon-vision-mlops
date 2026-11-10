@@ -39,9 +39,9 @@
 };
 
 \node[fill=black!4, draw=black!25, rounded corners=2pt, inner sep=2.5pt, font=\footnotesize\bfseries, align=center] at (0, 14.7) {
-    \textbf{Target:} Bare-Metal Host (RTX 5070 Ti, i7-14700K) $\cdot$ Remote-Only Training\\ % \quad$\vert$\quad
-    \textbf{Epistemic Guarantee:} Conformal Coverage $1-\alpha \ge 0.95$\\
-    \textbf{Inference SLO:} Fast Path $<25$\,ms p95
+    \textbf{Target:} Dedicated Compute Node (RTX 5070 Ti, i7-14700K) $\cdot$ Remote-Only Execution\\ % \quad$\vert$\quad
+    \textbf{Epistemic Guarantee:} Conformal Coverage $1-\alpha \ge 0.95$ $\cdot$ 4-Slot Virtual GPU Allocation\\
+    \textbf{Inference SLO:} Fast Path $<25$\,ms p95 $\cdot$ Staging CPU Discipline
 };
 
 %% ======================================================================
@@ -61,7 +61,7 @@
     \rule{\linewidth}{0.4pt}\\[0.6mm]
     \textbullet\ \textbf{Airflow 3 LocalExecutor:} Hourly drift DAG \& retraining trigger\\
     \textbullet\ \textbf{Jenkins GPU Agent:} Ephemeral RTX 5070 Ti pod for DVC builds\\
-    \textbullet\ \textbf{GitHub Actions:} PR gates, 203 pytest tests, MyPy, OKF v0.2
+    \textbullet\ \textbf{GitHub Actions:} PR gates, 203 pytest tests, MyPy strict, 0 Ruff warnings
 };
 
 \begin{scope}[on background layer]
@@ -135,9 +135,10 @@
     \textbullet\ \textbf{Tier 2 (Moderate):} $1 < |\hat{C}| \le k_{\max} \implies$ LanceDB HNSW + RRF rank fusion (${<}6$\,ms)\\
     \textbullet\ \textbf{Tier 3 (Ambiguous):} $|\hat{C}| > k_{\max} \lor (|\hat{C}|=1 \land \hat{\pi}_{\max} < \tau_{\text{conf}}) \implies$ Async VLM triage\\
     \textbullet\ \textbf{Tier 4 (Abstention):} $|\hat{C}|=0 \implies$ Global nearest-neighbour search + urgent audit\\[0.8mm]
-    \textbf{Model Passport \& Telemetry Store:}\\
-    \textbullet\ \textbf{Model Passport:} Live governance strip (provenance, coverage, latency, MMD²)\\
-    \textbullet\ \textbf{PostgreSQL Telemetry:} Stores raw pre-normalised activations ($L_2$ norm $W_1$)
+    \textbf{Observability \& Telemetry Pipeline:}\\
+    \textbullet\ \textbf{Dual Dashboards:} 10 MLOps panels + 14 Infrastructure \& Logging panels\\
+    \textbullet\ \textbf{Loki v13 \& Promtail:} Structured JSON log aggregation with non-CoW NVMe storage\\
+    \textbullet\ \textbf{Telemetry Store:} PostgreSQL pre-normalised activations ($L_2$ norm $W_1$ drift)
 };
 
 \node[box={5.1cm}] (k8s) at (5.65, -1.9) {%
@@ -148,9 +149,9 @@
     \begin{tabular}{|p{2.2cm}|p{2.2cm}|}
     \hline
     \textbf{\tiny taxon-vision-serving} & \textbf{\tiny taxon-vision-vlm} \\
-    \tiny 2 Pods + Redis Cache & \tiny LanceDB + Qwen2-VL \\
-    \tiny VRAM: $<1.5$\,GB (Shared) & \tiny VRAM: $>2.2$\,GB (Dedicated) \\
-    \tiny Scaling: CPU / GPU & \tiny On-Demand / Sablier \\
+    \tiny Prod: 2 Pods (2 GPU slots) & \tiny LanceDB + Qwen2-VL \\
+    \tiny Staging: 1 Pod (CPU-only) & \tiny VRAM: $>2.2$\,GB (Dedicated) \\
+    \tiny VRAM: $<1.5$\,GB / Pod & \tiny On-Demand / Sablier \\
     \hline
     \end{tabular}}\\[1.0mm]
     \textbullet\ Traefik v3.1 Ingress (80/20 Canary)\\[0.2mm]

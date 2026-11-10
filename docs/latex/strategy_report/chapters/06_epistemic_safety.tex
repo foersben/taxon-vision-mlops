@@ -158,7 +158,7 @@ where the upper bound assumes continuous non-conformity score distributions with
 \section{Conformal Triage Routing \& Active Learning Feedback}
 \label{sec:active_learning_triage}
 
-The prediction set cardinality $|\hat{C}(X_{n+1})|$ coupled with the maximum softmax probability $\hat{\pi}_{\max}(X_{n+1}) = \max_{y} \hat{\pi}_y(X_{n+1})$ serves as a deterministic control signal at the FastAPI serving boundary, partitioning incoming inference traffic into a four-tier operational execution contract:
+At the FastAPI serving boundary, the prediction set cardinality $|\hat{C}(X_{n+1})|$ and maximum softmax confidence $\hat{\pi}_{\max}(X_{n+1})$ partition incoming inference traffic into a four-tier operational execution contract:
 
 \begin{enumerate}
     \item \textbf{Decisive Fast-Path Resolution ($|\hat{C}(X_{n+1})| = 1$ with $\hat{\pi}_{\max} \ge \tau_{\text{conf}}$):} Exactly one taxon satisfies $\hat{\pi}_y(X_{n+1}) \ge 1 - \hat{q}_\alpha$, and the top-1 confidence simultaneously satisfies the operational confidence threshold $\hat{\pi}_{\max}(X_{n+1}) \ge \tau_{\text{conf}}$ (calibrated to $\tau_{\text{conf}} = 0.60$ in \nolinkurl{config/conformal_config.yaml}). The classification is statistically conclusive at the $1 - \alpha$ significance level and is returned immediately by the INT8 ONNX runtime within the sub-$25\text{ ms}$ hot-path SLO, completely bypassing secondary retrieval and operator triage.

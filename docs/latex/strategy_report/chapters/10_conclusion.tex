@@ -17,8 +17,8 @@ The architecture described in this report is delivered in three phases that end 
 
 In order to avoid any ambiguity between the target design and the present state of the code base, Table~\ref{tab:impl_status} records the status of each capability as verified against the repository. The label \textit{implemented} denotes functionality that exists in the code base and is exercised by the test suite or the deployment manifests; \textit{partial} denotes functionality whose building blocks exist but which is not yet integrated end-to-end; and \textit{planned} denotes functionality that is specified in this report but has not yet been implemented.
 
-\begin{longtable}{@{}p{0.27\textwidth}p{0.16\textwidth}p{0.53\textwidth}@{}}
-\caption{Implementation status of principal capabilities, verified against the repository (\texttt{feature/pipeline1-monitoring} branch, November 2026).}
+\begin{longtable}{@{}p{0.23\textwidth} p{0.17\textwidth} p{0.52\textwidth}@{}}
+\caption{Implementation status of principal capabilities, verified against the repository (\texttt{develop} branch, November 2026).}
 \label{tab:impl_status}\label{tab:implementation-status}\\
 \toprule
 \textbf{Capability} & \textbf{Status} & \textbf{Verified Repository Evidence \& Operational Alignment} \\
@@ -49,7 +49,7 @@ Epistemic safety gating (OOD + Conformal) & \textbf{implemented} & Dual-gate OOD
 \addlinespace
 Inference service \& HTMX dashboard & \textbf{implemented} & FastAPI service (\texttt{/predict}, \texttt{/explain}, \texttt{/health/ready}), distributed Redis ephemeral upload cache (\texttt{redis-ephemeral:6379}) eliminating multi-pod split-brain for CAM, ViT patch-grid projection and forward-hooked linear CAM saliency with differential candidate toggles (\texttt{inference/cam.py}), and Model Passport attestation. \\
 \addlinespace
-Hybrid CI/CD \& K3s GPU execution & \textbf{implemented} & GitHub Actions quality/release/GHCR workflows (\texttt{ci.yml}, \texttt{release.yaml}), Traefik v3.1 canary ingress, and bare-metal Jenkins two-pod execution (\texttt{jenkins-cpu-runner} and dedicated RTX 5070 Ti \texttt{jenkins-gpu-runner}). \\
+Hybrid CI/CD \& K3s GPU execution & \textbf{implemented} & GitHub Actions quality/release/GHCR workflows (\texttt{ci.yml}, \texttt{release.yaml}), Traefik v3.1 canary ingress with Sablier idle scaling, and bare-metal Jenkins execution (dedicated RTX 5070 Ti runner with 4-slot GPU time-slicing partition model and CPU-only staging discipline). \\
 \addlinespace
 Test harness \& code quality gates & \textbf{implemented} & 203 \texttt{pytest} tests, zero-warning Ruff, MyPy across 70 source files, 8-gate attestation seal (\nolinkurl{attest_seal.py}), AST code invariants engine (\nolinkurl{verify_code_invariants.py}), automated hardware specification verification, 100\% cognitive complexity $\le 15$ with zero snapshot exemptions, and OKF v0.2 schema validation. \\
 \addlinespace
@@ -57,9 +57,9 @@ Two-tier drift detection ($W_1$ \& $\text{MMD}^2$) & \textbf{implemented} & Line
 \addlinespace
 Stage 7 Four-Gate Promotion Verdict & \textbf{implemented} & Terminal DVC evaluation gate in \texttt{pipelines/evaluate.py} asserting Macro PR-AUC superiority, INT8 degradation $\le 3\%$, conformal coverage $\ge (1-\alpha)-5\%$, and latency SLO $\le 120\,\text{ms}$ with live MMD² exchangeability ($p \ge 0.01$); generates \nolinkurl{reports/model_passport.json}. \\
 \addlinespace
-In-cluster S3 cache \& Optuna dashboard & \textbf{implemented} & Kubernetes manifests deploy SeaweedFS (Apache 2.0, port 8333) and Optuna dashboard (NodePort 30081) backed by PostgreSQL 16 persistence; \texttt{docker-compose.yml} mirrors the stack locally. \\
+In-cluster S3 cache \& Optuna dashboard & \textbf{implemented} & Kubernetes manifests deploy SeaweedFS (Apache 2.0, port 8333 with \texttt{strategy.type: Recreate}) and Optuna dashboard (NodePort 30081) backed by PostgreSQL 16 persistence; \texttt{docker-compose.yml} mirrors the stack locally. \\
 \addlinespace
-Prometheus \& Grafana observability & \textbf{implemented} & FastAPI exposes \texttt{/metrics} with latency histograms, prediction counts, and embedding norms in \texttt{telemetry.py}; Prometheus server scrapes endpoints with native TSDB; Grafana alert rules route drift alerts to webhook relay. \\
+Prometheus \& Grafana observability & \textbf{implemented} & FastAPI exposes \texttt{/metrics} with latency histograms, prediction counts, and pre-normalised embedding norms; Prometheus native TSDB scraping; Grafana dual operational dashboards (10 MLOps panels, 14 Infrastructure panels); Loki TSDB v13 log aggregation with Promtail daemon log parsing; Alertmanager webhook relay with 6h anti-flapping lock. \\
 \midrule
 Airflow 3 LocalExecutor orchestration & \textbf{planned} & Fully specified architecture in Chapter 4; \texttt{prediction\_drift\_monitor} DAG (@hourly) and event-driven \texttt{model\_retraining} DAG with authenticated webhook relay and Jenkins trigger. \\
 \addlinespace

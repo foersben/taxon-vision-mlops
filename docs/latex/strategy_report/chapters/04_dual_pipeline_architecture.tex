@@ -216,13 +216,13 @@ Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely be
     };
 
     \node[obsCard] (prom) at (17.2, -8.4) {
-        \textbf{Prometheus TSDB}\\[-1pt]
-        {\scriptsize\color{black!70} Latency, RPS, $W_1$ Drift}
+        \textbf{Prometheus \& Loki}\\[-1pt]
+        {\scriptsize\color{black!70} TSDB v13 $\cdot$ $W_1$ Drift $\cdot$ Logs}
     };
 
     \node[obsCard] (grafana) at (17.2, -12.6) {
-        \textbf{Grafana Dashboard}\\[-1pt]
-        {\scriptsize\color{black!70} Live SLOs \& Drift UI}
+        \textbf{Dual Dashboards}\\[-1pt]
+        {\scriptsize\color{black!70} 10 MLOps + 14 Infra Panels}
     };
 
     \node[obsCard] (evidently) at (17.2, -16.8) {
@@ -310,7 +310,7 @@ Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely be
     % --- 9. Closed-Loop Feedback Channels ---
     % Path A: Prometheus Drift -> Retrain Relay -> Airflow (Track 4 at Y = -26.20, corridor X = -1.95)
     \draw[alertFlow] (prom.west) -- (15.35, -8.4) -- (15.35, -26.20) -- (-1.95, -26.20) -- (-1.95, -14.4) -- (airflow_sched.west);
-    \node[pillLabel] at (7.0, -26.20) {Path A: Grafana Drift Alert $\to$ Webhook Relay $\to$ Airflow};
+    \node[pillLabel] at (7.0, -26.20) {Path A: Grafana Drift Alert $\to$ Webhook Relay (6h Lock) $\to$ Airflow};
 
     % Path B: Active Learning -> DagsHub Manifest Update (Top Route at Y=2.35)
     \draw[loopFlow] ([yshift=-0.25cm]al_triage.east) -- (20.15, -21.25) -- (20.15, 2.35) -- (2.40, 2.35) -- (2.40, -0.30) -- (dagshub.west);
@@ -318,7 +318,7 @@ Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely be
 
 \end{tikzpicture}
 }
-\caption{Decoupled Dual-Pipeline Architecture Flow: Pipeline 1 executes the 7-Stage Epistemic Diamond DAG with Stage 3.5 data drift auditing for neural classification head training, while Pipeline 2 manages asynchronous vector indexing in LanceDB and DuckDB 2.0.0 taxonomic mutations. Persistent telemetry, MLflow 3.x tracking, Airflow orchestration, and Bayesian trials are anchored in a consolidated 4-schema PostgreSQL cluster. Both pipelines converge at the FastAPI serving gateway (2 replicas with active Model Passport) behind Traefik v3.1 ingress and an in-cluster Redis ephemeral upload cache. Full-stack observability integrates Prometheus TSDB streaming metrics ($W_1$ drift), Grafana operational dashboards, Airflow 3 LocalExecutor drift and retraining DAGs, and closed-loop Active Learning feedback.}
+\caption{Decoupled Dual-Pipeline Architecture Flow: Pipeline 1 executes the 7-Stage Epistemic Diamond DAG with Stage 3.5 data drift auditing for neural classification head training, while Pipeline 2 manages asynchronous vector indexing in LanceDB and DuckDB 2.0.0 taxonomic mutations. Persistent telemetry, MLflow 3.x tracking, Airflow orchestration, and Bayesian trials are anchored in a consolidated 4-schema PostgreSQL cluster. Both pipelines converge at the FastAPI serving gateway (2 replicas with active Model Passport) behind Traefik v3.1 ingress and an in-cluster Redis ephemeral upload cache. Full-stack observability integrates Prometheus TSDB streaming metrics ($W_1$ drift), Loki TSDB v13 log aggregation, Grafana dual operational dashboards (10 MLOps panels, 14 Infrastructure \& Logging panels), Airflow 3 LocalExecutor drift and retraining DAGs, and closed-loop Active Learning feedback.}
 \label{fig:cicd_flow}
 \end{figure*}
 
@@ -425,7 +425,7 @@ If feature extraction or spatial projection fails due to unsupported backbone po
 
 Computing CAM saliency synchronously on every prediction request would unnecessarily consume CPU cycles and bloat response payloads for automated clients that only require categorical predictions. Conversely, forcing the client to re-upload raw multi-megabyte image payloads whenever an operator requests visual explanation incurs substantial network latency and memory overhead.
 
-To resolve this trade-off, the serving layer implements a content-addressed ephemeral image cache governed by \nolinkurl{ImageCacheProtocol} in \nolinkurl{src/taxon_vision/service/storage.py}, backed by an in-cluster Redis ephemeral instance (\nolinkurl{RedisImageCache}) with in-memory fallback (\nolinkurl{MemoryImageCache}):
+To resolve this trade-off, the serving layer implements a content-addressed ephemeral image cache governed by \nolinkurl{ImageCacheProtocol} in \nolinkurl{src/taxon_vision/service/storage.py}, backed by an in-cluster Redis ephemeral instance (\texttt{Redis\-Image\-Cache}) with in-memory fallback (\texttt{Memory\-Image\-Cache}):
 \begin{enumerate}
     \item \textbf{Content Addressing via SHA-256:} Uploaded raw image bytes are hashed using SHA-256 to generate an immutable content digest (\texttt{image\_hash}).
     \item \textbf{Multi-Pod Split-Brain Mitigation:} Rather than isolating cached payloads within a single pod's heap, images are stored in a shared cluster Redis instance (\texttt{redis-ephemeral:6379}), ensuring that subsequent CAM attribution requests routed round-robin across replicas resolve the image payload seamlessly.
@@ -438,8 +438,8 @@ To resolve this trade-off, the serving layer implements a content-addressed ephe
 
 The FastAPI serving runtime and HTMX dashboard operationalise this decoupled architecture through progressive disclosure:
 \begin{enumerate}
-    \item \textbf{Fast-Path Inference ($<15\text{ ms}$):} The synchronous prediction endpoints (\texttt{POST /ui/predict-htmx} and \texttt{POST /api/v1/predict}) execute the dual-output ONNX model, evaluate conformal prediction sets $\hat{C}(X)$, and compute epistemic telemetry (Shannon entropy and Helmholtz free energy compared against thresholds $\tau_{\text{OOD}}$ and $\tau_{\text{entropy}}$). The dashboard immediately renders the prediction card containing candidate probability bars and epistemic telemetry badges without waiting for saliency synthesis.
-    \item \textbf{On-Demand Lazy Heatmap Synthesis (\texttt{/api/v1/explain}):} The CAM interface is embedded in a collapsible HTML5 \texttt{<details>} drawer. The client browser triggers an asynchronous HTMX request (\nolinkurl{hx-post="/api/v1/explain?image_hash=...&target_class_index=..."}) with the trigger condition \texttt{hx-trigger="toggle once"}, synthesising the heatmap overlay only when the operator actively opens the drawer.
+    \item \textbf{Fast-Path Inference ($<15\text{ ms}$):} Synchronous prediction routes (\nolinkurl{/ui/predict-htmx} and \nolinkurl{/api/v1/predict}) execute the dual-output ONNX model, evaluate conformal prediction sets $\hat{C}(X)$, and compute epistemic telemetry (Shannon entropy and Helmholtz free energy compared against thresholds $\tau_{\text{OOD}}$ and $\tau_{\text{entropy}}$). The dashboard immediately renders the prediction card containing candidate probability bars and epistemic telemetry badges without waiting for saliency synthesis.
+    \item \textbf{On-Demand Lazy Heatmap Synthesis (\texttt{/api/v1/explain}):} The CAM interface is embedded in a collapsible HTML5 \texttt{<details>} drawer. The client browser dispatches an asynchronous HTMX query to \nolinkurl{/api/v1/explain} supplying \texttt{image\_hash} and \texttt{target\_\allowbreak class\_\allowbreak index} under condition \texttt{hx-trigger="toggle once"}, synthesising the heatmap overlay only when the operator actively opens the drawer.
     \item \textbf{Differential Multi-Candidate Inspection:} When an observation yields a non-singleton conformal prediction set (e.g., $|\hat{C}(X)| \in \{2, 3\}$), the drawer provides interactive candidate toggles. Operators can click individual competing taxa to dynamically inspect class-specific activation maps for contrasting hypotheses on the identical cached image. This allows taxonomists to verify whether the model attended to genuine diagnostic morphology (e.g., wing venation patterns or floral stamen structures) or spurious background correlation.
     \item \textbf{Fault-Tolerant Rendering:} If an expired hash or unsupported architecture triggers an exception during explanation, the endpoint returns an inline warning fragment (\nolinkurl{partials/cam_error.html}) at HTTP 200 for HTMX clients (and typed HTTP 422 for machine API consumers), ensuring that the operator dashboard remains fully functional and responsive.
 \end{enumerate}
