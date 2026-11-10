@@ -67,11 +67,9 @@ spec:
           requests:
             cpu: "200m"
             memory: "1Gi"
-            nvidia.com/gpu: "1"
           limits:
             cpu: "2"
             memory: "4Gi"
-            nvidia.com/gpu: "1"
         volumeMounts:
         - name: checkpoints-volume
           mountPath: /app/models/checkpoints

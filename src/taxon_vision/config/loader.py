@@ -18,10 +18,10 @@ def _load_yaml_dict(path: Path) -> dict[str, Any]:
     """Safely load and parse YAML configuration dictionary from disk.
 
     Args:
-        path (Path): Filesystem path to the YAML configuration file.
+        path: Filesystem path to the YAML configuration file.
 
     Returns:
-        dict[str, Any]: Parsed configuration mapping, or empty dict if missing or invalid.
+        Parsed configuration mapping, or empty dict if missing or invalid.
     """
     if not path.is_file():
         return {}
@@ -34,11 +34,11 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     """Recursively merge override dictionary into base dictionary.
 
     Args:
-        base (dict[str, Any]): Base dictionary.
-        override (dict[str, Any]): Override dictionary to overlay.
+        base: Base dictionary.
+        override: Override dictionary to overlay.
 
     Returns:
-        dict[str, Any]: Newly merged dictionary preserving untouched base keys.
+        Newly merged dictionary preserving untouched base keys.
     """
     merged = base.copy()
     for key, value in override.items():
@@ -53,10 +53,10 @@ def _load_conformal_override(path: Path) -> dict[str, Any]:
     """Parse calibration parameters from conformal_config.yaml if present.
 
     Args:
-        path (Path): Path to conformal_config.yaml.
+        path: Path to conformal_config.yaml.
 
     Returns:
-        dict[str, Any]: Dictionary with conformal sub-key mapping, or empty dict.
+        Dictionary with conformal sub-key mapping, or empty dict.
     """
     if not path.is_file():
         return {}
@@ -89,11 +89,11 @@ def _resolve_custom_override(custom_path_str: str | None, base_path: Path) -> di
     """Load configuration overrides from custom user path or environment variable.
 
     Args:
-        custom_path_str (str | None): Optional path string from argument or env var.
-        base_path (Path): Resolved canonical default configuration path.
+        custom_path_str: Optional path string from argument or env var.
+        base_path: Resolved canonical default configuration path.
 
     Returns:
-        dict[str, Any]: Parsed override mapping, or empty dict if not applicable.
+        Parsed override mapping, or empty dict if not applicable.
     """
     if not custom_path_str:
         return {}
@@ -113,10 +113,10 @@ def _apply_direct_env_overrides(config_data: dict[str, Any]) -> dict[str, Any]:
         Checks for TAXON_ALLOW_UNTRAINED_FALLBACK, TAXON_FLAGGED_STORAGE_DIR, TAXON_OPTUNA_STORAGE_URI, TAXON_MLFLOW_TRACKING_URI, MLFLOW_TRACKING_URI, and TAXON_TELEMETRY_ALLOW_IN_MEMORY_FALLBACK injecting them into the merged dictionary.
 
     Args:
-        config_data (dict[str, Any]): Merged configuration dictionary.
+        config_data: Merged configuration dictionary.
 
     Returns:
-        dict[str, Any]: Updated configuration dictionary with direct environment overrides applied.
+        Updated configuration dictionary with direct environment overrides applied.
     """
     model_overrides: dict[str, Any] = {}
     env_untrained = os.getenv("TAXON_ALLOW_UNTRAINED_FALLBACK")
@@ -167,7 +167,7 @@ def _resolve_workspace_root() -> Path:
     """Resolve the active workspace root directory across source checkouts and packaged installs.
 
     Returns:
-        Path: Directory containing `config/default_config.yaml`.
+        Directory containing `config/default_config.yaml`.
     """
     env_root = os.getenv("TAXON_WORKSPACE_ROOT") or os.getenv("TAXON_CONFIG_ROOT")
     if env_root:
@@ -192,7 +192,7 @@ def get_params_path() -> Path:
     """Resolve the canonical params.yaml path, checking workspace root first then config/.
 
     Returns:
-        Path: Canonical path to params.yaml.
+        Canonical path to params.yaml.
     """
     repo_root = _resolve_workspace_root()
     root_params = repo_root / "params.yaml"
@@ -206,9 +206,7 @@ def get_settings(config_path: str | Path | None = None) -> Settings:
     """Retrieve and cache the validated global application configuration settings.
 
     Why:
-        Centralizes configuration resolution across YAML defaults, DVC pipeline parameters,
-        conformal calibration artefacts, and runtime environment variables into a single
-        type-safe, immutable Pydantic hierarchy, avoiding repeated disk I/O via LRU caching.
+        Centralizes configuration resolution across YAML defaults, DVC pipeline parameters, conformal calibration artefacts, and runtime environment variables into a single type-safe, immutable Pydantic hierarchy, avoiding repeated disk I/O via LRU caching.
 
     How:
         1. Resolves workspace root and loads base defaults from `config/default_config.yaml`.
@@ -221,7 +219,7 @@ def get_settings(config_path: str | Path | None = None) -> Settings:
         config_path: Optional filesystem path to YAML configuration overrides.
 
     Returns:
-        Settings: The validated application configuration instance.
+        The validated application configuration instance.
 
     Raises:
         FileNotFoundError: If the base configuration file does not exist.
