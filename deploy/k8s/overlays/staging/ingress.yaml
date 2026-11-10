@@ -24,6 +24,7 @@ spec:
   routes:
     - match: Host(`staging.taxon.benjamin-foerster.eu`)
       kind: Rule
+      priority: 100
       middlewares:
         - name: sablier-staging
       services:
