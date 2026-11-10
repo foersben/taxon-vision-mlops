@@ -25,6 +25,8 @@ spec:
       mountPath: /var/lib/taxon-vision/embeddings
     - name: host-manifests
       mountPath: /var/lib/taxon-vision/manifests
+    - name: host-reference
+      mountPath: /var/lib/taxon-vision/reference
     - name: host-checkpoints
       mountPath: /var/lib/taxon-vision/checkpoints
     resources:
@@ -56,6 +58,10 @@ spec:
   - name: host-manifests
     hostPath:
       path: /var/lib/taxon-vision/manifests
+      type: DirectoryOrCreate
+  - name: host-reference
+    hostPath:
+      path: /var/lib/taxon-vision/reference
       type: DirectoryOrCreate
   - name: host-checkpoints
     hostPath:

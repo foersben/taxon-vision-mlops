@@ -24,6 +24,8 @@ spec:
       mountPath: /root/.cache/rattler/cache
     - name: host-manifests
       mountPath: /var/lib/taxon-vision/manifests
+    - name: host-reference
+      mountPath: /var/lib/taxon-vision/reference
     - name: host-checkpoints
       mountPath: /var/lib/taxon-vision/checkpoints
     resources:
@@ -41,6 +43,10 @@ spec:
   - name: host-manifests
     hostPath:
       path: /var/lib/taxon-vision/manifests
+      type: DirectoryOrCreate
+  - name: host-reference
+    hostPath:
+      path: /var/lib/taxon-vision/reference
       type: DirectoryOrCreate
   - name: host-checkpoints
     hostPath:
@@ -104,6 +110,7 @@ spec:
               data/embeddings/val_embeddings.pt \
               data/embeddings/cal_embeddings.pt \
               data/embeddings/test_embeddings.pt \
+              data/reference/reference_train_embeddings.pt \
               models/checkpoints/head.pt \
               models/checkpoints/model_int8.onnx || echo "WARNING: DVC pull skipped or failed; continuing with workspace cache."
           '''
