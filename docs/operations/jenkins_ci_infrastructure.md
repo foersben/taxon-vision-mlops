@@ -3,11 +3,11 @@ type: Reference
 title: Jenkins CI/CD Architecture & Ephemeral Runner Topology
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
-version: 1.0
-description: Comprehensive architecture, security design, and operational record of the zero-open-ports Jenkins controller, Cloudflare Tunnel ingress, and k3s ephemeral agent topology.
-tags: [jenkins, cicd, k3s, cloudflare, pixi, infrastructure, docker]
-generated: {by: "process:docs-librarian", at: "2026-10-18T18:00:00Z"}
-verified: {by: "process:docs-librarian", at: "2026-10-18T18:00:00Z"}
+version: 1.2
+description: Comprehensive architecture, security design, and operational record of the zero-open-ports Jenkins controller, Cloudflare Tunnel ingress, 7-stage CI/CD pipeline, and k3s ephemeral agent topology.
+tags: [jenkins, cicd, k3s, cloudflare, pixi, infrastructure, docker, rbac, gpu-scheduling]
+generated: {by: "process:docs-librarian", at: "2026-11-10T16:00:00Z"}
+verified: {by: "process:docs-librarian", at: "2026-11-10T16:00:00Z"}
 ---
 
 # Jenkins CI/CD Architecture & Ephemeral Runner Topology
@@ -61,6 +61,8 @@ flowchart TD
     ML_Runner -->|Run Stage| S3["3. Pytest Suite (>= 80% Coverage)"]
     ML_Runner -->|Run Stage| S4["4. Invariants & Conformal Guarantees"]
     ML_Runner -->|Run Stage| S5["5. Zensical Strict Docs Build"]
+    ML_Runner -->|Conditional Handover| S6["6. Model Training & Checkpoint (GPU Pod: nvidia.com/gpu: 1)"]
+    ML_Runner -->|Branch-Aware CD| S7["7. Deploy to Kubernetes (Overlays: Staging vs Production)"]
 ```
 
 ---
@@ -630,6 +632,57 @@ flowchart TD
     S5 --> GPU_Pod
     GPU_Pod --> Teardown
 ```
+
+### 6.6 Post-Mortem: Staging RBAC 403 Forbidden in Deployment Stage (Build #85)
+
+During continuous integration Build #85 on branch `develop`, all verification gates and unit tests succeeded cleanly. However, the deployment stage aborted abruptly when executing `kubectl apply -k deploy/k8s/overlays/staging`:
+
+```text
+Error from server (Forbidden): services is forbidden: User "system:serviceaccount:jenkins-ci:jenkins-agent" cannot get resource "services" in API group "" in the namespace "taxon-vision-staging"
+```
+
+#### Forensic Root-Cause Analysis (Build #85)
+
+1. **Namespace Boundary Violation:** When Step 10 introduced multi-tier Kustomize overlays, `develop` builds were configured to deploy to `namespace: taxon-vision-staging`. However, the existing `jenkins-deployer-role` and `RoleBinding` in [`deploy/k8s/jenkins-agent-rbac.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/jenkins-agent-rbac.yaml) were scoped strictly to `namespace: taxon-vision`.
+2. **Missing Port-Forward Permissions:** The verification harness [`scripts/ci/verify_deployment.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/ci/verify_deployment.sh) establishes an ephemeral `kubectl port-forward` to probe liveness and readiness endpoints when ClusterIP or NodePort routes are unreachable from the workstation or CI agent. The role lacked `pods/portforward` verbs.
+
+#### Remediation: Cross-Namespace RBAC Expansion
+
+[`deploy/k8s/jenkins-agent-rbac.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/jenkins-agent-rbac.yaml) was expanded to provision symmetric roles and bindings across both `taxon-vision` and `taxon-vision-staging`:
+
+* Granted `get`, `list`, `watch`, `create`, `update`, `patch`, `delete` over core resources (`services`, `deployments`, `pods`, `pods/log`, `events`, `configmaps`, `secrets`).
+* Granted `pods/portforward` explicitly to support non-root smoke verification.
+* Granted Traefik custom resource permissions (`ingressroutes`, `traefikservices`, `middlewares` in group `traefik.io`).
+
+---
+
+### 6.7 Post-Mortem: GPU Scheduling Deadlock & Staging CPU Invariant (Build #86)
+
+During Build #86, the pipeline passed all static and unit tests and entered the `Model Training & Checkpoint (GPU)` stage. The stage spun with an active hourglass for 28+ minutes, reporting:
+
+```text
+'taxon-vision-mlops-develop-86-t71wn-vrhx2-165kc' is offline
+```
+
+#### Forensic Root-Cause Analysis (Build #86)
+
+1. **Exhaustion of Virtual GPU Slots:** The bare-metal host `hive-mind` partitions its NVIDIA GeForce RTX 5070 Ti into **exactly 4 virtual GPU slots** via NVIDIA time-slicing. At the time of execution:
+    * Slot 0 was held by the standing ARC runner pod (`arc-systems`).
+    * Slots 1 & 2 were held by the 2 production serving replicas (`taxon-vision`).
+    * Slot 3 was held by the newly deployed staging pod (`taxon-vision-staging`).
+    * **Total allocated: 4 / 4 slots.**
+2. **Scheduler Starvation:** When Jenkins requested a 5th GPU slot for the dynamic `jenkins-gpu-pod`, the Kubernetes scheduler blocked:
+
+   ```text
+   0/1 nodes are available: 1 Insufficient nvidia.com/gpu.
+   ```
+
+   The pod remained in `Pending`, the JNLP agent could not connect to Jenkins, and the pipeline stalled indefinitely.
+
+#### Remediation: CPU-Only Staging Discipline
+
+1. **Immediate Intervention:** Temporarily scaled the staging deployment to 0 replicas (`kubectl scale deployment taxon-vision-serving -n taxon-vision-staging --replicas=0`). The 4th slot was immediately released; the Jenkins GPU training pod scheduled instantly and finished model training.
+2. **Permanent Structural Fix:** Because our INT8-quantised ONNX serving hot path achieves sub-15ms latency on the Intel Core i7-14700K Performance cores (Rule 02), staging does not require GPU silicon. Removed `nvidia.com/gpu` from [`deploy/k8s/base/api-deployment.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/base/api-deployment.yaml) and kept it exclusively in [`deploy/k8s/overlays/production/patch-replicas.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/overlays/production/patch-replicas.yaml). Staging now executes purely on CPU, guaranteeing that the 4th GPU slot remains permanently unblocked for CI training jobs.
 
 ---
 

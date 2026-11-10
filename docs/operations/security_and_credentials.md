@@ -3,11 +3,11 @@ type: Reference
 title: Security Architecture & Credentials Governance
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
-version: 1.0
+version: 1.1
 description: Defence-in-depth security strategy, agentic workspace credential hygiene, four-pillar secret storage, dual-tier documentation, and zero-downtime key rotation runbooks.
 tags: [security, credentials, keepassxc, kubernetes, secrets, gitguardian]
-generated: {by: "process:docs-librarian", at: "2026-11-08T17:25:00Z"}
-verified: {by: "process:docs-librarian", at: "2026-11-08T17:25:00Z"}
+generated: {by: "process:docs-librarian", at: "2026-11-10T16:00:00Z"}
+verified: {by: "process:docs-librarian", at: "2026-11-10T16:00:00Z"}
 ---
 
 # Security Architecture & Credentials Governance
@@ -66,7 +66,7 @@ AI coding agents actively read workspace files, run diagnostic commands, and ins
 To eliminate disk-resident secrets on the developer workstation (`flagship`) whilst preserving a friction-free onboarding experience, TaxonVision separates **local container bootstrap fixtures** from **authentic developer credentials**:
 
 1. **Committed Explicit Dummy Defaults in [`docker-compose.yml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/docker-compose.yml):** Local Docker Compose services (`postgres`, `airflow-apiserver`, `airflow-scheduler`, `mlflow`, `seaweedfs`, `redis`, `app`) run exclusively on isolated `localhost` bridge networks and never communicate with the production cluster. Their environment variables use standard shell parameter expansion (`${VAR:-dummy_default}`) with explicit non-sensitive test placeholders committed directly to Git. Consequently, any engineer or CI job can clone the repository and execute `docker compose up -d` immediately with zero `.env` file creation.
-2. **Addressing Automated Secret Scanner False Positives:** Certain cryptographic libraries validate key structure at startup. Specifically, Apache Airflow 3 validates that `AIRFLOW__CORE__FERNET_KEY` is a URL-safe Base64-encoded 32-byte sequence before booting. Because a dummy key satisfying this mathematical format matches the entropy profile of a real Fernet key, automated scanners such as GitGuardian flag the committed placeholder. Rather than moving the dummy key into a hazardous `.env` file, we retain the dummy test fixture in `docker-compose.yml` and silence false-positive alerts via a repository-level `.gitguardian.yaml` path exclusion (**Target State - Step 9**).
+2. **Addressing Automated Secret Scanner False Positives:** Certain cryptographic libraries validate key structure at startup. Specifically, Apache Airflow 3 validates that `AIRFLOW__CORE__FERNET_KEY` is a URL-safe Base64-encoded 32-byte sequence before booting. Because a dummy key satisfying this mathematical format matches the entropy profile of a real Fernet key, automated scanners such as GitGuardian flag the committed placeholder. Rather than moving the dummy key into a hazardous `.env` file, we retain the dummy test fixture in `docker-compose.yml` and silence false-positive alerts via a repository-level `.gitguardian.yaml` path exclusion (**Verified Production Baseline**).
 3. **In-Memory Credential Injection via KeePassXC and `secret-tool` (Active):** When a developer on `flagship` requires a genuine external credential - such as the DagsHub Personal Access Token needed to pull or push DVC tensor artefacts - the secret is never written to `.dvc/config.local` or `.env`. Instead, as implemented in [`Justfile`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/Justfile), the command queries **KeePassXC** over the Linux Freedesktop Secret Service D-Bus interface (`org.freedesktop.secrets`) directly into a volatile shell sub-process variable:
 
 ```bash
@@ -126,17 +126,17 @@ The table below catalogues every credential required across the platform, its au
 | :--- | :--- | :--- | :--- | :--- |
 | **`DAGSHUB_TOKEN`** | GitHub Repo Secrets, Jenkins Credentials (`dagshub-token`), Local KeePassXC | CI Env Binding / `secret-tool` D-Bus lookup | **Never** | DVC S3 artefact hydration & remote MLflow tracking (**Active**) |
 | **`Kubeconfig / Cluster Token`** | None (Eliminated) | Automatic K3s `ServiceAccount` mount (`jenkins-agent`) | **Never** | Jenkins `kubectl apply` and rollout verification (**Active**) |
-| **`TAXON_INTERNAL_API_TOKEN`** | K3s Secret (`taxon-vision-secrets`) & Local Compose | `secretKeyRef` (K8s) / `${INTERNAL_API_TOKEN:-taxon-dev-internal-token}` | **Committed dummy default only** in `docker-compose.yml` | FastAPI `POST /api/v1/drift/evaluate` bearer auth (**Active** in Compose & App; K8s `secretKeyRef` is **Target State - Step 9**) |
-| **`TAXON_RETRAIN_WEBHOOK_SECRET`** | K3s Secret (`taxon-vision-secrets`) & Local Compose | `secretKeyRef` (K8s) / `${RETRAIN_WEBHOOK_SECRET:-taxon-dev-webhook-secret}` | **Committed dummy default only** in `docker-compose.yml` | Grafana Alertmanager `POST /api/v1/retrain/webhook` relay (**Active** in Compose & App; K8s `secretKeyRef` is **Target State - Step 9**) |
-| **`AIRFLOW__CORE__FERNET_KEY`** | K3s Secret (`airflow-secrets`) & Local Compose | `secretKeyRef` (K8s) / Literal dummy default in Compose | **Committed dummy default only** in `docker-compose.yml` | Airflow 3 connection & variable encryption (**Active** in Compose; K8s `secretKeyRef` is **Target State - Step 9**) |
-| **`AIRFLOW__API_AUTH__JWT_SECRET`** | K3s Secret (`airflow-secrets`) & Local Compose | `secretKeyRef` (K8s) / Literal dummy default in Compose | **Committed dummy default only** in `docker-compose.yml` | Airflow 3 internal API server & worker JWT auth (**Active** in Compose; K8s `secretKeyRef` is **Target State - Step 9**) |
-| **`POSTGRES_PASSWORD`** | K3s Secret (`taxon-vision-secrets`) & Local Compose | `secretKeyRef` (K8s) / `${POSTGRES_PASSWORD:-taxon_super_secret}` | **Committed dummy default only** in `docker-compose.yml` | PostgreSQL 16 root cluster bootstrap (**Active** in Compose; K8s `secretKeyRef` migration is **Target State - Step 9**) |
-| **`TAXON_TELEMETRY__DATABASE_URL`** | K3s Secret (`taxon-vision-secrets`) & Local Compose | `secretKeyRef` (K8s) / Literal dummy DSN in Compose | **Committed dummy default only** in `docker-compose.yml` | FastAPI `PostgresTelemetryStore` connection string (**Active** in Compose; K8s `secretKeyRef` migration is **Target State - Step 9**) |
-| **`TAXON_OPTUNA__OPTUNA_STORAGE_URI`** | K3s Secret (`taxon-vision-secrets`) & Local Compose | `secretKeyRef` (K8s) / Literal dummy DSN in Compose | **Committed dummy default only** in `docker-compose.yml` | Optuna study persistence & dashboard (**Active** in Compose; K8s `secretKeyRef` migration is **Target State - Step 9**) |
-| **`JENKINS_API_TOKEN`** | K3s Secret (`airflow-secrets`) & Local Compose | `secretKeyRef` (K8s) / `${JENKINS_API_TOKEN:-dummy_token}` | **Committed dummy default only** in `docker-compose.yml` | Airflow `model_retraining` DAG triggering Jenkins (**Active** in Compose; K8s `secretKeyRef` is **Target State - Step 9**) |
+| **`TAXON_INTERNAL_API_TOKEN`** | K3s Secret (`taxon-vision-secrets`) & Local Compose | `secretKeyRef` (K8s) / `${INTERNAL_API_TOKEN:-taxon-dev-internal-token}` | **Committed dummy default only** in `docker-compose.yml` | FastAPI `POST /api/v1/drift/evaluate` bearer auth (**Active** in Compose & K8s `secretKeyRef`) |
+| **`TAXON_RETRAIN_WEBHOOK_SECRET`** | K3s Secret (`taxon-vision-secrets`) & Local Compose | `secretKeyRef` (K8s) / `${RETRAIN_WEBHOOK_SECRET:-taxon-dev-webhook-secret}` | **Committed dummy default only** in `docker-compose.yml` | Grafana Alertmanager `POST /api/v1/retrain/webhook` relay (**Active** in Compose & K8s `secretKeyRef`) |
+| **`AIRFLOW__CORE__FERNET_KEY`** | K3s Secret (`airflow-secrets`) & Local Compose | `secretKeyRef` (K8s) / Literal dummy default in Compose | **Committed dummy default only** in `docker-compose.yml` | Airflow 3 connection & variable encryption (**Active** in Compose & K8s `secretKeyRef`) |
+| **`AIRFLOW__API_AUTH__JWT_SECRET`** | K3s Secret (`airflow-secrets`) & Local Compose | `secretKeyRef` (K8s) / Literal dummy default in Compose | **Committed dummy default only** in `docker-compose.yml` | Airflow 3 internal API server & worker JWT auth (**Active** in Compose & K8s `secretKeyRef`) |
+| **`POSTGRES_PASSWORD`** | K3s Secret (`taxon-vision-secrets`) & Local Compose | `secretKeyRef` (K8s) / `${POSTGRES_PASSWORD:-taxon_super_secret}` | **Committed dummy default only** in `docker-compose.yml` | PostgreSQL 16 root cluster bootstrap (**Active** in Compose & K8s `secretKeyRef`) |
+| **`TAXON_TELEMETRY__DATABASE_URL`** | K3s Secret (`taxon-vision-secrets`) & Local Compose | `secretKeyRef` (K8s) / Literal dummy DSN in Compose | **Committed dummy default only** in `docker-compose.yml` | FastAPI `PostgresTelemetryStore` connection string (**Active** in Compose & K8s `secretKeyRef`) |
+| **`TAXON_OPTUNA__OPTUNA_STORAGE_URI`** | K3s Secret (`taxon-vision-secrets`) & Local Compose | `secretKeyRef` (K8s) / Literal dummy DSN in Compose | **Committed dummy default only** in `docker-compose.yml` | Optuna study persistence & dashboard (**Active** in Compose & K8s `secretKeyRef`) |
+| **`JENKINS_API_TOKEN`** | K3s Secret (`airflow-secrets`) & Local Compose | `secretKeyRef` (K8s) / `${JENKINS_API_TOKEN:-dummy_token}` | **Committed dummy default only** in `docker-compose.yml` | Airflow `model_retraining` DAG triggering Jenkins (**Active** in Compose & K8s `secretKeyRef`) |
 
 > [!NOTE]
-> **Current vs Target State in Kubernetes Manifests:** On the current `feature/pipeline1-monitoring` branch, [`deploy/k8s/api-deployment.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) and [`deploy/k8s/postgres.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/postgres.yaml) contain literal bootstrap connection strings (`taxon_telemetry_pass`, `taxon_optuna_pass`, `taxon_super_secret`) to support initial cluster bring-up. **Step 9 (Target State)** of our engineering roadmap migrates these fields to Kubernetes `valueFrom.secretKeyRef` bindings provisioned via `scripts/deploy/provision_k8s_secrets.sh` from a root-owned `/etc/taxon-vision/production.env` file (`chmod 600`) on `hive-mind`.
+> **Production Kubernetes Secret Bindings:** In [`deploy/k8s/base/api-deployment.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/base/api-deployment.yaml), all sensitive environment variables (`TAXON_OPTUNA__OPTUNA_STORAGE_URI`, `TAXON_TELEMETRY__DATABASE_URL`, `TAXON_INTERNAL_API_TOKEN`, `TAXON_RETRAIN_WEBHOOK_SECRET`) are bound via `valueFrom.secretKeyRef` referencing secret `taxon-vision-secrets`. Secrets are provisioned idempotently into `taxon-vision` and `taxon-vision-staging` via [`scripts/deploy/provision_k8s_secrets.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/deploy/provision_k8s_secrets.sh) from a root-protected `/etc/taxon-vision/production.env` file (`chmod 600`) on `hive-mind`.
 
 ---
 
@@ -215,9 +215,9 @@ flowchart TD
 
 ## 6. Day-2 Operational Runbooks: Provisioning & Zero-Downtime Rotation
 
-### 6.1 Provisioning Secrets on `hive-mind` (Target State - Step 9)
+### 6.1 Provisioning Secrets on `hive-mind` (Verified Production Architecture)
 
-On the bare-metal server `hive-mind`, raw production credentials are stored in a single root-protected file outside the Git workspace (`/etc/taxon-vision/production.env`, owned by `root:root` with mode `0600`) and synchronised into K3s via `kubectl create secret generic ... --dry-run=client -o yaml | kubectl apply -f -`:
+On the bare-metal server `hive-mind`, raw production credentials are stored in a single root-protected file outside the Git workspace (`/etc/taxon-vision/production.env`, owned by `root:root` with mode `0600`) and synchronised into K3s via `scripts/deploy/provision_k8s_secrets.sh`:
 
 ```bash
 # 1. Verify strict file permissions on the host secret store

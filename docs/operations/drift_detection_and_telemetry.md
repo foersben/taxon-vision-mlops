@@ -16,6 +16,7 @@ sources:
   - resource: "src/taxon_vision/pipelines/data_drift.py"
   - resource: "src/taxon_vision/service/telemetry_store.py"
   - resource: "src/taxon_vision/service/routes/drift.py"
+  - resource: "scripts/maintenance/simulate_traffic.py"
 ---
 
 # Two-Tier Statistical Drift Detection & Telemetry Persistence
@@ -187,3 +188,21 @@ TaxonVision-MLOps applies the exact same two-tier mathematical engine (`compute_
 | **MLflow Target Experiment** | `taxon-vision-head-training` (`run_name="training_data_drift"`, tag `drift_scope="training"`) | `taxon-vision-drift` (`run_name="drift_evaluation"`) |
 | **Output Artefacts** | `reports/data_drift.json` & `reports/data_drift_report.html` | PostgreSQL `drift_runs` row & `reports/drift_report.html` |
 | **Downstream Governance Role** | Audits representation stability of new training data prior to Stage 4 gradient descent | Drives Grafana alerts, Active Model Passport badge, Stage 7 Gate 4 exchangeability, and automated retraining |
+
+---
+
+## 7. Synthetic Traffic Generation & Live Drift Validation
+
+Cold-started or freshly deployed Kubernetes clusters operate with unpopulated PostgreSQL tables and empty Prometheus time-series buffers, displaying "No data" across Grafana panels. To validate telemetry pipelines without waiting for asynchronous organic field traffic, TaxonVision provides a dedicated simulation utility in [`scripts/maintenance/simulate_traffic.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/maintenance/simulate_traffic.py).
+
+### 7.1 Operational Mechanics
+
+```bash
+# Dispatch 60 synthetic observation requests at 50ms pacing and trigger drift evaluation
+pixi run -e dev python scripts/maintenance/simulate_traffic.py --count 60 --delay-ms 50 --trigger-drift
+```
+
+* **Warmup & Pacing:** Iterates through genuine sample images in `data/sample/`, formats multipart HTTP POST requests, and transmits them to `/api/v1/predict` at a controlled rate (`--delay-ms`).
+* **PostgreSQL Population:** Verifies that raw pre-normalised activations $\mathbf{z} \in \mathbb{R}^{384}$ are successfully persisted to `predictions.embedding` via non-blocking FastAPI `BackgroundTasks`.
+* **Immediate Drift Evaluation:** When `--trigger-drift` is set, calls `POST /api/v1/drift/evaluate` immediately upon completing the batch, triggering Tier 1 Wasserstein-1 calculation, Tier 2 MMD² permutation tests, and Evidently 8-D PCA snapshot rendering.
+* **Metric Verification:** Asserts that Prometheus counters `taxon_predictions_total` and drift gauges `taxon_drift_w1_distance` increment as expected, transitioning Grafana dashboards to green status.

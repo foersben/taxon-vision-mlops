@@ -3,11 +3,11 @@ type: Reference
 title: GPU Resource Scheduling & Multiplexing
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
-version: 1.0
-description: Architectural strategies for managing single-GPU scheduling conflicts between Training, CI/CD, and Web Inference workloads.
-tags: [infrastructure, gpu, k3s, scheduling]
-generated: {by: "process:docs-librarian", at: "2026-10-18T18:00:00Z"}
-verified: {by: "process:docs-librarian", at: "2026-10-18T18:00:00Z"}
+version: 1.1
+description: Architectural strategies for managing single-GPU scheduling conflicts between Training, CI/CD, and Web Inference workloads, enforcing the 4-slot time-slicing invariant and staging CPU discipline.
+tags: [infrastructure, gpu, k3s, scheduling, time-slicing, deadlock-prevention]
+generated: {by: "process:docs-librarian", at: "2026-11-10T16:00:00Z"}
+verified: {by: "process:docs-librarian", at: "2026-11-10T16:00:00Z"}
 ---
 
 # GPU Resource Scheduling & Multiplexing
@@ -76,11 +76,27 @@ data:
             replicas: 4
 ```
 
-Applying this ConfigMap exposes 4 assignable `nvidia.com/gpu` slots in `k3s`:
+Applying this ConfigMap exposes 4 assignable `nvidia.com/gpu` slots in `k3s`. Under our production operational model on `hive-mind`, these 4 slots are strictly allocated:
 
-* **Slot 1 (Web API):** Dedicated to [deploy/k8s/api-deployment.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml).
-* **Slot 2 (Batch Training):** Claimed during DVC pipeline execution.
-* **Slots 3-4 (Ephemeral / CI):** Disposable runner pods or local interactive research.
+$$\underbrace{1_{\text{ARC Runner}}}_{\text{arc-systems}} + \underbrace{2_{\text{Production Pods}}}_{\text{taxon-vision}} + \underbrace{1_{\text{Jenkins GPU Agent}}}_{\text{jenkins-ci (training)}} = 4_{\text{Total Hardware Slots}}$$
+
+* **Slot 0 (ARC GitHub Actions Runner):** Dedicated to the standing self-hosted runner pod in `namespace: arc-systems` (`gpu-runner-deployment-xxfjd-8994t`), providing GPU acceleration for on-cluster GitHub Actions workflows.
+* **Slots 1 & 2 (Production Serving Replicas):** Dedicated to the two high-availability production inference replicas in `namespace: taxon-vision` ([`deploy/k8s/overlays/production/patch-replicas.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/overlays/production/patch-replicas.yaml)).
+* **Slot 3 (Ephemeral Jenkins GPU Training Agent):** Claimed on-demand by the dynamic Jenkins training pod ([`deploy/k8s/jenkins-gpu-pod.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/jenkins-gpu-pod.yaml)) during stage `Model Training & Checkpoint (GPU)`. The pod is terminated immediately upon pipeline completion to release the slot.
+
+### Staging CPU Invariant & Deadlock Elimination
+
+A critical architectural pitfall in single-node GPU time-slicing is **scheduling starvation deadlock**. If the staging environment (`namespace: taxon-vision-staging`) were permitted to claim a GPU slot, all 4 physical slots would be continuously occupied:
+
+$$1_{\text{ARC}} + 2_{\text{Prod}} + 1_{\text{Staging}} = 4_{\text{Slots Occupied}}$$
+
+Under this state, any incoming Jenkins CI build requesting `nvidia.com/gpu: 1` to train a candidate model would hang indefinitely in `Pending` (`0/1 nodes are available: 1 Insufficient nvidia.com/gpu`), causing the build to stall and report the agent as offline.
+
+To resolve this contention at the architectural root:
+
+* **Zero-Allocation CPU Serving:** Under Rule 02, our INT8-quantised ONNX serving hot path executes in $< 15\,\text{ms}$ on the Intel Core i7-14700K Performance cores without GPU acceleration.
+* **CPU-Only Staging Overlay:** [`deploy/k8s/overlays/staging/patch-replicas.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/overlays/staging/patch-replicas.yaml) strips `nvidia.com/gpu` entirely, constraining the staging pod to `cpu: "2"` and `memory: "4Gi"`.
+* **Deterministic Scheduling Guarantee:** Staging consumes zero GPU slots, guaranteeing that the 4th GPU slot is permanently available for ephemeral Jenkins model training runs.
 
 ## Application VRAM Budgeting Mechanics
 

@@ -3,11 +3,11 @@ type: Report
 title: Implementation Status & Engineering Verification Matrix
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
-version: "1.3.0"
+version: "1.4.0"
 description: Comprehensive four-tier engineering verification matrix, codebase-verified capabilities, and architectural roadmap for TaxonVision-MLOps.
 tags: [roadmap, status, project-management, mlops, verification]
-generated: {by: "process:docs-librarian", at: "2026-10-18T22:00:00Z"}
-verified: {by: "process:docs-librarian", at: "2026-10-18T22:00:00Z"}
+generated: {by: "process:docs-librarian", at: "2026-11-10T16:00:00Z"}
+verified: {by: "process:docs-librarian", at: "2026-11-10T16:00:00Z"}
 ---
 
 # Implementation Status & Engineering Verification Matrix
@@ -37,6 +37,10 @@ Components in Section 1 are fully wired into continuous integration, governed by
 | **FastAPI Serving & Flagged Specimen Storage** | `src/taxon_vision/service/{api,inference,schemas,storage}.py`, `service/routes/*.py` | `tests/integration/test_api_endpoints.py`, `tests/integration/test_views_and_routes.py` | **Production:** Persistent ONNX Runtime session with contiguous pre-allocated C-order buffers (`IOBinding` scheduled for Phase 2.5) and multipart upload. When `is_ood` or `requires_human_review` triggers, `service/storage.py` atomically writes `.npy` embeddings, `.json` metadata, and appends to `manifest.jsonl`. |
 | **Forward-Hooked Analytical CAM** | `src/taxon_vision/inference/cam.py` | `tests/integration/test_api_endpoints.py`, `tests/integration/test_views_and_routes.py`, `/api/v1/explain`, `/api/v1/predict?explain=true` | **Production:** Analytical Class Activation Mapping computed directly on linear probe weights in $< 5\text{ ms}$ without backward-pass graph overhead. Fully wired into HTMX operator cockpit (lazy visual inspector) and `POST /api/v1/predict?explain=true`. |
 | **Prometheus Telemetry Exposition** | `src/taxon_vision/monitoring/telemetry.py`, `config/prometheus.yaml` | `GET /metrics`, `tests/unit/test_monitoring.py` | **Production:** Exposes `taxon_predictions_total`, `taxon_inference_latency_seconds_bucket`, and `taxon_human_referrals_active` over Prometheus scrape endpoint. |
+| **Secret Governance & Automated Vault Provisioning** | `scripts/deploy/provision_k8s_secrets.sh`, `deploy/k8s/base/api-deployment.yaml`, `.gitguardian.yaml` | `tests/unit/test_config.py` | **Production:** Strict separation of code and state via `secretKeyRef` sourcing from `/etc/taxon-vision/production.env`. Automated secret masking, idempotent provisioning, and GitGuardian secret detection policies. |
+| **Multi-Tier Kustomize Staging & Production Overlays** | `deploy/k8s/{base,overlays/staging,overlays/production}`, `Jenkinsfile`, `.github/workflows/ci.yml` | `scripts/ci/verify_deployment.sh`, Jenkins Build #87 | **Production:** Branch-aware deployment routing `develop` to `taxon-vision-staging` and `main` to `taxon-vision`. CPU-only staging discipline (<15ms INT8 ONNX execution) eliminating GPU starvation deadlocks. |
+| **Synthetic Traffic Generation & Live Drift Validation** | `scripts/maintenance/simulate_traffic.py`, `scripts/maintenance/smoke_test_mlflow.sh` | Live telemetry verification on staging | **Production:** High-throughput async synthetic client supporting Gaussian blur and exposure corruption modes to validate Prometheus alerts and retraining relays. |
+| **Dual Grafana Dashboards & Loki Log Aggregation** | `deploy/grafana/provisioning/dashboards/json/`, `config/{loki,promtail}.yaml`, `deploy/prometheus/rules.yaml` | Ports 3000, 3100, 9080, 9090 | **Production:** Production Overview (10 panels) and Infrastructure Overview (14 panels, RSS slope, DDR5, RTX 5070 Ti VRAM). Promtail log shipping to Loki TSDB v13 with LogQL streams. Alertmanager rules with automated retrain webhook dispatch. |
 
 ---
 
@@ -69,9 +73,6 @@ The following capabilities are formal architectural designs and specifications; 
 
 | Capability | Target Architecture & Proposed Stack | Planned Functionality |
 | :--- | :--- | :--- |
-| **Kubernetes `secretKeyRef` & Provisioning (Step 9)** | `deploy/k8s/api-deployment.yaml`, `scripts/deploy/provision_k8s_secrets.sh`, `.gitguardian.yaml` | Migrates literal bootstrap DSNs in Kubernetes manifests to `secretKeyRef` (`taxon-vision-secrets`, `airflow-secrets`) synced from `/etc/taxon-vision/production.env`. |
-| **Multi-Tier Staging Namespace & Kustomize (Step 10)** | `deploy/k8s/{base,overlays/staging,overlays/production}`, `Jenkinsfile`, `.github/workflows/ci.yml` | Routes `develop` builds (`:develop`) to `namespace: taxon-vision-staging` (`staging.taxon.benjamin-foerster.eu`, Sablier scale-to-zero) before promoting `main` (`:latest`) to `taxon-vision`. |
-| **Traffic Replay & Drift Simulator CLI (Step 12)** | `scripts/ops/replay_traffic.py`, `Justfile` (`simulate-traffic`, `simulate-drift`) | Synthesizes baseline and corrupted (Gaussian blur / brightness shift) inference traffic to validate end-to-end drift alerting and Airflow retraining loops on demand. |
 | **BADGE Active Learning** | `active_learning/query.py` + PyTorch gradient embedding computation | Generates hallucinated loss gradients ($g_x = (p - e_{\hat{y}}) \otimes z$) and samples diverse batches via k-means++ in gradient space. |
 | **Persistent Triage Queue** | Parquet + DuckDB storage layer + Label Studio webhook sync | Replaces in-memory `TriageQueue` with persistent columnar triage queue and bidirectional Label Studio annotation ingest. |
 | **Parent-Child Visual Chunking** | YOLO-World / OWL-ViT v2 + BioCLIP-2 ($d=512$) | Isolates diagnostic specimen crop $I_{\text{child}}$ from parent environmental scene $I_{\text{parent}}$ to eliminate background bias. |

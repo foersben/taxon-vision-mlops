@@ -3,11 +3,11 @@ type: Reference
 title: Multi-Tier Deployment & Promotion Strategy
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
-version: 1.0
-description: End-to-end MLOps deployment architecture covering the hybrid GitHub Actions and Jenkins pipeline, in-cluster staging vs production isolation, Kustomize overlays, canary routing, and rollback playbooks.
+version: 1.1
+description: End-to-end MLOps deployment architecture covering the hybrid GitHub Actions and Jenkins pipeline, verified in-cluster staging vs production isolation, Kustomize overlays, canary routing, and rollback playbooks.
 tags: [deployment, cicd, kubernetes, k3s, jenkins, staging, kustomize, canary]
-generated: {by: "process:docs-librarian", at: "2026-11-08T17:27:00Z"}
-verified: {by: "process:docs-librarian", at: "2026-11-08T17:27:00Z"}
+generated: {by: "process:docs-librarian", at: "2026-11-10T16:00:00Z"}
+verified: {by: "process:docs-librarian", at: "2026-11-10T16:00:00Z"}
 ---
 
 # Multi-Tier Deployment & Promotion Strategy
@@ -71,10 +71,9 @@ Defined in [`Jenkinsfile`](file:///home/benni/Documents/antigravity_workspace/ta
 
 ---
 
-## 3. Target Multi-Tier Promotion Architecture: Local, Staging & Production (Planned Step 10)
+## 3. Verified Multi-Tier Promotion Architecture: Local, Staging & Production
 
-> [!IMPORTANT]
-> **Implementation Status:** In the current `Jenkinsfile` on `feature/pipeline1-monitoring`, both `develop` and `main` branches deploy directly into `namespace: taxon-vision`. **Step 10 (Target State)** of the master roadmap introduces branch-aware Kustomize overlays so pushes to `develop` deploy to an isolated in-cluster staging namespace (`taxon-vision-staging`), reserving `taxon-vision` exclusively for signed releases merged to `main`.
+The repository enforces strict branch-aware continuous delivery across three distinct operational tiers, governed by native Kustomize overlays in [`deploy/k8s/overlays/`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/overlays/):
 
 ### 3.1 Architectural Trade-Off: Separate Staging Server vs In-Cluster Namespace
 
@@ -84,7 +83,7 @@ When designing a staging environment for `develop`, an engineering team must cho
 | :--- | :--- | :--- | :--- |
 | **Capital & Operational Cost** | Requires a second workstation or EUR 80-150/month cloud GPU instance that sits idle 95% of the week | **EUR 0 additional cost** - leverages existing `hive-mind` capacity (128 GB DDR5 RAM, 20-core i7-14700K, RTX 5070 Ti) | Renting redundant silicon for sporadic staging checks is unneeded economic ballast. |
 | **Hardware & Driver Parity** | Suffers from kernel, GPU architecture, and network topology drift relative to production | **100% hardware and kernel parity** - identical Ubuntu 26.04 LTS kernel, NVIDIA 615.71.09 / CUDA 13.4 driver, and Traefik v3 ingress | Bugs caused by Blackwell SM 120 kernel compatibility or BTRFS mounts are caught reliably in staging. |
-| **VRAM & Compute Contention** | Physically separate memory bus | Isolated via **NVIDIA Time-Slicing (Slot 2)** paired with **Sablier Scale-to-Zero** (15-minute idle timeout) | Because Sablier scales staging to 0 replicas when idle, staging consumes **0 MB VRAM and 0% CPU** during production serving and GPU training runs. |
+| **VRAM & Compute Contention** | Physically separate memory bus | Staging operates strictly on **CPU Performance Cores (< 15ms latency)** paired with **Sablier Scale-to-Zero** (15-minute idle timeout) | Consuming **0 GPU slots**, staging guarantees that Jenkins training jobs never stall on scheduling starvation. |
 | **State & Data Isolation** | Separate physical disk | Strictly partitioned via Kubernetes Namespace boundaries and dedicated `telemetry_staging` PostgreSQL database | Zero cross-talk between staging test traffic and production drift telemetry. |
 
 ### 3.2 The Three-Tier Promotion Funnel
@@ -101,7 +100,7 @@ flowchart TD
         DEV_GIT["Git branch: develop"]
         GH_DEV["GitHub Actions CI<br/>* Full CPU test gate<br/>* Builds & pushes :develop image"]
         JNK_DEV["Jenkins Staging Pipeline<br/>* Runs on hive-mind<br/>* Applies deploy/k8s/overlays/staging"]
-        STAGE_POD["K3s Namespace: taxon-vision-staging<br/>* Image: :develop (1 Replica)<br/>* URL: staging.taxon.benjamin-foerster.eu<br/>* Scale-to-Zero via Sablier (0 VRAM idle)"]
+        STAGE_POD["K3s Namespace: taxon-vision-staging<br/>* Image: :develop (1 Replica, CPU-only)<br/>* URL: staging.taxon.benjamin-foerster.eu<br/>* Scale-to-Zero via Sablier"]
         VERIFY_DEV["verify_deployment.sh taxon-vision-staging"]
     end
 
@@ -109,7 +108,7 @@ flowchart TD
         MAIN_GIT["Git branch: main (Signed PR Merge)"]
         GH_MAIN["GitHub Actions CI<br/>* Builds & pushes :latest & :sha-tag"]
         JNK_MAIN["Jenkins Production Pipeline<br/>* Applies deploy/k8s/overlays/production<br/>* RollingUpdate (maxSurge: 1, maxUnavailable: 0)"]
-        PROD_POD["K3s Namespace: taxon-vision<br/>* Image: :latest (2 Replicas, Always Warm)<br/>* URL: taxon.benjamin-foerster.eu"]
+        PROD_POD["K3s Namespace: taxon-vision<br/>* Image: :latest (2 Replicas, 2 GPU Slots)<br/>* URL: taxon.benjamin-foerster.eu"]
         VERIFY_MAIN["verify_deployment.sh taxon-vision"]
     end
 
@@ -124,20 +123,21 @@ flowchart TD
     PROD_POD --> VERIFY_MAIN
 ```
 
-### 3.3 Hardware & NVIDIA Time-Slicing Resource Partitioning on `hive-mind`
+### 3.3 Hardware & Resource Partitioning Matrix on `hive-mind`
 
 To guarantee that staging verification and Jenkins GPU training never degrade production p95 inference latency ($\le 10-15\text{ ms}$ GPU target / `50.38 ms` empirical CPU INT8 within the $\le 120.0\text{ ms}$ Stage 7 SLA gate), compute and memory resources on `hive-mind` are partitioned across the Intel Core i7-14700K (8 Performance-cores / 16 threads `0-15`, 12 Efficient-cores `16-27`), 128 GB DDR5 RAM, and the 4 virtual time-sliced replicas of the NVIDIA GeForce RTX 5070 Ti (16 GB GDDR7 VRAM):
 
 | Cluster Workload | Kubernetes Namespace | CPU Allocation & Affinity Target | RAM Limit | GPU Slot & VRAM Budget | Lifecycle Policy |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Production Serving (`taxon-vision-serving`)** | `taxon-vision` | 2.0 Cores (P-core threads `0-3`) | 1,536 MiB | Slot 1 ($\le 1.5\text{ GB}$ ONNX runtime) | Always Warm (2 Replicas, `maxUnavailable: 0`) |
-| **Staging Serving (`taxon-vision-serving`)** | `taxon-vision-staging` | 1.0 Core (E-core threads `16-17`) | 1,024 MiB | Slot 2 ($\le 1.0\text{ GB}$ when active; $0\text{ GB}$ idle) | Scale-to-Zero via Sablier after 15m inactivity |
-| **Jenkins GPU Training (`ml-runner`)** | `jenkins-ci` | 8.0 Cores (P-core threads `4-11`) | 16 GiB | Slot 3 ($f=0.7 \implies 11.2\text{ GB}$ PyTorch cap) | Ephemeral Pod (terminated immediately after run) |
-| **Storage, Databases & Observability** | `taxon-vision`, `kube-system` | 4.0 Cores (E-core threads `18-27`) | 8 GiB | None (CPU only) | Persistent (PostgreSQL 16, SeaweedFS, MLflow, Prometheus, Grafana) |
+| **GitHub Actions Runner (`gpu-runner`)** | `arc-systems` | 2.0 Cores | 8 GiB | **Slot 0** (1 GPU slot) | Standing / Re-spawned |
+| **Production Serving (`taxon-vision-serving`)** | `taxon-vision` | 2.0 Cores (P-core threads `0-3`) | 4,096 MiB | **Slots 1 & 2** (1 GPU slot per replica) | Always Warm (2 Replicas, `maxUnavailable: 0`) |
+| **Staging Serving (`taxon-vision-serving`)** | `taxon-vision-staging` | 2.0 Cores (P-core threads `4-5`) | 4,096 MiB | **0 Slots (Pure CPU INT8)** | Scale-to-Zero via Sablier after 15m inactivity |
+| **Jenkins GPU Training (`ml-runner`)** | `jenkins-ci` | 8.0 Cores (P-core threads `6-13`) | 16 GiB | **Slot 3** ($f=0.7 \implies 11.2\text{ GB}$ PyTorch cap) | Ephemeral Pod (terminated immediately after run) |
+| **Storage, Databases & Observability** | `taxon-vision`, `kube-system` | 4.0 Cores (E-core threads `16-27`) | 8 GiB | None (CPU only) | Persistent (PostgreSQL 16, SeaweedFS, MLflow, Prometheus, Grafana, Loki) |
 
 ---
 
-## 4. Declarative Manifest Organisation with Native Kustomize (Target State - Step 10)
+## 4. Declarative Manifest Organisation with Native Kustomize
 
 Rather than duplicating YAML files across environments or introducing Helm chart templating complexity, **Step 10** structures [`deploy/k8s/`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/) using Kubernetes' built-in Kustomize engine (`kubectl apply -k`), which ships natively inside `kubectl`:
 

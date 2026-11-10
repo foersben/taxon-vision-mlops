@@ -338,26 +338,28 @@ The system implements a production two-layer CI/CD architecture:
     * `Integration & Conformal Invariants` - Verifies integration endpoints and asserts split conformal prediction empirical coverage bounds ($1 - \alpha \ge 0.90$).
     * `Documentation Strict Build` - Validates OKF knowledge graph and verifies documentation integrity via `zensical build --strict`.
     * `Model Training & Checkpoint (GPU)` - Runs on `develop` or `main` within a dedicated GPU agent pod requesting `nvidia.com/gpu: 1` on `hive-mind`. Pulls DVC manifests, streams real image observations from AWS S3 via `extract_features.py` into 4 stratified embedding splits on SeaweedFS, trains the head via Optuna sweeps, exports the ONNX graph, and pushes updated release checkpoints to DagsHub DVC.
-    * `Deploy to Kubernetes` - Automatically injects SeaweedFS credentials, hydrates models (with fallback to host-volume checkpoints), applies [`deploy/k8s/api-deployment.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) and [`deploy/k8s/monitoring-prometheus-grafana.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/monitoring-prometheus-grafana.yaml) (`imagePullPolicy: Always`), executes a zero-downtime rolling restart, and runs the automated verification smoke test ([`scripts/ci/verify_deployment.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/ci/verify_deployment.sh)).
+    * `Deploy to Kubernetes` - Automatically injects SeaweedFS credentials, hydrates models (with fallback to host-volume checkpoints), applies branch-aware Kustomize overlays ([`deploy/k8s/overlays/staging`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/overlays/staging) on `develop` or [`deploy/k8s/overlays/production`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/overlays/production) on `main`), executes a zero-downtime rolling restart, and runs the automated verification smoke test ([`scripts/ci/verify_deployment.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/ci/verify_deployment.sh)) targeting the respective namespace.
 
 ---
 
-## In-Cluster Observability Plane: Prometheus & Grafana on K3s
+## In-Cluster Observability Plane: Prometheus, Loki & Grafana on K3s
 
-To guarantee operational autonomy without external telemetry egress or SaaS dependencies, the cluster hosts an in-cluster Prometheus and Grafana stack in `namespace: taxon-vision`, deployed via [`deploy/k8s/monitoring-prometheus-grafana.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/monitoring-prometheus-grafana.yaml):
+To guarantee operational autonomy without external telemetry egress or SaaS dependencies, the cluster hosts an in-cluster observability stack in `namespace: taxon-vision`, deployed via [`deploy/k8s/monitoring-prometheus-grafana.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/monitoring-prometheus-grafana.yaml):
 
 * **Service Endpoints & NodePort Registry:**
     * **Port `30080`:** FastAPI inference service & operator dashboard (`taxon-vision-serving:8000`).
     * **Port `30081`:** Optuna Bayesian hyperparameter search visualizer (`optuna-dashboard:8080`, scaled to 0 when idle).
     * **Port `30090`:** Prometheus TSDB web UI and API (`prometheus:9090`), scraping targets every 15 seconds.
-    * **Port `30300`:** Grafana visualizer (`grafana:3000`), authenticated with auto-provisioned Prometheus datasources, 6-panel MLOps dashboard, and Alertmanager webhook relay rules.
+    * **Port `30300`:** Grafana visualizer (`grafana:3000`), authenticated with auto-provisioned Prometheus and Loki datasources, dual dashboards (10-panel Production Overview + 14-panel Infrastructure & Hardware Invariants), and Alertmanager webhook relay rules.
     * **Port `30432`:** Consolidated PostgreSQL 16 relational database (`postgres:5432`) hosting `telemetry`, `optuna`, `airflow`, and `mlflow`.
     * **Port `30500`:** MLflow v3.16.0 tracking and model registry server (`mlflow-server:5000`).
+    * **Port `3100`:** Grafana Loki single-binary log engine (`config/loki.yaml`) with TSDB indexing and 168h retention.
+    * **Internal Port `9080`:** Promtail log shipper (`config/promtail.yaml`) parsing FastAPI JSON logs, Airflow DAG/task execution traces, and Traefik access streams.
     * **Internal Port `6379`:** In-cluster Redis ephemeral upload cache (`redis-ephemeral:6379`), providing 64 MB bounded LRU memory for multipart specimen uploads and on-demand CAM attribution across replicas.
     * **Internal Port `8333`:** SeaweedFS S3-compatible object gateway (`seaweedfs:8333`) hosting `taxon-dvc-cache`, `triage-queue`, and `mlflow-artifacts`.
-* **Storage Persistence & BTRFS NOCOW Allocation:** Prometheus and Grafana persist time-series indices and dashboard state to `/var/lib/taxon-vision/prometheus` and `/var/lib/taxon-vision/grafana` on the NVMe drive. Subvolumes are marked with the `NOCOW` (`chattr +C`) attribute to eliminate filesystem block fragmentation from frequent write appends.
+* **Storage Persistence & BTRFS NOCOW Allocation:** Prometheus, Grafana, and Loki persist time-series indices, dashboard state, and chunk files to `/var/lib/taxon-vision/prometheus`, `/var/lib/taxon-vision/grafana`, and `/var/lib/taxon-vision/loki` on the NVMe drive. Subvolumes are marked with the `NOCOW` (`chattr +C`) attribute to eliminate filesystem block fragmentation from frequent write appends.
 * **Linux Process Isolation & Root initContainers:** Unprivileged containers (Prometheus UID `65534`, Grafana UID `472`) are paired with root `initContainers` (`docker.io/busybox:latest`) that enforce correct ownership (`chown -R 65534:65534 /prometheus`, `chown -R 472:472 /var/lib/grafana`) and mode `775` before the main processes spawn, preventing `permission denied` startup crashes on hostPath volumes.
-* **Declarative Datasource Auto-Provisioning:** Grafana boots with a pre-configured datasource ConfigMap (`grafana-datasources`) targeting `http://prometheus:9090` internally, enabling immediate out-of-the-box telemetry without manual UI setup.
+* **Declarative Datasource Auto-Provisioning:** Grafana boots with pre-configured datasource ConfigMaps targeting `http://prometheus:9090` and `http://loki:3100` internally, enabling immediate out-of-the-box metric and log exploration without manual UI setup.
 
 ---
 
@@ -425,7 +427,9 @@ For local multi-service orchestration and debugging, a canonical [`docker-compos
 * **Redis 7** (port `6379`) - Bounded 64 MB ephemeral upload and CAM state cache.
 * **Optuna Dashboard** (port `8080`) - Interactive Bayesian hyperparameter search visualizer.
 * **Prometheus** (port `9090`) - Scrapes `/metrics` endpoints (`config/prometheus.yaml`).
-* **Grafana** (port `3000`) - Auto-provisioned with Prometheus datasources, the 6-panel MLOps dashboard, and Alertmanager webhook rules (credentials: `admin` / `admin`).
+* **Grafana** (port `3000`) - Auto-provisioned with Prometheus and Loki datasources, dual dashboards (Production Overview + Infrastructure & Hardware Invariants), and Alertmanager webhook rules (credentials: `admin` / `admin`).
+* **Grafana Loki** (port `3100`) - Local log TSDB indexing structured logs and access streams.
+* **Promtail** (port `9080`) - Tails and streams application, Airflow, and Traefik access logs to Loki.
 
 Start the full local stack with:
 

@@ -3,9 +3,9 @@ type: Concept
 title: Polyglot Storage Architecture & Database Matrix
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
-version: 1.1
-description: Technical specification of the polyglot storage matrix, consolidated PostgreSQL 16 relational cluster, Three-Tier S3 Interlock, and zero-leakage 4-way stratified tensor partitioning.
-tags: [storage, databases, postgres, s3, parquet, arrow, duckdb, optuna, seaweedfs, dagshub, mlflow, prometheus, redis]
+version: 1.2
+description: Technical specification of the polyglot storage matrix, consolidated PostgreSQL 16 relational cluster, Three-Tier S3 Interlock, Loki log persistence, and zero-leakage 4-way stratified tensor partitioning.
+tags: [storage, databases, postgres, s3, parquet, arrow, duckdb, optuna, seaweedfs, dagshub, mlflow, prometheus, loki, redis]
 generated: {by: "process:docs-librarian", at: "2026-11-08T17:10:00Z"}
 verified: {by: "process:docs-librarian", at: "2026-11-08T17:10:00Z"}
 sources:
@@ -81,7 +81,7 @@ flowchart TD
 
 ## 2. Complete Storage & Database Matrix
 
-The platform maps every data asset across ten specialised storage tiers, governed by explicit invalidation rules and service-level objectives:
+The platform maps every data asset across eleven specialised storage tiers, governed by explicit invalidation rules and service-level objectives:
 
 | Storage Technology | Architectural Tier & Location | Primary Data Assets | Access Pattern & Protocols | Invalidation & Lifecycle SLO |
 | :--- | :--- | :--- | :--- | :--- |
@@ -92,8 +92,9 @@ The platform maps every data asset across ten specialised storage tiers, governe
 | **PostgreSQL 16 (`mlflow` DB)** | Consolidated Relational Pod (`postgres:5432`) | MLflow 3.16.0 experiment runs, `LoggedModel` entities, dataset lineage, and `@Production` / `@Challenger` registry aliases | SQLAlchemy ACID transactions managed by the `mlflow-server` container (`:5000`) | Persistent across training lifecycles; offline CLI execution falls back to `sqlite:///data/mlflow/mlflow.db`. |
 | **PostgreSQL 16 (`optuna` DB)** | Consolidated Relational Pod (`postgres:5432`) | Bayesian TPE hyperparameter trial histories and ASHA pruning milestones | SQLAlchemy relational transactions via `TAXON_OPTUNA_STORAGE_URI` | Persistent across HPO sweeps; offline local runs fall back to `sqlite:///data/optuna/optuna_studies.db`. |
 | **PostgreSQL 16 (`airflow` DB)** | Consolidated Relational Pod (`postgres:5432`) | Airflow 3.0 DAG schedules, task instance states, and XCom metadata | SQLAlchemy connection pool from `airflow-scheduler` and `airflow-apiserver` (`:8090`) | Persistent orchestration state; initialised idempotently by `airflow-init`. |
-| **SeaweedFS In-Cluster S3** | Local Cluster Daemon (`:8333`) | DVC tensor cache (`s3://taxon-dvc-cache`) and MLflow artefacts (`s3://mlflow-artifacts` - plots, Evidently HTML, `pyfunc_model`) | High-throughput S3 API over cluster loopback (`strategy.type: Recreate`) | Local NVMe object store providing $< 2\,\text{ms}$ loopback read latency with zero cloud egress cost. |
+| **SeaweedFS In-Cluster S3** | Local Cluster Daemon (`:8333`) | DVC tensor cache (`s3://taxon-dvc-cache`), human triage feedback (`s3://triage-queue`), and MLflow artefacts (`s3://mlflow-artifacts` - plots, Evidently HTML, `pyfunc_model`) | High-throughput S3 API over cluster loopback (`strategy.type: Recreate`) | Local NVMe object store providing $< 2\,\text{ms}$ loopback read latency with zero cloud egress cost. |
 | **Redis Ephemeral Upload Cache** | In-Cluster Ephemeral Pod (`redis-ephemeral:6379`) | Raw specimen image uploads (`taxon:img:{sha256}`) for on-demand Grad-CAM attribution | Connection-pooled RESP protocol, non-blocking AnyIO threadpool offload | 15-minute rolling TTL (`SETEX 900`), `maxmemory 64mb` with `allkeys-lru` eviction policy. |
+| **Grafana Loki TSDB** | Local Cluster Daemon (`:3100`) | Aggregated container logs (FastAPI JSON records, Airflow DAG worker logs, Traefik access records) | Promtail log shipping, LogQL stream expressions over HTTP | 168-hour (7-day) rolling retention on non-CoW host NVMe storage (`/var/lib/taxon-vision/loki`). |
 | **DagsHub S3 DVC Remote** | Cloud Object Store (`s3://dvc` / `origin`) | Canonical checkpoints (`head.pt`, `model_int8.onnx`), DVC locks | Remote S3 API authenticated via ephemeral KeePassXC `secret-tool` injection | Content-addressed cloud archive; updated upon verified pipeline releases. |
 | **AWS Open Data Registry S3** | Public Cloud Storage (`s3://inaturalist-open-data`) | Raw citizen-science photographs | Unauthenticated direct HTTP/S3 batch streaming | Upstream public repository; images are streamed on demand into RAM and immediately discarded. |
 | **Prometheus TSDB** | In-Cluster Telemetry Daemon (`:9090`) | Inference latency histograms, conformal set sizes, OOD counters, and drift gauges (`w1_distance`, `mmd2_p_value`) | HTTP pull scraping every 15 seconds from `/metrics` | 15-day rolling retention buffer driving Grafana dashboards and Alertmanager webhooks. |
@@ -120,7 +121,7 @@ CREATE DATABASE airflow   OWNER airflow;
 CREATE DATABASE mlflow    OWNER mlflow;
 ```
 
-On the bare-metal host (`hive-mind`), the PostgreSQL data directory (`/var/lib/taxon-vision/postgres`) resides on a BTRFS subvolume initialised with the non-Copy-on-Write attribute (`chattr +C`), preventing physical NVMe block fragmentation during continuous write-ahead log (WAL) checkpoints.
+On the bare-metal host (`hive-mind`), the PostgreSQL data directory (`/var/lib/taxon-vision/postgres`) resides on a BTRFS subvolume initialised with the non-Copy-on-Write attribute (`chattr +C`), preventing physical NVMe block fragmentation during continuous write-ahead log (WAL) checkpoints. In Kubernetes, the database is exposed under the cluster-internal fully-qualified domain name (FQDN) `postgres.taxon-vision.svc.cluster.local:5432`, allowing both production pods in `taxon-vision` and staging pods in `taxon-vision-staging` to connect to the unified relational store seamlessly across namespace boundaries.
 
 ### 3.2 Prediction Telemetry Schema (`telemetry` Database)
 
