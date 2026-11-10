@@ -888,7 +888,7 @@ def evaluate_cli(argv: list[str] | None = None) -> int:
     Returns:
         0 if successful, 1 otherwise.
     """
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s", force=True)
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
 

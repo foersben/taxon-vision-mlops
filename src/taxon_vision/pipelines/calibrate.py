@@ -214,7 +214,7 @@ def calibrate_cli(argv: list[str] | None = None) -> int:
     Returns:
         Integer exit code (0 on success).
     """
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s", force=True)
     settings = get_settings()
     parser = _build_arg_parser(settings.conformal.alpha)
     args = parser.parse_args(argv)

@@ -394,6 +394,7 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%H:%M:%S",
+        force=True,
     )
     parser = build_parser()
     args = parser.parse_args(argv)

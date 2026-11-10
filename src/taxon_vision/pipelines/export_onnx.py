@@ -150,6 +150,7 @@ def export_onnx_cli(argv: list[str] | None = None) -> int:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%H:%M:%S",
         stream=sys.stdout,
+        force=True,
     )
 
     output_file, temp_fp32_path = _resolve_export_output(args.output, args.quantize_int8)

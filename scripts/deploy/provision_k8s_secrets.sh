@@ -88,7 +88,7 @@ if [[ "${MOCK_MODE}" == "true" ]]; then
     INTERNAL_API_TOKEN="mock_internal_token_secret_1234567890"
     RETRAIN_WEBHOOK_SECRET="mock_retrain_webhook_secret_abcdef"
     POSTGRES_PASSWORD="mock_postgres_password"
-    AIRFLOW_FERNET_KEY="mock_fernet_key_placeholder_value_0000="
+    AIRFLOW_FERNET_KEY=$(echo -n "01234567890123456789012345678901" | base64)
     AIRFLOW_JWT_SECRET="mock_airflow_jwt_secret_key_32bytes"
     JENKINS_API_TOKEN="mock_jenkins_api_token"
 else
