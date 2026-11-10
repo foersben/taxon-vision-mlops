@@ -3,11 +3,11 @@ type: Agent Rule
 title: "Rule 08: Clean Code & Anti-Pattern Prevention"
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
-version: 1.0
-description: "Standards for 4-part architectural docstrings, parameter containers, event-loop non-blocking I/O, RAII resource lifecycle, and fail-fast observability."
+version: 1.1
+description: "Standards for 4-part architectural docstrings, soft-wrapped prose, parameter containers, event-loop non-blocking I/O, RAII resource lifecycle, and fail-fast observability."
 tags: [clean-code, architecture, quality, async]
 generated: {by: process:scaffold-init, at: "2026-10-27T17:40:00Z"}
-verified: {by: process:scaffold-init, at: "2026-10-27T17:40:00Z"}
+verified: {by: process:doc-sync, at: "2026-11-01T19:55:00Z"}
 trigger: always_on
 severity: critical
 ---
@@ -24,6 +24,7 @@ Superficial one-line summaries are strictly prohibited for non-trivial public cl
 * **Why (Architectural Rationale & Trade-offs):** Concrete justification of why this pattern was chosen over alternatives, referencing physical hardware ceilings, latency budgets, memory limits, or legal compliance invariants.
 * **How (Algorithmic Mechanism & Invariants):** Clear description of the internal data flow, mathematical formulations, runtime/space complexity $\mathcal{O}(\cdot)$, and zero-allocation or statistical guarantees.
 * **Standard Fields:** Typed `Args`, `Returns`, `Raises`, and literature `References`.
+* **Soft-Wrapped Prose Invariant:** Docstring prose paragraphs must be authored as continuous single lines without manual newline wrapping (`\n`). Text wrapping is delegated exclusively to editor soft-wrapping.
 
 ## 2. Parameter Encapsulation & Tuple Blindness Ban
 
@@ -48,3 +49,8 @@ Superficial one-line summaries are strictly prohibited for non-trivial public cl
 ## 6. Structural Sibling Topology
 
 * When refactoring monolithic files exceeding 500 lines of code, decompose logic into focused single-responsibility sibling modules within the same directory (e.g. `dataset.py`, `promotion.py`, `visualizations.py`) rather than introducing nested subpackages. This preserves a flat package topology and prevents circular or eager submodule imports under Rule 00.
+
+## 7. Soft-Wrapped Documentation & Comments
+
+* **Zero Hard Line Breaks in Prose:** All docstring sections (`Summary`, `Why`, `How`, `Args` descriptions) and code comments must be written as continuous, un-wrapped paragraphs without manual hard line breaks (`\n`).
+* Code formatting and linting rules in TaxonVision intentionally ignore `E501` for docstrings and comments. Text wrapping is delegated exclusively to editor soft-wrapping (`editor.wordWrap: "bounded"` or `"on"`).

@@ -61,9 +61,9 @@ In high-throughput biological monitoring (e.g., continuous camera-trap streams o
 TaxonVision-MLOps enforces a **lazy invocation trigger** governed strictly by Split Conformal Prediction set cardinality:
 
 * **Singleton Prediction Set ($|\mathcal{C}(x)| = 1$):**
-    * *Traffic Volume:* Approximately $82\%$ of production traffic.
-    * *Execution Path:* The predicted taxon satisfies the finite-sample coverage guarantee ($1 - \alpha = 95\%$). The system immediately returns the top-1 result via the pinned zero-allocation ONNX Runtime path without touching vector indices or external models.
-    * *Latency Profile:* Mean latency $\approx 9.5\text{ ms}$, strictly meeting the $15\text{ ms}$ production SLO.
+    * *Traffic Volume:* Approximately $95.1\%$ on the empirical 10-taxa holdout ($82\%$ projected on large-scale multi-hundred-species taxonomies).
+    * *Execution Path:* The predicted taxon satisfies the finite-sample coverage guarantee ($1 - \alpha = 95\%$). The system immediately returns the top-1 result via the persistent ONNX Runtime path without touching vector indices or external models.
+    * *Latency Profile:* Empirical CPU INT8 p95 latency is $50.38\text{ ms}$ ($47.38\text{ ms}$ p50, within the $120.0\text{ ms}$ Stage 7 SLA gate), with a projected GPU FP16 mean latency $\approx 9.5\text{ ms}$ ($\le 15.0\text{ ms}$ GPU p95 target).
 
 * **Sister-Taxa Ambiguity Set ($|\mathcal{C}(x)| \in [2, 3]$):**
     * *Traffic Volume:* Approximately $12\%$ to $15\%$ of production traffic.

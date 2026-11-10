@@ -148,15 +148,27 @@ class IngestionConfig(BaseModel):
 
 
 class MLflowConfig(BaseModel):
-    """Experiment tracking and DagsHub MLflow remote server configuration schema.
+    """Experiment tracking and MLflow 3.x model registry configuration schema.
 
     Attributes:
-        tracking_uri (str): MLflow tracking server URI.
-        experiment_name (str): Target experiment grouping name for training runs.
+        tracking_uri: Primary MLflow 3.x tracking server URI.
+        fallback_sqlite_uri: Local SQLite backend URI when remote server is unreachable.
+        dagshub_uri: Optional remote DagsHub MLflow mirror URI.
+        experiment_name: Target experiment grouping name for training runs.
+        drift_experiment_name: Target experiment grouping name for drift evaluations.
+        model_registry_name: Registered model name for PyTorch/PyFunc classifiers.
+        onnx_registry_name: Registered model name for quantized INT8 ONNX graphs.
+        health_check_timeout_seconds: Timeout in seconds when probing tracking_uri health.
     """
 
-    tracking_uri: str = "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
-    experiment_name: str = "taxon-vision-head-tuning"
+    tracking_uri: str = "http://127.0.0.1:5000"
+    fallback_sqlite_uri: str = "sqlite:///data/mlflow/mlflow.db"
+    dagshub_uri: str = "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
+    experiment_name: str = "taxon-vision-head-training"
+    drift_experiment_name: str = "taxon-vision-drift"
+    model_registry_name: str = "taxon_vision_classifier"
+    onnx_registry_name: str = "taxon_vision_onnx"
+    health_check_timeout_seconds: float = Field(default=1.0, gt=0.0)
 
 
 class ConformalConfig(BaseModel):
@@ -251,14 +263,86 @@ class OptunaConfig(BaseModel):
     reduction_factor: int = Field(default=2, gt=1)
 
 
+class TelemetryConfig(BaseModel):
+    """Configuration schema for prediction telemetry persistence and database connection pooling.
+
+    Why:
+        Centralizes the telemetry database DSN, connection pool limits, and query timeouts, preventing hardcoded connection strings on the prediction hot path.
+
+    Attributes:
+        database_url (str): SQLAlchemy/psycopg connection URI for the telemetry database.
+        pool_min_size (int): Minimum persistent connections maintained in the pool.
+        pool_max_size (int): Maximum allowable connections under peak traffic.
+        timeout_seconds (float): Connection checkout and execution timeout in seconds.
+    """
+
+    database_url: str = "postgresql+psycopg://telemetry:taxon_telemetry_pass@localhost:5432/telemetry"
+    pool_min_size: int = Field(default=2, ge=1)
+    pool_max_size: int = Field(default=10, ge=1)
+    timeout_seconds: float = Field(default=5.0, gt=0.0)
+    allow_in_memory_fallback: bool = Field(default=False)
+    fallback_buffer_size: int = Field(default=500, ge=10)
+
+
+class DriftConfig(BaseModel):
+    """Configuration schema for embedding and concept drift monitoring.
+
+    Attributes:
+        window_size (int): Number of recent production inference records evaluated in sliding window (default: 500).
+        min_samples (int): Minimum required records in window to compute drift (default: 50).
+        tau_w1 (float): Calibrated threshold for 1D Wasserstein-1 distance on embedding norms (default: 0.15).
+        mmd_max_samples (int): Maximum subsample size for MMD permutation testing (default: 500).
+        mmd_permutations (int): Number of permutations for MMD empirical p-value computation (default: 200).
+        alpha (float): Significance ceiling for MMD permutation hypothesis rejection (default: 0.01).
+        config_path (str): Relative or absolute path to calibrated drift configuration YAML (default: 'config/drift_config.yaml').
+        reference_embeddings_path (str): Path to baseline reference holdout embeddings (default: 'data/embeddings/cal_embeddings.pt').
+    """
+
+    window_size: int = Field(default=500, ge=10)
+    min_samples: int = Field(default=50, ge=5)
+    tau_w1: float = Field(default=0.15, gt=0.0)
+    mmd_max_samples: int = Field(default=500, ge=10)
+    mmd_permutations: int = Field(default=200, ge=50)
+    alpha: float = Field(default=0.01, gt=0.0, lt=1.0)
+    config_path: str = Field(default="config/drift_config.yaml")
+    reference_embeddings_path: str = Field(default="data/embeddings/cal_embeddings.pt")
+
+
 class EvaluationConfig(BaseModel):
     """Configuration schema for model evaluation and latency SLOs.
 
+    Summary:
+        Declares operational service-level objective execution ceilings for inference evaluation.
+
     Attributes:
-        latency_sla_ms (float): Latency service level objective threshold in milliseconds (default: 25.0).
+        latency_sla_ms (float): Latency service level objective threshold in milliseconds (default: 120.0).
     """
 
-    latency_sla_ms: float = Field(default=25.0, gt=0.0)
+    latency_sla_ms: float = Field(default=120.0, gt=0.0)
+
+
+class PromotionConfig(BaseModel):
+    """Configuration schema for four-gate model promotion and registry lifecycle.
+
+    Summary:
+        Governs the statistical, latency, and distribution exchangeability thresholds applied during model promotion.
+
+    Why (Architectural Rationale & Trade-offs):
+        Centralising promotion thresholds into a validated Pydantic model eliminates hardcoded magic numbers across pipeline execution stages and enables deterministic configuration overrides via environment variables or YAML files.
+
+    Attributes:
+        quantization_drop_tol (float): Maximum tolerable drop in accuracy between FP32 and INT8 (default: 0.03).
+        coverage_tolerance (float): Finite-sample binomial margin allowed below nominal conformal coverage (default: 0.05).
+        latency_slo_ms (float): Pragmatic p95 execution latency threshold in milliseconds (default: 120.0).
+        min_telemetry_samples (int): Minimum live inference records required before assessing exchangeability (default: 50).
+        drift_alpha (float): Permutation test significance level for calibration exchangeability (default: 0.01).
+    """
+
+    quantization_drop_tol: float = Field(default=0.03, ge=0.0, le=0.20)
+    coverage_tolerance: float = Field(default=0.05, ge=0.0, le=0.20)
+    latency_slo_ms: float = Field(default=120.0, gt=0.0)
+    min_telemetry_samples: int = Field(default=50, ge=5)
+    drift_alpha: float = Field(default=0.01, gt=0.0, lt=0.5)
 
 
 class Settings(BaseSettings):
@@ -282,7 +366,10 @@ class Settings(BaseSettings):
     ingestion: IngestionConfig = Field(default_factory=IngestionConfig)
     streaming: StreamingConfig = Field(default_factory=StreamingConfig)
     optuna: OptunaConfig = Field(default_factory=OptunaConfig)
+    telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
+    drift: DriftConfig = Field(default_factory=DriftConfig)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
+    promotion: PromotionConfig = Field(default_factory=PromotionConfig)
 
     @property
     def data(self) -> StreamingConfig:

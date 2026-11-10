@@ -4,7 +4,7 @@ title: Package Hierarchy & Master Call Graph
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
 version: 1.0
-description: Technical architecture of the 4-tier package hierarchy, master dependency call graph, and Rule 00 Python invariants.
+description: Technical architecture of the 4-tier package hierarchy, master dependency call graph, and modern Python language mandates.
 tags: [architecture, package-graph, dependencies, layers, modularity]
 generated: {by: "process:docs-librarian", at: "2026-10-18T12:00:00Z"}
 verified: {by: "process:docs-librarian", at: "2026-10-18T12:00:00Z"}
@@ -17,8 +17,8 @@ The `src/taxon_vision/` codebase is structured as a strict **4-tier layered arch
 ```mermaid
 flowchart TD
     subgraph T1["Tier 1: Orchestration & Entrypoints"]
-        P["taxon_vision.pipelines<br/>(7-Stage DVC Batch DAG)"]
-        S["taxon_vision.service<br/>(FastAPI & HTMX Web Serving)"]
+        P["taxon_vision.pipelines<br/>(8-Stage DVC Batch DAG)"]
+        S["taxon_vision.service<br/>(FastAPI, HTMX & Telemetry)"]
     end
 
     subgraph T2["Tier 2: Specialized ML Engines"]
@@ -78,8 +78,8 @@ flowchart TD
 
 ### Tier 1: Orchestration & Ingress
 
-* **`taxon_vision.pipelines`:** Orchestrates the 7 offline DVC batch processing stages (`ingest` -> `audit_license` -> `extract_features` -> `train` -> `export_onnx` -> `calibrate` -> `evaluate`). Governs artifact creation and reproducible tensor generation.
-* **`taxon_vision.service`:** Hosts the online serving layer, providing an asynchronous REST API (`/predict`, `/health`, `/metrics`, `/feedback`) and a server-rendered Jinja2/HTMX operator dashboard for human-in-the-loop review.
+* **`taxon_vision.pipelines`:** Orchestrates the 8 offline DVC batch processing stages (`ingest` -> `audit_license` -> `extract_features` -> `data_drift` -> `train` -> `export_onnx` -> `calibrate` -> `evaluate`) plus empirical drift threshold calibration (`calibrate_drift`). Governs artefact creation and reproducible tensor generation.
+* **`taxon_vision.service`:** Hosts the online serving layer, providing an asynchronous REST API (`/predict`, `/explain`, `/drift/evaluate`, `/drift/latest`, `/retrain/webhook`, `/health`, `/metrics`), PostgreSQL telemetry persistence (`telemetry_store`), and a server-rendered Jinja2/HTMX operator dashboard featuring the live `ModelPassport`.
 
 ### Tier 2: Specialized ML Engines
 
@@ -108,27 +108,33 @@ Orchestrates batch workflows invoked via `dvc repro`.
 
 | Module File | Key Classes / Functions | Primary Method Signatures | Description |
 | :--- | :--- | :--- | :--- |
-| `ingest.py` | `run_ingest` | `run_ingest(config_path: Path \| None = None) -> None` | Fetches observations for target taxa from iNaturalist into `data/raw_manifest.parquet`. |
-| `audit_license.py` | `run_audit_license` | `run_audit_license(config_path: Path \| None = None) -> None` | Enforces open license compliance, generating `data/dataset_manifest.parquet`. |
-| `extract_features.py` | `run_feature_extraction` | `run_feature_extraction(config_path: Path \| None = None) -> None` | Passes images through frozen backbone, saving split embedding tensors (`.pt`). |
-| `train.py` | `run_training` | `run_training(config_path: Path \| None = None) -> None` | Trains linear probe classifier head using Class-Balanced Loss. |
-| `export_onnx.py` | `run_export` | `run_export(config_path: Path \| None = None) -> None` | Exports classifier to ONNX format and executes static INT8 quantization. |
-| `calibrate.py` | `run_calibration` | `run_calibration(config_path: Path \| None = None) -> None` | Calculates conformal quantile $\hat{q}$ and energy threshold $\tau_{\text{ood}}$. |
-| `evaluate.py` | `run_evaluation` | `run_evaluation(config_path: Path \| None = None) -> None` | Validates empirical test coverage ($1 - \alpha$) and p95 latency SLO. |
+| `ingest.py` | `run_ingest` | `run_ingest(config_path: Path \| None = None) -> None` | Fetches observations for target taxa from iNaturalist into `data/manifests/raw_manifest.parquet`. |
+| `audit_license.py` | `run_audit_license` | `run_audit_license(config_path: Path \| None = None) -> None` | Enforces open license compliance, generating `data/manifests/dataset_manifest.parquet`. |
+| `extract_features.py` | `run_feature_extraction` | `run_feature_extraction(config_path: Path \| None = None) -> None` | Passes images through frozen backbone, saving 4-way split embedding tensors (`.pt`). |
+| `data_drift.py` | `run_data_drift_audit` | `run_data_drift_audit(current_path: Path, reference_path: Path, output_path: Path, ...) -> dict` | Stage 3.5 DVC gate auditing Wasserstein-1 and MMD² drift between `train_embeddings.pt` and `reference_train_embeddings.pt`. |
+| `calibrate_drift.py` | `calibrate_drift_thresholds` | `calibrate_drift_thresholds(reference_embeddings: np.ndarray, ...) -> dict[str, float]` | Bootstraps 99th-percentile empirical null distributions ($B=1000$) to write `config/drift_config.yaml`. |
+| `train.py` | `run_training` | `run_training(config_path: Path \| None = None) -> None` | Trains linear probe classifier head using Class-Balanced Loss and starts parent MLflow run. |
+| `export_onnx.py` | `run_export` | `run_export(config_path: Path \| None = None) -> None` | Exports dual-output classifier (`logits`, `embeddings`) to ONNX, performs INT8 PTQ, and logs `TaxonVisionPyFuncModel`. |
+| `calibrate.py` | `run_calibration` | `run_calibration(config_path: Path \| None = None) -> None` | Calculates conformal quantile $\hat{q}$ and energy threshold $\tau_{\text{ood}}$, resuming parent MLflow run. |
+| `evaluate.py` | `run_evaluation` | `run_evaluation(config_path: Path \| None = None) -> None` | Validates empirical test coverage ($1 - \alpha$), logs 6 holdout plots, and executes Four-Gate Model Promotion. |
 
 ### Subpackage 2: Service (`taxon_vision.service`)
 
-Powers online HTTP inference, Class Activation Mapping, and HTMX triage UI.
+Powers online HTTP inference, Class Activation Mapping, telemetry persistence, drift evaluation, and HTMX triage UI.
 
 | Module File | Key Classes / Functions | Primary Method Signatures | Description |
 | :--- | :--- | :--- | :--- |
-| `api.py` | `app`, `lifespan` | `lifespan(_app: FastAPI) -> AsyncIterator[None]` | ASGI composition root pre-warming models and managing clean shutdown. |
+| `api.py` | `app`, `lifespan` | `lifespan(_app: FastAPI) -> AsyncGenerator[None]` | ASGI composition root pre-warming models, initialising `TelemetryStore`, and managing clean shutdown. |
 | `inference.py` | `predict_species`, `load_taxa_catalog` | `predict_species(image_bytes: bytes, ...) -> PredictionResult` | Zero-allocation inference pipeline coordinating ONNX session, conformal sets, and CAM. |
+| `telemetry_store.py` | `PostgresTelemetryStore`, `BoundedInMemoryTelemetryStore`, `PredictionRecord` | `record_prediction(record: PredictionRecord) -> None`, `fetch_recent_embeddings(limit: int) -> tuple` | Relational PostgreSQL store (with bounded memory fallback) persisting pre-normalised 384-D embeddings and drift runs. |
+| `passport.py` | `ModelPassport`, `load_model_passport` | `load_model_passport() -> ModelPassport` | Queries MLflow `@Production` metadata and latest drift run with a 60s TTL cache for the HTMX operator header. |
 | `storage.py` | `ImageCacheProtocol`, `RedisImageCache`, `MemoryImageCache`, `persist_flagged_observation` | `store(image_bytes: bytes) -> str`, `get(image_hash: str) -> bytes \| None` | Distributed Redis ephemeral upload cache (with memory fallback) and disk triage persistence. |
 | `presentation.py` | `build_prediction_view_model`, `render_prediction_card` | `build_prediction_view_model(prediction, image_hash, ...) -> dict` | Formats conformal prediction sets and telemetry for server-rendered Jinja2/HTMX templates. |
-| `routes/predict.py` | `router` | `POST /api/v1/predict(file: UploadFile) -> JSONResponse` | Machine REST API returning classification logits, conformal set members, and OOD scores. |
+| `routes/predict.py` | `router` | `POST /api/v1/predict(file: UploadFile) -> JSONResponse` | Machine REST API returning classification logits, conformal set members, and asynchronous telemetry recording. |
 | `routes/explain.py` | `router` | `POST /api/v1/explain(image_hash: str, ...) -> ExplainResponse \| HTMLResponse` | On-demand Class Activation Mapping supporting JSON attribution or server-rendered drawer fragments. |
-| `routes/views.py` | `router` | `GET /`, `POST /ui/predict-htmx` | Interactive operator dashboard view and HTMX partial upload drawer handler. |
+| `routes/drift.py` | `router` | `POST /api/v1/drift/evaluate`, `GET /api/v1/drift/latest` | Bearer-authenticated sliding-window drift evaluation endpoint and latest HTML/JSON report retrieval. |
+| `routes/retrain.py` | `router` | `POST /api/v1/retrain/webhook` | Secret-authenticated Grafana Alertmanager webhook relay triggering the Airflow `model_retraining` DAG. |
+| `routes/views.py` | `router` | `GET /`, `POST /ui/predict-htmx` | Interactive operator dashboard view (rendering `ModelPassport`) and HTMX partial upload drawer handler. |
 | `routes/train.py` | `router` | `POST /api/v1/train(background_tasks: BackgroundTasks) -> JSONResponse` | Asynchronous training trigger endpoint dispatching background training runs. |
 | `routes/health.py` | `router` | `GET /health`, `GET /health/ready`, `GET /metrics` | Kubernetes liveness probe, model readiness probe, and Prometheus exposition scraper. |
 
@@ -150,7 +156,7 @@ Neural network architectures, probe heads, loss functions, and modular training 
 | `training/tuning.py` | `tune_hyperparameters`, `HyperparameterObjective` | `tune_hyperparameters(data: EmbeddingSplit, ...) -> TuningResult` | Bayesian hyperparameter optimization study orchestration with TPE sampling and ASHA pruning. |
 | `training/visualizations.py` | `log_training_visualizations` | `log_training_visualizations(tracker, history, ...) -> None` | Diagnostic plot rendering (confusion matrices, PR curves, and energy distributions). |
 | `training/checkpoint.py` | `save_checkpoint` | `save_checkpoint(model: nn.Module, path: Path) -> Path` | Checkpoint serialization and PyTorch state dictionary export. |
-| `training/types.py` | `ResolvedTrainingParameters`, `EmbeddingSplit` | Pydantic Models & Frozen Dataclasses | Parameter containers enforcing Rule 08 parameter encapsulation and zero tuple blindness. |
+| `training/types.py` | `ResolvedTrainingParameters`, `EmbeddingSplit` | Pydantic Models & Frozen Dataclasses | Parameter containers enforcing parameter encapsulation and zero tuple blindness (typed frozen dataclasses and models). |
 
 ### Subpackage 4: Inference (`taxon_vision.inference`)
 
@@ -161,8 +167,9 @@ ONNX Runtime execution, static quantization, and explainability.
 | `onnx_engine.py` | `ONNXInferenceEngine` | `predict(image_tensor: np.ndarray) -> np.ndarray` | High-throughput zero-allocation ONNX Runtime inference session. |
 | `cam.py` | `generate_heatmap`, `generate_cam_overlay` | `generate_heatmap(model, image_tensor, target_class) -> np.ndarray` | Class Activation Mapping projecting ViT patch tokens and CNN activations. |
 | `calibration.py` | `TaxonCalibrationDataReader` | `get_next() -> dict[str, np.ndarray] \| None` | ONNX Runtime calibration reader streaming unlabelled representative images. |
-| `onnx_exporter.py` | `export_to_onnx` | `export_to_onnx(model: nn.Module, dummy_input: torch.Tensor, path: Path) -> Path` | Exports PyTorch model graphs to ONNX Opset 17 with dynamic batch axes. |
+| `onnx_exporter.py` | `export_to_onnx` | `export_to_onnx(model: nn.Module, dummy_input: torch.Tensor, path: Path) -> Path` | Exports dual-output PyTorch model graphs (`logits`, `embeddings`) to ONNX Opset 17 with dynamic batch axes. |
 | `quantizer.py` | `quantize_onnx_model`, `quantize_onnx_static` | `quantize_onnx_model(input_path: Path, output_path: Path, ...) -> Path` | Performs static/dynamic INT8 post-training quantization via ONNX Runtime quantization API. |
+| `mlflow_model.py` | `TaxonVisionPyFuncModel` | `predict(context, model_input: pd.DataFrame \| np.ndarray) -> pd.DataFrame` | Custom `mlflow.pyfunc.PythonModel` wrapper bundling `model_int8.onnx` and conformal config for registry serving. |
 
 ### Subpackage 5: Uncertainty & Safety (`taxon_vision.uncertainty`)
 
@@ -177,10 +184,11 @@ Statistical guarantees and distribution-free risk control.
 
 ### Subpackage 6: Active Learning (`taxon_vision.active_learning`)
 
-Human-in-the-loop sample acquisition and triage prioritization.
+Human-in-the-loop sample acquisition, feedback ingestion, and triage prioritization.
 
 | Module File | Key Classes / Functions | Primary Method Signatures | Description |
 | :--- | :--- | :--- | :--- |
+| `feedback.py` | `merge_feedback_to_manifest`, `parse_single_task_annotation` | `merge_feedback_to_manifest(raw_manifest_path: Path, ...) -> int` | Ingests verified Label Studio and triage annotations into `raw_manifest.parquet` for closed-loop retraining. |
 | `query.py` | `BADGEQueryStrategy` | `select_samples(embeddings: np.ndarray, logits: np.ndarray, budget: int) -> list[int]` | Batch Active Learning by Diverse Gradient Embeddings ($k$-means++). |
 | `query.py` | `CoreSetQueryStrategy` | `select_samples(embeddings: np.ndarray, budget: int) -> list[int]` | Minimax facility location distance sampling over representation space. |
 | `triage_queue.py` | `TriageQueue` | `enqueue(observation: dict[str, Any]) -> str` | Ingests ambiguous observations into human operator triage queue. |
@@ -188,12 +196,13 @@ Human-in-the-loop sample acquisition and triage prioritization.
 
 ### Subpackage 7: Monitoring & Observability (`taxon_vision.monitoring`)
 
-Streaming telemetry, latency profiling, and data drift detection.
+Streaming telemetry, latency profiling, and two-tier representation drift detection.
 
 | Module File | Key Classes / Functions | Primary Method Signatures | Description |
 | :--- | :--- | :--- | :--- |
-| `telemetry.py` | `PrometheusTelemetry` | `record_inference(latency_sec: float, set_size: int, is_ood: bool) -> None` | Emits request counts, latency histograms, and conformal set sizes. |
-| `drift.py` | `DriftDetector` | `compute_wasserstein_drift(ref: np.ndarray, curr: np.ndarray) -> float` | Computes Earth Mover's Distance between baseline and production embeddings. |
+| `telemetry.py` | `PrometheusTelemetry`, `DriftMetricsCollector` | `record_inference(...) -> None`, `update_drift_metrics(...) -> None` | Emits request counts, latency histograms, conformal set sizes, and representation drift gauges (`w1`, `mmd2`, `pvalue`). |
+| `drift.py` | `compute_wasserstein_drift`, `compute_mmd_drift`, `run_mmd_permutation_test` | `run_mmd_permutation_test(ref: np.ndarray, curr: np.ndarray, ...) -> MMDPermutationResult` | Computes 1D Wasserstein-1 norm drift and unbiased multivariate RKHS RBF $\text{MMD}_u^2$ permutation tests. |
+| `drift_runner.py` | `evaluate_sliding_window_drift`, `DriftEvaluationOutcome` | `evaluate_sliding_window_drift(store: TelemetryStore, ...) -> DriftEvaluationOutcome` | Orchestrates sliding-window PostgreSQL embedding evaluation, Evidently 0.7 8-D PCA HTML generation, and Prometheus updates. |
 
 ### Subpackage 8: Data Ingestion & S3 (`taxon_vision.data`)
 
@@ -228,7 +237,7 @@ Hierarchical configuration loader and typed Pydantic models.
 
 ---
 
-## 3. Rule 00 Python Modernization Mandates
+## 3. Python Language Mandates & Architectural Invariants
 
 To preserve long-term maintainability, all subpackages adhere to three strict architectural invariants:
 

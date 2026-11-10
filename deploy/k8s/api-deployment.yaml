@@ -45,6 +45,26 @@ spec:
           value: "0.0.0.0"
         - name: TAXON_SERVICE__REDIS_URL
           value: "redis://redis-ephemeral.taxon-vision.svc.cluster.local:6379/0"
+        - name: TAXON_OPTUNA__OPTUNA_STORAGE_URI
+          valueFrom:
+            secretKeyRef:
+              name: taxon-vision-secrets
+              key: OPTUNA_STORAGE_URI
+        - name: TAXON_TELEMETRY__DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: taxon-vision-secrets
+              key: TELEMETRY_DATABASE_URL
+        - name: TAXON_INTERNAL_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: taxon-vision-secrets
+              key: INTERNAL_API_TOKEN
+        - name: TAXON_RETRAIN_WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: taxon-vision-secrets
+              key: RETRAIN_WEBHOOK_SECRET
         resources:
           requests:
             cpu: "200m"

@@ -165,7 +165,7 @@ spec:
             pixi run --frozen -e ci-dev pytest tests/integration/ tests/invariants/ \
               --cov=src/taxon_vision \
               --cov-append \
-              --cov-report=xml:coverage.xml \
+              --cov-report=xml:reports/coverage/coverage.xml \
               --cov-fail-under=80 \
               -x -q -o "addopts="
           '''
@@ -291,17 +291,29 @@ spec:
               done
             fi
 
-            # Apply API deployment and service manifests
-            kubectl apply -f deploy/k8s/api-deployment.yaml
+            # Apply shared backing services
+            kubectl apply -f deploy/k8s/postgres.yaml
             kubectl apply -f deploy/k8s/monitoring-prometheus-grafana.yaml
 
+            # Determine target overlay from Git branch
+            if [ "${BRANCH_NAME}" = "main" ]; then
+              TARGET_ENV="production"
+              TARGET_NS="taxon-vision"
+            else
+              TARGET_ENV="staging"
+              TARGET_NS="taxon-vision-staging"
+            fi
+
+            echo ">>> Deploying ${TARGET_ENV} overlay to namespace ${TARGET_NS} via Kustomize..."
+            kubectl apply -k deploy/k8s/overlays/${TARGET_ENV}
+
             # Trigger rolling restart to serve fresh weights
-            kubectl rollout restart deployment/taxon-vision-serving -n taxon-vision
+            kubectl rollout restart deployment/taxon-vision-serving -n ${TARGET_NS}
 
             # Verify deployment health
-            kubectl rollout status deployment/taxon-vision-serving -n taxon-vision --timeout=120s
-            bash scripts/ci/verify_deployment.sh taxon-vision
-            echo ">>> Deployment successfully verified."
+            kubectl rollout status deployment/taxon-vision-serving -n ${TARGET_NS} --timeout=120s
+            bash scripts/ci/verify_deployment.sh ${TARGET_NS}
+            echo ">>> Deployment successfully verified for ${TARGET_ENV}."
           '''
         }
       }

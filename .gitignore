@@ -24,6 +24,8 @@ share/python-wheels/
 MANIFEST
 
 # Unit test / coverage reports
+reports/*.html
+reports/coverage/
 htmlcov/
 .tox/
 .nox/
@@ -47,6 +49,7 @@ mlruns/
 # Jupyter Notebook & Scratch
 .ipynb_checkpoints/
 scratch/
+scripts/scratch/
 
 # Environments
 .env
@@ -54,6 +57,8 @@ scratch/
 .venv/
 env/
 venv/
+docker-compose.override.yml
+docker-compose.override.yaml
 
 # Pixi
 .pixi/
@@ -70,6 +75,7 @@ docs/viz.html
 data/raw/
 data/processed/
 data/sample/
+data/flagged_observations/
 models/checkpoints/*
 *.onnx
 *.pth

@@ -48,7 +48,7 @@ def verify_observation_compliance(obs: dict[str, Any]) -> list[str]:
     """Verify open license and photographer attribution compliance for a single observation record.
 
     Why:
-        Citizen-science repositories contain observations under restrictive All-Rights-Reserved (ARR) or non-open licenses, and `static.inaturalist.org` mirrors lack open-dataset redistribution provenance unless explicitly verified. Enforcing Rule 05 at the ingestion gate guarantees that only CC0, CC-BY, and CC-BY-NC observations with retained photographer attribution enter training manifests.
+        Citizen-science repositories contain observations under restrictive All-Rights-Reserved (ARR) or non-open licenses, and `static.inaturalist.org` mirrors lack open-dataset redistribution provenance unless explicitly verified. Filtering license codes at the ingestion gate guarantees that only CC0, CC-BY, and CC-BY-NC observations with retained photographer attribution enter training manifests, preventing copyright infringement and ensuring legal open-data compliance.
 
     How:
         Normalizes `license_code` to lowercase hyphenated form and checks membership in `ALLOWED_LICENSES`, rejects unverified `static.inaturalist.org` URLs, and asserts that `attribution` or `photographer_name` contains at least 3 non-whitespace characters.

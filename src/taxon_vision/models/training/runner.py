@@ -20,6 +20,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+import mlflow
 import torch
 import yaml
 from torch import nn, optim
@@ -33,8 +34,9 @@ from taxon_vision.models.training.dataset import (
     resolve_synthetic_permission,
 )
 from taxon_vision.models.training.embeddings import train_head_on_cached_embeddings
-from taxon_vision.models.training.promotion import _promote_model_if_better
 from taxon_vision.models.training.tracking import (
+    LoggedDatasets,
+    MLflowTracker,
     _log_calibrated_energy_threshold,
     _log_dataset_lineage,
     _log_mlflow_metrics,
@@ -431,24 +433,21 @@ def run_training_pipeline(
     run_name = f"train_{resolved.extractor}_{int(time.time())}"
     promotion_status: str | None = None
     mlflow_run_id: str | None = None
+    mlflow_model_id: str | None = None
+    logged_datasets: LoggedDatasets | None = None
 
-    initial_params = {
+    initial_tags = {
         "extractor": resolved.extractor,
-        "epochs": resolved.epochs,
-        "batch_size": resolved.batch_size,
-        "learning_rate": resolved.learning_rate,
-        "num_classes": num_classes,
-        "tune": tune,
-        "cuda_memory_fraction": applied_vram_fraction if applied_vram_fraction is not None else "cpu",
+        "num_classes": str(num_classes),
+        "tune": str(tune).lower(),
+        "cuda_memory_fraction": str(applied_vram_fraction) if applied_vram_fraction is not None else "cpu",
     }
-
-    with mlflow_run_scope(run_name=run_name, params=initial_params, log_file=log_file) as active_run:
+    # Pass params=None so immutable hyperparameter keys are NOT locked before Optuna finishes!
+    with mlflow_run_scope(run_name=run_name, params=None, log_file=log_file) as active_run:
         if active_run:
             mlflow_run_id = active_run.info.run_id
-            _log_dataset_lineage(
-                train_emb=data.train_embeddings.cpu().numpy(),
-                train_lbl=data.train_labels.cpu().numpy(),
-            )
+            mlflow.set_tags(initial_tags)
+            logged_datasets = _log_dataset_lineage(data=data)
 
         hparams = _resolve_tier_hyperparameters(
             extractor=resolved.extractor,
@@ -491,8 +490,23 @@ def run_training_pipeline(
         duration = time.perf_counter() - t0
 
         if active_run:
-            _log_mlflow_metrics(history, duration)
-            val_pr_auc = _extract_metric_last(history, "val_pr_auc", 0.0)
+            sample_val = data.val_embeddings[: min(5, data.val_embeddings.shape[0])].detach().cpu().numpy()
+            model_info = MLflowTracker.log_model(
+                model=components.head,
+                model_name="taxon_vision_classifier",
+                params=components.params,
+                input_example=sample_val,
+            )
+            if model_info is not None:
+                mlflow_model_id = getattr(model_info, "model_id", None)
+
+            val_dataset = logged_datasets.val if logged_datasets else None
+            _log_mlflow_metrics(
+                history,
+                duration,
+                model_id=mlflow_model_id,
+                dataset=val_dataset,
+            )
 
             components.head.eval()
             with torch.no_grad():
@@ -508,12 +522,12 @@ def run_training_pipeline(
                 calibrated_energy_threshold=calibrated_threshold,
             )
 
-            promotion_status = _promote_model_if_better(
-                model=components.head,
-                pr_auc=val_pr_auc,
-                val_embeddings=data.val_embeddings,
-                extractor=resolved.extractor,
-            )
+            promotion_status = "candidate_trained"
+            mlflow.set_tag("registry.status", "candidate_trained")
+            val_pr_auc = _extract_metric_last(history, "val_pr_auc", 0.0)
+            mlflow.set_tag("candidate.val_pr_auc", f"{val_pr_auc:.4f}")
+            if mlflow_model_id:
+                mlflow.set_tag("mlflow.model_id", mlflow_model_id)
 
     train_loss = _extract_metric_last(history, "train_loss", 0.0)
     val_loss = _extract_metric_last(history, "val_loss", 0.0)
@@ -539,6 +553,7 @@ def run_training_pipeline(
         "promotion_status": promotion_status,
         "hyperparameter_source": components.params["hyperparameter_source"],
         "mlflow_run_id": mlflow_run_id,
+        "mlflow_model_id": mlflow_model_id,
         "history": history,
     }
     return result

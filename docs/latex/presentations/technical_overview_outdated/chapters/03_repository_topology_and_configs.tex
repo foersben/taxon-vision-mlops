@@ -313,7 +313,7 @@
                 \begin{itemize}\scriptsize
                     \item \textbf{\texttt{validate\_okf.py}}: Google Open Knowledge Format linter verifying frontmatter and links.
                     \item \textbf{\texttt{visualize\_okf.py}}: Standalone D3/SVG knowledge graph compiler (\texttt{docs/viz.html}).
-                    \item \textbf{\texttt{verify\_markdown\_rules.py}}: Enforces Markdown Rule 04 formatting.
+                    \item \textbf{\texttt{verify\_markdown\_rules.py}}: Enforces Markdown typography and formatting invariants.
                 \end{itemize}
             \end{block}
         \end{column}
@@ -391,18 +391,18 @@
 % ---------------------------------------------------------------------
 % Slide 13: Invariant Rules & Canonical Workflows (.agents/)
 % ---------------------------------------------------------------------
-\begin{frame}{Agentic Governance}{\texttt{.agents/}: Invariant Guardrails \& Canonical Automation Workflows}
+\begin{frame}{Repository Governance}{Architectural Invariant Standards \& Verification Workflows}
     \begin{columns}[T]
         \begin{column}{0.48\textwidth}
-            \begin{block}{7 Core Invariant Rules}
+            \begin{block}{7 Core Architectural Invariants}
                 \begin{itemize}\scriptsize
-                    \item \textbf{Rule 00 (Python):} Pure Pixi, no bare pip/venv, complexity $< 15$.
-                    \item \textbf{Rule 01 (MLOps):} Deterministic PRNG seeding, DVC immutability.
-                    \item \textbf{Rule 02 (Latency):} Zero-allocation hot path, p95 $< 15\text{ ms}$.
-                    \item \textbf{Rule 03 (Git):} Mandatory GPG/SSH commit signatures.
-                    \item \textbf{Rule 04 (Markdown):} Hyphens only, 4-space list indentation.
-                    \item \textbf{Rule 05 (License):} CC0, CC-BY, CC-BY-NC compliance only.
-                    \item \textbf{Rule 06 (Conformal):} Empirical coverage $\ge 1 - \alpha$.
+                    \item \textbf{Language Modernisation:} Pure Pixi, no bare pip/venv, complexity $< 15$.
+                    \item \textbf{MLOps Reproducibility:} Deterministic PRNG seeding, DVC immutability.
+                    \item \textbf{Inference Latency:} Zero-allocation hot path, p95 $< 15\text{ ms}$.
+                    \item \textbf{Git Security:} Mandatory GPG/SSH commit signatures.
+                    \item \textbf{Documentation Hygiene:} Hyphens only, 4-space list indentation.
+                    \item \textbf{Licence Compliance:} CC0, CC-BY, CC-BY-NC compliance only.
+                    \item \textbf{Conformal Coverage:} Empirical coverage $\ge 1 - \alpha$.
                 \end{itemize}
             \end{block}
         \end{column}
@@ -420,8 +420,8 @@
         \end{column}
     \end{columns}
 
-    \script{Every AI agent operation is bound by seven non-negotiable invariant rules and automated through six canonical slash-command workflows.}
-    \qa{What happens if an agent violates an invariant rule?}{Pre-commit gates reject the change immediately in local hooks and GitHub Actions, preventing merge until all rules are satisfied.}
+    \script{Every platform operation is bound by seven non-negotiable architectural invariants and automated through canonical verification workflows.}
+    \qa{What happens if an operation violates an architectural invariant?}{Pre-commit gates reject the change immediately in local hooks and GitHub Actions, preventing merge until all invariants are satisfied.}
 \end{frame}
 
 % ---------------------------------------------------------------------

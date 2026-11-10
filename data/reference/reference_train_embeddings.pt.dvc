@@ -1,0 +1,5 @@
+outs:
+- md5: 5486c9d20ac0063fed12b88ec88e9c4f
+  size: 1826989
+  hash: md5
+  path: reference_train_embeddings.pt

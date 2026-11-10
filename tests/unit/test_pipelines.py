@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import json
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 from typing import Any
@@ -632,3 +634,102 @@ def test_calibrate_and_evaluate_pipelines(tmp_path: Path) -> None:
 
     profiles = get_canonical_pareto_profiles()
     assert len(profiles) == 5
+
+    # Verify extended holdout metrics payload
+    with eval_metrics.open("r", encoding="utf-8") as f:
+        metrics_dict = json.load(f)
+    assert "test_accuracy" in metrics_dict
+    assert "test_empirical_coverage" in metrics_dict
+    assert "test_worst_class_ap" in metrics_dict
+    assert "test_median_class_ap" in metrics_dict
+    assert "ece" in metrics_dict
+    assert "singleton_rate" in metrics_dict
+    assert "p95_latency_ms" in metrics_dict
+
+
+def test_evaluate_cli_with_mlflow_logging(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify Stage 7 evaluate logs lineage, metrics, per-taxon table, pyfunc model, and plots to MLflow."""
+    from unittest.mock import MagicMock
+
+    import mlflow
+
+    from taxon_vision.models.training.tracking import ParentRunContext
+    from taxon_vision.pipelines.evaluate import evaluate_cli
+    from taxon_vision.pipelines.export_onnx import export_onnx_cli
+
+    # 1. Create a dummy quantized model
+    int8_model = tmp_path / "model_int8.onnx"
+    export_onnx_cli(
+        [
+            "--quantize-int8",
+            "--quantize-mode",
+            "dynamic",
+            "--quantized-output",
+            str(int8_model),
+            "--extractor",
+            "mobilenetv4_conv_small",
+            "--allow-untrained",
+        ]
+    )
+
+    test_pt = tmp_path / "test_embeddings.pt"
+    torch.save(
+        {"embeddings": torch.randn(15, 1280), "labels": torch.tensor([i % 3 for i in range(15)])},
+        test_pt,
+    )
+    conf_yaml = tmp_path / "conformal_config.yaml"
+    conf_yaml.write_text("calibration:\n  q_hat: 0.1\n  alpha: 0.05\n", encoding="utf-8")
+
+    # Mock MLflow interactions
+    mock_ctx = ParentRunContext(
+        run_id="run-test-123",
+        model_id="m-model-456",
+        extractor="mobilenetv4_conv_small",
+        status="completed",
+    )
+    monkeypatch.setattr(
+        "taxon_vision.pipelines.evaluate.resume_parent_mlflow_run",
+        lambda: contextlib.nullcontext(mock_ctx),
+    )
+
+    mock_log_metrics = MagicMock()
+    mock_log_table = MagicMock()
+    mock_log_model = MagicMock()
+    mock_vis = MagicMock()
+
+    monkeypatch.setattr(mlflow, "log_metrics", mock_log_metrics)
+    monkeypatch.setattr(mlflow, "log_table", mock_log_table)
+    monkeypatch.setattr(mlflow.pyfunc, "log_model", mock_log_model)
+    monkeypatch.setattr("taxon_vision.pipelines.evaluate.log_holdout_visualizations", mock_vis)
+
+    pareto_json = tmp_path / "pareto_results.json"
+    eval_metrics = tmp_path / "pareto_evaluation.json"
+
+    ret = evaluate_cli(
+        [
+            "--onnx-model",
+            str(int8_model),
+            "--embeddings",
+            str(test_pt),
+            "--conformal-config",
+            str(conf_yaml),
+            "--out",
+            str(pareto_json),
+            "--metrics-out",
+            str(eval_metrics),
+        ]
+    )
+    assert ret == 0
+    assert mock_log_metrics.called
+    logged_metrics = mock_log_metrics.call_args[0][0]
+    assert "test_worst_class_ap" in logged_metrics
+    assert "test_median_class_ap" in logged_metrics
+    assert "eval.empirical_test_coverage" in logged_metrics
+    assert "eval.ece" in logged_metrics
+    assert "eval.p95_latency_ms" in logged_metrics
+
+    assert mock_log_table.called
+    assert mock_log_table.call_args[1]["artifact_file"] == "reports/per_taxon_holdout_audit.json"
+    assert mock_log_model.called
+    assert mock_log_model.call_args[1]["artifact_path"] == "pyfunc_model"
+    assert mock_vis.called

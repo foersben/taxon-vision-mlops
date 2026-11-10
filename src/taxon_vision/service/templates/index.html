@@ -1,6 +1,40 @@
 {% extends "base.html" %}
 
 {% block content %}
+<section class="governance-strip">
+  <div class="gov-badge model-badge">
+    <span class="badge-icon">🏷️</span>
+    <span class="badge-label">Active Model:</span>
+    <strong>{{ passport.model_name }}</strong>
+    <span class="backbone-tag">({{ passport.backbone }})</span>
+  </div>
+
+  <div class="gov-pill coverage-pill">
+    <span class="badge-icon">🛡️</span>
+    <span>Coverage: <strong>{{ (passport.empirical_test_coverage * 100) | round(1) }}%</strong></span>
+    <span class="target-sub">(Target &ge; {{ (passport.nominal_coverage * 100) | round(0) }}%)</span>
+    <span class="divider">&bull;</span>
+    <span>Mean Set: <strong>{{ passport.mean_set_size | round(2) }}</strong></span>
+  </div>
+
+  <div class="gov-pill latency-pill">
+    <span class="badge-icon">⚡</span>
+    <span>INT8 p95: <strong>{{ passport.p95_latency_ms | round(1) }} ms</strong></span>
+  </div>
+
+  <div class="gov-pill drift-pill status-{{ passport.exchangeability_status | lower | replace(' ', '-') }}">
+    <span class="status-dot"></span>
+    <span>MMD²:
+      {% if passport.mmd2_p_value is not none %}
+        <strong>p={{ passport.mmd2_p_value | round(3) }}</strong>
+      {% else %}
+        <strong>N/A</strong>
+      {% endif %}
+    </span>
+    <span class="drift-status">({{ passport.exchangeability_status }})</span>
+  </div>
+</section>
+
 <section class="upload-section">
   <div class="section-header">
     <h1>Citizen Science Species Identification</h1>

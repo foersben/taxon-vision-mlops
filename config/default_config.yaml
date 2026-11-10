@@ -93,8 +93,14 @@ ingestion:
   per_page: 200
 
 mlflow:
-  tracking_uri: "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
-  experiment_name: "taxon-vision-head-tuning"
+  tracking_uri: "http://127.0.0.1:5000"
+  fallback_sqlite_uri: "sqlite:///data/mlflow/mlflow.db"
+  dagshub_uri: "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
+  experiment_name: "taxon-vision-head-training"
+  drift_experiment_name: "taxon-vision-drift"
+  model_registry_name: "taxon_vision_classifier"
+  onnx_registry_name: "taxon_vision_onnx"
+  health_check_timeout_seconds: 1.0
 
 conformal:
   alpha: 0.05
@@ -125,5 +131,30 @@ optuna:
   min_resource: 3
   reduction_factor: 2
 
+telemetry:
+  database_url: "postgresql+psycopg://telemetry:taxon_telemetry_pass@localhost:5432/telemetry"
+  pool_min_size: 2
+  pool_max_size: 10
+  timeout_seconds: 5.0
+  allow_in_memory_fallback: false
+  fallback_buffer_size: 500
+
+drift:
+  window_size: 500
+  min_samples: 50
+  tau_w1: 0.15
+  mmd_max_samples: 500
+  mmd_permutations: 200
+  alpha: 0.01
+  config_path: "config/drift_config.yaml"
+  reference_embeddings_path: "data/embeddings/cal_embeddings.pt"
+
 evaluation:
-  latency_sla_ms: 25.0
+  latency_sla_ms: 120.0
+
+promotion:
+  quantization_drop_tol: 0.03
+  coverage_tolerance: 0.05
+  latency_slo_ms: 120.0
+  min_telemetry_samples: 50
+  drift_alpha: 0.01

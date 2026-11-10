@@ -1,0 +1,18 @@
+# ==============================================================================
+# TaxonVision-MLOps Docker Compose: Production Simulation Mode Overrides
+# ==============================================================================
+# Explicitly loaded via:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Enforces zero host source-code bind-mounts to verify hermetic container builds.
+# ==============================================================================
+
+services:
+  app:
+    restart: unless-stopped
+    volumes:
+      - ./data/flagged_observations:/app/data/flagged_observations
+      - ./models/checkpoints:/app/models/checkpoints
+      - ./data/sample:/app/data/sample
+
+  pipeline-runner:
+    restart: "no"

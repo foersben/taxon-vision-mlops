@@ -49,19 +49,19 @@
 %%  Left: DagsHub (-4.7) | Right: CI/CD (+4.7), width = 6.9cm
 %% ======================================================================
 \node[hubbox={6.9cm}] (dagshub) at (-4.7, 12.4) {%
-    \textbf{\footnotesize\color{mblueborder} DagsHub, SeaweedFS \& Redis MLOps Hub}\\[0.8mm]
+    \textbf{\footnotesize\color{mblueborder} DagsHub, SeaweedFS \& PostgreSQL Hub}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
     \textbullet\ \textbf{Data Version Control (DVC):} Remote storage, Parquet manifests\\
     \textbullet\ \textbf{In-Cluster Object \& Cache:} SeaweedFS (Local S3) \& Redis (Uploads)\\
-    \textbullet\ \textbf{Tracking \& Registry:} MLflow SQLite WAL, Registry \& Label Studio
+    \textbullet\ \textbf{Tracking \& Registry:} MLflow 3.x LoggedModels \& PostgreSQL
 };
 
 \node[hubbox={6.9cm}] (cicd) at (4.7, 12.4) {%
-    \textbf{\footnotesize\color{mblueborder} GitHub Actions \& Jenkins CI/CD}\\[0.8mm]
+    \textbf{\footnotesize\color{mblueborder} GitHub Actions, Jenkins \& Airflow 3}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
-    \textbullet\ \textbf{Two-Pod CI Agent:} Ephemeral CPU runner (gates) + GPU pod (training)\\
-    \textbullet\ \textbf{Quality Gates:} 203 pytest tests, 70 MyPy files, CC audit, OKF v0.2\\
-    \textbullet\ \textbf{Epistemic Safety Gate:} Empirical coverage $\ge 95\%$ on calibration holdout
+    \textbullet\ \textbf{Airflow 3 LocalExecutor:} Hourly drift DAG \& retraining trigger\\
+    \textbullet\ \textbf{Jenkins GPU Agent:} Ephemeral RTX 5070 Ti pod for DVC builds\\
+    \textbullet\ \textbf{GitHub Actions:} PR gates, 203 pytest tests, MyPy, OKF v0.2
 };
 
 \begin{scope}[on background layer]
@@ -100,13 +100,13 @@
 %%  Left: Pipeline 1 (-4.7) | Right: Pipeline 2 (+4.7), width = 6.9cm
 %% ======================================================================
 \node[classbox={6.9cm}] (pipe1) at (-4.7, 3.3) {%
-    \textbf{\footnotesize\color{mgrayborder} Epistemic Diamond: Train, Export, Calibrate \& Eval}\\[0.8mm]
+    \textbf{\footnotesize\color{mgrayborder} Pipeline 1: Epistemic Diamond DAG}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
+    \textbullet\ \textbf{Stage 3.5: \texttt{data\_drift}:} $W_1$ \& $\text{MMD}^2$ vs static anchor\\
     \textbullet\ \textbf{Stage 4: \texttt{train}:} Modular sibling training $\to$ \nolinkurl{head.pt} (CB-Loss)\\
-    \textbullet\ \textbf{Stage 5: \texttt{export\_onnx}:} \nolinkurl{model_int8.onnx} \& \nolinkurl{head_int8.onnx} (PTQ)\\
+    \textbullet\ \textbf{Stage 5: \texttt{export\_onnx}:} \nolinkurl{model_int8.onnx} (Dual-output PTQ)\\
     \textbullet\ \textbf{Stage 6: \texttt{calibrate}:} $\hat{q}_\alpha$, $\tau_{\text{energy}}$ on cal $\to$ \nolinkurl{conformal_config.yaml}\\
-    \textbullet\ \textbf{Stage 7: \texttt{evaluate}:} $1-\alpha$ bound check on test $\to$ \nolinkurl{pareto_evaluation.json}\\
-    \textbullet\ \textbf{Fast-Path CAM:} Forward-only Class Activation Mapping (${<}2$\,ms)
+    \textbullet\ \textbf{Stage 7: \texttt{eval}:} Four-Gate Promotion Verdict \& Holdout Audit
 };
 
 \node[pipebox={6.9cm}] (pipe2) at (4.7, 3.3) {%
@@ -135,9 +135,9 @@
     \textbullet\ \textbf{Tier 2 (Moderate):} $1 < |\hat{C}| \le k_{\max} \implies$ LanceDB HNSW + RRF rank fusion (${<}6$\,ms)\\
     \textbullet\ \textbf{Tier 3 (Ambiguous):} $|\hat{C}| > k_{\max} \lor (|\hat{C}|=1 \land \hat{\pi}_{\max} < \tau_{\text{conf}}) \implies$ Async VLM triage\\
     \textbullet\ \textbf{Tier 4 (Abstention):} $|\hat{C}|=0 \implies$ Global nearest-neighbour search + urgent audit\\[0.8mm]
-    \textbf{Observability \& Epistemic Monitoring:}\\
-    \textbullet\ Prometheus metrics: Latency histograms, conformal set size tracking, OOD rate\\
-    \textbullet\ \textbf{Two-Tier Drift:} Live $W_1$ scalar norm monitoring \& Offline full-manifold MMD
+    \textbf{Model Passport \& Telemetry Store:}\\
+    \textbullet\ \textbf{Model Passport:} Live governance strip (provenance, coverage, latency, MMD²)\\
+    \textbullet\ \textbf{PostgreSQL Telemetry:} Stores raw pre-normalised activations ($L_2$ norm $W_1$)
 };
 
 \node[box={5.1cm}] (k8s) at (5.65, -1.9) {%
@@ -235,7 +235,7 @@
 \draw[arrow, draw=morangeborder, line width=1.4pt, rounded corners=3mm]
     (k8s.east) -- (8.8, -1.4) -- (8.8, 12.4) -- (cicd.east);
 \node[lbl, rotate=-90, text=morangeborder, draw=morangeborder!50] at (8.8, 5.5)
-    {Wasserstein-1 Feature Drift Alert (Retrain Webhook)};
+    {Grafana Drift Alert $\to$ Webhook Relay $\to$ Airflow Retrain DAG};
 
 \end{tikzpicture}%
   }%

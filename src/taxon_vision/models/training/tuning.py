@@ -243,11 +243,18 @@ class HyperparameterObjective:
             self._log_trial_metrics(active_run, history)
 
             if trial.should_prune():
+                if active_run:
+                    epochs_completed = len(history.get("val_pr_auc", []))
+                    mlflow.set_tag("optuna.trial_state", "PRUNED")
+                    mlflow.set_tag("optuna.pruned_at_epoch", str(epochs_completed))
+                    mlflow.end_run(status="KILLED")
+                    active_run = None
                 raise optuna.TrialPruned()
 
             best_val = float(max(history["val_pr_auc"])) if history.get("val_pr_auc") else 0.0
             if active_run:
                 try:
+                    mlflow.set_tag("optuna.trial_state", "COMPLETE")
                     mlflow.log_metric("peak_val_pr_auc", best_val)
                 except Exception as metric_err:
                     logger.debug("Failed to log peak_val_pr_auc metric: %s", metric_err)
@@ -256,7 +263,7 @@ class HyperparameterObjective:
         finally:
             if active_run is not None:
                 with contextlib.suppress(Exception):
-                    mlflow.end_run()
+                    mlflow.end_run(status="FINISHED")
 
 
 def _setup_mlflow(cfg: TuningConfig) -> bool:
@@ -313,9 +320,9 @@ def _log_best_run(
     try:
         active_run = mlflow.active_run()
         if active_run:
-            mlflow.log_params(best_params)
             mlflow.log_metric("best_val_pr_auc", best_value)
             mlflow.set_tag("optuna.optimization_algorithm", "TPE+ASHA")
+            mlflow.set_tag("optuna.best_trial_number", str(study.best_trial.number) if study else "0")
             log_optuna_diagnostic_plots(study)
         else:
             with mlflow.start_run(run_name="optuna_best_model"):
@@ -534,7 +541,12 @@ def tune_hyperparameters(
         mlflow_available=mlflow_available,
     )
 
-    study.optimize(objective, n_trials=cfg.n_trials)
+    # Ensure child runs are always grouped under a Parent Run node in MLflow 3 UI
+    if mlflow_available and mlflow.active_run() is None:
+        with mlflow.start_run(run_name=f"optuna_study_{study_name}"):
+            study.optimize(objective, n_trials=cfg.n_trials)
+    else:
+        study.optimize(objective, n_trials=cfg.n_trials)
 
     best_params = study.best_params
     if "learning_rate" in best_params and "lr" not in best_params:

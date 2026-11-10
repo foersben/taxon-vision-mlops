@@ -50,7 +50,7 @@ The simulator models an operational 5-class biological perimeter containing chal
 * **Preset 4: Semantic OOD Vehicle / Mineral:**
     * *Morphology:* Field vehicle (e.g., Land Cruiser) or geological formation in the camera trap field of view.
     * *Network State:* Strongly negative logits across all biological taxa ($z \approx [-4.5, -4.8, -5.2, -4.9, -5.4]$).
-    * *Epistemic Dynamics:* While shift-invariant softmax would normalize these negative activations into an arbitrary biological probability distribution, Helmholtz Free Energy remains high ($E(x; T) \approx +3.32 > \tau_{\text{OOD}} = -2.28$).
+    * *Epistemic Dynamics:* While shift-invariant softmax would normalize these negative activations into an arbitrary biological probability distribution, Helmholtz Free Energy remains high ($E(x; T) \approx +3.32 > \tau_{\text{OOD}} = -2.40$).
     * *Operational Action:* Diverted immediately to the human taxonomist triage queue. Softmax point predictions are discarded.
 
 ---
@@ -83,7 +83,7 @@ flowchart TD
 
 ### Finite-Sample Quantile Inflation
 
-In Split Conformal Prediction, using the uncorrected asymptotic $(1 - \alpha)$ empirical quantile leads to under-coverage due to sample variance. For $N_{\text{cal}} = 169$ exchangeable calibration observations, the exact order statistic rank index $p$ is calculated as:
+In Split Conformal Prediction, using the uncorrected asymptotic $(1 - \alpha)$ empirical quantile leads to under-coverage due to sample variance. For $N_{\text{cal}} = 155$ exchangeable in-distribution calibration observations (from the $164$-sample calibration split), the exact order statistic rank index $p$ is calculated as:
 
 $$p = \frac{\lceil(N_{\text{cal}} + 1)(1 - \alpha)\rceil}{N_{\text{cal}}}$$
 

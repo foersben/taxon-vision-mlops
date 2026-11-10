@@ -1,9 +1,9 @@
 {
   "alpha": 0.05,
   "nominal_coverage": 0.95,
-  "empirical_calibration_coverage": 0.9645,
-  "q_hat": 0.8405,
-  "tau_ood": -2.2792,
-  "ood_energy_threshold": -2.2792,
-  "num_calibration_samples": 169
+  "empirical_calibration_coverage": 0.9677,
+  "q_hat": 0.6337,
+  "tau_ood": -2.4029,
+  "ood_energy_threshold": -2.4029,
+  "num_calibration_samples": 155
 }

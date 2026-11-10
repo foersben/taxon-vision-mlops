@@ -6,7 +6,7 @@ This directory houses structured automation, verification, and governance script
 
 ## Canonical Pipeline Entrypoints
 
-All 7 unified pipeline stages are executed directly via their first-class CLI entrypoints in `src/taxon_vision/pipelines/`. Per Rule 00, all commands must use `pixi run -e dev`:
+All 7 unified pipeline stages are executed directly via their first-class CLI entrypoints in `src/taxon_vision/pipelines/`. To maintain reproducible, lockfile-pinned toolchains, all commands must execute via `pixi run -e dev`:
 
 ```bash
 # Stage 1: Ingestion from iNaturalist API
@@ -47,7 +47,7 @@ This script provides automated post-deployment smoke testing and observability v
 
 #### `scripts/ci/local_ci.sh`
 
-This developer utility replicates the complete GitHub Actions CI workflow locally on the native workstation without the overhead of Docker or `act`. It accepts target arguments (`quality`, `tests`, `docs`, `all`) and sequentially enforces the Pure Pixi environment invariant (verifying that no rogue `.venv/` or `uv.lock` files exist), runs Markdown Rule 04 verification, audits OKF frontmatter, executes Ruff linting and formatting, runs MyPy strict type checking, triggers the full pytest regression suite with coverage requirements ($\ge 80\%$), audits open-license compliance, and builds documentation in strict mode with Zensical.
+This developer utility replicates the complete GitHub Actions CI workflow locally on the native workstation without the overhead of Docker or `act`. It accepts target arguments (`quality`, `tests`, `docs`, `all`) and sequentially enforces the Pure Pixi environment invariant (verifying that no rogue `.venv/` or `uv.lock` files exist), runs Markdown formatting verification, audits OKF frontmatter, executes Ruff linting and formatting, runs MyPy strict type checking, triggers the full pytest regression suite with coverage requirements ($\ge 80\%$), audits open-license compliance, and builds documentation in strict mode with Zensical.
 
 ---
 
@@ -71,7 +71,7 @@ This tool parses the verified OKF documentation graph and compiles it into an in
 
 #### `scripts/governance/verify_markdown_rules.py`
 
-This script enforces project-wide Markdown Rule 04 formatting invariants across all markdown files. It validates that standard ASCII hyphens (`-`) are used exclusively (banning unicode en-dashes `–`, em-dashes `—`, and minus signs `−`), mandates asterisk (`*`) unordered lists with exactly 1 space and 4-space indentation multiples, requires exactly 1 blank line before and after lists, code blocks, and headings, and strips all trailing whitespace. It can be executed with `--fix` to automatically repair non-compliant markdown documents across the workspace.
+This script enforces project-wide Markdown typography and layout formatting invariants across all markdown files. It validates that standard ASCII hyphens (`-`) are used exclusively (banning unicode en-dashes `–`, em-dashes `—`, and minus signs `−`), mandates asterisk (`*`) unordered lists with exactly 1 space and 4-space indentation multiples, requires exactly 1 blank line before and after lists, code blocks, and headings, and strips all trailing whitespace. It can be executed with `--fix` to automatically repair non-compliant markdown documents across the workspace.
 
 ---
 

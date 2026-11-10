@@ -1,0 +1,302 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "MLOps & Production Overview",
+      "tooltip": "Switch to Model Performance & Statistical Drift Dashboard",
+      "type": "link",
+      "url": "/d/taxon_overview"
+    }
+  ],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "Memory Discipline & Leak Analysis",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "mbytes",
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth" }
+        }
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 1 },
+      "id": 2,
+      "title": "Process Resident Memory (RSS)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "process_resident_memory_bytes / 1024 / 1024",
+          "legendFormat": "RSS Memory (MiB)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 500 },
+              { "color": "red", "value": 5000 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 1 },
+      "id": 3,
+      "title": "Memory Leak Slope (15m Derivative)",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "deriv(process_resident_memory_bytes[15m])",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 70 },
+              { "color": "red", "value": 90 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 1 },
+      "id": 4,
+      "title": "Process RAM vs 128 GB Host DDR5",
+      "type": "gauge",
+      "targets": [
+        {
+          "expr": "(process_resident_memory_bytes / 137438953472) * 100",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 8 },
+      "id": 5,
+      "title": "Computational Compute & CPU Invariants (Intel i7-14700K)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth" }
+        }
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 9 },
+      "id": 6,
+      "title": "Active CPU Core Utilization",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(process_cpu_seconds_total[1m])",
+          "legendFormat": "CPU Cores",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "drawStyle": "line" }
+        }
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 9 },
+      "id": 7,
+      "title": "CPU Computational Cost per Prediction",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "1000 * (rate(process_cpu_seconds_total[1m]) / clamp_min(rate(taxon_predictions_total[1m]), 1e-4))",
+          "legendFormat": "CPU Time (ms/req)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 9 },
+      "id": 8,
+      "title": "Throughput Efficiency (Req/s per Core)",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "(sum(rate(taxon_predictions_total[1m])) or vector(0)) / clamp_min(rate(process_cpu_seconds_total[1m]), 1e-4)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 },
+      "id": 9,
+      "title": "GPU Silicon & VRAM Invariants (NVIDIA RTX 5070 Ti 16 GB)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "mbytes",
+          "custom": { "drawStyle": "line" }
+        }
+      },
+      "gridPos": { "h": 8, "w": 16, "x": 0, "y": 17 },
+      "id": 10,
+      "title": "Inference VRAM Allocation vs 4.8 GB Serving Ceiling",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "taxon_hardware_gpu_memory_allocated_bytes / 1024 / 1024",
+          "legendFormat": "Allocated VRAM",
+          "refId": "A"
+        },
+        {
+          "expr": "taxon_hardware_gpu_memory_reserved_bytes / 1024 / 1024",
+          "legendFormat": "PyTorch Reserved VRAM",
+          "refId": "B"
+        },
+        {
+          "expr": "taxon_hardware_gpu_serving_budget_bytes / 1024 / 1024",
+          "legendFormat": "Serving Envelope Ceiling (4.8 GB)",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 75 },
+              { "color": "red", "value": 90 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 17 },
+      "id": 11,
+      "title": "Serving VRAM Envelope Utilization",
+      "type": "gauge",
+      "targets": [
+        {
+          "expr": "(taxon_hardware_gpu_memory_allocated_bytes / 5153960755) * 100",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 25 },
+      "id": 12,
+      "title": "OS Resource Handles & Descriptor Limits",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "line" }
+        }
+      },
+      "gridPos": { "h": 7, "w": 16, "x": 0, "y": 26 },
+      "id": 13,
+      "title": "Open File Descriptors (Sockets & Stream Handles)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "process_open_fds",
+          "legendFormat": "Active FDs",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "red", "value": 80 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 26 },
+      "id": 14,
+      "title": "File Descriptor Capacity %",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "(process_open_fds / clamp_min(process_max_fds, 1)) * 100",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["taxon-vision", "mlops", "hardware", "infrastructure"],
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": { "refresh_intervals": ["5s", "10s", "30s", "1m"] },
+  "timezone": "browser",
+  "title": "TaxonVision Infrastructure & Hardware Invariants",
+  "uid": "hardware_invariants",
+  "version": 1
+}

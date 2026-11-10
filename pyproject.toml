@@ -17,7 +17,7 @@ dependencies = [
     "timm>=1.0.14",
     "numpy>=1.26.0",
     "pillow>=11.0.0",
-    "polars>=1.20.0,<2",
+    "polars>=1.20.0,<3",
     "duckdb>=2.0.0",
     "scikit-learn>=1.6.0",
     "scipy>=1.14.0",
@@ -32,6 +32,9 @@ dependencies = [
     "aiolimiter>=1.1.0",
     "filelock>=3.16.0",
     "redis>=5.0.0",
+    "psycopg[binary]>=3.2",
+    "psycopg-pool>=3.2",
+    "evidently>=0.7,<0.8",
 ]
 
 [dependency-groups]
@@ -63,7 +66,7 @@ packages = ["src/taxon_vision"]
 target-version = "py312"
 line-length = 120
 force-exclude = true
-extend-exclude = [".pixi", "scratch", "notebooks", "site", "openwiki"]
+extend-exclude = [".pixi", "scratch", "scripts/scratch", "notebooks", "site", "openwiki"]
 cache-dir = ".cache/ruff_cache"
 
 [tool.ruff.lint]
@@ -103,15 +106,29 @@ disallow_any_generics = false
 check_untyped_defs = true
 ignore_missing_imports = true
 explicit_package_bases = true
-exclude = ["scratch/", "notebooks/", "site/"]
+exclude = ["scratch/", "scripts/scratch/", "notebooks/", "site/", "airflow/"]
 cache_dir = ".cache/mypy_cache"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "--cov=src/taxon_vision --cov-report=term-missing --cov-report=html --cov-report=xml"
+addopts = "--cov=src/taxon_vision --cov-report=term-missing --cov-report=html:reports/coverage/html --cov-report=xml:reports/coverage/coverage.xml"
 cache_dir = ".cache/pytest_cache"
 filterwarnings = ["ignore::FutureWarning", "ignore::DeprecationWarning"]
+markers = [
+    "integration: mark test as integration test requiring external services",
+]
+
+[tool.coverage.run]
+data_file = ".cache/coverage/.coverage"
+branch = true
+source = ["src/taxon_vision"]
+
+[tool.coverage.html]
+directory = "reports/coverage/html"
+
+[tool.coverage.xml]
+output = "reports/coverage/coverage.xml"
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]

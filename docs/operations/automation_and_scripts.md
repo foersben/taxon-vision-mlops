@@ -18,7 +18,7 @@ The `scripts/` directory houses structured automation, continuous integration, g
 
 ## 1. Canonical Pipeline CLI Entrypoints
 
-All 7 stages of the Epistemic Diamond DAG are implemented as first-class CLI entrypoints within `src/taxon_vision/pipelines/`. Per Rule 00, all commands must execute via `pixi run -e dev`:
+All 7 stages of the Epistemic Diamond DAG are implemented as first-class CLI entrypoints within `src/taxon_vision/pipelines/`. To guarantee reproducible hermetic environments and avoid unmanaged host dependencies, all commands execute via `pixi run -e dev`:
 
 ```bash
 # Stage 1: Ingestion from iNaturalist
@@ -109,7 +109,7 @@ Local developer validation harness reproducing the GitHub Actions CI pipeline wi
 
 #### Workflow Targets
 
-* `quality`: Enforces the Pure Pixi environment invariant (asserts no `.venv` or `uv.lock` exist), executes Markdown Rule 04 verification, audits OKF frontmatter, and runs Ruff linting, formatting, and MyPy type checks.
+* `quality`: Enforces the Pure Pixi environment invariant (asserts no `.venv` or `uv.lock` exist), executes Markdown typography and formatting verification, audits OKF frontmatter, and runs Ruff linting, formatting, and MyPy type checks.
 * `tests`: Executes the complete pytest test suite with coverage assertions ($\ge 80\%$), integration and invariant checks, and license compliance audits.
 * `docs`: Audits OKF frontmatter and compiles documentation using Zensical in strict mode (`zensical build --strict`).
 * `all`: Executes all three passes sequentially (default).
@@ -143,6 +143,27 @@ pixi run -e dev python scripts/maintenance/cleanup_mlflow_registry.py
 
 # Execute pruning on remote DagsHub MLflow registry
 pixi run -e dev python scripts/maintenance/cleanup_mlflow_registry.py --execute --keep-last 10 --keep-top-k 5
+```
+
+---
+
+### `scripts/maintenance/visualize_airflow_dag.py`
+
+Zero-dependency offline visualizer that statically inspects Airflow DAG files using Python's native `ast` module, rendering terminal dependency trees in $< 100\,\text{ms}$ without requiring active Docker containers or background daemon processes.
+
+#### Operational Capabilities
+
+* **Offline AST Parsing:** Statically scans `airflow/dags/*.py` to extract tasks, operators, and bitshift dependency chains (`>>`).
+* **Interactive Filtering:** Supports targeted inspection of individual DAGs (`prediction_drift_monitor`, `model_retraining`) or complete repository scans.
+* **Residue Prevention:** Provides immediate developer feedback on DAG topologies without allocating memory in Docker or leaving container processes behind.
+
+```bash
+# Inspect all DAGs
+just airflow-dag
+
+# Inspect specific DAG
+just airflow-dag prediction_drift_monitor
+just airflow-dag model_retraining
 ```
 
 ---
@@ -185,7 +206,7 @@ pixi run -e dev python scripts/governance/visualize_okf.py
 
 ### `scripts/governance/verify_markdown_rules.py`
 
-Syntax and formatting linter enforcing project-wide Markdown Rule 04 invariants.
+Syntax and formatting linter enforcing consistent Markdown typography and layout invariants.
 
 #### Enforced Invariants
 

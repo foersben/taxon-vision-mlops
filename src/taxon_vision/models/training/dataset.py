@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 
 import torch
 import yaml
@@ -160,6 +161,53 @@ def _generate_synthetic_embedding_split(dim: int, num_classes: int) -> Embedding
     )
 
 
+def _parse_split_payload(
+    payload: Any,
+) -> tuple[torch.Tensor | None, torch.Tensor | None, int | None, list[int] | None]:
+    """Extract embeddings, labels, feature dimension, and sample counts from a serialized payload.
+
+    Args:
+        payload: Deserialized object loaded from a tensor checkpoint file.
+
+    Returns:
+        Tuple of (embeddings, labels, feature_dimension, samples_per_class).
+    """
+    if isinstance(payload, dict):
+        z = payload.get("embeddings")
+        y = payload.get("labels")
+        tensor_z = z if isinstance(z, torch.Tensor) else None
+        tensor_y = y if isinstance(y, torch.Tensor) else None
+        feat_dim = payload.get("feature_dim", tensor_z.shape[1] if tensor_z is not None and tensor_z.ndim > 1 else None)
+        samples = payload.get("samples_per_class")
+        return tensor_z, tensor_y, feat_dim, samples
+
+    if isinstance(payload, torch.Tensor):
+        feat_dim = payload.shape[1] if payload.ndim > 1 else None
+        return payload, None, feat_dim, None
+
+    return None, None, None, None
+
+
+def _load_optional_partition_tensor(path: Path) -> tuple[torch.Tensor | None, torch.Tensor | None]:
+    """Load optional embeddings and labels tensor pair from an auxiliary split file if present.
+
+    Args:
+        path: Path to target partition file.
+
+    Returns:
+        Tuple of (embeddings, labels) if loaded successfully, or (None, None).
+    """
+    if not path.is_file():
+        return None, None
+    try:
+        payload = torch.load(path, map_location="cpu", weights_only=False)
+        z, y, _, _ = _parse_split_payload(payload)
+        return z, y
+    except Exception as err:
+        logger.debug("Failed reading optional split tensor %s: %s", path, err)
+        return None, None
+
+
 def _try_load_split_from_pair(train_path: Path, val_path: Path, dim: int) -> EmbeddingSplit | None:
     """Load train and validation partitions directly from discrete .pt tensor files.
 
@@ -174,32 +222,29 @@ def _try_load_split_from_pair(train_path: Path, val_path: Path, dim: int) -> Emb
     if not train_path.exists() or not val_path.exists():
         return None
     try:
-        train_payload = torch.load(train_path, map_location="cpu", weights_only=False)
-        val_payload = torch.load(val_path, map_location="cpu", weights_only=False)
-
-        train_z = train_payload["embeddings"] if isinstance(train_payload, dict) else train_payload
-        train_y = train_payload["labels"] if isinstance(train_payload, dict) else None
-        samples_per_class = train_payload.get("samples_per_class") if isinstance(train_payload, dict) else None
-        feat_dim = (
-            train_payload.get("feature_dim", train_z.shape[1]) if isinstance(train_payload, dict) else train_z.shape[1]
+        train_z, train_y, feat_dim, samples_per_class = _parse_split_payload(
+            torch.load(train_path, map_location="cpu", weights_only=False)
         )
+        val_z, val_y, _, _ = _parse_split_payload(torch.load(val_path, map_location="cpu", weights_only=False))
 
-        val_z = val_payload["embeddings"] if isinstance(val_payload, dict) else val_payload
-        val_y = val_payload["labels"] if isinstance(val_payload, dict) else None
-
-        if not isinstance(train_z, torch.Tensor) or not isinstance(train_y, torch.Tensor):
-            return None
-        if not isinstance(val_z, torch.Tensor) or not isinstance(val_y, torch.Tensor):
+        if train_z is None or train_y is None or val_z is None or val_y is None:
             return None
         if feat_dim != dim:
-            logger.warning("Split embeddings at %s have dimension %d, expected %d", train_path, feat_dim, dim)
+            logger.warning("Split embeddings at %s have dimension %s, expected %d", train_path, feat_dim, dim)
             return None
+
+        cal_z, cal_y = _load_optional_partition_tensor(train_path.parent / "cal_embeddings.pt")
+        test_z, test_y = _load_optional_partition_tensor(train_path.parent / "test_embeddings.pt")
 
         split = EmbeddingSplit(
             train_embeddings=train_z,
             train_labels=train_y,
             val_embeddings=val_z,
             val_labels=val_y,
+            cal_embeddings=cal_z,
+            cal_labels=cal_y,
+            test_embeddings=test_z,
+            test_labels=test_y,
             samples_per_class=samples_per_class,
         )
         logger.info(

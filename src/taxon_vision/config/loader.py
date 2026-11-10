@@ -110,8 +110,7 @@ def _apply_direct_env_overrides(config_data: dict[str, Any]) -> dict[str, Any]:
         Enables seamless runtime configuration of test modes, MLflow tracking, and database URIs without nested delimiters.
 
     How:
-        Checks for TAXON_ALLOW_UNTRAINED_FALLBACK, TAXON_FLAGGED_STORAGE_DIR, TAXON_OPTUNA_STORAGE_URI,
-        TAXON_MLFLOW_TRACKING_URI, and MLFLOW_TRACKING_URI, injecting them into the merged dictionary.
+        Checks for TAXON_ALLOW_UNTRAINED_FALLBACK, TAXON_FLAGGED_STORAGE_DIR, TAXON_OPTUNA_STORAGE_URI, TAXON_MLFLOW_TRACKING_URI, MLFLOW_TRACKING_URI, and TAXON_TELEMETRY_ALLOW_IN_MEMORY_FALLBACK injecting them into the merged dictionary.
 
     Args:
         config_data (dict[str, Any]): Merged configuration dictionary.
@@ -146,6 +145,18 @@ def _apply_direct_env_overrides(config_data: dict[str, Any]) -> dict[str, Any]:
 
     if mlflow_overrides:
         config_data = _deep_merge(config_data, {"mlflow": mlflow_overrides})
+
+    telemetry_overrides: dict[str, Any] = {}
+    env_telemetry_uri = os.getenv("TAXON_TELEMETRY_DATABASE_URL") or os.getenv("TAXON_TELEMETRY__DATABASE_URL")
+    if env_telemetry_uri is not None:
+        telemetry_overrides["database_url"] = env_telemetry_uri
+
+    env_fallback = os.getenv("TAXON_TELEMETRY_ALLOW_IN_MEMORY_FALLBACK")
+    if env_fallback is not None:
+        telemetry_overrides["allow_in_memory_fallback"] = env_fallback.strip().lower() in ("true", "1", "yes")
+
+    if telemetry_overrides:
+        config_data = _deep_merge(config_data, {"telemetry": telemetry_overrides})
 
     return config_data
 

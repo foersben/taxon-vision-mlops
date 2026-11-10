@@ -132,7 +132,7 @@ def ingest_cli(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s", force=True)
     asyncio.run(run_ingestion(taxa=args.taxa, per_page=args.per_page, out_path=args.out))
     return 0
 

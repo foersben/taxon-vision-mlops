@@ -1,0 +1,27 @@
+# ==============================================================================
+# TaxonVision-MLOps Docker Compose: Development Mode Overrides
+# ==============================================================================
+# Explicitly loaded via:
+#   docker compose -f docker-compose.yml -f deploy/compose/docker-compose.dev.yml up -d
+# or via Justfile: `just up-dev`. Bind-mounts host source code and
+# data directories for rapid iterative development and live hot-reloading.
+# ==============================================================================
+
+services:
+  app:
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./reports:/app/reports
+      - ./config:/app/config
+
+  pipeline-runner:
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./reports:/app/reports
+      - ./config:/app/config
+      - ./dvc.yaml:/app/dvc.yaml
+      - ./params.yaml:/app/params.yaml

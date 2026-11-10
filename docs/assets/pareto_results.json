@@ -14,16 +14,21 @@
   },
   {
     "extractor": "dinov3_vits14",
-    "architecture": "Dense Self-Supervised ViT",
-    "canonical_baseline": "Dense Morphology Probe / Register Tokens",
+    "architecture": "Dense Self-Supervised ViT (vit_small_patch16_dinov3)",
+    "canonical_baseline": "Dense Morphology Probe (92.07% INT8 Holdout Test Acc, 50.38 ms CPU INT8 p95 / ~13.5 ms GPU FP16)",
+    "accuracy_score": 92.07,
+    "top1_acc": 92.07,
     "parameters_m": 22.0,
     "feature_dim": 384,
-    "target_profile": "Server GPU / Dense Morphology",
+    "target_profile": "Server GPU & CPU INT8 / Dense Morphology",
     "p50_latency_ms": 9.5,
     "p95_latency_ms": 13.5,
+    "cpu_int8_p50_latency_ms": 47.38,
+    "cpu_int8_p95_latency_ms": 50.38,
+    "cpu_int8_throughput_fps": 20.9,
     "throughput_fps": 105.0,
     "vram_peak_mb": 850.0,
-    "provenance": "Empirical On-Cluster (reports/pareto_evaluation.json)"
+    "provenance": "Empirical Holdout Accuracy & CPU INT8 Latency (reports/pareto_evaluation.json); GPU Latency Projected"
   },
   {
     "extractor": "dinov2_vits14",

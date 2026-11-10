@@ -72,7 +72,7 @@
     \scriptsize $\bullet$ 20 discrete Git interception hooks\\
     \scriptsize $\bullet$ Cryptographic GPG/SSH commit signature\\
     \scriptsize $\bullet$ Pure Pixi: rejection of \texttt{.venv/} \& \texttt{uv.lock}\\
-    \scriptsize $\bullet$ Markdown Rule 04 formatting invariants
+    \scriptsize $\bullet$ Markdown formatting and typography invariants
 };
 
 % Column 2: Dual-Target Test Matrix

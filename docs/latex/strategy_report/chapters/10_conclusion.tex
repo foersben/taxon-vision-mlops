@@ -18,14 +18,14 @@ The architecture described in this report is delivered in three phases that end 
 In order to avoid any ambiguity between the target design and the present state of the code base, Table~\ref{tab:impl_status} records the status of each capability as verified against the repository. The label \textit{implemented} denotes functionality that exists in the code base and is exercised by the test suite or the deployment manifests; \textit{partial} denotes functionality whose building blocks exist but which is not yet integrated end-to-end; and \textit{planned} denotes functionality that is specified in this report but has not yet been implemented.
 
 \begin{longtable}{@{}p{0.27\textwidth}p{0.16\textwidth}p{0.53\textwidth}@{}}
-\caption{Implementation status of principal capabilities, verified against the repository (\texttt{develop} branch, October 2026).}
+\caption{Implementation status of principal capabilities, verified against the repository (\texttt{feature/pipeline1-monitoring} branch, November 2026).}
 \label{tab:impl_status}\label{tab:implementation-status}\\
 \toprule
-\textbf{Capability} & \textbf{Status} & \textbf{Verified Repository Evidence \& Outstanding Actions} \\
+\textbf{Capability} & \textbf{Status} & \textbf{Verified Repository Evidence \& Operational Alignment} \\
 \midrule
 \endfirsthead
 \toprule
-\textbf{Capability} & \textbf{Status} & \textbf{Verified Repository Evidence \& Outstanding Actions} \\
+\textbf{Capability} & \textbf{Status} & \textbf{Verified Repository Evidence \& Operational Alignment} \\
 \midrule
 \endhead
 \bottomrule
@@ -35,39 +35,41 @@ Reproducible environment (Pixi, Just) & \textbf{implemented} & Lock-file driven 
 \addlinespace
 Dataset versioning \& S3 streaming & \textbf{implemented} & DVC on DagsHub S3 remote (\texttt{dvc.lock}); \texttt{s3\_streamer.py} with connection pooling, retries, and \texttt{min\_extraction\_success\_ratio} gate. \\
 \addlinespace
-Experiment tracking \& Model Registry & \textbf{implemented} & MLflow on DagsHub; \texttt{taxon\_vision\_classifier} with \texttt{Production}/\texttt{Challenger}/\texttt{Archived} aliases, real tensor signatures, and diagnostic plots. \\
+Consolidated PostgreSQL 4-DB cluster & \textbf{implemented} & Single PostgreSQL~16 cluster (\texttt{postgres:16-alpine}) hosting isolated \texttt{mlflow}, \texttt{airflow}, \texttt{telemetry}, and \texttt{optuna} databases; non-CoW NVMe allocation (\texttt{chattr +C}); SQLite local fallback. \\
+\addlinespace
+MLflow 3.x LoggedModels \& 4-split Lineage & \textbf{implemented} & Self-hosted MLflow 3.16.0 proxy backed by PostgreSQL and SeaweedFS S3 (\texttt{s3://mlflow-artifacts/}); first-class \texttt{LoggedModel} (\texttt{m-...}), 4-split dataset lineage via \texttt{mlflow.data}, real tensor signatures, and cross-stage DVC run continuity via \nolinkurl{reports/train_metrics.json:mlflow_run_id}. \\
 \addlinespace
 Head training \& convergence callbacks & \textbf{implemented} & Class-Balanced Loss ($\beta$), best-weight restoration, early stopping (patience 5), and LR plateau decay (patience 2) in \texttt{loops.py}. \\
 \addlinespace
-Bayesian HPO (Optuna TPE + ASHA) & \textbf{implemented} & 6D search space in \texttt{tuning.py} with persistent SQLite WAL storage (\nolinkurl{optuna_studies.db} in \nolinkurl{data/optuna/}) and nested MLflow child trial logging. \\
+Bayesian HPO (Optuna TPE + ASHA) & \textbf{implemented} & 6D search space in \texttt{tuning.py} backed by PostgreSQL \texttt{optuna} database with \texttt{postgresql+psycopg2://} driver compatibility and nested MLflow child trial logging. \\
 \addlinespace
-Dual-output ONNX \& INT8 PTQ & \textbf{implemented} & \texttt{onnx\_exporter.py} emits \texttt{logits} ($[N,K]$) and \texttt{embeddings} ($[N,D]$); static QDQ (with representative calibration images) and dynamic fallback in \texttt{quantizer.py}. \\
+Dual-output ONNX \& INT8 PTQ & \textbf{implemented} & \texttt{onnx\_exporter.py} emits unnormalised \texttt{logits} ($[N,K]$) and penultimate \texttt{embeddings} ($[N,D]$); static QDQ and dynamic fallback with logit node preservation in \texttt{quantizer.py}. \\
 \addlinespace
 Epistemic safety gating (OOD + Conformal) & \textbf{implemented} & Dual-gate OOD (dynamically calibrated $\tau_{\text{OOD}}$ resolved via \nolinkurl{config/conformal_config.yaml}, $\tau_{\text{entropy}}=1.60$ nats) in \texttt{ood\_detector.py} and Split Conformal sets ($1-\alpha \ge 0.95$, $\tau_{\text{conf}}=0.60$) in \texttt{conformal.py}. \\
 \addlinespace
-Inference service \& HTMX dashboard & \textbf{implemented} & FastAPI service (\texttt{/predict}, \texttt{/explain}, \texttt{/health/ready}), distributed Redis ephemeral upload cache (\texttt{redis-ephemeral:6379}) eliminating multi-pod split-brain for CAM, ViT patch-grid projection and forward-hooked linear CAM saliency with differential candidate toggles (\texttt{inference/cam.py}), and local persistence of flagged samples. \\
+Inference service \& HTMX dashboard & \textbf{implemented} & FastAPI service (\texttt{/predict}, \texttt{/explain}, \texttt{/health/ready}), distributed Redis ephemeral upload cache (\texttt{redis-ephemeral:6379}) eliminating multi-pod split-brain for CAM, ViT patch-grid projection and forward-hooked linear CAM saliency with differential candidate toggles (\texttt{inference/cam.py}), and Model Passport attestation. \\
 \addlinespace
 Hybrid CI/CD \& K3s GPU execution & \textbf{implemented} & GitHub Actions quality/release/GHCR workflows (\texttt{ci.yml}, \texttt{release.yaml}), Traefik v3.1 canary ingress, and bare-metal Jenkins two-pod execution (\texttt{jenkins-cpu-runner} and dedicated RTX 5070 Ti \texttt{jenkins-gpu-runner}). \\
 \addlinespace
-Test harness \& code quality gates & \textbf{implemented} & 203 \texttt{pytest} tests, zero-warning Ruff, MyPy across 70 source files, 8-gate attestation seal (\nolinkurl{attest_seal.py}), AST code invariants engine (\nolinkurl{verify_code_invariants.py}), Rule 07 hardware verification, 100\% cognitive complexity $\le 15$ with zero snapshot exemptions, and OKF v0.2 schema validation. \\
+Test harness \& code quality gates & \textbf{implemented} & 203 \texttt{pytest} tests, zero-warning Ruff, MyPy across 70 source files, 8-gate attestation seal (\nolinkurl{attest_seal.py}), AST code invariants engine (\nolinkurl{verify_code_invariants.py}), automated hardware specification verification, 100\% cognitive complexity $\le 15$ with zero snapshot exemptions, and OKF v0.2 schema validation. \\
+\addlinespace
+Two-tier drift detection ($W_1$ \& $\text{MMD}^2$) & \textbf{implemented} & Linear-time Wasserstein-1 ($W_1$) on pre-normalised activations and full-geometry RBF $\text{MMD}^2$ with $B=1{,}000$ Monte Carlo permutations in \texttt{monitoring/drift.py}; exposed via \nolinkurl{/api/v1/drift/evaluate} and DVC Stage~3.5 (\texttt{data\_drift.py}). \\
+\addlinespace
+Stage 7 Four-Gate Promotion Verdict & \textbf{implemented} & Terminal DVC evaluation gate in \texttt{pipelines/evaluate.py} asserting Macro PR-AUC superiority, INT8 degradation $\le 3\%$, conformal coverage $\ge (1-\alpha)-5\%$, and latency SLO $\le 120\,\text{ms}$ with live MMD² exchangeability ($p \ge 0.01$); generates \nolinkurl{reports/model_passport.json}. \\
+\addlinespace
+In-cluster S3 cache \& Optuna dashboard & \textbf{implemented} & Kubernetes manifests deploy SeaweedFS (Apache 2.0, port 8333) and Optuna dashboard (NodePort 30081) backed by PostgreSQL 16 persistence; \texttt{docker-compose.yml} mirrors the stack locally. \\
+\addlinespace
+Prometheus \& Grafana observability & \textbf{implemented} & FastAPI exposes \texttt{/metrics} with latency histograms, prediction counts, and embedding norms in \texttt{telemetry.py}; Prometheus server scrapes endpoints with native TSDB; Grafana alert rules route drift alerts to webhook relay. \\
 \midrule
-Prometheus \& Grafana observability & \textbf{partial} & FastAPI exposes \texttt{/metrics} with 3 core collectors in \texttt{telemetry.py} and \texttt{config/prometheus.yaml} exists; in-cluster Prometheus server with native TSDB and BTRFS NOCOW specified in Section~\ref{sec:prometheus_tsdb_realisation}. \\
+Airflow 3 LocalExecutor orchestration & \textbf{planned} & Fully specified architecture in Chapter 4; \texttt{prediction\_drift\_monitor} DAG (@hourly) and event-driven \texttt{model\_retraining} DAG with authenticated webhook relay and Jenkins trigger. \\
 \addlinespace
-1D Wasserstein-1 feature drift & \textbf{partial} & Scalar $L_2$-norm Wasserstein-1 calculation on pre-normalised activations is implemented and unit-tested in \texttt{monitoring/drift.py}, but is not yet hooked into the live \texttt{/predict} inference path or exported as a Prometheus gauge. \\
+Evidently AI HTML dashboards in MLflow & \textbf{implemented} & Interactive Evidently drift reports and machine-readable metrics logged directly to MLflow experiment \texttt{taxon-vision-drift} in Stage~3.5 and drift endpoints. \\
 \addlinespace
-BADGE active learning \& triage queue & \textbf{partial} & \texttt{compute\_badge\_embeddings} (\texttt{query.py}) and Parquet-backed \texttt{TriageQueueManager} (\texttt{triage\_queue.py}) are unit-tested, but are not yet wired into \texttt{/predict} (which currently writes raw JSON/JPEG files via \texttt{storage.py}) or scheduled retraining. \\
-\addlinespace
-Conformal calibration \& Pareto evaluation & \textbf{implemented} & Single-trunk 7-stage DVC DAG integrates \texttt{calibrate} (\texttt{taxon\_vision.pipelines.calibrate}) and \texttt{eval} (\texttt{taxon\_vision.pipelines.evaluate}), calculating non-conformity quantiles $\hat{q}_\alpha$ and asserting coverage $\ge 1 - \alpha$ on holdout test partitions. \\
-\addlinespace
-In-cluster S3 cache \& Optuna dashboard & \textbf{implemented} & Kubernetes manifests deploy SeaweedFS (Apache 2.0, port 8333) and Optuna dashboard (NodePort 30081) backed by NVMe SQLite WAL persistence; \texttt{docker-compose.yml} mirrors the stack locally. \\
+BADGE active learning \& triage queue & \textbf{partial} & \texttt{compute\_badge\_embeddings} (\texttt{query.py}) and Parquet-backed \texttt{TriageQueueManager} (\texttt{triage\_queue.py}) are unit-tested, pending full integration with the live triage queue. \\
 \midrule
-Full-manifold MMD drift gate & \textbf{planned} & Specified in Section~\ref{sec:evidently_drift_gate} as the Tier-2 offline RKHS kernel drift gate ($\text{MMD}^2$) within the Evidently AI quality gate, pending implementation in \texttt{monitoring/drift.py} or \texttt{Jenkinsfile}. \\
+LanceDB filtered HNSW \& RRF (Pipeline 2) & \textbf{planned} & Single-stage spatio-temporal HNSW index, Uber H3 masking, and Reciprocal Rank Fusion (Chapter 5) fully preserved as architectural pillars for continuous taxonomic MMKG. \\
 \addlinespace
-Evidently AI reports \& Alertmanager & \textbf{planned} & Specified in Section~\ref{sec:evidently_drift_gate} and Section~\ref{sec:alertmanager_routing}; Evidently HTML/JSON drift reporting and Alertmanager webhook triggers to Jenkins scheduled for Phase 3. \\
-\addlinespace
-LanceDB filtered HNSW \& RRF & \textbf{planned} & Single-stage spatio-temporal HNSW index, Uber H3 masking, and Reciprocal Rank Fusion (Chapter 5) are architectural targets; embeddings currently serialise to PyTorch \texttt{.pt} / Parquet. \\
-\addlinespace
-Zero-shot cropping \& VLM triage & \textbf{planned} & Upstream YOLO-World organism isolation, \texttt{taxon-vision-vlm} (Qwen2-VL-2B) gRPC microservice, and DuckDB taxonomic split/lump mutations (Chapter 5). \\
+Zero-shot cropping \& VLM triage (Pipeline 2) & \textbf{planned} & Upstream YOLO-World organism isolation, \texttt{taxon-vision-vlm} (Qwen2-VL-2B) gRPC microservice, and DuckDB taxonomic split/lump mutations (Chapter 5). \\
 \addlinespace
 Label Studio synchronisation & \textbf{planned} & Automated bidirectional sync between \texttt{triage\_queue} and the DagsHub Label Studio annotation workspace. \\
 \end{longtable}

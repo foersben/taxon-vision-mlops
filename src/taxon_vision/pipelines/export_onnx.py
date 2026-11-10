@@ -12,6 +12,8 @@ import logging
 import sys
 from pathlib import Path
 
+import mlflow
+
 from taxon_vision.config import get_settings
 from taxon_vision.inference.onnx_exporter import (
     _build_and_restore_classifier,
@@ -21,6 +23,7 @@ from taxon_vision.inference.onnx_exporter import (
     export_to_onnx,
 )
 from taxon_vision.models.head import TaxonClassifier
+from taxon_vision.models.training.tracking import MLflowTracker, resume_parent_mlflow_run
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +150,7 @@ def export_onnx_cli(argv: list[str] | None = None) -> int:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%H:%M:%S",
         stream=sys.stdout,
+        force=True,
     )
 
     output_file, temp_fp32_path = _resolve_export_output(args.output, args.quantize_int8)
@@ -173,29 +177,23 @@ def export_onnx_cli(argv: list[str] | None = None) -> int:
 
         _export_dedicated_head(classifier, target_artifact, args.quantize_int8)
 
-        import mlflow
-
-        if mlflow.active_run():
-            from taxon_vision.models.training.tracking import MLflowTracker
-
-            MLflowTracker.log_onnx_model(
-                onnx_model=target_artifact,
-                artifact_path="model",
-                num_classes=classifier.num_classes,
-                image_size=image_dim,
-                registered_model_name="taxon_vision_onnx",
-            )
-
-        from taxon_vision.models.training.tracking import log_stage_metrics_to_parent_run
-
         file_size_mb = target_artifact.stat().st_size / (1024 * 1024) if target_artifact.exists() else 0.0
-        log_stage_metrics_to_parent_run(
-            metrics={
-                "onnx_model_size_mb": round(file_size_mb, 2),
-                "quantized_int8": 1.0 if args.quantize_int8 else 0.0,
-            },
-            prefix="export.",
-        )
+
+        with resume_parent_mlflow_run() as ctx:
+            if ctx is not None:
+                MLflowTracker.log_onnx_model(
+                    onnx_model=target_artifact,
+                    artifact_path="onnx_model",
+                    num_classes=classifier.num_classes,
+                    image_size=image_dim,
+                    registered_model_name="taxon_vision_onnx",
+                )
+                mlflow.log_metrics(
+                    {
+                        "export.onnx_model_size_mb": round(file_size_mb, 2),
+                        "export.quantized_int8": 1.0 if args.quantize_int8 else 0.0,
+                    }
+                )
 
         return _finalize_export_artifacts(target_artifact, args.output, args.quantize_int8)
 

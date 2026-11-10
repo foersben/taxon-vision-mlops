@@ -19,7 +19,7 @@ function initEpistemicSimulator() {
             logits: [5.2, -1.2, -1.8, -2.4, -3.1],
             temp: 1.0,
             alpha: 0.05,
-            tau: -2.28
+            tau: -2.40
         },
         sister_mimicry: {
             id: "sister_mimicry",
@@ -28,7 +28,7 @@ function initEpistemicSimulator() {
             logits: [4.2, 4.0, -1.5, -2.2, -3.0],
             temp: 1.0,
             alpha: 0.05,
-            tau: -2.28
+            tau: -2.40
         },
         empty_frame: {
             id: "empty_frame",
@@ -37,7 +37,7 @@ function initEpistemicSimulator() {
             logits: [-0.1, 0.05, -0.15, 0.1, -0.05],
             temp: 1.0,
             alpha: 0.05,
-            tau: -2.28
+            tau: -2.40
         },
         semantic_ood: {
             id: "semantic_ood",
@@ -46,7 +46,7 @@ function initEpistemicSimulator() {
             logits: [-4.5, -4.8, -5.2, -4.9, -5.4],
             temp: 1.0,
             alpha: 0.05,
-            tau: -2.28
+            tau: -2.40
         }
     };
 
@@ -61,7 +61,7 @@ function initEpistemicSimulator() {
     let currentLogits = [...presets.confident_inlier.logits];
     let currentTemp = 1.0;
     let currentAlpha = 0.05;
-    let currentTau = -2.28;
+    let currentTau = -2.40;
     let activePreset = "confident_inlier";
 
     mountPoint.innerHTML = `
@@ -93,15 +93,15 @@ function initEpistemicSimulator() {
                         <span id="sim-alpha-display" class="badge-tag warning">0.05</span>
                     </label>
                     <input type="range" id="sim-alpha-input" min="0.01" max="0.20" step="0.01" value="0.05">
-                    <small>Coverage guarantee = 1 - &alpha; (95.0%). Calibrated on N_cal = 169 split.</small>
+                    <small>Coverage guarantee = 1 - &alpha; (95.0%). Calibrated on N_cal = 155 inliers (from 164 split).</small>
                 </div>
                 <div class="sim-param-col">
                     <label for="sim-tau-input">
                         <span>OOD Energy Cutoff (&tau;<sub>OOD</sub>)</span>
-                        <span id="sim-tau-display" class="badge-tag danger">-2.28</span>
+                        <span id="sim-tau-display" class="badge-tag danger">-2.40</span>
                     </label>
-                    <input type="range" id="sim-tau-input" min="-10.0" max="2.0" step="0.1" value="-2.28">
-                    <small>Helmholtz Free Energy cutoff anchoring 95% In-Distribution TPR.</small>
+                    <input type="range" id="sim-tau-input" min="-10.0" max="2.0" step="0.1" value="-2.40">
+                    <small>Helmholtz Free Energy cutoff (-2.4029) anchoring 95% In-Distribution TPR.</small>
                 </div>
             </div>
 
@@ -114,7 +114,7 @@ function initEpistemicSimulator() {
                 <div class="sim-bars-column">
                     <div class="sim-section-heading">
                         <span>Calibrated Probabilities &pi;&#770;<sub>k</sub>(x)</span>
-                        <span class="threshold-legend" id="sim-threshold-legend">Threshold (1 - q̂<sub>&alpha;</sub>): 16.0%</span>
+                        <span class="threshold-legend" id="sim-threshold-legend">Threshold (1 - q̂<sub>&alpha;</sub>): 36.6%</span>
                     </div>
                     <div id="sim-bars-container" class="sim-bars-container"></div>
                 </div>
@@ -153,7 +153,7 @@ function initEpistemicSimulator() {
                 <div class="banner-body">
                     <div class="banner-title" id="sim-decision-title">Zero-Allocation Fast-Path Inference</div>
                     <div class="banner-desc" id="sim-decision-desc">
-                        Singleton set satisfies 95% conformal coverage. Direct serving within 15 ms SLO.
+                        Singleton set satisfies 95% conformal coverage. Direct ONNX serving (~50.4 ms CPU INT8 / &le; 15 ms GPU target).
                     </div>
                 </div>
             </div>
@@ -205,15 +205,15 @@ function initEpistemicSimulator() {
     function updateSimulation() {
         currentTemp = parseFloat(tempSlider.value) || 1.0;
         currentAlpha = parseFloat(alphaSlider.value) || 0.05;
-        currentTau = parseFloat(tauSlider.value) || -2.28;
+        currentTau = parseFloat(tauSlider.value) || -2.40;
 
         tempDisplay.textContent = currentTemp.toFixed(1);
         alphaDisplay.textContent = currentAlpha.toFixed(2);
         tauDisplay.textContent = currentTau.toFixed(2);
 
         // Finite-sample inflated quantile
-        // At alpha=0.05, calibrated q_hat = 0.8405
-        const q_hat = Math.min(0.995, Math.max(0.60, 1.0 - currentAlpha * 3.19));
+        // At alpha=0.05, calibrated q_hat = 0.6337 (1 - q_hat = 0.3663)
+        const q_hat = Math.min(0.995, Math.max(0.40, 1.0 - currentAlpha * 7.326));
         const nonConfThresh = 1.0 - q_hat;
 
         const threshLegend = document.getElementById("sim-threshold-legend");
@@ -355,7 +355,7 @@ function initEpistemicSimulator() {
             icon.textContent = "⚡";
             title.textContent = "Route: Zero-Allocation Fast-Path Inference";
             const candidate = species[admittedIndices[0]].name;
-            desc.innerHTML = `Singleton prediction set admitted: <em>${candidate}</em> (&pi;&#770; = ${(probs[admittedIndices[0]] * 100).toFixed(1)}%). Mathematical ${( (1 - currentAlpha) * 100).toFixed(0)}% coverage guarantee verified. Direct ONNX Runtime serving within sub-15ms SLO.`;
+            desc.innerHTML = `Singleton prediction set admitted: <em>${candidate}</em> (&pi;&#770; = ${(probs[admittedIndices[0]] * 100).toFixed(1)}%). Mathematical ${( (1 - currentAlpha) * 100).toFixed(0)}% coverage guarantee verified. Direct ONNX Runtime serving (~50.4 ms CPU INT8 within 120 ms SLA; &le; 15 ms GPU target).`;
         } else if (admittedIndices.length <= 3) {
             banner.classList.add("route-rag");
             icon.textContent = "🔍";

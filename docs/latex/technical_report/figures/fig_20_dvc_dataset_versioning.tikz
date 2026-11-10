@@ -72,7 +72,7 @@
     \scriptsize $\bullet$ Cryptographic hashes of manifests \& splits\\
     \scriptsize $\bullet$ Manifest hash logged as \texttt{dvc\_dataset\_hash} in MLflow\\
     \scriptsize $\bullet$ Atomic link: Git commit SHA $\leftrightarrow$ Pipeline outputs\\
-    \scriptsize $\bullet$ Satisfies MLOps Reproducibility Rule 01
+    \scriptsize $\bullet$ Enforces strict mathematical reproducibility
 };
 
 % Column 2: Content-Addressed Storage

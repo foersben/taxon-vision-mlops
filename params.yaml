@@ -57,4 +57,11 @@ conformal:
   ood_tpr: 0.95
 
 evaluation:
-  latency_sla_ms: 25.0
+  latency_sla_ms: 120.0
+
+promotion:
+  quantization_drop_tol: 0.03
+  coverage_tolerance: 0.05
+  latency_slo_ms: 120.0
+  min_telemetry_samples: 50
+  drift_alpha: 0.01

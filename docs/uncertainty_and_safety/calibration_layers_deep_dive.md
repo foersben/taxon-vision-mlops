@@ -84,7 +84,7 @@ $$s_i = 1 - \hat{\pi}_{y_i}(x_i; T) \in [0, 1]$$
 
 ### Finite-Sample Quantile Inflation
 
-Standard asymptotic empirical quantiles lead to systematic under-coverage on small calibration splits due to sample variance. For $N_{\text{cal}} = 169$ exchangeable observations, `src/taxon_vision/uncertainty/conformal.py` computes the inflated order statistic:
+Standard asymptotic empirical quantiles lead to systematic under-coverage on small calibration splits due to sample variance. For $N_{\text{cal}} = 155$ in-distribution calibration observations (retained from the $164$-sample calibration split after $95\%$ TPR OOD filtering), `src/taxon_vision/uncertainty/conformal.py` computes the inflated order statistic ($\hat{q}_\alpha = 0.6337$ at $\alpha = 0.05$):
 
 $$p = \frac{\lceil(N_{\text{cal}} + 1)(1 - \alpha)\rceil}{N_{\text{cal}}}$$
 
@@ -173,4 +173,4 @@ $$S = \frac{r_{\max} - r_{\min}}{255}, \quad Z = \operatorname{round}\left(-\fra
 
 $$q = \operatorname{clamp}\left(\operatorname{round}\left(\frac{r}{S}\right) + Z, \; -128, \; 127\right)$$
 
-Calibrating $[r_{\min}, r_{\max}]$ on real domain images prevents numerical saturation on diagnostic morphological details, preserving $99.8\%$ of FP32 accuracy while satisfying the sub-25ms latency budget.
+Calibrating $[r_{\min}, r_{\max}]$ on real domain images and preserving FP32 on final logit projection nodes prevents numerical saturation on diagnostic morphological details, achieving $92.07\%$ INT8 holdout accuracy ($1.22\%$ drop relative to the $93.29\%$ FP32 validation baseline, well within the $3.0\%$ Gate 1 tolerance) and $50.38\,\text{ms}$ p95 CPU INT8 latency ($\le 120.0\,\text{ms}$ Stage 7 SLA gate; $\le 15.0\,\text{ms}$ GPU target).

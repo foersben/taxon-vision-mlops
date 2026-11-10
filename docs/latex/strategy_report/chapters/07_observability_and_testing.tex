@@ -156,59 +156,95 @@ To preserve sensitivity to input distribution shift without introducing the comp
 \end{equation}
 Unit normalisation is deferred exclusively to downstream cosine distance computations and nearest-neighbour graph indexing within LanceDB.
 
-\subsubsection{Evidently AI Offline Validation and Model Promotion Gating}
+\subsubsection{Evidently AI Offline Validation, Data Drift Invariants, and Four-Gate Promotion}
 \label{sec:evidently_drift_gate}
 
-Whilst the linear-time Wasserstein-1 scalar projection ($W_1$) protects live serving throughput, complex visual domain shifts -- such as subtle phenological variations, background vegetation changes, or localised sensor noise -- may alter the geometry of the latent representation manifold without substantially shifting the empirical mean norm. To evaluate these higher-order distribution shifts without blocking production serving requests, the architecture incorporates an offline statistical quality gate powered by Evidently AI.
+Whilst the linear-time Wasserstein-1 scalar projection ($W_1$) protects live serving throughput, complex visual domain shifts -- such as subtle phenological variations, background vegetation changes, or localized sensor noise -- may alter the geometry of the latent representation manifold without substantially shifting the empirical mean norm. To evaluate these higher-order distribution shifts without blocking production serving requests, the architecture incorporates an offline statistical quality gate powered by Evidently AI.
 
-The drift auditing engine executes as an automated CI/CD stage within the Jenkins execution plane on the bare-metal GPU node. The audit is triggered during model candidate evaluation or following the accumulation of scheduled production inference batches. The workflow operates as follows:
+The drift auditing engine operates across two decoupled regimes: an automated CI/CD stage within the DVC pipeline (Stage~3.5, \texttt{data\_drift}), and an hourly scheduled drift evaluation orchestrated by Airflow~3. The mathematical formulation and operational workflow operate as follows:
 
 \begin{enumerate}
-    \item \textbf{Data Ingestion and Baseline Alignment:} The evaluator hydrates the pristine reference calibration embeddings ($\mathcal{D}_{\text{cal}}$, tracked via DVC) alongside an accumulated production inference split ($\mathcal{D}_{\text{prod}}$, stored as unconstrained pre-normalised activations in SeaweedFS).
-    \item \textbf{Statistical Test Execution:} The suite evaluates non-parametric two-sample Kolmogorov-Smirnov (KS) tests across individual embedding dimensions at a significance threshold of $\alpha_{\text{drift}} = 0.05$. In parallel, it evaluates the two-sample Maximum Mean Discrepancy ($\text{MMD}^2$) over the full $D$-dimensional latent representation space using a Gaussian RBF kernel:
+    \item \textbf{Data Ingestion and Baseline Alignment:} The evaluator hydrates pristine reference calibration embeddings ($\mathcal{D}_{\text{cal}}$, tracked via DVC) alongside an accumulated production inference split ($\mathcal{D}_{\text{prod}}$, stored as unconstrained pre-normalised activations in PostgreSQL).
+    \item \textbf{Statistical Test Execution:} The suite evaluates non-parametric two-sample Kolmogorov-Smirnov (KS) tests across individual embedding dimensions at a significance threshold of $\alpha_{\text{drift}} = 0.05$. In parallel, it evaluates the two-sample Maximum Mean Discrepancy ($\text{MMD}^2$) over the full $D$-dimensional latent representation space using a Gaussian RBF kernel with bandwidth $\sigma$ resolved via the median heuristic:
     \begin{equation}
-        \text{MMD}^2(P, Q) = \frac{1}{M^2}\sum_{i=1}^M\sum_{j=1}^M k(z_i, z_j) - \frac{2}{MN}\sum_{i=1}^M\sum_{j=1}^N k(z_i, z'_j) + \frac{1}{N^2}\sum_{i=1}^N\sum_{j=1}^N k(z'_i, z'_j).
+        \text{MMD}^2(P, Q) = \frac{1}{M^2}\sum_{i=1}^M\sum_{j=1}^M k(z_i, z_j) - \frac{2}{MN}\sum_{i=1}^M\sum_{j=1}^N k(z_i, z'_j) + \frac{1}{N^2}\sum_{i=1}^N\sum_{j=1}^N k(z'_i, z'_j),
+    \end{equation}
+    where $k(z, z') = \exp\left(-\frac{\|z - z'\|^2}{2\sigma^2}\right)$. To calculate an exact non-parametric empirical $p$-value without asymptotic normal approximations, the engine executes $B = 1{,}000$ Monte Carlo permutations across pooled sample matrices:
+    \begin{equation}
+        p = \frac{1 + \sum_{b=1}^B \mathbb{I}\left(\text{MMD}^2_b \ge \text{MMD}^2_{\text{obs}}\right)}{B + 1}.
     \end{equation}
     \item \textbf{Dual Artefact Emission:} The execution run generates two distinct artefacts:
     \begin{itemize}
         \item \nolinkurl{reports/drift_report.html}: An interactive, visual dashboard rendering drift distributions, categorical probability shifts, and per-feature empirical cumulative distribution functions (eCDFs), archived directly to DagsHub as a permanent build artefact.
-        \item \nolinkurl{reports/drift_metrics.json}: A structured, machine-readable summary recording global drift share (the proportion of drifted feature dimensions) and the scalar MMD distance.
+        \item \nolinkurl{reports/drift_metrics.json}: A structured, machine-readable summary recording global drift share (the proportion of drifted feature dimensions), the scalar MMD distance, and the permutation $p$-value.
     \end{itemize}
-    \item \textbf{Promotion Assertion Gate:} The CI pipeline evaluates \nolinkurl{drift_metrics.json} against an explicit promotion invariant: if the proportion of drifted embedding dimensions exceeds 15\%, or if $\text{MMD}^2 > \tau_{\text{MMD}}$, the candidate model is prohibited from receiving the \texttt{Production} alias in the MLflow Model Registry, regardless of its validation Macro PR-AUC score. This prevents the deployment of models whose apparent accuracy gains are artefacts of overfitting to transient domain shifts.
+    \item \textbf{Stage 7 Four-Gate Model Promotion Verdict:} Historical pipelines promoted models at Stage~4 based solely on validation Macro PR-AUC. This represents a dangerous anti-pattern: Stage~4 cannot evaluate INT8 post-training quantisation collapse, holdout conformal coverage, empirical inference latency, or exchangeability against live traffic. Consequently, promotion authority is transferred strictly to Stage~7 (\texttt{src/taxon\_vision/pipelines/evaluate.py}). A candidate model earns the \texttt{Challenger} or \texttt{Production} alias if and only if it simultaneously satisfies all four promotion gates:
+    \begin{itemize}
+        \item \textbf{Gate 1 (Accuracy Superiority):} Validation Macro PR-AUC must improve upon the active production model ($\Delta \text{PR-AUC} \ge 0$).
+        \item \textbf{Gate 2 (Quantisation Fidelity):} Top-1 accuracy degradation induced by INT8 Post-Training Quantisation must remain $\le 3.0\%$ relative to the unquantised FP32 PyTorch baseline.
+        \item \textbf{Gate 3 (Empirical Conformal Coverage):} Empirical marginal coverage on the holdout test partition must satisfy the lower statistical bound $\ge (1 - \alpha) - 5\%$ (e.g. $\ge 90\%$ at nominal $\alpha = 0.05$).
+        \item \textbf{Gate 4 (Latency Ceiling \& Live Exchangeability):} The p95 CPU inference latency must remain strictly below the Service Level Objective ceiling ($\le 120\,\text{ms}$), and the two-sample RBF $\text{MMD}^2$ permutation test against live PostgreSQL prediction telemetry must confirm covariate exchangeability ($p \ge 0.01$).
+    \end{itemize}
 \end{enumerate}
 
 \subsection{Dual-Path Alertmanager Routing and Automated Feedback Loops}
 \label{sec:alertmanager_routing}
 
-Prometheus Alertmanager evaluates time-series rules across live cluster metrics, enforcing a bifurcated routing topology that separates automated infrastructure remediation from human expert escalation:
+Prometheus Alertmanager and Grafana evaluate time-series rules across live cluster metrics, enforcing a bifurcated routing topology that separates automated infrastructure remediation from human expert escalation:
 
 \begin{figure}[htbp]
     \centering
-    \begin{tikzpicture}[node distance=1.8cm, auto, >=stealth,
-        block/.style={rectangle, draw=black, fill=slate!10, rounded corners, text width=3.8cm, text centered, minimum height=1.0cm, font=\small},
-        alert/.style={rectangle, draw=rose!80, fill=rose!10, rounded corners, text width=3.8cm, text centered, minimum height=1.0cm, font=\small},
-        action/.style={rectangle, draw=teal!80, fill=teal!10, rounded corners, text width=3.8cm, text centered, minimum height=1.0cm, font=\small},
-        line/.style={draw, ->, thick}]
-        
-        \node [block] (prom) {Prometheus Server\\(\texttt{/metrics} Scraper)};
-        \node [alert, right=1.5cm of prom] (am) {Alertmanager Engine\\(Rule Evaluation)};
-        \node [action, above right=0.8cm and 1.5cm of am] (jenkins) {Automated Retraining\\(Jenkins Webhook)};
-        \node [action, below right=0.8cm and 1.5cm of am] (human) {Operator Notification\\(Discord / Zero Trust)};
-        
-        \path [line] (prom) -- (am);
-        \path [line] (am) |- node[near end, above, font=\footnotesize] {Condition A: $W_1 > \tau_{\text{drift}}$} (jenkins);
-        \path [line] (am) |- node[near end, below, font=\footnotesize] {Condition B: $|\hat{C}| = 0$} (human);
+    \begin{tikzpicture}[
+        >=stealth,
+        node distance=0.8cm,
+        block/.style={rectangle, draw=slate!80, fill=slate!8, rounded corners=3pt, text width=3.3cm, text centered, minimum height=0.95cm, font=\footnotesize, line width=0.6pt},
+        promBlock/.style={rectangle, draw=morangeborder, fill=morange!35, rounded corners=3pt, text width=3.3cm, text centered, minimum height=0.95cm, font=\footnotesize, line width=0.6pt},
+        alertBlock/.style={rectangle, draw=rose!80, fill=rose!10, rounded corners=3pt, text width=3.4cm, text centered, minimum height=0.95cm, font=\footnotesize, line width=0.6pt},
+        actionBlock/.style={rectangle, draw=teal!80, fill=teal!10, rounded corners=3pt, text width=3.4cm, text centered, minimum height=0.95cm, font=\footnotesize, line width=0.6pt},
+        p2Block/.style={rectangle, draw=mpurpleborder, fill=mpurple!35, rounded corners=3pt, text width=3.4cm, text centered, minimum height=0.95cm, font=\footnotesize, line width=0.6pt},
+        line/.style={draw=slate!80, ->, thick},
+        alertLine/.style={draw=rose!90, ->, thick},
+        actionLine/.style={draw=teal!90, ->, thick},
+        p2Line/.style={draw=mpurpleborder, ->, thick},
+        pill/.style={fill=white, draw=slate!30, rounded corners=2pt, inner sep=1.2pt, font=\tiny\sffamily}
+    ]
+    
+    % Column 1: Observability Plane (X = 1.6)
+    \node [promBlock] (prom) at (1.6, 2.5) {\textbf{Prometheus Server}\\[-1pt]{\scriptsize \texttt{/metrics} Time-Series Scraper}};
+    \node [block] (telemetry) at (1.6, 0.4) {\textbf{PostgreSQL Telemetry}\\[-1pt]{\scriptsize Sliding-Window Prediction Vectors}};
+    
+    % Column 2: Evaluation & Alerting (X = 5.8)
+    \node [alertBlock] (grafana) at (5.8, 2.5) {\textbf{Grafana Alert Engine}\\[-1pt]{\scriptsize Rules: \texttt{EmbeddingDriftDetected}}};
+    \node [p2Block] (triage) at (5.8, 0.4) {\textbf{Label Studio Triage Queue}\\[-1pt]{\scriptsize Human Taxonomist Annotation}};
+    
+    % Column 3: Orchestration & Retraining (X = 11.2)
+    \node [actionBlock] (relay) at (11.2, 3.4) {\textbf{FastAPI Webhook Relay}\\[-1pt]{\scriptsize \nolinkurl{/api/v1/retrain/webhook}}};
+    \node [actionBlock] (airflow) at (11.2, 1.9) {\textbf{Airflow 3 Scheduler}\\[-1pt]{\scriptsize \texttt{model\_retraining} DAG}};
+    \node [actionBlock] (jenkins) at (11.2, 0.4) {\textbf{Jenkins GPU Runner}\\[-1pt]{\scriptsize 4-Gate Promotion Verdict}};
+    
+    % Connections
+    \draw [line] (telemetry) -- node[pill, left] {1h Batch} (prom);
+    \draw [line] (prom) -- node[pill, above] {PromQL Alert Rules} (grafana);
+    
+    % Condition A: Retraining Loop (from grafana.north up to Y=3.4 then straight to relay.west)
+    \draw [alertLine] (grafana.north) -- (5.8, 3.4) -- node[pill, midway, above] {Condition A: Drift Breached ($W_1 \lor \text{MMD}^2$)} (relay.west);
+    \draw [actionLine] (relay.south) -- node[pill, right] {JWT Auth} (airflow.north);
+    \draw [actionLine] (airflow.south) -- node[pill, right] {Trigger Build} (jenkins.north);
+    
+    % Condition B: Epistemic Triage Loop
+    \draw [alertLine] (grafana.south) -- node[pill, right] {Condition B: $|\hat{C}|=0 \lor E>\tau_{\text{OOD}}$} (triage.north);
+    \draw [p2Line] (triage.south) -- ++(0, -0.45) -| node[pill, pos=0.25, below] {Verified Labels $\to$ Dataset Manifest} (jenkins.south);
     \end{tikzpicture}
-    \caption{Dual-path Alertmanager dispatch separating continuous retraining from expert intervention.}
+    \caption{Dual-path monitoring and closed-loop continuous retraining architecture. Prometheus scrapes streaming metrics while PostgreSQL records sliding-window prediction embeddings. Under Condition A (feature or manifold drift), Grafana dispatches an authenticated webhook to the FastAPI relay, prompting the Airflow 3 scheduler to trigger an ephemeral GPU retraining job in Jenkins governed by the Stage 7 Four-Gate Promotion Verdict. Under Condition B (epistemic novelty or empty conformal sets), anomalous samples route to the Label Studio triage queue for expert re-annotation.}
     \label{fig:alertmanager_dual_routing}
 \end{figure}
 
 \begin{enumerate}
     \item \textbf{Path A: Automated Retraining Trigger (Machine Loop):}
-    Triggered when empirical feature drift breaches the streaming tolerance ($W_1(\tilde{\mathcal{Z}}_{\text{base}}, \tilde{\mathcal{Z}}_{\text{prod}}) > \tau_{\text{drift}}$) or when the mean conformal prediction set cardinality expands by more than 20\% over a rolling 1-hour window ($\mathbb{E}[|\hat{C}(X)|] > 1.20 \cdot \mathbb{E}_{\text{cal}}[|\hat{C}|]$). Alertmanager constructs an authenticated webhook payload dispatched to the Jenkins controller endpoint (\nolinkurl{https://jenkins.benjamin-foerster.eu/job/taxon-vision-retrain/build}). This initialises an ephemeral GPU worker pod to pull the latest DVC dataset manifest, retrain the classification head, recompute non-conformity quantiles $\hat{q}_\alpha$, and submit a new \texttt{Challenger} model candidate.
+    Triggered when empirical feature drift breaches the streaming tolerance ($W_1(\tilde{\mathcal{Z}}_{\text{base}}, \tilde{\mathcal{Z}}_{\text{prod}}) > \tau_{\text{drift}}$) or when the multivariate $\text{MMD}^2$ permutation test detects significant manifold shift ($p < 0.01$). Grafana Alertmanager evaluates the PromQL rule \texttt{taxon\_drift\_detected == 1} and fires an authenticated HTTP POST payload to the FastAPI webhook relay (\nolinkurl{/api/v1/retrain/webhook}) authenticated via \texttt{TAXON\_RETRAIN\_WEBHOOK\_SECRET}. The relay verifies the secret, enforces an anti-flapping cooldown period, acquires a short-lived JSON Web Token (JWT) from Airflow~3, and triggers the \texttt{model\_retraining} DAG via the Airflow REST API. Airflow merges verified Label Studio exports into \nolinkurl{data/manifests/dataset_manifest.parquet}, triggers the Jenkins GPU pipeline (\nolinkurl{job/taxon-vision-mlops/buildWithParameters?RETRAIN_MODEL=true}), monitors execution to completion, and evaluates the Stage~7 Four-Gate Promotion Verdict.
     
     \item \textbf{Path B: Epistemic Abstention Alert (Human Loop):}
-    Triggered when the rate of empty conformal prediction sets ($|\hat{C}(X)| = 0$) or severe out-of-distribution energy rejections ($E(x) > \tau_{\text{OOD}}$) exceeds 5\% of total request volume. Because an empty prediction set indicates an organism that cannot be assigned to any catalogued class at the 95\% confidence level, automated retraining cannot resolve the underlying novelty. Alertmanager formats a diagnostic alert detailing client coordinates, image hashes, and top logit distributions, routing it via Discord webhook and administrative email to the operational taxonomist team.
+    Triggered when the rate of empty conformal prediction sets ($|\hat{C}(X)| = 0$) or severe out-of-distribution energy rejections ($E(x) > \tau_{\text{OOD}}$) exceeds 5\% of total request volume. Because an empty prediction set indicates an organism that cannot be assigned to any catalogued class at the 95\% confidence level, automated retraining cannot resolve the underlying novelty. Alertmanager formats a diagnostic alert detailing client coordinates, image hashes, and top logit distributions, routing it via Discord webhook and administrative email to the operational taxonomist team, whilst samples are staged in the Label Studio triage queue for expert re-sorting.
 \end{enumerate}
 
 \section{Multi-Tier Verification and Testing Strategy}
@@ -274,7 +310,7 @@ Beyond functional and statistical correctness, production maintainability mandat
     \item \textbf{Comprehensive Automated Test Harness:} The regression test suite comprises \textbf{203 automated pytest tests} maintaining an empirical statement coverage of $89\%$ across the entire \nolinkurl{src/taxon_vision} package (with critical data, inference, and uncertainty modules exceeding $95\%$).
     \item \textbf{Cognitive Complexity Invariants ($\le 15$):} To prevent monolithic control flow anti-patterns, the CI quality gate executes automated cognitive complexity analysis via \nolinkurl{complexipy}. Every function across both application code (\nolinkurl{src/}) and governance scripts (\nolinkurl{scripts/}) is constrained to a cognitive complexity ceiling of $\le 15$. Following modular decomposition of the OKF validation and visualisation engines, $100\%$ of functions satisfy this ceiling with zero snapshot exemptions.
     \item \textbf{AST Code Invariants Engine:} To programmatically prevent runtime regressions and anti-patterns, an automated Abstract Syntax Tree engine (\nolinkurl{scripts/governance/verify_code_invariants.py}) enforces non-negotiable architectural mandates: (a) zero dynamic reflection (\texttt{hasattr}/\texttt{getattr}), (b) positional parameter arity $\le 4$ encapsulated in typed Pydantic models, (c) zero blocking synchronous I/O within asynchronous FastAPI routes, and (d) zero bypass comments (\texttt{\#~noqa}, \texttt{\#~type:\ ignore}, \texttt{\#~complexipy:\ ignore}). Legacy exceptions are strictly ratcheted downwards via \nolinkurl{code_invariants_baseline.json}.
-    \item \textbf{Unified 8-Gate Attestation Seal:} Prior to cryptographic git commit signing (\texttt{git commit -S}), the platform executes a deterministic attestation runner (\nolinkurl{.agents/verifiers/attest_seal.py}) verifying all eight pre-commit gates in sequence: Ruff linting and formatting, strict MyPy type checking across 70 source files, Complexipy complexity invariants, OKF v0.2 knowledge graph validation (\nolinkurl{scripts/governance/validate_okf.py}), Markdown Rule 04 syntax and British English editorial idiom verification (\nolinkurl{scripts/governance/verify_markdown_rules.py}), Rule 07 hardware invariant specifications (\nolinkurl{scripts/governance/verify_hardware_invariants.py}), open-licensing compliance (\nolinkurl{taxon_vision.pipelines.audit_license}), and fast-path targeted test suites. Successful executions emit an immutable computation receipt to \nolinkurl{.agents/receipts/}.
+    \item \textbf{Unified 8-Gate Attestation Seal:} Prior to cryptographic git commit signing (\texttt{git commit -S}), the platform executes a deterministic attestation runner (\nolinkurl{.agents/verifiers/attest_seal.py}) verifying all eight pre-commit gates in sequence: Ruff linting and formatting, strict MyPy type checking across 70 source files, Complexipy complexity invariants, OKF v0.2 knowledge graph validation (\nolinkurl{scripts/governance/validate_okf.py}), Markdown syntax and British English editorial idiom verification (\nolinkurl{scripts/governance/verify_markdown_rules.py}), bare-metal hardware invariant specifications (\nolinkurl{scripts/governance/verify_hardware_invariants.py}), open-licensing compliance (\nolinkurl{taxon_vision.pipelines.audit_license}), and fast-path targeted test suites. Successful executions emit an immutable computation receipt to \nolinkurl{.agents/receipts/}.
 \end{enumerate}
 
 \subsection{Tier 6: Persistent Bayesian Telemetry and Deployment Smoke Testing}
@@ -282,7 +318,7 @@ Beyond functional and statistical correctness, production maintainability mandat
 
 Iterative hyperparameter tuning introduces volatile state risks when trials execute inside ephemeral container agents. To eliminate unpersisted trial histories, the architecture establishes a dedicated Bayesian telemetry plane:
 \begin{enumerate}
-    \item \textbf{Optuna SQLite WAL Persistence:} The hyperparameter runner (\nolinkurl{src/taxon_vision/models/training/runner.py}) binds to an ACID-compliant SQLite backend configured in Write-Ahead Logging (\texttt{WAL}) mode at \nolinkurl{/workspace/optuna/optuna_studies.db}, mounted from the host NVMe drive (\nolinkurl{/var/lib/taxon-vision/optuna}). This permits concurrent read operations by the dashboard without locking database writes during parallel trial execution.
+    \item \textbf{Optuna PostgreSQL Storage with SQLite Fallback:} The hyperparameter runner (\nolinkurl{src/taxon_vision/models/training/runner.py}) binds to the consolidated PostgreSQL cluster using dialect \nolinkurl{postgresql+psycopg2://optuna:...@postgres:5432/optuna}, matching the bundled driver in the official \texttt{optuna-dashboard} image. SQLite WAL mode (\nolinkurl{sqlite:///data/optuna/optuna_studies.db}) is retained strictly as an automatic fallback for offline local workstation development.
     \item \textbf{Cluster Optuna Dashboard:} Deployed in Kubernetes via \nolinkurl{deploy/k8s/mlops-storage-and-optuna.yaml} using the official image (\texttt{ghcr.io/optuna/optuna-dashboard:latest}), the interactive dashboard is exposed to the local network via NodePort \texttt{30081}. It renders live optimisation history plots, parameter importances, and multi-objective Pareto frontiers across classification heads and backbone extractors.
     \item \textbf{Post-Rollout Smoke Testing:} Following every zero-downtime rolling restart, the automated verification script (\nolinkurl{scripts/ci/verify_deployment.sh}) probes the live cluster: (a) verifying rollout status of \texttt{deployment/taxon-vision-serving}, (b) testing \texttt{/health} and \texttt{/health/ready} probes, (c) dispatching a multipart synthetic image prediction to \texttt{/api/v1/predict}, and (d) asserting that Prometheus metrics counter \texttt{taxon\_predictions\_total} increments deterministically.
 \end{enumerate}

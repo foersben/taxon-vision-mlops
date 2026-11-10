@@ -126,9 +126,9 @@ Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely be
         {\scriptsize\color{black!70} \texttt{taxon-vision:latest}}
     };
 
-    \node[execCard] (jenkins_cpu) at (0.0, -14.4) {
-        \textbf{Jenkins CPU Runner}\\[-1pt]
-        {\scriptsize\color{black!70} Ephemeral Pod / \texttt{cleanWs}}
+    \node[execCard] (airflow_sched) at (0.0, -14.4) {
+        \textbf{Airflow 3 Scheduler}\\[-1pt]
+        {\scriptsize\color{black!70} LocalExecutor / DAGs}
     };
 
     \node[execCard] (jenkins_gpu) at (0.0, -19.2) {
@@ -165,8 +165,8 @@ Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely be
     };
 
     \node[storeCylinder] (sqlite_wal) at (5.0, -21.0) {
-        \textbf{SQLite WAL Telemetry}\\[-1pt]
-        {\scriptsize\color{black!70} MLflow Registry \& Optuna DB}
+        \textbf{PostgreSQL 4-Schema}\\[-1pt]
+        {\scriptsize\color{black!70} MLflow, Airflow, Telemetry, Optuna}
     };
 
     % =========================================================================
@@ -183,13 +183,13 @@ Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely be
     };
 
     \node[dagCard] (dvc_train) at (11.4, -8.4) {
-        \textbf{4. Modular Head Train}\\[-1pt]
-        {\scriptsize\color{black!70} CB-Loss + Sibling Topology}
+        \textbf{3.5--4. Drift \& Train}\\[-1pt]
+        {\scriptsize\color{black!70} Static Anchor + CB-Loss}
     };
 
     \node[dagCard] (dvc_export) at (11.4, -12.6) {
         \textbf{5. ONNX Export}\\[-1pt]
-        {\scriptsize\color{black!70} \texttt{model\_int8} \& \texttt{head\_int8}}
+        {\scriptsize\color{black!70} \texttt{model\_int8} (Dual Output)}
     };
 
     \node[dagCard] (dvc_calib) at (11.4, -16.8) {
@@ -198,8 +198,8 @@ Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely be
     };
 
     \node[dagCard] (dvc_eval) at (11.4, -21.0) {
-        \textbf{7. Pareto Evaluation}\\[-1pt]
-        {\scriptsize\color{black!70} $1-\alpha$ Coverage Gate}
+        \textbf{7. Four-Gate Promotion}\\[-1pt]
+        {\scriptsize\color{black!70} PR-AUC, Cov, SLO, MMD² Gate}
     };
 
     % =========================================================================
@@ -211,8 +211,8 @@ Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely be
     };
 
     \node[execCard] (serving) at (17.2, -4.2) {
-        \textbf{FastAPI Serving}\\[-1pt]
-        {\scriptsize\color{black!70} 2 Pods $\cdot$ Fast / CAM}
+        \textbf{FastAPI \& Passport}\\[-1pt]
+        {\scriptsize\color{black!70} Model Passport $\cdot$ Fast / CAM}
     };
 
     \node[obsCard] (prom) at (17.2, -8.4) {
@@ -242,8 +242,8 @@ Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely be
     % --- 1. Control Plane Internal Edges (Column 1) ---
     \draw[solidFlow] (git.south) -- node[pillLabel, pos=0.5] {Code Push / PR} (gha.north);
     \draw[solidFlow] (gha.south) -- node[pillLabel, pos=0.5] {Merge to \texttt{main}} (ghcr.north);
-    \draw[solidFlow] (gha.west) -- (-2.35, -4.8) -- node[pillLabel, pos=0.5, rotate=90] {Cloudflare Webhook} (-2.35, -14.4) -- (jenkins_cpu.west);
-    \draw[solidFlow] (jenkins_cpu.south) -- node[pillLabel, pos=0.5] {Trigger GPU Job} (jenkins_gpu.north);
+    \draw[solidFlow] (gha.west) -- (-2.35, -4.8) -- node[pillLabel, pos=0.5, rotate=90] {Cloudflare Webhook} (-2.35, -19.2) -- (jenkins_gpu.west);
+    \draw[solidFlow] (airflow_sched.south) -- node[pillLabel, pos=0.5] {Trigger GPU Retrain} (jenkins_gpu.north);
 
     % --- 2. Jenkins GPU Agent Triggering Diamond DAG (Track 3 at Y = -25.50) ---
     \draw[solidFlow] (jenkins_gpu.south) -- (0.0, -25.50) -- (7.4, -25.50) -- (7.4, 0.40) -- ([yshift=0.4cm]dvc_ingest.west);
@@ -303,14 +303,14 @@ Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely be
     \draw[solidFlow] ([yshift=-0.25cm]serving.east) -- (19.65, -4.45) -- (19.65, -20.75) -- ([yshift=0.25cm]al_triage.east);
     \node[pillLabel, rotate=-90] at (19.65, -12.5) {Triage ($|\hat{C}| > 3$ or $|\hat{C}| = 0$)};
 
-    % Evidently AI Offline Promotion Gate to SQLite WAL (Track 0 at Y = -23.40, completely below containers)
+    % Evidently AI Offline Promotion Gate to PostgreSQL (Track 0 at Y = -23.40, completely below containers)
     \draw[alertFlow] (evidently.west) -- (14.95, -16.8) -- (14.95, -23.40) -- (5.60, -23.40) -- ([xshift=0.6cm]sqlite_wal.south);
-    \node[pillLabel] at (10.50, -23.40) {Tier-2 Promotion Gate ($\text{MMD}^2 \le \tau_{\text{MMD}}$)};
+    \node[pillLabel] at (10.50, -23.40) {Four-Gate Promotion Gate (Stage 7 $\to$ Registry)};
 
     % --- 9. Closed-Loop Feedback Channels ---
-    % Path A: Prometheus Drift -> Jenkins Retrain (Track 4 at Y = -26.20)
-    \draw[alertFlow] (prom.west) -- (15.35, -8.4) -- (15.35, -26.20) -- (-0.50, -26.20) -- ([xshift=-0.5cm]jenkins_gpu.south);
-    \node[pillLabel] at (7.0, -26.20) {Path A: Alertmanager Webhook ($W_1 > \tau_{\text{drift}}$ or Set Size Spike)};
+    % Path A: Prometheus Drift -> Retrain Relay -> Airflow (Track 4 at Y = -26.20, corridor X = -1.95)
+    \draw[alertFlow] (prom.west) -- (15.35, -8.4) -- (15.35, -26.20) -- (-1.95, -26.20) -- (-1.95, -14.4) -- (airflow_sched.west);
+    \node[pillLabel] at (7.0, -26.20) {Path A: Grafana Drift Alert $\to$ Webhook Relay $\to$ Airflow};
 
     % Path B: Active Learning -> DagsHub Manifest Update (Top Route at Y=2.35)
     \draw[loopFlow] ([yshift=-0.25cm]al_triage.east) -- (20.15, -21.25) -- (20.15, 2.35) -- (2.40, 2.35) -- (2.40, -0.30) -- (dagshub.west);
@@ -318,7 +318,7 @@ Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely be
 
 \end{tikzpicture}
 }
-\caption{Decoupled Dual-Pipeline Architecture Flow: Pipeline 1 executes the 7-Stage Epistemic Diamond DAG for neural classification head training, while Pipeline 2 manages asynchronous vector indexing in LanceDB and DuckDB 2.0.0 taxonomic mutations. Persistent telemetry and trial history are anchored in SQLite WAL (MLflow Model Registry and Optuna studies). Both pipelines converge at the FastAPI serving gateway (2 replicas) behind Traefik v3.1 ingress and an in-cluster Redis ephemeral upload cache. Full-stack observability integrates Prometheus TSDB streaming metrics ($W_1$ drift), Grafana operational dashboards, Evidently AI offline $\text{MMD}^2$ promotion gating, and closed-loop Active Learning feedback.}
+\caption{Decoupled Dual-Pipeline Architecture Flow: Pipeline 1 executes the 7-Stage Epistemic Diamond DAG with Stage 3.5 data drift auditing for neural classification head training, while Pipeline 2 manages asynchronous vector indexing in LanceDB and DuckDB 2.0.0 taxonomic mutations. Persistent telemetry, MLflow 3.x tracking, Airflow orchestration, and Bayesian trials are anchored in a consolidated 4-schema PostgreSQL cluster. Both pipelines converge at the FastAPI serving gateway (2 replicas with active Model Passport) behind Traefik v3.1 ingress and an in-cluster Redis ephemeral upload cache. Full-stack observability integrates Prometheus TSDB streaming metrics ($W_1$ drift), Grafana operational dashboards, Airflow 3 LocalExecutor drift and retraining DAGs, and closed-loop Active Learning feedback.}
 \label{fig:cicd_flow}
 \end{figure*}
 
@@ -345,9 +345,9 @@ As the training pipeline initialises, it is specified to bind the MLflow telemet
 mlflow.set_tag("git.commit", os.environ.get("GIT_COMMIT"))
 \end{minted}
 
-Crucially, the CI/CD pipeline enforces an automated epistemic safety gate prior to deployment. Before any compiled model is allowed to enter the registry, a standalone invariant test loads the candidate ONNX graph and evaluates it against a holdout calibration dataset. The script formally asserts that the empirical marginal coverage of the Split Conformal Prediction set, $|C|$, meets or exceeds the mathematical bound $1 - \alpha$ (for example, $95\%$ coverage, where $\alpha=0.05$). If the empirical coverage falls below this strict threshold, the pipeline throws a fatal assertion error, blocking the Git merge and effectively preventing the uncalibrated model from reaching production.
+Crucially, the CI/CD pipeline enforces an automated epistemic safety and promotion gate prior to deployment. Rather than promoting candidate weights immediately upon completing head training in Stage~4, the architecture reserves promotion authority exclusively to the terminal evaluation stage (Stage~7, \texttt{evaluate.py}). This eliminates a critical MLOps anti-pattern: Stage~4 only evaluates unquantised FP32 PyTorch weights on validation splits, remaining blind to INT8 quantisation drop, empirical test conformal coverage, and statistical exchangeability against live production traffic.
 
-If the safety gate is cleared, the system programmatically interacts with the MLflow API. The candidate is compared with the model carrying the \texttt{Production} alias by validation Macro PR-AUC: a better candidate is marked as \texttt{Challenger}, whereas an inferior one is archived. The promotion of a \texttt{Challenger} to \texttt{Production} remains a deliberate step after deployment testing, so that at most two competing models are active at any time:
+When a candidate clears all four gates of the Stage~7 Model Promotion Verdict (Section~\ref{sec:evidently_drift_gate}), the system programmatically registers the candidate as a first-class \texttt{LoggedModel} in the MLflow Model Registry. A qualified candidate that surpasses the incumbent \texttt{Production} model receives the alias \texttt{Challenger} pending canary deployment verification, whilst an inferior run is archived:
 \begin{minted}{python}
 client.set_registered_model_alias(
     name="taxon_vision_classifier",
@@ -359,19 +359,20 @@ client.set_registered_model_alias(
 \section{Automated Training on the Main Branch: The Epistemic Diamond DAG}
 \label{sec:main_training}
 
-On the main branch, the CI/CD pipeline continues beyond the quality gates and executes the complete 7-stage Epistemic Diamond DAG on the bare-metal host. The stages are strictly governed by parameter definitions in the canonical root \texttt{params.yaml} and implemented as first-class CLI entrypoints within \texttt{src/taxon\_vision/pipelines/}. The execution lineage forms a closed diamond topology that guarantees reproducible data-to-model provenance:
+On the main branch, the CI/CD pipeline continues beyond static quality gates and executes the complete 8-stage Epistemic Diamond DAG on the bare-metal host. The stages are strictly governed by parameter definitions in the canonical root \texttt{params.yaml} and implemented as first-class CLI entrypoints within \texttt{src/taxon\_vision/pipelines/}. The execution lineage forms a closed diamond topology that guarantees reproducible data-to-model provenance:
 \begin{enumerate}
     \item \textbf{Stage 1: Ingestion (\texttt{src/taxon\_vision/pipelines/ingest.py}):} Queries research-grade citizen-science observation records across catalogued taxa via \texttt{INatAPIClient}, emitting the initial raw manifest \nolinkurl{data/manifests/raw_manifest.parquet}.
-    \item \textbf{Stage 2: Licence Audit (\texttt{src/taxon\_vision/pipelines/audit\_license.py}):} Validates observation records against Rule 05 Open License constraints, filtering non-compliant items and saving verified entries with full photographer attribution to \nolinkurl{data/manifests/dataset_manifest.parquet} and \nolinkurl{reports/license_audit.json}.
+    \item \textbf{Stage 2: Licence Audit (\texttt{src/taxon\_vision/pipelines/audit\_license.py}):} Validates observation records against open-licence constraints (admitting only CC0, CC-BY, and CC-BY-NC), filtering non-compliant items and saving verified entries with full photographer attribution to \nolinkurl{data/manifests/dataset_manifest.parquet} and \nolinkurl{reports/license_audit.json}.
     \item \textbf{Stage 3: Feature Extraction (\texttt{src/taxon\_vision/pipelines/extract\_features.py}):} Lazily streams observation imagery from AWS S3, passing images through the frozen foundation backbone (e.g., DINOv3 with $d=384$, or BioCLIP-2 with $d=512$). It partitions representations into four discrete, stratified tensor files under \nolinkurl{data/embeddings/}: \nolinkurl{train_embeddings.pt} (70\%), \nolinkurl{val_embeddings.pt} (10\%), \nolinkurl{cal_embeddings.pt} (10\%), and \nolinkurl{test_embeddings.pt} (10\%). This diamond fan-out eliminates data leakage between training, calibration, and final holdout benchmarking.
-    \item \textbf{Stage 4: Head Training (\texttt{src/taxon\_vision/pipelines/train.py}):} Trains a lightweight linear classification head on \nolinkurl{train_embeddings.pt} and \nolinkurl{val_embeddings.pt} using Class-Balanced Loss ($E_n = \frac{1-\beta^n}{1-\beta}$) and Bayesian hyperparameter sweeps via Optuna, outputting \nolinkurl{models/checkpoints/head.pt} and \nolinkurl{reports/train_metrics.json}.
+    \item \textbf{Stage 3.5: Training-Side Data Drift (\texttt{src/taxon\_vision/pipelines/data\_drift.py}):} Evaluates Tier~1 linear-time Wasserstein-1 ($W_1$) on pre-normalised embedding norms and Tier~2 multivariate Maximum Mean Discrepancy ($\text{MMD}^2$) between the freshly extracted training embeddings and the immutable reference baseline (\nolinkurl{data/reference/reference_train_embeddings.pt.dvc}). If severe covariate shift is detected ($W_1 > \tau_{\text{drift}}$ or permutation $p < 0.01$), the pipeline fails fast before expending GPU compute on hyperparameter search and head training, serialising results to \nolinkurl{reports/drift_metrics.json} and \nolinkurl{reports/drift_report.html}.
+    \item \textbf{Stage 4: Head Training (\texttt{src/taxon\_vision/pipelines/train.py}):} Trains a lightweight linear classification head on \nolinkurl{train_embeddings.pt} and \nolinkurl{val_embeddings.pt} using Class-Balanced Loss ($E_n = \frac{1-\beta^n}{1-\beta}$) and Bayesian hyperparameter sweeps via Optuna backed by PostgreSQL, outputting \nolinkurl{models/checkpoints/head.pt} and \nolinkurl{reports/train_metrics.json} with the active \nolinkurl{mlflow_run_id}.
     \item \textbf{Stage 5: ONNX Export \& PTQ (\texttt{src/taxon\_vision/pipelines/export\_onnx.py}):} Compiles the PyTorch classifier into two specialised ONNX execution graphs:
     \begin{enumerate}[label=(\alph*)]
         \item \textbf{End-to-End Dual-Output Graph (\nolinkurl{models/checkpoints/model_int8.onnx}):} Ingests raw normalised image tensors ($\mathbb{R}^{3 \times 224 \times 224}$) and emits both unnormalised logits $f(x) \in \mathbb{R}^K$ and penultimate feature embeddings $z(x) \in \mathbb{R}^D$ in a single forward pass, quantised via INT8 Post-Training Quantisation (PTQ).
         \item \textbf{Dedicated Linear Head Graph (\nolinkurl{models/checkpoints/head_int8.onnx}):} Ingests pre-computed embedding vectors ($z \in \mathbb{R}^D$) directly and emits logits $f(z) \in \mathbb{R}^K$. This enables sub-millisecond evaluation ($t_{\text{head}} < 0.2\text{ ms}$) during active learning query loops and vector triage without invoking the heavy Vision Transformer backbone.
     \end{enumerate}
     \item \textbf{Stage 6: Split Conformal Calibration (\texttt{src/taxon\_vision/pipelines/calibrate.py}):} Evaluates the holdout calibration partition \nolinkurl{data/embeddings/cal_embeddings.pt} through \nolinkurl{model_int8.onnx}. It calculates the empirical non-conformity quantile $\hat{q}_\alpha$ and Helmholtz free energy OOD threshold $\tau_{\text{energy}}$, serialising runtime parameters to \nolinkurl{config/conformal_config.yaml} and \nolinkurl{reports/conformal_metrics.json}.
-    \item \textbf{Stage 7: Pareto Evaluation (\texttt{src/taxon\_vision/pipelines/evaluate.py}):} Evaluates candidate backbones against the pristine holdout test partition \nolinkurl{data/embeddings/test_embeddings.pt} using \nolinkurl{model_int8.onnx} and \nolinkurl{config/conformal_config.yaml}. It mathematically verifies the empirical marginal coverage bound ($\ge 1 - \alpha$), calculates p95 latency, throughput, and hardware efficiency profiles (parameter counts, MACs/FLOPs, and peak memory footprint), and writes \nolinkurl{reports/pareto_evaluation.json} and \nolinkurl{docs/assets/pareto_results.json}.
+    \item \textbf{Stage 7: Dual Holdout Evaluation \& Four-Gate Model Promotion Verdict (\texttt{src/taxon\_vision/pipelines/evaluate.py}):} Evaluates candidate backbones against the pristine holdout test partition \nolinkurl{data/embeddings/test_embeddings.pt} using \nolinkurl{model_int8.onnx} and \nolinkurl{config/conformal_config.yaml}. It mathematically audits the Four-Gate Model Promotion Verdict: (1) Macro PR-AUC superiority, (2) INT8 quantization degradation $\le 3.0\%$, (3) empirical marginal coverage bound ($\ge 1 - \alpha$), and (4) p95 CPU latency under the SLO ceiling ($\le 120\,\text{ms}$) with live traffic exchangeability ($\text{MMD}^2$ permutation $p \ge 0.01$). If all four gates pass, it promotes the model alias, writes \nolinkurl{reports/pareto_evaluation.json}, and generates the cryptographic Model Passport (\nolinkurl{reports/model_passport.json}).
 \end{enumerate}
 Checkpoints, graphs, and evaluation reports are pushed to DVC remotes, and a rolling restart of the serving deployment (\texttt{imagePullPolicy: Always}) loads the fresh artefacts without interrupting service.
 

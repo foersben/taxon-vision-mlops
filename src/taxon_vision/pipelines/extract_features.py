@@ -826,6 +826,7 @@ def extract_features_cli(argv: list[str] | None = None) -> int:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%H:%M:%S",
         stream=sys.stdout,
+        force=True,
     )
 
     out_dir_path = Path(args.out_dir) if args.out_dir else Path("data/embeddings")
