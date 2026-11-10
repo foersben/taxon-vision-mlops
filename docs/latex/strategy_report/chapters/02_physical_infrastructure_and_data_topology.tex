@@ -117,8 +117,8 @@ DVC synchronisation is partitioned strictly across two distinct remotes:
     \item \textbf{The In-Cluster High-Throughput Remote (\texttt{local-seaweedfs}):}\\
     Targeting \nolinkurl{s3://taxon-dvc-cache} at the internal cluster FQDN:\\
     \url{http://seaweedfs.taxon-vision.svc.cluster.local:8333}.\\
-    This remote is dedicated to multi-gigabyte embedding caches (\nolinkurl{train_embeddings.pt}, \nolinkurl{val_embeddings.pt}, \nolinkurl{cal_embeddings.pt}, \nolinkurl{test_embeddings.pt}), enabling zero-egress, wire-speed caching for Bayesian hyperparameter optimisation sweeps.
-    \item \textbf{The Public Lineage Remote (\texttt{origin}):} Targeting \nolinkurl{s3://dvc} at DagsHub. Dedicated to release model checkpoints (\nolinkurl{head.pt}) and INT8 quantised runtimes (\nolinkurl{model_int8.onnx}).
+    This remote is dedicated to multi-gigabyte partitioned embedding tensors across all four canonical splits (training, validation, calibration, and test), enabling zero-egress, wire-speed caching for Bayesian hyperparameter optimisation sweeps.
+    \item \textbf{The Public Lineage Remote (\texttt{origin}):} Targeting \nolinkurl{s3://dvc} at DagsHub. Dedicated to release model checkpoints and INT8 quantised ONNX runtimes.
 \end{itemize}
 
 \subsection{In-Cluster Ephemeral Upload Cache: Redis Architecture and Split-Brain Elimination}
@@ -152,7 +152,7 @@ To resolve this split-brain without imposing sticky sessions or heavy cloud obje
 \section{Consolidated Relational and Telemetry Data Topology}
 \label{sec:postgres_topology}
 
-Early system prototypes fragmented state persistence across multiple disconnected SQLite databases (\nolinkurl{mlflow.db}, \nolinkurl{optuna_studies.db}, local telemetry logs). Under high-frequency concurrent traffic -- such as parallel Bayesian hyperparameter trials running concurrently with live inference telemetry writes and Airflow scheduler heartbeats -- SQLite's file-level locking mechanism inevitably induced write-lock contention (\texttt{database is locked}) and transaction timeouts on host NVMe storage.
+Early system prototypes fragmented state persistence across multiple disconnected SQLite database files (for MLflow runs, Optuna studies, and local telemetry logs). Under high-frequency concurrent traffic -- such as parallel Bayesian hyperparameter trials running concurrently with live inference telemetry writes and Airflow scheduler heartbeats -- SQLite's file-level locking mechanism inevitably induced write-lock contention (\texttt{database is locked}) and transaction timeouts on host NVMe storage.
 
 To establish enterprise ACID transaction durability without introducing unwieldy operational overhead, the platform consolidates all relational and time-series metadata into a single, high-performance \textbf{PostgreSQL 16} cluster (\texttt{postgres:16-alpine}) hosted in-cluster. Operating with an active memory footprint of less than 80~MB RAM (dispelling the misconception that PostgreSQL imposes an intolerable 1.0 to 2.0~GB overhead for single-node deployments), the cluster establishes four strictly isolated logical databases provisioned during initialisation:
 \begin{enumerate}
