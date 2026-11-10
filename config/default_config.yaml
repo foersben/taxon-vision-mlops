@@ -48,6 +48,7 @@ model:
   allow_untrained_fallback: false
   prefer_onnx_runtime: true
   onnx_opset_version: 17
+  onnx_intra_op_threads: 2
   cam_numerical_epsilon: 1.0e-8
   ood_temperature: 1.0
   ood_energy_threshold: -2.40

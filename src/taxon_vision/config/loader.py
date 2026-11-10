@@ -127,8 +127,25 @@ def _apply_direct_env_overrides(config_data: dict[str, Any]) -> dict[str, Any]:
     if env_storage is not None:
         model_overrides["flagged_storage_dir"] = env_storage
 
+    env_intra = os.getenv("TAXON_MODEL__ONNX_INTRA_OP_THREADS") or os.getenv("ORT_INTRA_OP_NUM_THREADS")
+    if env_intra is not None:
+        try:
+            model_overrides["onnx_intra_op_threads"] = int(env_intra)
+        except ValueError:
+            pass
+
     if model_overrides:
         config_data = _deep_merge(config_data, {"model": model_overrides})
+
+    service_overrides: dict[str, Any] = {}
+    env_redis = (
+        os.getenv("TAXON_SERVICE__REDIS_URL") or os.getenv("TAXON_SERVICE_REDIS_URL") or os.getenv("TAXON_REDIS_URL")
+    )
+    if env_redis is not None:
+        service_overrides["redis_url"] = env_redis
+
+    if service_overrides:
+        config_data = _deep_merge(config_data, {"service": service_overrides})
 
     optuna_overrides: dict[str, Any] = {}
     env_optuna_uri = os.getenv("TAXON_OPTUNA_STORAGE_URI")

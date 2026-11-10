@@ -54,15 +54,19 @@ class ONNXInferenceEngine:
         has_embeddings: Whether the exported graph emits a secondary embeddings tensor.
     """
 
-    def __init__(self, model_path: str | Path) -> None:
+    def __init__(self, model_path: str | Path, intra_op_num_threads: int | None = None) -> None:
         """Initialize the ONNX Runtime session with graph optimizations.
 
         Args:
             model_path: Filesystem path to the exported ONNX model artifact.
+            intra_op_num_threads: Optional ceiling for intra-operator worker threads to prevent cgroup contention.
         """
         self.model_path = str(model_path)
         opts = ort.SessionOptions()
         opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        if intra_op_num_threads is not None and intra_op_num_threads > 0:
+            opts.intra_op_num_threads = intra_op_num_threads
+            opts.inter_op_num_threads = 1
         self.session = ort.InferenceSession(self.model_path, opts, providers=["CPUExecutionProvider"])
         self.input_name = self.session.get_inputs()[0].name
         output_names = [out.name for out in self.session.get_outputs()]

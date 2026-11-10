@@ -63,6 +63,7 @@ class ModelConfig(BaseModel):
         allow_untrained_fallback (bool): Whether to permit uninitialized/fallback weights for offline testing.
         prefer_onnx_runtime (bool): Whether to prioritize ONNX Runtime over PyTorch for inference.
         onnx_opset_version (int): ONNX target operator set version for graph serialization.
+        onnx_intra_op_threads (int): Number of intra-operator threads for ONNX Runtime CPU execution (0 for engine default).
         cam_numerical_epsilon (float): Small floating point epsilon to prevent division by zero in CAM normalization.
         ood_temperature (float): Temperature parameter for Helmholtz free energy OOD detection.
         ood_energy_threshold (float): Energy score threshold for flagging observations as Out-of-Distribution.
@@ -89,6 +90,7 @@ class ModelConfig(BaseModel):
     allow_untrained_fallback: bool = False
     prefer_onnx_runtime: bool = True
     onnx_opset_version: int = Field(default=17, gt=0)
+    onnx_intra_op_threads: int = Field(default=2, ge=0)
     cam_numerical_epsilon: float = Field(default=1.0e-8, gt=0.0)
     ood_temperature: float = Field(default=1.0, gt=0.0)
     ood_energy_threshold: float = Field(default=-2.40)

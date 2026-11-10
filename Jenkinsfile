@@ -202,6 +202,7 @@ spec:
         EXTRACTOR = "${params.EXTRACTOR}"
       }
       when {
+        beforeAgent true
         anyOf {
           triggeredBy 'TimerTrigger'
           expression { params.INGEST_DATA == true }
@@ -249,6 +250,7 @@ spec:
 
     stage('Deploy to Kubernetes') {
       when {
+        beforeAgent true
         anyOf {
           branch 'main'
           branch 'develop'

@@ -171,7 +171,7 @@ def get_onnx_engine() -> ONNXInferenceEngine | None:
             logger.warning("ONNX artefact %s not found; serving with the PyTorch classifier.", onnx_path)
             return None
 
-    engine = ONNXInferenceEngine(str(onnx_path))
+    engine = ONNXInferenceEngine(str(onnx_path), intra_op_num_threads=cfg.onnx_intra_op_threads)
     expected = len(load_taxa_catalog())
     if engine.num_classes is not None and engine.num_classes != expected:
         raise ModelNotReadyError(
