@@ -20,6 +20,7 @@ metadata:
 spec:
   entryPoints:
     - web
+    - websecure
   routes:
     - match: Host(`staging.taxon.benjamin-foerster.eu`)
       kind: Rule
@@ -28,3 +29,4 @@ spec:
       services:
         - name: taxon-vision-serving
           port: 8000
+  tls: {}
