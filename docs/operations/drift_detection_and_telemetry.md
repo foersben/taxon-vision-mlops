@@ -53,9 +53,9 @@ flowchart TD
     subgraph Runner["2. Two-Tier Statistical Drift Engine (evaluate_recent_drift)"]
         REF["Reference Baseline<br/>data/embeddings/cal_embeddings.pt<br/>(N_ref = 164, cached in RAM)"] --> T1
         REF --> T2
-        PG_PRED -->|Sliding Window N <= 500<br/>(min_samples = 50)| T1["Tier 1: 1D Wasserstein-1 on L2 Norms<br/>W1( ||z_ref||_2 , ||z_curr||_2 ) > tau_W1"]
-        PG_PRED -->|Sliding Window N <= 500| T2["Tier 2: Multivariate RKHS RBF MMD²<br/>B = 200 Permutations, p_value < alpha (0.01)"]
-        T1 --> VERDICT{"drift_detected =<br/>(W1 > tau_W1) OR (p < 0.01)"}
+        PG_PRED -->|"Sliding Window N &le; 500 (min_samples = 50)"| T1["Tier 1: 1D Wasserstein-1 on L2 Norms<br/>W1( ||z_ref||_2 , ||z_curr||_2 ) &gt; tau_W1"]
+        PG_PRED -->|"Sliding Window N &le; 500"| T2["Tier 2: Multivariate RKHS RBF MMD²<br/>B = 200 Permutations, p_value &lt; alpha (0.01)"]
+        T1 --> VERDICT{"drift_detected =<br/>(W1 &gt; tau_W1) OR (p &lt; 0.01)"}
         T2 --> VERDICT
     end
 

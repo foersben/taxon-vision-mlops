@@ -48,9 +48,9 @@ flowchart TD
         JUST["just dvc-pull / just dvc-push<br/>(secret-tool in-memory query)"]
         K8S["K3s Production Runtime<br/>(In-Cluster Kubernetes Secrets)"]
 
-        COMPOSE -->|Zero Secrets / Friction-Free Boot| DEV["Local Compose Containers"]
-        KPXC -->|D-Bus Memory Buffer (No Disk Write)| JUST
-        K8S -->|secretKeyRef Injection| PROD["FastAPI Serving Pod"]
+        COMPOSE -->|"Zero Secrets / Friction-Free Boot"| DEV["Local Compose Containers"]
+        KPXC -->|"D-Bus Memory Buffer (No Disk Write)"| JUST
+        K8S -->|"secretKeyRef Injection"| PROD["FastAPI Serving Pod"]
     end
 ```
 

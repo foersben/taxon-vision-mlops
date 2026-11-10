@@ -45,9 +45,9 @@ flowchart LR
 
     subgraph Airflow["Apache Airflow 3.0 Control Plane (LocalExecutor)"]
         direction TB
-        DAG1["DAG 1: prediction_drift_monitor<br/>1. evaluate_live_drift (HttpHook -> FastAPI)<br/>2. is_drift_detected (@task.short_circuit)<br/>3. trigger_retraining (TriggerDagRunOperator)"]
-        DAG2["DAG 2: model_retraining (max_active_runs=1)<br/>1. merge_human_feedback (Label Studio -> Parquet)<br/>2. trigger_jenkins_build (Dynamic INGEST_DATA)<br/>3. wait_for_jenkins_build (Queue Polling)<br/>4. report_promotion_outcome (XCom Audit)"]
-        DAG1 -->|drift_detected == True| DAG2
+        DAG1["DAG 1: prediction_drift_monitor<br/>1. evaluate_live_drift (HttpHook to FastAPI)<br/>2. is_drift_detected (@task.short_circuit)<br/>3. trigger_retraining (TriggerDagRunOperator)"]
+        DAG2["DAG 2: model_retraining (max_active_runs=1)<br/>1. merge_human_feedback (Label Studio to Parquet)<br/>2. trigger_jenkins_build (Dynamic INGEST_DATA)<br/>3. wait_for_jenkins_build (Queue Polling)<br/>4. report_promotion_outcome (XCom Audit)"]
+        DAG1 -->|"drift_detected == True"| DAG2
     end
 
     subgraph Compute["Jenkins K3s GPU Execution Plane"]
@@ -57,7 +57,7 @@ flowchart LR
     CRON --> DAG1
     GRAF -->|Bearer Secret| WH
     WH -->|POST /api/v2/dags/.../dagRuns| DAG2
-    DAG2 -->|HttpHook (jenkins)| JNK
+    DAG2 -->|"HttpHook (jenkins)"| JNK
 ```
 
 ---
