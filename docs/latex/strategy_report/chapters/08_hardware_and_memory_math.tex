@@ -2,7 +2,7 @@
 \chapter{Hardware Optimisation and Memory Mathematics}
 \label{ch:hardware_math}
 
-Operating a high-throughput machine learning service under strict latency service-level agreements (SLAs) requires moving decisively beyond theoretical model performance and addressing the physical limitations of silicon. This chapter explicitly defines the mathematical transformations utilised to compress neural network memory footprints, the formal theorems rigorously governing epistemic safety thresholds, and the memory complexity equations required to safely bound vector database consumption.
+Operating a high-throughput machine learning service under strict latency service-level objectives (SLOs) requires moving decisively beyond theoretical model performance and addressing the physical limitations of silicon. This chapter explicitly defines the mathematical transformations utilised to compress neural network memory footprints, the formal theorems rigorously governing epistemic safety thresholds, and the memory complexity equations required to safely bound vector database consumption.
 
 \section{Static and Dynamic Quantisation Architectures}
 \label{sec:quantization_math}
@@ -63,4 +63,4 @@ Whilst operational models leverage DINOv3 ($D_{\text{dim}} = 384$) or BioCLIP-2 
 \[
 \mathcal{M}_{\text{index}} = 500{,}000 \times 768 \times 4 \text{ bytes} = 1{,}536{,}000{,}000 \text{ bytes} \approx 1.536 \text{ GB}.
 \]
-Under this conservative assumption, the entire uncompressed vector payload occupies at most $1.536\text{ GB}$ (collapsing to $0.768\text{ GB}$ under DINOv3 or $1.024\text{ GB}$ under BioCLIP-2). Even when accounting for graph navigational links in HNSW, the complete index consumes well under $3.0\text{ GB}$ of host memory, allowing the entire retrieval graph to reside in fast DDR5 memory alongside serving workers and preserving the sub-$25\text{ ms}$ inference SLA.
+Under this conservative assumption, the entire uncompressed vector payload occupies at most $1.536\text{ GB}$ (collapsing to $0.768\text{ GB}$ under DINOv3 or $1.024\text{ GB}$ under BioCLIP-2). Even when accounting for graph navigational links in HNSW, the complete index consumes well under $3.0\text{ GB}$ of host memory, allowing the entire retrieval graph to reside in fast DDR5 memory alongside serving workers and preserving the sub-$25\text{ ms}$ inference SLO.

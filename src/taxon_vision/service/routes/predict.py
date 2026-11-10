@@ -6,18 +6,26 @@ import io
 import logging
 import time
 import uuid
+from functools import partial
 from typing import Annotated, Any
 
 import anyio
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile, status
 from PIL import Image
 
-from taxon_vision.config import get_settings
+from taxon_vision.config import ConformalConfig, get_settings
 from taxon_vision.inference.cam import generate_cam_overlay
-from taxon_vision.monitoring.telemetry import PREDICTION_COUNTER
-from taxon_vision.service.inference import InvalidImageError, ModelNotReadyError, load_taxa_catalog, run_prediction
+from taxon_vision.monitoring.telemetry import LATENCY_HISTOGRAM, PREDICTION_COUNTER, REFERRAL_RATE
+from taxon_vision.service.inference import (
+    InvalidImageError,
+    ModelNotReadyError,
+    get_classifier,
+    load_taxa_catalog,
+    run_prediction,
+)
 from taxon_vision.service.schemas import ConformalRoutingTier, PredictionResponse, TaxonPrediction
 from taxon_vision.service.storage import persist_flagged_observation
+from taxon_vision.service.telemetry_store import PredictionRecord, get_telemetry_store
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +36,19 @@ def _resolve_routing_tier(
     raw_tier: str,
     pred_set: list[str],
     confidence: float,
-    min_confidence: float,
-    k_max: int,
+    conformal_cfg: ConformalConfig,
 ) -> ConformalRoutingTier:
-    """Safely map raw prediction tier string or infer from prediction set metrics."""
+    """Safely map raw prediction tier string or infer from prediction set metrics.
+
+    Args:
+        raw_tier: Raw routing tier string from prediction output.
+        pred_set: List of scientific names in the conformal prediction set.
+        confidence: Top-1 prediction confidence score.
+        conformal_cfg: Conformal configuration specifying thresholds.
+
+    Returns:
+        Resolved ConformalRoutingTier enumeration value.
+    """
     try:
         return ConformalRoutingTier(raw_tier)
     except ValueError:
@@ -40,11 +57,27 @@ def _resolve_routing_tier(
             return ConformalRoutingTier.ABSTENTION
         if cardinality == 1:
             return (
-                ConformalRoutingTier.DECISIVE if confidence >= min_confidence else ConformalRoutingTier.SEVERE_AMBIGUITY
+                ConformalRoutingTier.DECISIVE
+                if confidence >= conformal_cfg.min_confidence
+                else ConformalRoutingTier.SEVERE_AMBIGUITY
             )
-        if cardinality <= k_max:
+        if cardinality <= conformal_cfg.k_max:
             return ConformalRoutingTier.MODERATE_AMBIGUITY
         return ConformalRoutingTier.SEVERE_AMBIGUITY
+
+
+def _generate_cam_from_bytes(content: bytes, top1_idx: int | None) -> str:
+    """Decode raw image bytes and render a base64 CAM saliency overlay synchronously.
+
+    Args:
+        content: Encoded image bytes.
+        top1_idx: Optional top-1 class index to explain.
+
+    Returns:
+        Base64-encoded PNG overlay string.
+    """
+    img = Image.open(io.BytesIO(content)).convert("RGB")
+    return generate_cam_overlay(img, get_classifier(), top1_idx, 0.5)
 
 
 def _build_live_prediction(
@@ -55,16 +88,10 @@ def _build_live_prediction(
     """Construct structured response from successful inference output.
 
     Why:
-        Transforms raw array-based and dictionary inference outputs into strongly-typed,
-        validated Pydantic schemas. Correlates top predictions and conformal set member
-        names against authoritative catalog metadata to provide clients with canonical
-        taxon IDs, scientific names, common names, and triage recommendations.
+        Transforms raw array-based and dictionary inference outputs into strongly-typed, validated Pydantic schemas. Correlates top predictions and conformal set member names against authoritative catalog metadata to provide clients with canonical taxon IDs, scientific names, common names, and triage recommendations.
 
     How:
-        Extracts top-1 predicted taxon, parses confidence score, scans candidate names
-        in the conformal set, distributes uniform candidate likelihood among secondary
-        conformal items, flags conformal ambiguity if the set size exceeds the threshold
-        (|C| > 3 or |C| == 0), and packages the latency measurement into a PredictionResponse.
+        Extracts top-1 predicted taxon, parses confidence score, scans candidate names in the conformal set, distributes uniform candidate likelihood among secondary conformal items, flags conformal ambiguity if the set size exceeds the threshold (|C| > 3 or |C| == 0), and packages the latency measurement into a PredictionResponse.
 
     Complexity:
         O(K) where K is the cardinality of the conformal candidate set.
@@ -114,8 +141,7 @@ def _build_live_prediction(
         raw_tier=str(pred.get("routing_tier", "")),
         pred_set=pred_set,
         confidence=confidence,
-        min_confidence=settings.conformal.min_confidence_threshold,
-        k_max=settings.conformal.k_max,
+        conformal_cfg=settings.conformal,
     )
 
     return PredictionResponse(
@@ -135,27 +161,22 @@ def _build_live_prediction(
 @router.post("/api/v1/predict", response_model=PredictionResponse)
 async def predict_species(
     file: Annotated[UploadFile, File(...)],
+    background_tasks: BackgroundTasks,
     explain: bool = False,
 ) -> PredictionResponse:
     """Classify species from an uploaded image with conformal uncertainty guarantees.
 
     Why:
         Serving visual inference in production requires strict non-blocking concurrency.
-        Executing image decoding, tensor normalization, and PyTorch/ONNX matrix operations
-        directly on the asyncio loop thread blocks all concurrent requests. Furthermore,
-        silently catching execution exceptions and returning dummy predictions masks critical
-        failures (corrupt model weights, missing artefacts, GPU driver crashes, OOM errors).
-        This endpoint offloads synchronous inference to a threadpool worker, measures accurate
-        wall-clock latency, persists out-of-distribution or ambiguous records for subsequent
-        human review, and reports each failure class with its proper HTTP status.
+        Executing image decoding, tensor normalization, and PyTorch/ONNX matrix operations directly on the asyncio loop thread blocks all concurrent requests. Furthermore, silently catching execution exceptions and returning dummy predictions masks critical failures (corrupt model weights, missing artefacts, GPU driver crashes, OOM errors). This endpoint offloads synchronous inference to a threadpool worker, measures accurate wall-clock latency, persists out-of-distribution or ambiguous records for subsequent human review, and reports each failure class with its proper HTTP status.
 
     How:
         1. Reads raw bytes asynchronously from the multipart file upload.
         2. Validates payload non-emptiness and size constraints.
         3. Dispatches `run_prediction` to AnyIO's threadpool worker via `run_sync`.
-        4. If flagged as OOD or requiring human review, persists observation metadata and embeddings.
-        5. If `explain=True`, computes forward-only CAM attribution for top-1 taxon and encodes as base64 PNG.
-        6. On success: increments `taxon_predictions_total{status="success"}` and returns `PredictionResponse`.
+        4. If flagged as OOD or requiring human review, offloads persistence of observation metadata and embeddings to a worker thread.
+        5. If `explain=True`, computes forward-only CAM attribution for top-1 taxon and encodes as base64 PNG off the main event loop.
+        6. On success: records latency in `LATENCY_HISTOGRAM`, updates `REFERRAL_RATE` if flagged, increments `taxon_predictions_total{status="success"}` and returns `PredictionResponse`.
         7. On an undecodable/empty image (`InvalidImageError`): logs a warning, increments `status="invalid_input"` and raises HTTP 422.
         8. On missing model artefacts or unexpected runtime inference failure: logs exception, increments counter, and raises HTTP 503.
 
@@ -164,6 +185,7 @@ async def predict_species(
 
     Args:
         file: Multipart uploaded image file.
+        background_tasks: FastAPI background task coordinator for non-blocking I/O dispatch.
         explain: Optional boolean flag to request forward-only CAM saliency visualization.
 
     Returns:
@@ -193,23 +215,60 @@ async def predict_species(
 
     try:
         pred = await anyio.to_thread.run_sync(run_prediction, content)
-        latency = (time.perf_counter() - t0) * 1000.0
+        duration_sec = time.perf_counter() - t0
+        latency = duration_sec * 1000.0
+        LATENCY_HISTOGRAM.observe(duration_sec)
 
+        obs_id = str(uuid.uuid4())
         if pred.get("is_ood") or pred.get("requires_human_review"):
-            obs_id = str(uuid.uuid4())
-            persist_flagged_observation(obs_id, pred, embedding=pred.get("embedding"))
+            REFERRAL_RATE.inc()
+            await anyio.to_thread.run_sync(
+                partial(
+                    persist_flagged_observation,
+                    obs_id,
+                    pred,
+                    pred.get("embedding"),
+                    image_bytes=content,
+                )
+            )
 
         cam_base64: str | None = None
         if explain:
             try:
-                img = Image.open(io.BytesIO(content)).convert("RGB")
                 top1_idx = pred.get("top1_idx")
-                cam_base64 = await anyio.to_thread.run_sync(generate_cam_overlay, img, None, top1_idx, 0.5)
+                cam_base64 = await anyio.to_thread.run_sync(_generate_cam_from_bytes, content, top1_idx)
             except Exception as cam_err:
                 logger.warning("CAM overlay generation failed for %s: %s", file.filename, cam_err)
                 cam_base64 = None
 
+        rec = PredictionRecord(
+            observation_id=obs_id,
+            extractor=settings.model.default_extractor,
+            model_version=settings.service.version,
+            top1_taxon=str(pred.get("scientific_name")),
+            top1_confidence=float(pred.get("confidence", 0.0)),
+            conformal_set=[str(s) for s in pred.get("conformal_set", [])],
+            ood_energy=float(pred["ood_energy_score"]) if pred.get("ood_energy_score") is not None else None,
+            is_ood=bool(pred.get("is_ood", False)),
+            requires_review=bool(pred.get("requires_human_review", False)),
+            latency_ms=round(latency, 2),
+            embedding=pred.get("embedding"),
+        )
+        background_tasks.add_task(get_telemetry_store().record, rec)
         PREDICTION_COUNTER.labels(status="success").inc()
+        logger.info(
+            "Prediction completed successfully for %s",
+            file.filename,
+            extra={
+                "endpoint": "/api/v1/predict",
+                "observation_id": obs_id,
+                "latency_ms": round(latency, 2),
+                "taxon_id": pred.get("top1_idx"),
+                "is_ood": pred.get("is_ood", False),
+                "conformal_size": len(pred.get("conformal_set", [])),
+                "routing_tier": pred.get("routing_tier", "DECISIVE"),
+            },
+        )
         return _build_live_prediction(pred, latency, cam_base64)
     except InvalidImageError as img_err:
         logger.warning("Rejected undecodable upload %s: %s", file.filename, img_err)

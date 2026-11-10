@@ -1,28 +1,28 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:ce8d2b83b9be336380ab2b814a83f11de1dd6cb5a68952cd3d146d0c83d05ae7",
+  "pageVersion": "sha256:1e14b4e1c6eaa441d667c15811fcca7fba892a67a5a2c183edcd66de2a55782a",
   "claims": [
     {
       "id": "claim_ad0b2b29297149abb9e64624314cf76f",
-      "statement": "The taxon-vision-api Deployment runs two replicas with non-root security UID 10001, a zero-downtime rolling update strategy (maxSurge 1, maxUnavailable 0), and mounts model checkpoints from the host filesystem as read-only at /app/models/checkpoints.",
+      "statement": "The taxon-vision-serving Deployment runs two replicas with non-root security UID 10001, a zero-downtime rolling update strategy (maxSurge 1, maxUnavailable 0), and mounts model checkpoints from host path /var/lib/taxon-vision/checkpoints as read-only at /app/models/checkpoints.",
       "evidence": [
         {
-          "resource": "repo://deploy/k8s/api-deployment.yaml#L9-L75",
-          "version": "repo-lines-v1:sha256:c41e3de5db650a03ce196d71f6c485e4cfe68986d236c104532beea8562f70c6:eyJzZWxlY3RlZExpbmVDb3VudCI6NjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVlOTFlNTFjZTUzOGVmMTIwZWUyMGNiZGY5NDE1OGJhY2UxY2MxMTc5MDZmODY0ZmVkMmQ5NGUzNzExMGNiMjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY1MmQ3MTExMDNkNTBhNDM3ODMwYzZmYmNkMDRmYjRiYWI0OWEwZjgyZjZkMjZkMWM3OTFjNmU4NDg4ZGQwOTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYyMWQ0ZDg3OGZhNThhY2I3YzQ4YTJmYzIzZDMwNGFiOWY2MmMxMjg3MmNjMTBjZDNkMjkzNjY4N2YzYjJkNDkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQwZmM0ODk2NTdjODVjOTQ3ZTQ0MmM1YTk1NmNmMTI5NGY1OGQxNTNkNmZiNGI4NDc0NzE1ZjcwOTk4MzUxNTcifQ"
+          "resource": "repo://deploy/k8s/api-deployment.yaml#L1-L91",
+          "version": "repo-lines-v1:sha256:2b360e3dcaefc97cc9687f9e6eed4b4c7ba8d737e303cd4d6c0ee655c8f175f8:eyJzZWxlY3RlZExpbmVDb3VudCI6OTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc3ZGQ4MGQzMjFmNTQwN2NmNTYxNWYzOGY4ZjU4MjJhMDVmOWY3MDI3M2JlYjQ4NGUxYmUyMDg0NWZlMTAzMTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc4NDcxOTNhODA3OTQ0MWMxOGU5OTUxZThhNjExYmIyOTgzMDQ0ZGZlZTRjNjI1NmE0ZGViZDc3YWZlOGI3ZDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI2OWI0NjZkN2MyYmQxYTU4ZTdiMjk0ZjNhYTFjOThmMDE4Zjc2Yjk2ZWNjODA0YjRmZGE4ZjU0YTRhYzZhMGYifQ"
         }
       ]
     },
     {
       "id": "claim_649fc2693ec64d729ec150385a729496",
-      "statement": "The taxon-vision-api Service routes external NodePort 30080 traffic to port 8000, while container health is governed by decoupled liveness probing on /health and readiness probing on /health/ready, which checks taxa catalog loading and model initialization before admitting traffic.",
+      "statement": "The taxon-vision-serving Service routes external NodePort 30080 traffic to port 8000, while container health is governed by decoupled liveness probing on /health and readiness probing on /health/ready, which checks taxa catalog loading and model initialization before admitting traffic.",
       "evidence": [
         {
-          "resource": "repo://deploy/k8s/api-deployment.yaml#L54-L93",
-          "version": "repo-lines-v1:sha256:31d9b6778f43a2f31db4d977f30168467d5ac617bec1f3c85accab47922d9d14:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg4MjI4OWMzNGU3ZWRjMWFmZjJmY2U0YzhhMmM1NDg1ZjkwYTA0MzllMWZmZDkwMWU5ZmZkZTI1MzdlNWY2NjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA1NjI3ZmMzZjE3MDE2ODhmNWRhZmM4ZjBmYWY2MjQwNGU2NmI5YTczYTBjNWM0YjNlM2FmZGE5NmE1MWU1MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE0YmY2ZDFiZWRhNWY2N2ZlMmFiZTgzNTRmNWUxMjhjZTg2ZDQyZmZhMDBkM2M2MzhkOWUxZTIyMzYzMWM0MjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+          "resource": "repo://deploy/k8s/api-deployment.yaml#L67-L110",
+          "version": "repo-lines-v1:sha256:b39e5dddc05b4eeb81ac3b53c82f4b6dfcef340ee96e27c1d5d4ef95953f473e:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg4MjI4OWMzNGU3ZWRjMWFmZjJmY2U0YzhhMmM1NDg1ZjkwYTA0MzllMWZmZDkwMWU5ZmZkZTI1MzdlNWY2NjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA1NjI3ZmMzZjE3MDE2ODhmNWRhZmM4ZjBmYWY2MjQwNGU2NmI5YTczYTBjNWM0YjNlM2FmZGE5NmE1MWU1MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZjNzAyNzM1YTRlZTIxY2JmZGIxMmZjMWJhYzIzOGI3M2E3OTNkYzVlNGYxNzhhNGNjNTE1NDQ0YWIyMmE5ZGIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         },
         {
-          "resource": "repo://src/taxon_vision/service/routes/health.py#L16-L67",
-          "version": "repo-lines-v1:sha256:4129143be446b048de1227680de21b1169ef768a312ac59293e15d53cc5a21f7:eyJzZWxlY3RlZExpbmVDb3VudCI6NTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY4YzA3NThmZmY3MTI3OWIzODBjMzIwOTE5ZGNkM2VhYzkzMzA4ZjY5MzgyZTY0NWQ3Zjg4ODliOTkzMzk5YTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA0OGY4ZTBmZjEyYWE3ZTAyNmIyYWJlZjllMzJmZmU2MmZlNTE4OThkMDlhNjRlODZmNzk5NDNiOTZhY2QyMmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM5OWEwNWU2M2UzMDI4ZDMyYTAxYmViNzQxZTliOWJhZTI4OTFlMzljOTc0NTg4MWNkYzQzMGE4N2IxODMxODEifQ"
+          "resource": "repo://src/taxon_vision/service/routes/health.py#L16-L83",
+          "version": "repo-lines-v1:sha256:5cdb298069ef30ac95b7cbab4e2a7c80a9ef6ec4e2f9cd7304c83b4b81957829:eyJzZWxlY3RlZExpbmVDb3VudCI6NjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY4YzA3NThmZmY3MTI3OWIzODBjMzIwOTE5ZGNkM2VhYzkzMzA4ZjY5MzgyZTY0NWQ3Zjg4ODliOTkzMzk5YTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA0OGY4ZTBmZjEyYWE3ZTAyNmIyYWJlZjllMzJmZmU2MmZlNTE4OThkMDlhNjRlODZmNzk5NDNiOTZhY2QyMmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM5OWEwNWU2M2UzMDI4ZDMyYTAxYmViNzQxZTliOWJhZTI4OTFlMzljOTc0NTg4MWNkYzQzMGE4N2IxODMxODEifQ"
         }
       ]
     },
@@ -31,8 +31,8 @@
       "statement": "Kubernetes RBAC grants the jenkins-agent ServiceAccount in namespace jenkins-ci execution privileges in jenkins-ci and deployment management capabilities over deployments and services in namespace taxon-vision via jenkins-deployer-role.",
       "evidence": [
         {
-          "resource": "repo://deploy/k8s/jenkins-agent-rbac.yaml#L6-L78",
-          "version": "repo-lines-v1:sha256:93f611389583665e418778345cd85efccd7fdb0fb067ab837f1ee290e7d48eaa:eyJzZWxlY3RlZExpbmVDb3VudCI6NzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc3NmFlMTQyNDI4ZTc1NGI2N2Q3ZDZlM2RmZGJlMWI0NDhmMGJhYzM1NWQ4ZmEyNGVjOTQ3MWUyMWQ5MGI0MzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImViMzcyM2MyMDBmOGU3ZjZjY2EzOGMxMzRhZWI5OWNmNWY4YzIyMTU3M2IzMzllMDdiMTRkMDdhOTNiMTg3N2YiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA2YTI1N2FmOGNlZTY3Yjc1ZTIzNjg0MjhiNjIzMGUwYzQyM2RhZDU1MDU3NzYxYThlNjgwOTJiMjQzNmU0OWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+          "resource": "repo://deploy/k8s/jenkins-agent-rbac.yaml#L6-L81",
+          "version": "repo-lines-v1:sha256:f7f36f8d51f2fa2800c933b853a2255636174d9cfe687051d0beddea548128a5:eyJzZWxlY3RlZExpbmVDb3VudCI6NzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc3NmFlMTQyNDI4ZTc1NGI2N2Q3ZDZlM2RmZGJlMWI0NDhmMGJhYzM1NWQ4ZmEyNGVjOTQ3MWUyMWQ5MGI0MzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImViMzcyM2MyMDBmOGU3ZjZjY2EzOGMxMzRhZWI5OWNmNWY4YzIyMTU3M2IzMzllMDdiMTRkMDdhOTNiMTg3N2YiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA2YTI1N2FmOGNlZTY3Yjc1ZTIzNjg0MjhiNjIzMGUwYzQyM2RhZDU1MDU3NzYxYThlNjgwOTJiMjQzNmU0OWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         }
       ]
     },
@@ -48,18 +48,18 @@
     },
     {
       "id": "claim_2a921623cca54c6fb527c61e791f681e",
-      "statement": "Production telemetry exposes taxon_predictions_total, taxon_inference_latency_seconds, and taxon_human_referrals_active via a GET /metrics endpoint scraped by Prometheus at 5-second intervals.",
+      "statement": "Production telemetry exposes taxon_predictions_total, taxon_inference_latency_seconds, and taxon_human_referrals_active via a GET /metrics endpoint scraped by Prometheus.",
       "evidence": [
         {
-          "resource": "repo://config/prometheus.yaml#L1-L8",
-          "version": "repo-lines-v1:sha256:8f291c4b11a85e7ba8f728481ad42ce329f4a410807b7dc4d44b6ea0dc0a8396:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODRlM2VlOTQwYWFmZmUzODFjODQ2ZmNmMjI3YjIyMzMyZmNhOGJjYzYyMTk3Yzc5ODliNWJjYWM4ZDkxZTQyZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZDdlODRiODQzOGMyNjM1YTI4YWE3NzhmNDAzYWJiNTllMzM5M2FhZWFjZjJlNmNiNjMxZjA3YWU1MmE3NWM3ZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+          "resource": "repo://config/prometheus.yaml#L1-L9",
+          "version": "repo-lines-v1:sha256:afa27aeb4f7038f352286bd1590457b86527f3e91589c4e771a24aff6485fde8:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODRlM2VlOTQwYWFmZmUzODFjODQ2ZmNmMjI3YjIyMzMyZmNhOGJjYzYyMTk3Yzc5ODliNWJjYWM4ZDkxZTQyZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiM2MzMjI3YTdiMGUwZmVmNGY2M2IyYjcxNWI1NjY3MWVlZGJiOWE2YmY4ODNiZmFiYjZiZTM2NmI2ZjA0MTc4ZSJ9"
         },
         {
-          "resource": "repo://src/taxon_vision/monitoring/telemetry.py#L41-L45",
-          "version": "repo-lines-v1:sha256:2edf25a5cfd46193eb403e3e02ec33d44510419c536e59eb98879be79d96eae9:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZGNmZTYyZWVjYTYzMWJjYTlhZGFjM2Y4NjQyMjkyNDEwOTIxMzVhN2FjNzc1ZWExNTRmZmQ1OTQwNjRiZTYzZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDcwOWI3NWVjMzNhZmI1NGFhOTdhZTUyMjgxNjQ2OTM0ZTQ0NjA4NzI1NTRjY2I2M2MxNDI5ZmFiMTc1ZWY4NCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNTViNmU4NzA2YjQzMDQ3ZjJhNmRiNjdmMTMyNjM4NTk1NjA0ZTY3ZjM2OTY2ODc2Y2UwMTU4ZjAwNTNlNmJkMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+          "resource": "repo://src/taxon_vision/monitoring/telemetry.py#L54-L66",
+          "version": "repo-lines-v1:sha256:7315020574cbcb2dbfa22e9331fd1bddd1a32bf4837fc9a7452dc5f80b5fd3e1:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM4YzQyN2I5NzZiNTkwZGM0YTJhYjM3MmJmYzQ0OTBiYTczZDY2MzY2OTc4YzlhMGYyMGIxNzVmNWRiNmVkNmMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc1ZGU3YzVmYmY4NDI1N2I4NzNiNDViNWZlZTViNWY1OTRkMmNiOTNjOTQ3MWQzZmJiMmVkMTQxMTVmOWQyMjMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkzYzUyODE2ODRmNGZkZGJiNzg5OWJhMmE0NDVkMmY4NjZkNmNkZTNiNGMxYjhlOWYyNDUwN2E1N2U3MDExZDAifQ"
         },
         {
-          "resource": "repo://src/taxon_vision/service/routes/health.py#L69-L85",
+          "resource": "repo://src/taxon_vision/service/routes/health.py#L85-L101",
           "version": "repo-lines-v1:sha256:2b13db2a3753e787c69c5bd031b4f8ac1d4368d813f46ba3795434c131fc61e4:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJmMThkMjcyODlmMGZmNWM4NzVlNWYxZTIxNGExNzQ0YmFmOTFkNTYwYzQ1MDRkNGE3NmY4M2IxNjNmZWY3YzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4ODMzOTYxMzIyNzE4OWRlNDY5MTc1Y2RjZGM5MDJkNGJjYjIyYWY2MWU5NzJkNmQ3MzBiMjg2YmNmYTVjYzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRmYmQwMDkzMTRiYzI3MDg0MTY3MzRhMDJhZTVmZjM5YTFlNDhhMDUwYmU5MWY0M2IyZmFhOTIwMDJjNjJiZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         }
       ]
@@ -69,34 +69,100 @@
       "statement": "The /predict endpoint records execution latency in taxon_inference_latency_seconds, increments taxon_predictions_total labelled by routing outcome (success, invalid_input, unavailable, or error), and stages flagged out-of-distribution or ambiguous observations for human review.",
       "evidence": [
         {
-          "resource": "repo://src/taxon_vision/service/routes/predict.py#L129-L178",
-          "version": "repo-lines-v1:sha256:5a690f3f6962a760aa3b1457228c56da54103ee7b75307425a7e014b40ac9c12:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImExZjhhZGE2NTI2MDIyOTBhOGQ4NjQxN2YxOTY4NmM2YmNjMjljNGRlNzI4YzEwNTU2N2M1MDE4YjcwYWExOGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNlNjU3ZmFhOTA3MWRhMGZjNWZjOTE1N2EyMWI1NDYyZmEwNTNmY2FhYjM4NjRjMTAwZThlMmRkN2FlZWQ1NmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE4ZDNmYTk5YWY1OTMwYmZiOWQ1YzgzNThhMTY4YmRhOGUwYTgwZjdkNjRkYzFmYjE5MTEyNTM3NmZjZDFkYzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+          "resource": "repo://src/taxon_vision/service/routes/predict.py#L197-L265",
+          "version": "repo-lines-v1:sha256:ef2762372bc1c447f3909846eb08cb7e7316be4ebdfc0591042ae962bc1b90ba:eyJzZWxlY3RlZExpbmVDb3VudCI6NjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImExZjhhZGE2NTI2MDIyOTBhOGQ4NjQxN2YxOTY4NmM2YmNjMjljNGRlNzI4YzEwNTU2N2M1MDE4YjcwYWExOGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNiOTMyOGMyNTkyNWYwMmVmOGMxODg4MmVkYTdkZTZhNmU4MTBlNTRmNzE1YzZlZTEzNWJlYTYwNWI0NmY2YTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE4ZDNmYTk5YWY1OTMwYmZiOWQ1YzgzNThhMTY4YmRhOGUwYTgwZjdkNjRkYzFmYjE5MTEyNTM3NmZjZDFkYzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhhMjE3YzZlZmI3MThjZWI5NjAxNjJlMDZkOWE0MGQ0OTRjNDcyN2M3Y2I3NGFkMzJmNjNmYjU2ZmY4OTI0MmEifQ"
         }
       ]
     },
     {
       "id": "claim_26e26c46ef6d41c3adafd13c27be2db5",
-      "statement": "Representation drift is computed in O(N * D) time by projecting embedding vectors onto their L2 Euclidean norms and evaluating the 1D Wasserstein-1 earth mover distance approximation as the absolute difference between reference and production mean norms.",
+      "statement": "Representation drift is computed in O(N * D + N log N) time by projecting pre-normalized embedding vectors onto their L2 Euclidean norms and evaluating the exact 1D Wasserstein-1 earth mover distance between empirical CDFs via scipy.stats.wasserstein_distance.",
       "evidence": [
         {
-          "resource": "repo://src/taxon_vision/monitoring/drift.py#L10-L34",
-          "version": "repo-lines-v1:sha256:d557151d12b232c2503abd3169916044ef9177589465b64bc25f4635e759ef80:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNhZmRkNjM4MjE4ZjQzOGE5Mjc3OTg0MDczYjAwYTFmOWM5MDFjMzFmYzFkODEzMWM1MTNjNTRlMmE1NGZjNDEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA1NThlMzM0ZTQwZjkxNWU0MjhlZWEyMTg3YzFkNzRiY2M5MDFhN2Y3N2NjMzJkMjdhNDBjYmY0MGI4YmZlNTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY1ODI1MzliN2FjMDg3ZDhkMDY3NGEzMzNjOWZkNGZkMDUzMjIyNWE3N2NiNjRkYTViZGUwYzZhMTkwZTg2ODIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+          "resource": "repo://src/taxon_vision/monitoring/drift.py#L46-L76",
+          "version": "repo-lines-v1:sha256:3980abfa08a10f829bfc18c501f87b86b9272afae1986da75ac4c15c49c9b7da:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNhZmRkNjM4MjE4ZjQzOGE5Mjc3OTg0MDczYjAwYTFmOWM5MDFjMzFmYzFkODEzMWM1MTNjNTRlMmE1NGZjNDEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc5YTVmYjY3MTcyYWQ3MjUzMDI5YjlmNWQ1OWQ1OGVkOGMyYzVkOGIxMzM5OWZhMDMwOWMwZmI4ZjExNTdmMGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdlMDJlMjRkNWM3ODc0YTY2NDIxM2FiNWIyOWRiZGFkNmU2ODIwYWJmYWEwN2YwY2RmZjExZGU3ODljODNiNjIifQ"
         }
       ]
     },
     {
       "id": "claim_00f3cdc1ee634a9da43ce2e8549b0086",
-      "statement": "The verify_deployment.sh script deterministically validates deployments through a 5-step gate checking rollout completion, pod inspection, Service ClusterIP resolution, HTTP 200 liveness and readiness probe responses, and live multipart inference with Prometheus metric confirmation.",
+      "statement": "The verify_deployment.sh script deterministically validates deployments through a 5-step gate checking rollout completion, pod inspection, Service endpoint discovery across ClusterIP, NodePort, and ephemeral port-forward, HTTP 200 liveness and readiness probe responses, and live multipart inference with Prometheus metric confirmation.",
       "evidence": [
         {
-          "resource": "repo://scripts/ci/verify_deployment.sh#L16-L54",
-          "version": "repo-lines-v1:sha256:c14d5a915de0d1e3872284d7ae8589e21aad54e7bd4707844da9e05f96b24626:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIyZWRjM2U3OWVhYjA3NWM0ODlmNDE5NTQ5OTY0MDdmOWNjMjE4YzViMGNkNzUyZmU1ZjBjNzRmYWRiMjc1OWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdhNGU3YTY0N2M1Yjc4ZTJkMmNkMWM3ZjQ1NmYxMTg2OGJmMDY1ZThiYWMxNzA3YTY2ZTA5NDE5YTRkY2FkMDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZlYjk5MWNjODY0MDc0OGZjZGU1ZmJhMTI3NzY0MjZkZWRmZDJkMjE3ZGMwYzNjNjAzMDY0NjgyMzI4MTJmNzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+          "resource": "repo://scripts/ci/verify_deployment.sh#L41-L113",
+          "version": "repo-lines-v1:sha256:0722e6bbfa065e0db148ed1ea7c26b194afb5212296243e3b2ba903fb6b444ac:eyJzZWxlY3RlZExpbmVDb3VudCI6NzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIyZWRjM2U3OWVhYjA3NWM0ODlmNDE5NTQ5OTY0MDdmOWNjMjE4YzViMGNkNzUyZmU1ZjBjNzRmYWRiMjc1OWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdhNGU3YTY0N2M1Yjc4ZTJkMmNkMWM3ZjQ1NmYxMTg2OGJmMDY1ZThiYWMxNzA3YTY2ZTA5NDE5YTRkY2FkMDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZlYjk5MWNjODY0MDc0OGZjZGU1ZmJhMTI3NzY0MjZkZWRmZDJkMjE3ZGMwYzNjNjAzMDY0NjgyMzI4MTJmNzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_19abaead5b1a45f898d8d8408f3d5b56",
+      "statement": "Sablier lazy-scaling manages on-demand dashboard deployments (optuna-dashboard, grafana, evidently-ui) at zero idle replicas, intercepting HTTP traffic via Traefik middleware to scale them to one replica on demand and idling them after 15 to 20 minutes of inactivity.",
+      "evidence": [
+        {
+          "resource": "repo://deploy/k8s/sablier-scaler.yaml#L41-L90",
+          "version": "repo-lines-v1:sha256:71e8e0b6b1d102bf0552a6560bfe19379bcf60930c9358e8a1ec438a754ed7a9:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc3ZGQ4MGQzMjFmNTQwN2NmNTYxNWYzOGY4ZjU4MjJhMDVmOWY3MDI3M2JlYjQ4NGUxYmUyMDg0NWZlMTAzMTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY1MmQ3MTExMDNkNTBhNDM3ODMwYzZmYmNkMDRmYjRiYWI0OWEwZjgyZjZkMjZkMWM3OTFjNmU4NDg4ZGQwOTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ3ZjdkMzAwOGQzMDM0YmQ2MmNmZDAxMWYyOGVmOTNhY2NiNzliMDRlNzBkN2JlNDg4ODZjNDExZWI0Y2ZjYTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQwZmM0ODk2NTdjODVjOTQ3ZTQ0MmM1YTk1NmNmMTI5NGY1OGQxNTNkNmZiNGI4NDc0NzE1ZjcwOTk4MzUxNTcifQ"
+        },
+        {
+          "resource": "repo://deploy/k8s/traefik-ingress.yaml#L13-L129",
+          "version": "repo-lines-v1:sha256:7ac34afb88a3d2ef9299b8ef333e970670651f33fc7984487c69e84bc6d13bb4:eyJzZWxlY3RlZExpbmVDb3VudCI6MTE3LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJlOGVjNThiM2VkNzQzODZmMzdlYjI4YjI5NDg4OWYyMzFlNmQ5Y2E0YjQ0NzhmYmVjMWI4MzUwM2I1MGI5Y2RkIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI3ZmY2MTFmYjE4MDBmZjcyYmFiODVlOTRjMzJlOWUyMGUzZDlmNGQwNWI5NDg5MTI5NGY3ZTc1OGZhZGQ1YThlIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiIxOGVhZDhiYzk2OGVjOTBjNDY5OTk5MDBlMGEwYmVhYWJmODJmNjllYjhkOGFkYzljMjc4NjYzMmJmMWY1Y2EzIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MCwiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_5c0558f9393a4f5f93d52bd9f00aa26a",
+      "statement": "The prediction_drift_monitor Airflow DAG queries the microservice drift endpoint hourly, short-circuiting to dispatch the model_retraining DAG to merge feedback annotations and trigger a Jenkins GPU retraining job when distribution drift is detected.",
+      "evidence": [
+        {
+          "resource": "repo://airflow/dags/model_retraining.py#L38-L168",
+          "version": "repo-lines-v1:sha256:923d10202695062810bee9a3f13fbf713b9a6db077ea5206a98989397d1bd313:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMxLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJkNmYwZWE2MDEzNzdmZmFiZDE1NmNjMmI4ZTlkNmU0YjdlZTgwNDU2OGIyMDliNmVjNDg3YzI4ZTZhOTUwOGQ3IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJmNWI2YjM2Zjc2OGU2NDJhNjQ5ZDk4ZTY4MzQ2YTBjYjhhZGIwMWQwYTdhMDQ3NDUwNTM5ZTJlMWFlOTMyNmM3IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI2MjAwOTdlNGFhNTAwNjhiYTE1N2Y5YTI3MzlmYWQ4Njk5NWUxZTBjZGNjZGFkYzU4OTdjMjAzNGM3NGQzZWZhIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MCwiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1In0"
+        },
+        {
+          "resource": "repo://airflow/dags/prediction_drift_monitor.py#L39-L96",
+          "version": "repo-lines-v1:sha256:784ab3340074a4c8c3d04a5d06637368a0e2749233e183ca1415cb20a2723482:eyJzZWxlY3RlZExpbmVDb3VudCI6NTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ2ZjBlYTYwMTM3N2ZmYWJkMTU2Y2MyYjhlOWQ2ZTRiN2VlODA0NTY4YjIwOWI2ZWM0ODdjMjhlNmE5NTA4ZDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMwMDlmMmU4MzZiMTIxNWM4ZTA2ZjBjZWMzMjM2NjNiYzZjYzhiZGNkMjE5ZDhlY2VkY2M4ZWJjYTgxYWJiZTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFjYjhjZTMzNTM2YTRmNzNiOTczMmVmYzc1NzEzODJhOWI3OWMxYTg3NjVkMjNhMzE0YmM2ZTBmYTZlNTE0NWMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_707c5e7cc8704f92a7bc6bbce66996c7",
+      "statement": "The drift detection pipeline projects representations onto an 8-component PCA subspace with L2 vector norms and executes Kolmogorov-Smirnov two-sample tests across tabular projections using Evidently DataDriftPreset to generate diagnostic HTML reports.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/monitoring/drift_runner.py#L149-L189",
+          "version": "repo-lines-v1:sha256:50d2ea7ea80811a1840f30b5a42acef92a8b4c2542c8f0424ae9c8290b775362:eyJzZWxlY3RlZExpbmVDb3VudCI6NDEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjczNTU0M2QzZDUzYTc3NWUxOWNiNDhkOGFkZjRjNWNmNzY1NWJiMzk4YjhhM2IwNWQ4YjFiOWZiZjU3OGQwMDIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI5MTE3YzVjNTczYzhhODE4MDkwMjU0NTdlY2Y3MWJkZWJiMmMzZTc2YmZhOTU3YTU1NDNjZWM5NmE2YjFlOWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMwZGQxNWUyNWIxZGYwYTFiZGM2M2Y5MGNhMGQwMTgxYTkyNzcwNmFhZTNiNjQ2ZTIwNjhkNDEyY2NiZDJlOWUifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/pipelines/data_drift.py#L276-L308",
+          "version": "repo-lines-v1:sha256:dc0475a91936202d3ec78bb0b5f04009cc6ac354d6fbe0b879fe32752dfe849e:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJmZjlkYTFhMmVhOTZiNmI2ZGJlOTNmYzc2ODE2MGM3MjZjZmU3Mjc4MjhiOGUyNmI5NWI5YmFlY2RjZDdlMTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwYzFmMTg4ZjE0MmVkN2E4MjQ2ODBiMjA3MTcyYzU1MTliYzYxNGE0OGZkYTdjZjE2N2VkYjhkZGY3OTk1NmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU1N2QxZjlmYjE2MzdiZjZmYjc4ZGQ1YWJiNzcyODQ5NTgzNDA0MzE4M2Y4YWUyMzcwNGU5OGU3ZjY4YTAxMmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ1YzEyNDU3NDg5NDY4ZWRhZTI0NGFiMzU0MzVmNDZmNTg5YTU4NThiNDRkMTgwZWUzZDMyZDY3Y2IzY2FmMDQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5cbe3b718d124819911af47208c1f0ad",
+      "statement": "DriftMetricsCollector dynamically extracts recent drift evaluation records from persistent telemetry storage and exposes them as Prometheus gauges with a 30-second TTL cache to maintain metric consistency across multi-worker ASGI processes.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/monitoring/telemetry.py#L68-L156",
+          "version": "repo-lines-v1:sha256:97874c10dfb2ae813bd1549f943b6bc8f5f5e636931aab029856284de349162a:eyJzZWxlY3RlZExpbmVDb3VudCI6ODksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjViOTYwYzY1NmRmMmM5NzllZGYwODhhNDYxOWU4OWJiOTI0NWJlZjBmZjg2Zjg3OTI2YjM1NjNmMTIzZmJjYjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU0NDVlMTdhZGVkMzA5NzQ1ZmZkYTMyOWZjZDY1ODYyZDUyOTZjNGVkN2IwZmVjZWIzMzA0NzVmNmUyNzRjNjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE5OGIwNjNkOWI0N2U2NTM3OTYyNTU3MmNjZTE5NzY2OWQ1NzY3ZTEyYzE4YmUwNzU2NTJiOGNkOTgxY2U4ZDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f9522e58605b4015929f282025ea0aaf",
+      "statement": "Docker packaging employs a non-root Pixi container with frozen dependencies, while Docker Compose orchestrates the multi-service stack comprising Traefik, FastAPI, SeaweedFS, Optuna, Prometheus, Grafana, MLflow, PostgreSQL, and Airflow.",
+      "evidence": [
+        {
+          "resource": "repo://deploy/docker/Dockerfile#L4-L41",
+          "version": "repo-lines-v1:sha256:ec2db0e17f77353b976289bff691d6e3eae39ed71d1f517636f56389af8ebebd:eyJzZWxlY3RlZExpbmVDb3VudCI6MzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYyNTVjMTgyNTVkMjc1MjE3MzJkNDVmNjljMjMxOGMwNDA4YWMyNzE3YWMxZjAyNGEwYTdjMjkxYzVlZTRlYmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk4MTQ1MjA4YWVkYTBkMWFlZmU1ZGRjMWQ0YWVhZjc5NGU3OGRjMmU2ZGJjY2U3Yjc4MjVjZDI5NmRkMjA0ZGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMwMzMzOTMyZmExYTczMjNhNGFkZjc1ZGM1MjE0Nzg5MTljODU2NDUwM2Y2ZWVmN2MyYjEyMjVhNzkzYTBiMDIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://docker-compose.yml#L43-L292",
+          "version": "repo-lines-v1:sha256:d625d71fbf3a176a158f496763150ce7220bfcf50d71a93b97e01758d40c56cb:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJmYTczZmNjZGM5OWVhODM1OTY3YzdkZWU3ZWZiZWQxZjNjYTg3MjYwZDkyOTMxODUwZmRkNjZkYThjYjEyZjFkIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIwMWJhNDcxOWM4MGI2ZmU5MTFiMDkxYTdjMDUxMjRiNjRlZWVjZTk2NGUwOWMwNThlZjhmOTgwNWRhY2E1NDZiIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI0NGMzMWY0ODI2NTNmNDhkZWY2ZTI4N2QwZGJjNmYwYTVlNGVkNDQyMmY5OThjODVkMDgyY2I4NmU1NDQ0ZTdlIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI3YmEzZGJjZDJjOTRjNjg2M2JlNTFjYTM2YmE2YjE1ZjNjZDY0N2UwOTc2NzE5NWYzNWY1ZWNjNzkwOGY5NzU0In0"
         }
       ]
     }
   ],
   "verification": {
     "by": "openwiki/0.7.2",
-    "at": "2026-10-15T19:46:36.219Z"
+    "at": "2026-11-08T17:07:25.915Z"
   }
 }

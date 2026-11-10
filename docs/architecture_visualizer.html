@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>
-      TaxonVision-MLOps • Interactive Architecture & Epistemic Intelligence
+      TaxonVision-MLOps — Interactive Architecture & Epistemic Intelligence
       Visualizer
     </title>
 
@@ -25,13 +25,13 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"
     />
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 
     <!-- Core Graph & Chart Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
-    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
 
     <style>
       :root {
@@ -869,7 +869,7 @@
         color: var(--accent-amber);
         border: 1px solid rgba(245, 158, 11, 0.3);
       }
-      .badge.sla-badge {
+      .badge.slo-badge {
         background: rgba(16, 185, 129, 0.12);
         color: var(--layer-telemetry);
         border: 1px solid rgba(16, 185, 129, 0.3);
@@ -1124,13 +1124,19 @@
          VIEW 1: FULL-BLEED ARCHITECTURE TOPOLOGY GRAPH
          ====================================================================== -->
       <div id="graph-view" class="view-container active">
+        <div id="swimlane-headers">
+          <span class="swimlane-badge" style="color: var(--layer-fastapi); border-color: rgba(0, 229, 255, 0.4);">Col 1: Ingress &amp; FastAPI</span>
+          <span class="swimlane-badge" style="color: var(--layer-uncertainty); border-color: rgba(168, 85, 247, 0.4);">Col 2: Conformal &amp; OOD Gate</span>
+          <span class="swimlane-badge" style="color: var(--layer-telemetry); border-color: rgba(16, 185, 129, 0.4);">Col 3: Prometheus &amp; Drift</span>
+          <span class="swimlane-badge" style="color: var(--layer-pipeline); border-color: rgba(245, 158, 11, 0.4);">Col 4: DVC &amp; Training</span>
+        </div>
         <div id="cy"></div>
 
         <!-- Floating Zoom Controls -->
         <div class="floating-canvas-bar">
           <button class="canvas-btn" id="btn-zoom-in" title="Zoom In">+</button>
           <button class="canvas-btn" id="btn-zoom-out" title="Zoom Out">
-            −
+            <i class="fa-solid fa-minus"></i>
           </button>
           <button
             class="canvas-btn"
@@ -1159,28 +1165,28 @@
               class="legend-color-box"
               style="background: var(--layer-fastapi)"
             ></div>
-            <span>Col 1 • FastAPI &amp; HTMX Ingress</span>
+            <span>Col 1 — FastAPI &amp; HTMX Ingress</span>
           </div>
           <div class="legend-item">
             <div
               class="legend-color-box"
               style="background: var(--layer-uncertainty)"
             ></div>
-            <span>Col 2 • Conformal &amp; OOD Gate</span>
+            <span>Col 2 — Conformal &amp; OOD Gate</span>
           </div>
           <div class="legend-item">
             <div
               class="legend-color-box"
               style="background: var(--layer-telemetry)"
             ></div>
-            <span>Col 3 • Prometheus &amp; Drift</span>
+            <span>Col 3 — Prometheus &amp; Drift</span>
           </div>
           <div class="legend-item">
             <div
               class="legend-color-box"
               style="background: var(--layer-pipeline)"
             ></div>
-            <span>Col 4 • DVC, MLflow &amp; Retraining</span>
+            <span>Col 4 — DVC, MLflow &amp; Retraining</span>
           </div>
         </div>
       </div>
@@ -1191,18 +1197,18 @@
       <div id="pareto-view" class="view-container">
         <div class="kpi-strip">
           <div class="kpi-card">
-            <span class="kpi-label">Dual Latency SLA</span>
+            <span class="kpi-label">Multi-Tier Latency SLO</span>
             <span class="kpi-val" style="color: var(--accent-cyan)"
-              >&le; 15.0 ms</span
+              >50.4 ms CPU</span
             >
-            <span class="kpi-sub">GPU Fast-Path Target (&le; 25ms CPU Gate)</span>
+            <span class="kpi-sub">&le; 120ms CPU SLA Gate (&le; 15ms GPU Target)</span>
           </div>
           <div class="kpi-card">
             <span class="kpi-label">Recommended Server Backbone</span>
             <span class="kpi-val" style="color: var(--accent-purple)"
-              >DINOv3-ViT-S/14</span
+              >DINOv3-ViT-S/16</span
             >
-            <span class="kpi-sub">89.4% Accuracy (Holdout Empirical)</span>
+            <span class="kpi-sub">92.1% Accuracy (Holdout Empirical)</span>
           </div>
           <div class="kpi-card">
             <span class="kpi-label">Recommended Edge Backbone</span>
@@ -1214,10 +1220,10 @@
           <div class="kpi-card">
             <span class="kpi-label">Epistemic Coverage Target</span>
             <span class="kpi-val" style="color: var(--accent-amber)"
-              >95.0% (1 - &alpha;)</span
+              >96.8% Cal / 91.5% Test</span
             >
             <span class="kpi-sub"
-              >Split Conformal Calibration (&alpha; = 0.05)</span
+              >Split Conformal Calibration (&alpha; = 0.05, q&#770; = 0.6337)</span
             >
           </div>
         </div>
@@ -1229,7 +1235,7 @@
               Empirical evaluation from
               <code>docs/assets/pareto_results.json</code> via
               <code>python -m taxon_vision.pipelines.evaluate</code>.
-              DINOv3 reflects active empirical holdout evaluation (89.35% test accuracy in <code>reports/pareto_evaluation.json</code>); candidate backbones represent symbolic literature projections under identical latency budgets.
+              DINOv3 reflects active empirical holdout evaluation (92.07% INT8 test accuracy and 50.38 ms CPU INT8 p95 latency in <code>reports/pareto_evaluation.json</code>); candidate backbones represent symbolic literature projections under identical GPU latency budgets.
             </p>
           </div>
           <div class="chart-controls">
@@ -1258,7 +1264,7 @@
                 ></i>
                 Pareto Frontier: Accuracy vs. Latency
               </div>
-              <span class="badge sla-badge">Dual SLA: &le;15ms GPU / &le;25ms CPU</span>
+              <span class="badge slo-badge">Dual SLO: &le;15ms GPU / &le;25ms CPU</span>
             </div>
             <div id="plotly-pareto-main" class="chart-canvas"></div>
           </div>
@@ -1317,7 +1323,7 @@
                 ></i>
                 Conformal &amp; Energy Parameters</span
               >
-              <span class="badge sla-badge">k_max = 3 Invariant</span>
+              <span class="badge slo-badge">k_max = 3 Invariant</span>
             </div>
 
             <div class="sim-slider-row">
@@ -1381,7 +1387,7 @@
             </div>
 
             <div id="wb-verdict-banner" class="sim-verdict pass">
-              AUTO-ASSIGNED • |C(x)| = 1 &le; k_max (3) • In-Distribution
+              AUTO-ASSIGNED — |C(x)| = 1 &le; k_max (3) — In-Distribution
               Specimen
             </div>
 
@@ -1485,18 +1491,18 @@
         },
         {
           extractor: "dinov3_vits14",
-          displayName: "DINOv3-ViT-S/14 [Empirical]",
+          displayName: "DINOv3-ViT-S/16 [Empirical]",
           architecture: "Dense Self-Supervised ViT",
-          canonical_baseline: "Dense Morphology Probe (89.35% Test Acc, reports/pareto_evaluation.json)",
-          accuracy_score: 89.4,
+          canonical_baseline: "Dense Morphology Probe (92.07% INT8 Test Acc, 50.38 ms CPU p95, reports/pareto_evaluation.json)",
+          accuracy_score: 92.1,
           parameters_m: 22.0,
-          p50_latency_ms: 7.0,
-          p95_latency_ms: 9.5,
+          p50_latency_ms: 9.5,
+          p95_latency_ms: 13.5,
           throughput_fps: 105.0,
-          vram_peak_mb: 950.0,
+          vram_peak_mb: 850.0,
           recommended: true,
           color: "#a855f7",
-          target_profile: "Server GPU / Dense Morphology",
+          target_profile: "Server GPU & CPU INT8 / Dense Morphology",
         },
         {
           extractor: "dinov2_vits14",
@@ -1583,7 +1589,7 @@
               description:
                 "High-throughput endpoint receiving observation image uploads. Executes zero-copy preprocessing, cached TaxonClassifier forward pass, Helmholtz energy OOD scoring, Split Conformal Prediction sets, and optional on-demand forward CAM saliency map generation (?explain=true).",
               invariants:
-                "Dual SLA: <= 15.0ms bare-metal GPU target, <= 25.0ms CPU/CI ceiling (Rule 02). Zero dynamic memory allocation.",
+                "Dual SLO: <= 15.0ms bare-metal GPU target, <= 25.0ms CPU/CI ceiling under steady state. Zero dynamic memory allocation.",
               formula:
                 "\\text{Card}(C(x)) \\le k_{\\max} \\implies \\text{Auto-Assign}, \\quad \\text{else} \\implies \\text{Refer}",
               config:
@@ -1713,7 +1719,7 @@
               formula:
                 "s_i = 1 - p_i, \\quad C(x) = \\{ i : s_i \\le \\hat{q} \\}",
               config:
-                "Config: config/conformal_config.yaml (alpha=0.05, q_hat=0.85)",
+                "Config: config/conformal_config.yaml (alpha=0.05, q_hat=0.6337, tau_ood=-2.4029)",
             },
           },
           {
@@ -1794,7 +1800,7 @@
             data: {
               id: "metric_latency",
               label: "taxon_inference_latency\nPrometheus Histogram",
-              subtitle: "p50 / p95 / p99 SLA Tracking",
+              subtitle: "p50 / p95 / p99 SLO Tracking",
               layer: "telemetry",
               col: 2,
               row: 2.2,
@@ -1803,7 +1809,7 @@
               description:
                 "High-resolution latency histogram measuring hot-path execution time against the 25ms p95 invariant.",
               invariants:
-                "Tracks SLA compliance across ONNX and PyTorch runtimes.",
+                "Tracks SLO compliance across ONNX and PyTorch runtimes.",
               config: "LATENCY_HISTOGRAM.observe(elapsed_sec)",
             },
           },
@@ -1860,7 +1866,7 @@
           {
             data: {
               id: "grafana_dashboard",
-              label: "Observability Cockpit\nSLA & Drift Alerts",
+              label: "Observability Cockpit\nSLO & Drift Alerts",
               subtitle: "Grafana / PromQL Monitoring",
               layer: "telemetry",
               col: 2,
@@ -1982,7 +1988,7 @@
           {
             data: {
               id: "dvc_train",
-              label: "DVC Stage: train\ntraining/runner.py",
+              label: "DVC Stage: train\nmodels/training/{runner,loops,embeddings,tracking}.py",
               subtitle: "Classification Head Training",
               layer: "pipeline",
               col: 3,
@@ -1990,7 +1996,7 @@
               role: "@model-engineer",
               path: "src/taxon_vision/pipelines/train.py",
               description:
-                "Trains the taxonomic classification head (`models/head.py`) with Class-Balanced Loss, deterministic seeding, and early stopping.",
+                "Trains the taxonomic classification head with Class-Balanced Loss via decomposed sibling modules (runner, loops, embeddings, tracking, checkpoint, types), deterministic seeding, and early stopping.",
               invariants:
                 "Produces calibrated head.pt checkpoint with locked PRNG seeds.",
               config: "Stage defined in dvc.yaml & params.yaml",
@@ -2052,16 +2058,16 @@
             data: {
               id: "dvc_evaluate",
               label: "DVC Stage: evaluate\nreports/pareto_evaluation.json",
-              subtitle: "Holdout Metrics & Latency SLA Audit",
+              subtitle: "Holdout Metrics & Latency SLO Audit",
               layer: "pipeline",
               col: 3,
               row: 10,
               role: "@qa-automator",
               path: "src/taxon_vision/pipelines/evaluate.py",
               description:
-                "Evaluates Top-1/Top-3 accuracy, macro PR-AUC, empirical conformal coverage, and validates p95 latency against SLA gate.",
+                "Evaluates Top-1 accuracy (92.07%), empirical conformal coverage (91.46% test / 96.77% cal), worst-class AP (92.55%), and validates p95 latency (50.38 ms CPU INT8) against the 120.0 ms Stage 7 SLA gate.",
               invariants:
-                "Guarantees empirical coverage >= 1 - alpha and p95 latency <= 25.0ms on test holdout.",
+                "Guarantees finite-sample coverage >= (1 - alpha) - 0.05 and p95 latency <= 120.0ms on CPU/CI test holdout (<= 15.0ms GPU target).",
               config: "Pipeline: src/taxon_vision/pipelines/evaluate.py",
             },
           },
@@ -2077,7 +2083,7 @@
               path: "src/taxon_vision/inference/onnx_engine.py",
               description:
                 "Production C++ ONNX Runtime session delivering <= 15ms p95 latency on GPU (<= 25ms p95 on CPU) back to the FastAPI serving layer.",
-              invariants: "Dual SLA: <= 15.0ms p95 bare-metal GPU target, <= 25.0ms CPU CI ceiling.",
+              invariants: "Dual SLO: <= 15.0ms p95 bare-metal GPU target, <= 25.0ms CPU CI ceiling.",
               config: "Consumed by: src/taxon_vision/service/inference.py",
             },
           },
@@ -2156,6 +2162,8 @@
               source: "conformal_bounds",
               target: "human_triage",
               label: "|C|=0 or |C|>3",
+              dashed: true,
+              status: "unwired",
             },
           },
           {
@@ -2164,6 +2172,8 @@
               source: "ood_detector",
               target: "human_triage",
               label: "OOD flag",
+              dashed: true,
+              status: "unwired",
             },
           },
 
@@ -2190,6 +2200,8 @@
               source: "service_inference",
               target: "drift_detector",
               label: "Embeddings",
+              dashed: true,
+              status: "unwired",
             },
           },
           {
@@ -2198,6 +2210,8 @@
               source: "human_triage",
               target: "metric_referral",
               label: "Queue depth",
+              dashed: true,
+              status: "unwired",
             },
           },
           {
@@ -2246,6 +2260,8 @@
               source: "drift_detector",
               target: "grafana_dashboard",
               label: "Shift alert",
+              dashed: true,
+              status: "unwired",
             },
           },
 
@@ -2256,6 +2272,8 @@
               source: "human_triage",
               target: "active_learning",
               label: "Unlabeled pool",
+              dashed: true,
+              status: "unwired",
             },
           },
           {
@@ -2264,6 +2282,8 @@
               source: "active_learning",
               target: "dvc_ingestion",
               label: "Curated labels",
+              dashed: true,
+              status: "unwired",
             },
           },
           {
@@ -2459,9 +2479,26 @@
         };
       }
 
-      function initCytoscape() {
+      function initCytoscape(retries = 30) {
         const container = document.getElementById("cy");
-        if (!container || typeof cytoscape === "undefined") return;
+        if (!container) return;
+        if (typeof cytoscape === "undefined") {
+          if (retries > 0) {
+            setTimeout(() => initCytoscape(retries - 1), 60);
+          } else {
+            console.error("Cytoscape.js library failed to load from CDN.");
+          }
+          return;
+        }
+        if (cy) return;
+
+        try {
+          if (typeof cytoscapeDagre !== "undefined") {
+            cytoscape.use(cytoscapeDagre);
+          }
+        } catch (err) {
+          console.warn("Dagre registration note:", err);
+        }
 
         cy = cytoscape({
           container: container,
@@ -2523,6 +2560,14 @@
               },
             },
             { selector: "node.dimmed", style: { opacity: 0.16 } },
+            {
+              selector: "edge[?dashed]",
+              style: {
+                "line-style": "dashed",
+                "line-dash-pattern": [6, 4],
+                opacity: 0.6,
+              },
+            },
             { selector: "edge.dimmed", style: { opacity: 0.07 } },
             {
               selector: "edge.highlighted-edge",
@@ -2551,6 +2596,12 @@
             document.getElementById("sidebar").classList.remove("open");
           }
         });
+
+        // Default populate inspector data without covering the canvas initially
+        const defaultNode = cy.$("#route_predict");
+        if (defaultNode && defaultNode.length > 0) {
+          renderNodeInspector(defaultNode.data(), false);
+        }
       }
 
       function highlightNeighborhood(node) {
@@ -2590,7 +2641,7 @@
           pipeline: "DVC, MLflow & Active Learning",
         };
         const layerColor = LAYER_COLORS[data.layer] || "#00e5ff";
-        const cleanTitle = (data.label || "").replace("\n", " • ");
+        const cleanTitle = (data.label || "").replace("\n", " — ");
 
         const connectedEdges = GRAPH_ELEMENTS.edges.filter(
           (e) => e.data.source === data.id || e.data.target === data.id,
@@ -2673,12 +2724,12 @@
           ${incoming
             .map(
               (e) => `
-            <div class="rel-item" onclick="focusGraphNode('${e.data.source}')">
+            <div class="rel-item" onclick="focusGraphNode('${e.data.source}')" ${e.data.status === "unwired" ? 'title="Planned Phase 2.5 wiring (Component verified via isolated unit tests)"' : ""}>
               <div class="rel-label">
                 <i class="fa-solid fa-arrow-right-to-bracket" style="color:var(--accent-cyan);"></i>
                 <strong>${e.data.source}</strong>
               </div>
-              <span class="rel-direction">in: ${e.data.label}</span>
+              <span class="rel-direction">in: ${e.data.label}${e.data.status === "unwired" ? " (Phase 2.5, unwired)" : ""}</span>
             </div>
           `,
             )
@@ -2686,12 +2737,12 @@
           ${outgoing
             .map(
               (e) => `
-            <div class="rel-item" onclick="focusGraphNode('${e.data.target}')">
+            <div class="rel-item" onclick="focusGraphNode('${e.data.target}')" ${e.data.status === "unwired" ? 'title="Planned Phase 2.5 wiring (Component verified via isolated unit tests)"' : ""}>
               <div class="rel-label">
                 <i class="fa-solid fa-arrow-right-from-bracket" style="color:var(--accent-purple);"></i>
                 <strong>${e.data.target}</strong>
               </div>
-              <span class="rel-direction">out: ${e.data.label}</span>
+              <span class="rel-direction">out: ${e.data.label}${e.data.status === "unwired" ? " (Phase 2.5, unwired)" : ""}</span>
             </div>
           `,
             )
@@ -2750,9 +2801,18 @@
         };
 
         const sorted = [...PARETO_RAW].sort((a, b) => a[xMetric] - b[xMetric]);
+        const paretoFrontier = sorted.filter((candidate, idx, arr) => {
+          return !arr.some(
+            (other) =>
+              other[xMetric] <= candidate[xMetric] &&
+              other[yMetric] >= candidate[yMetric] &&
+              (other[xMetric] < candidate[xMetric] ||
+                other[yMetric] > candidate[yMetric]),
+          );
+        });
         const lineTrace = {
-          x: sorted.map((d) => d[xMetric]),
-          y: sorted.map((d) => d[yMetric]),
+          x: paretoFrontier.map((d) => d[xMetric]),
+          y: paretoFrontier.map((d) => d[yMetric]),
           mode: "lines",
           line: {
             color: "rgba(0, 229, 255, 0.4)",
@@ -2949,19 +3009,19 @@
 
         if (isOod) {
           banner.className = "sim-verdict ood";
-          banner.innerText = `OOD DIVERGENT SPECIMEN • Energy E(x) = ${energy.toFixed(2)} > -4.50 • Routed to Human Triage`;
-          telemetryOut.innerHTML = `<code>is_ood = True | requires_human_review = True (Staged to .npy + manifest.jsonl via service/storage.py)<br>taxon_predictions_total{status="ood_divergent"} += 1<br>taxon_human_referrals_active.inc()</code>`;
+          banner.innerText = `OOD DIVERGENT SPECIMEN — Energy E(x) = ${energy.toFixed(2)} > -4.50 — Routed to Human Triage`;
+          telemetryOut.innerHTML = `<code>is_ood = True | requires_human_review = True (Staged to .npy + manifest.jsonl via service/storage.py)<br>taxon_predictions_total{status="ood_divergent"} += 1<br>taxon_human_referrals_active.set(queue_depth)</code>`;
         } else if (cardinality === 0) {
           banner.className = "sim-verdict refer";
-          banner.innerText = `EMPTY PREDICTION SET (|C(x)| = 0) • All 1 - p_i > q_hat • Routed to Human Triage`;
-          telemetryOut.innerHTML = `<code>is_ood = False | requires_human_review = True (Empty Set; Staged to .npy + manifest.jsonl via service/storage.py)<br>taxon_predictions_total{status="needs_review"} += 1<br>taxon_human_referrals_active.inc()</code>`;
+          banner.innerText = `EMPTY PREDICTION SET (|C(x)| = 0) — All 1 - p_i > q_hat — Routed to Human Triage`;
+          telemetryOut.innerHTML = `<code>is_ood = False | requires_human_review = True (Empty Set; Staged to .npy + manifest.jsonl via service/storage.py)<br>taxon_predictions_total{status="needs_review"} += 1<br>taxon_human_referrals_active.set(queue_depth)</code>`;
         } else if (cardinality > 3) {
           banner.className = "sim-verdict refer";
-          banner.innerText = `AMBIGUOUS PREDICTION SET (|C(x)| = ${cardinality} > k_max = 3) • Routed to Human Triage`;
-          telemetryOut.innerHTML = `<code>is_ood = False | requires_human_review = True (Cardinality > 3; Staged to .npy + manifest.jsonl via service/storage.py)<br>taxon_predictions_total{status="needs_review"} += 1<br>taxon_human_referrals_active.inc()</code>`;
+          banner.innerText = `AMBIGUOUS PREDICTION SET (|C(x)| = ${cardinality} > k_max = 3) — Routed to Human Triage`;
+          telemetryOut.innerHTML = `<code>is_ood = False | requires_human_review = True (Cardinality > 3; Staged to .npy + manifest.jsonl via service/storage.py)<br>taxon_predictions_total{status="needs_review"} += 1<br>taxon_human_referrals_active.set(queue_depth)</code>`;
         } else {
           banner.className = "sim-verdict pass";
-          banner.innerText = `AUTO-ASSIGNED • |C(x)| = ${cardinality} <= k_max (3) • Guaranteed 95% Marginal Coverage`;
+          banner.innerText = `AUTO-ASSIGNED — |C(x)| = ${cardinality} <= k_max (3) — Guaranteed 95% Marginal Coverage`;
           telemetryOut.innerHTML = `<code>is_ood = False | requires_human_review = False<br>taxon_predictions_total{status="auto_assigned"} += 1<br>top_prediction = "${probs[0].sci}"</code>`;
         }
 
@@ -3014,68 +3074,76 @@
         });
       }
 
-      document.addEventListener("DOMContentLoaded", () => {
+      function bootVisualizer() {
         initCytoscape();
         renderModelCards();
         updateSimulatorWorkbench();
-
-        // Dynamic fetch of assets/pareto_results.json (fallback to PARETO_RAW)
-        const fetchParetoData = () => {
-          const tryFetch = (url) =>
-            fetch(url).then((res) => {
-              if (!res.ok) throw new Error("HTTP " + res.status);
-              return res.json();
-            });
-
-          tryFetch("assets/pareto_results.json")
-            .catch(() => tryFetch("../assets/pareto_results.json"))
-            .catch(() => tryFetch("/taxon-vision-mlops/assets/pareto_results.json"))
-            .then((jsonData) => {
-              if (Array.isArray(jsonData) && jsonData.length > 0) {
-                jsonData.forEach((item) => {
-                  const match = PARETO_RAW.find((d) => d.extractor === item.extractor);
-                  if (match) {
-                    if (item.p50_latency_ms !== undefined) match.p50_latency_ms = item.p50_latency_ms;
-                    if (item.p95_latency_ms !== undefined) match.p95_latency_ms = item.p95_latency_ms;
-                    if (item.throughput_fps !== undefined) match.throughput_fps = item.throughput_fps;
-                    if (item.vram_peak_mb !== undefined) match.vram_peak_mb = item.vram_peak_mb;
-                    if (item.parameters_m !== undefined) match.parameters_m = item.parameters_m;
-                    if (item.accuracy_score !== undefined) match.accuracy_score = item.accuracy_score;
-                    if (item.canonical_baseline !== undefined) match.canonical_baseline = item.canonical_baseline;
-                  }
-                });
-                renderModelCards();
-                const paretoView = document.getElementById("pareto-view");
-                if (paretoView && paretoView.classList.contains("active")) {
-                  renderPlotlyCharts();
-                }
-              }
-            })
-            .catch((err) => {
-              console.debug("pareto_results.json not fetched, using PARETO_RAW fallback", err);
-            });
-        };
         fetchParetoData();
-
-        // Default populate inspector data without covering the canvas initially
-        const defaultNode = cy ? cy.$("#route_predict") : null;
-        if (defaultNode && defaultNode.length > 0) {
-          renderNodeInspector(defaultNode.data(), false);
-        }
+        initControls();
 
         // ResizeObserver guarantees zero blank views when opening inside Antigravity Webviews
         if (typeof ResizeObserver !== "undefined") {
-          const ro = new ResizeObserver(() => {
-            if (
-              cy &&
-              document.getElementById("graph-view").classList.contains("active")
-            ) {
-              cy.resize();
-              cy.fit(undefined, 45);
-            }
-          });
-          ro.observe(document.getElementById("cy"));
+          const cyEl = document.getElementById("cy");
+          if (cyEl) {
+            const ro = new ResizeObserver(() => {
+              if (
+                cy &&
+                document.getElementById("graph-view").classList.contains("active")
+              ) {
+                cy.resize();
+                cy.fit(undefined, 45);
+              }
+            });
+            ro.observe(cyEl);
+          }
         }
+      }
+
+      // Dynamic fetch of assets/pareto_results.json (fallback to PARETO_RAW)
+      const fetchParetoData = () => {
+        const tryFetch = (url) =>
+          fetch(url).then((res) => {
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            return res.json();
+          });
+
+        tryFetch("assets/pareto_results.json")
+          .catch(() => tryFetch("../assets/pareto_results.json"))
+          .catch(() => tryFetch("/taxon-vision-mlops/assets/pareto_results.json"))
+          .then((jsonData) => {
+            if (Array.isArray(jsonData) && jsonData.length > 0) {
+              jsonData.forEach((item) => {
+                const match = PARETO_RAW.find((d) => d.extractor === item.extractor);
+                if (match) {
+                  if (item.p50_latency_ms !== undefined) match.p50_latency_ms = item.p50_latency_ms;
+                  if (item.p95_latency_ms !== undefined) match.p95_latency_ms = item.p95_latency_ms;
+                  if (item.throughput_fps !== undefined) match.throughput_fps = item.throughput_fps;
+                  if (item.vram_peak_mb !== undefined) match.vram_peak_mb = item.vram_peak_mb;
+                  if (item.parameters_m !== undefined) match.parameters_m = item.parameters_m;
+                  if (item.accuracy_score !== undefined) match.accuracy_score = item.accuracy_score;
+                  if (item.canonical_baseline !== undefined) match.canonical_baseline = item.canonical_baseline;
+                }
+              });
+              renderModelCards();
+              const paretoView = document.getElementById("pareto-view");
+              if (paretoView && paretoView.classList.contains("active")) {
+                renderPlotlyCharts();
+              }
+            }
+          })
+          .catch((err) => {
+            console.debug("pareto_results.json not fetched, using PARETO_RAW fallback", err);
+          });
+      };
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", bootVisualizer);
+      } else {
+        bootVisualizer();
+      }
+
+      // Tab switching and layout controls attached immediately or on DOM ready
+      const initControls = () => {
 
         // View Tab Switching
         document.querySelectorAll(".tab-btn").forEach((btn) => {
@@ -3277,7 +3345,7 @@
               cy.elements().removeClass("dimmed highlighted-edge highlighted");
           }
         });
-      });
+      };
     </script>
   </body>
 </html>

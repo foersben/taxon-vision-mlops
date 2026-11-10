@@ -21,20 +21,30 @@ To process citizen-science visual streams reliably, the TaxonVision-MLOps archit
 \centering
 \caption{TaxonVision-MLOps 5-Tier Operational Maturity Framework (Adapted from Google MLOps)}
 \label{tab:maturity_framework}
-\begin{tabularx}{\textwidth}{@{}l X X@{}}
+\begin{tabularx}{\textwidth}{@{}p{0.25\textwidth} X X@{}}
 \toprule
 \textbf{Maturity Level} & \textbf{Infrastructure Configuration} & \textbf{Operational Focus} \\
 \midrule
 \textbf{0: Manual (Google Baseline)} & Isolated interactive notebooks; manual state handoffs. & Localised algorithm prototyping. \\
-\textbf{1: Pipeline (Google Baseline)} & Automated DAGs; basic data validation. & Continuous training baseline. \\
-\textbf{2: CI/CD (Google Baseline)} & GitHub Actions \& Jenkins; ONNX graph export. & Rapid, repeatable code \& model releases. \\
-\textbf{3: Feedback (TaxonVision Extension)} & Telemetry scraping; Active Learning triage queues. & Real-time drift detection \& data loops. \\
-\textbf{4: Safety (TaxonVision Extension)} & Split Conformal Prediction; Energy-Based OOD. & Distribution-free coverage guarantees ($1-\alpha$). \\
+\textbf{1: Pipeline (Google Baseline)} & Automated DVC DAGs; consolidated 4-DB PostgreSQL tracking; baseline feature extraction. & Continuous training baseline \& dataset lineage. \\
+\textbf{2: CI/CD (Google Baseline)} & GitHub Actions PR gates; Jenkins RTX 5070 Ti GPU pods; Airflow~3 LocalExecutor; ONNX graph export. & Rapid, repeatable code, data \& model releases. \\
+\textbf{3: Feedback (TaxonVision Extension)} & PostgreSQL prediction telemetry; two-tier drift ($W_1$ \& $\text{MMD}^2$); Grafana webhook relay; Label Studio triage. & Continuous drift detection, automated retraining \& active learning. \\
+\textbf{4: Safety (TaxonVision Extension)} & Split Conformal Prediction ($1-\alpha$); Energy-Based OOD; Stage~7 Four-Gate Promotion Verdict. & Distribution-free coverage guarantees \& production safety. \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
 The comprehensive architecture diagram presented on the following page serves as the visual synthesis of this maturity framework. It maps the end-to-end TaxonVision-MLOps deployment strategy, detailing the physical separation between the offline classification engine and the continuous taxonomic Multimodal Knowledge Graph (MMKG). Furthermore, it illustrates the critical convergence of these dual pipelines at the inference serving boundary, where epistemic safety gates and active learning feedback loops guarantee sustained operational reliability.
+
+\section{Tri-Plane Orchestration Matrix}
+\label{sec:tri_plane_orchestration}
+
+A common anti-pattern in MLOps architectures is tool overlap -- attempting to force a single CI runner to handle cron scheduling, or forcing a workflow orchestrator to execute bare-metal GPU builds. The TaxonVision-MLOps platform eliminates ambiguity by enforcing a strict \textbf{Tri-Plane Orchestration Matrix}, cleanly partitioning duties across three specialised engines:
+\begin{enumerate}
+    \item \textbf{GitHub Actions (Static PR Verification \& Release Plane):} Ephemeral cloud runners executing fast pre-merge verification: Ruff linting, MyPy strict type analysis across 70 source files, Open Knowledge Format (OKF) schema validation, license audits, cognitive complexity bounds ($\le 15$), and fast pytest suites. Upon merge to \texttt{main}, it builds hermetic wheel distributions and multi-arch production container images published to GHCR.
+    \item \textbf{Apache Airflow 3 (Stateful Control Plane \& Scheduling):} Deployed as an in-cluster control plane running \texttt{LocalExecutor} backed by PostgreSQL. Airflow is strictly reserved for stateful, cron-scheduled, and event-driven workflows: the hourly prediction drift monitor (\texttt{prediction\_drift\_monitor} DAG), automated retraining coordination (\texttt{model\_retraining} DAG), and bidirectional synchronisation with the Label Studio human annotation workspace. Airflow executes zero heavy machine learning operations itself, maintaining an extremely light operational footprint without requiring CUDA drivers or Python virtual environment overhead in scheduler containers.
+    \item \textbf{Jenkins (Bare-Metal GPU Compute Plane):} Deployed on the local bare-metal host, Jenkins manages ephemeral Kubernetes worker pods with exclusive NVIDIA GeForce RTX 5070 Ti access. Jenkins executes the computationally intensive stages of the DVC pipeline: high-throughput Vision Transformer feature extraction, Optuna Bayesian hyperparameter sweeps, and Stage~7 dual holdout evaluation with the Four-Gate Model Promotion Verdict.
+\end{enumerate}
 
 \section{Remote-Only Execution Principle}
 \label{sec:remote_only}

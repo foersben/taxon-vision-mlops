@@ -14,7 +14,7 @@ from taxon_vision.config import get_settings
 from taxon_vision.service.inference import get_classifier
 
 
-def _save_checkpoint(head: nn.Module, checkpoint_path: Path | str | None) -> Path:
+def save_checkpoint(head: nn.Module, checkpoint_path: Path | str | None = None) -> Path:
     """Persist trained head weights and invalidate runtime classifier cache.
 
     Why:
@@ -32,7 +32,7 @@ def _save_checkpoint(head: nn.Module, checkpoint_path: Path | str | None) -> Pat
     """
     if checkpoint_path is None:
         settings = get_settings()
-        target_path = Path(__file__).resolve().parents[4] / settings.model.head_checkpoint_path
+        target_path = Path(settings.model.head_checkpoint_path)
     else:
         target_path = Path(checkpoint_path)
 

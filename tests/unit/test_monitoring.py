@@ -1,12 +1,18 @@
 # SPDX-FileCopyrightText: 2026 Benjamin Förster
 # SPDX-License-Identifier: MIT
-"""Unit tests for monitoring and telemetry components."""
+"""Unit tests for monitoring, representation drift, and MMD hypothesis testing."""
 
 from __future__ import annotations
 
 import numpy as np
+import pytest
+from scipy.stats import ortho_group
 
-from taxon_vision.monitoring.drift import compute_wasserstein_drift
+from taxon_vision.monitoring.drift import (
+    MMDResult,
+    compute_mmd2_permutation,
+    compute_wasserstein_drift,
+)
 
 
 def test_compute_wasserstein_drift() -> None:
@@ -35,3 +41,75 @@ def test_compute_wasserstein_drift_unnormalized_vs_normalized_paradox() -> None:
 
     # Unit vectors collapse to static 1.0 vs 1.0 comparison (drift ~ 0.0)
     assert np.isclose(drift_unit, 0.0, atol=1e-6)
+
+
+def test_compute_mmd2_same_distribution() -> None:
+    """Verify that independent draws from the same distribution yield p-value > 0.05."""
+    rng = np.random.default_rng(42)
+    ref = rng.standard_normal(size=(120, 16))
+    curr = rng.standard_normal(size=(120, 16))
+
+    result = compute_mmd2_permutation(ref, curr, max_samples=200, n_permutations=200, seed=42)
+    assert isinstance(result, MMDResult)
+    assert result.p_value > 0.05
+    assert result.n_reference == 120
+    assert result.n_current == 120
+    assert result.bandwidth > 0.0
+
+
+def test_compute_mmd2_mean_shift() -> None:
+    """Verify that multivariate mean displacement triggers rejection of null hypothesis with p < 0.01."""
+    rng = np.random.default_rng(42)
+    ref = rng.standard_normal(size=(120, 16))
+    curr = rng.standard_normal(size=(120, 16)) + 0.5
+
+    result = compute_mmd2_permutation(ref, curr, max_samples=200, n_permutations=200, seed=42)
+    assert result.p_value < 0.01
+    assert result.mmd2 > 0.0
+
+
+def test_compute_mmd2_rotation_blind_spot() -> None:
+    """Verify that orthogonal manifold rotations are detected by MMD while invisible to 1D norm W1."""
+    rng = np.random.default_rng(42)
+    # Construct anisotropic covariance matrix (elongated in first dimension)
+    cov = np.diag([10.0, 1.0, 0.1] + [1.0] * 13)
+    ref = rng.multivariate_normal(np.zeros(16), cov, size=150)
+
+    # Apply random orthogonal rotation matrix R in O(16)
+    rot_matrix = ortho_group.rvs(16, random_state=42)
+    curr_rotated = ref @ rot_matrix.T
+
+    # Tier 1: Norms are invariant under orthogonal rotation (||Rx||_2 == ||x||_2)
+    w1_dist = compute_wasserstein_drift(ref, curr_rotated)
+    assert np.isclose(w1_dist, 0.0, atol=1e-6)
+
+    # Tier 2: MMD detects the angular distribution displacement
+    mmd_res = compute_mmd2_permutation(ref, curr_rotated, max_samples=200, n_permutations=200, seed=42)
+    assert mmd_res.p_value < 0.01
+    assert mmd_res.mmd2 > 0.0
+
+
+def test_compute_mmd2_deterministic_seed() -> None:
+    """Verify that identical inputs and seeds yield identical bitwise MMD results."""
+    rng = np.random.default_rng(42)
+    ref = rng.standard_normal(size=(80, 8))
+    curr = rng.standard_normal(size=(80, 8)) + 0.2
+
+    res1 = compute_mmd2_permutation(ref, curr, max_samples=50, n_permutations=100, seed=123)
+    res2 = compute_mmd2_permutation(ref, curr, max_samples=50, n_permutations=100, seed=123)
+
+    assert res1.mmd2 == res2.mmd2
+    assert res1.p_value == res2.p_value
+    assert res1.bandwidth == res2.bandwidth
+
+
+def test_compute_mmd2_input_validation() -> None:
+    """Verify that populations with fewer than 2 samples raise ValueError."""
+    ref = np.ones((1, 8))
+    curr = np.ones((10, 8))
+
+    with pytest.raises(ValueError, match="at least two samples per group"):
+        compute_mmd2_permutation(ref, curr)
+
+    with pytest.raises(ValueError, match="at least two samples per group"):
+        compute_mmd2_permutation(curr, ref)

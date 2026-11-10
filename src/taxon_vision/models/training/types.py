@@ -4,12 +4,58 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple, TypedDict
 
 import torch
+from torch import nn, optim
+
+from taxon_vision.models.loss import ClassBalancedLoss
+
+
+class TrainingComponentsTuple(NamedTuple):
+    """NamedTuple representation of wired training components."""
+
+    head: nn.Module
+    criterion: ClassBalancedLoss
+    optimizer: optim.Optimizer
+    config: HeadTrainingConfig
+    params: dict[str, Any]
+
+
+class ResolvedTrainingParametersTuple(NamedTuple):
+    """NamedTuple representation of resolved baseline training parameters."""
+
+    extractor: str
+    epochs: int
+    batch_size: int
+    learning_rate: float
+    checkpoint_path: Path | str
+
+
+class PromotionAlias(StrEnum):
+    """Enumeration of model promotion aliases and gating outcomes."""
+
+    PRODUCTION = "Production"
+    CHALLENGER = "Challenger"
+    ARCHIVED = "Archived"
+    SKIPPED_BELOW_INCUMBENT = "skipped_below_incumbent"
+
+
+@dataclass(frozen=True)
+class TrainingHyperparameters:
+    """Resolved hyperparameter tuple and provenance tracking."""
+
+    learning_rate: float
+    weight_decay: float
+    dropout: float
+    cb_beta: float
+    batch_size: int
+    noise_std: float
+    hyperparameter_source: str
 
 
 @dataclass(frozen=True)
@@ -256,3 +302,102 @@ class TuningConfig:
     reset_study: bool = False
     min_resource: int = 3
     reduction_factor: int = 2
+
+
+@dataclass(frozen=True)
+class TrainingComponents:
+    """Encapsulates wired PyTorch model head, loss criterion, optimizer, and training configs.
+
+    Provides attribute access (.head, .criterion, ...) and sequence unpacking support
+    (head, criterion, optimizer, config, params = components) to maintain 100% backward
+    compatibility with legacy 5-tuple consumers.
+    """
+
+    head: nn.Module
+    criterion: ClassBalancedLoss
+    optimizer: optim.Optimizer
+    config: HeadTrainingConfig
+    params: dict[str, Any]
+
+    def to_tuple(self) -> TrainingComponentsTuple:
+        """Export as typed 5-tuple for sequence-unpacking boundaries."""
+        return TrainingComponentsTuple(
+            head=self.head,
+            criterion=self.criterion,
+            optimizer=self.optimizer,
+            config=self.config,
+            params=self.params,
+        )
+
+    def __iter__(self) -> Iterator[Any]:
+        """Enable tuple-style unpacking: head, criterion, optimizer, config, params = components."""
+        yield self.head
+        yield self.criterion
+        yield self.optimizer
+        yield self.config
+        yield self.params
+
+
+@dataclass(frozen=True)
+class ResolvedTrainingParameters:
+    """Resolved baseline parameters and paths for training pipeline execution."""
+
+    extractor: str
+    epochs: int
+    batch_size: int
+    learning_rate: float
+    checkpoint_path: Path | str
+
+    def to_tuple(self) -> ResolvedTrainingParametersTuple:
+        """Export as typed 5-tuple for sequence-unpacking boundaries."""
+        return ResolvedTrainingParametersTuple(
+            extractor=self.extractor,
+            epochs=self.epochs,
+            batch_size=self.batch_size,
+            learning_rate=self.learning_rate,
+            checkpoint_path=self.checkpoint_path,
+        )
+
+    def __iter__(self) -> Iterator[Any]:
+        """Enable tuple-style unpacking for backwards compatibility."""
+        yield self.extractor
+        yield self.epochs
+        yield self.batch_size
+        yield self.learning_rate
+        yield self.checkpoint_path
+
+
+class TrainingPipelineResult(TypedDict):
+    """Structured result dictionary returned by run_training_pipeline.
+
+    Guarantees strict static type safety while remaining transparently compatible with dict-based access patterns across REST API endpoints, CLI, and test assertions.
+
+    Attributes:
+        status: Run status (e.g., "success", "failed").
+        extractor: Identifier for the feature extractor backbone.
+        epochs_trained: Actual number of epochs completed.
+        final_train_loss: Final training loss value.
+        final_val_loss: Final validation loss value.
+        final_val_accuracy: Final validation accuracy.
+        checkpoint_path: File path to the trained model checkpoint.
+        duration_seconds: Total execution time in seconds.
+        promotion_status: MLflow model promotion status (if applicable).
+        hyperparameter_source: Source of hyperparameters (e.g., "grid", "bayesian").
+        mlflow_run_id: MLflow run identifier.
+        mlflow_model_id: MLflow model version identifier.
+        history: Dictionary containing epoch-wise metrics.
+    """
+
+    status: str
+    extractor: str
+    epochs_trained: int
+    final_train_loss: float
+    final_val_loss: float
+    final_val_accuracy: float
+    checkpoint_path: str
+    duration_seconds: float
+    promotion_status: str | None
+    hyperparameter_source: str
+    mlflow_run_id: str | None
+    mlflow_model_id: str | None
+    history: dict[str, list[float]]

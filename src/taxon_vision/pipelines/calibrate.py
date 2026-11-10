@@ -10,31 +10,55 @@ calibration embeddings (data/embeddings/cal_embeddings.pt) to guarantee distribu
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import logging
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+from typing import NamedTuple
 
+import mlflow
+import mlflow.data
 import numpy as np
 import torch
 import yaml
 
 from taxon_vision.config import get_settings
 from taxon_vision.inference.onnx_engine import ONNXInferenceEngine
+from taxon_vision.models.training.tracking import resume_parent_mlflow_run
 from taxon_vision.uncertainty.conformal import SplitConformalPredictor
 from taxon_vision.uncertainty.ood_detector import EnergyOODDetector
 
 logger = logging.getLogger(__name__)
 
 
-def load_embeddings_and_labels(path: Path) -> tuple[np.ndarray, np.ndarray]:
+class EmbeddingsAndLabels(NamedTuple):
+    """Deserialized NumPy embedding matrix and ground-truth label vector."""
+
+    embeddings: np.ndarray
+    labels: np.ndarray
+
+
+@dataclass(frozen=True)
+class _CalibrationSummary:
+    """Calibrated conformal and OOD thresholds with empirical sample statistics."""
+
+    alpha: float
+    q_hat: float
+    tau_ood: float | None
+    sample_size: int
+    empirical_coverage: float
+
+
+def load_embeddings_and_labels(path: Path) -> EmbeddingsAndLabels:
     """Load embeddings and corresponding labels from a serialized .pt split file.
 
     Args:
         path: Path to serialized PyTorch embedding partition dictionary.
 
     Returns:
-        Tuple of (embeddings, labels) as numpy arrays.
+        EmbeddingsAndLabels of (embeddings, labels) as numpy arrays.
     """
     if not path.exists():
         raise FileNotFoundError(f"Embedding partition file not found: {path}")
@@ -51,32 +75,28 @@ def load_embeddings_and_labels(path: Path) -> tuple[np.ndarray, np.ndarray]:
 
     embs_np = embs.numpy() if isinstance(embs, torch.Tensor) else np.asarray(embs, dtype=np.float32)
     lbls_np = lbls.numpy() if isinstance(lbls, torch.Tensor) else np.asarray(lbls, dtype=np.int64)
-    return embs_np, lbls_np
+    return EmbeddingsAndLabels(embeddings=embs_np, labels=lbls_np)
 
 
 def _save_calibration_artifacts(
     out_path: Path,
     metrics_path: Path | None,
-    alpha: float,
-    q_hat: float,
-    tau_ood: float | None,
-    sample_size: int,
-    empirical_coverage: float,
+    summary: _CalibrationSummary,
 ) -> None:
     """Save calibration configuration and optional DVC summary metrics to disk."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
     yaml_payload = {
         "calibration": {
             "method": "split-conformal",
-            "nominal_coverage": round(1.0 - alpha, 4),
-            "alpha": round(alpha, 4),
-            "q_hat": round(q_hat, 4),
-            "tau_ood": round(tau_ood, 4) if tau_ood is not None else None,
-            "ood_energy_threshold": round(tau_ood, 4) if tau_ood is not None else None,
+            "nominal_coverage": round(1.0 - summary.alpha, 4),
+            "alpha": round(summary.alpha, 4),
+            "q_hat": round(summary.q_hat, 4),
+            "tau_ood": round(summary.tau_ood, 4) if summary.tau_ood is not None else None,
+            "ood_energy_threshold": round(summary.tau_ood, 4) if summary.tau_ood is not None else None,
             "max_set_size_for_auto_accept": 3,
             "empty_set_action": "route_to_human_triage",
             "min_confidence_threshold": 0.60,
-            "num_calibration_samples": sample_size,
+            "num_calibration_samples": summary.sample_size,
         }
     }
     with out_path.open("w", encoding="utf-8") as f:
@@ -86,13 +106,13 @@ def _save_calibration_artifacts(
     if metrics_path is not None:
         metrics_path.parent.mkdir(parents=True, exist_ok=True)
         metrics_meta = {
-            "alpha": round(alpha, 4),
-            "nominal_coverage": round(1.0 - alpha, 4),
-            "empirical_calibration_coverage": round(empirical_coverage, 4),
-            "q_hat": round(q_hat, 4),
-            "tau_ood": round(tau_ood, 4) if tau_ood is not None else None,
-            "ood_energy_threshold": round(tau_ood, 4) if tau_ood is not None else None,
-            "num_calibration_samples": sample_size,
+            "alpha": round(summary.alpha, 4),
+            "nominal_coverage": round(1.0 - summary.alpha, 4),
+            "empirical_calibration_coverage": round(summary.empirical_coverage, 4),
+            "q_hat": round(summary.q_hat, 4),
+            "tau_ood": round(summary.tau_ood, 4) if summary.tau_ood is not None else None,
+            "ood_energy_threshold": round(summary.tau_ood, 4) if summary.tau_ood is not None else None,
+            "num_calibration_samples": summary.sample_size,
         }
         with metrics_path.open("w", encoding="utf-8") as f:
             json.dump(metrics_meta, f, indent=2)
@@ -144,12 +164,45 @@ def _build_arg_parser(default_alpha: float) -> argparse.ArgumentParser:
         default=False,
         help="Allow synthetic score generation when calibration files are absent.",
     )
-    # Legacy flags for compatibility
-    parser.add_argument("--cache-path", type=str, default=None, help=argparse.SUPPRESS)
-    parser.add_argument("--split", type=str, default="cal", help=argparse.SUPPRESS)
-    parser.add_argument("--checkpoint", type=str, default=None, help=argparse.SUPPRESS)
-    parser.add_argument("--scores-path", type=Path, default=None, help=argparse.SUPPRESS)
     return parser
+
+
+def _log_calibration_to_mlflow(
+    summary: _CalibrationSummary,
+    emb_path: Path,
+    out_path: str | None = None,
+    embeddings: np.ndarray | None = None,
+    labels: np.ndarray | None = None,
+) -> None:
+    """Log calibration metrics, dataset lineage, and artifacts to parent MLflow run.
+
+    Args:
+        summary: Calibrated summary thresholds and coverage metrics.
+        emb_path: Path to calibration embeddings tensor file.
+        out_path: Optional destination path for calibration parameters JSON.
+        embeddings: Optional in-memory calibration embeddings array.
+        labels: Optional in-memory calibration labels array.
+    """
+    with resume_parent_mlflow_run() as ctx:
+        if ctx is None:
+            return
+
+        if emb_path.exists() and embeddings is not None and labels is not None:
+            with contextlib.suppress(Exception):
+                cal_ds = mlflow.data.from_numpy(embeddings, targets=labels, name="cal_embeddings")  # type: ignore[attr-defined]
+                mlflow.log_input(cal_ds, context="calibration")
+
+        mlflow.log_metrics(
+            {
+                "conformal.q_hat": summary.q_hat,
+                "conformal.empirical_calibration_coverage": summary.empirical_coverage,
+                "conformal.tau_ood": summary.tau_ood if summary.tau_ood is not None else 0.0,
+                "conformal.num_calibration_samples": summary.sample_size,
+            }
+        )
+
+        if out_path and Path(out_path).exists():
+            mlflow.log_artifact(str(out_path), artifact_path="calibration")
 
 
 def calibrate_cli(argv: list[str] | None = None) -> int:
@@ -161,14 +214,12 @@ def calibrate_cli(argv: list[str] | None = None) -> int:
     Returns:
         Integer exit code (0 on success).
     """
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s", force=True)
     settings = get_settings()
     parser = _build_arg_parser(settings.conformal.alpha)
     args = parser.parse_args(argv)
 
     emb_path = args.embeddings
-    if not emb_path.exists() and args.cache_path and Path(args.cache_path).exists():
-        emb_path = Path(args.cache_path)
 
     if not emb_path.exists():
         if not args.allow_synthetic and not settings.model.allow_untrained_fallback:
@@ -214,9 +265,7 @@ def calibrate_cli(argv: list[str] | None = None) -> int:
     print(f"  Calibrated OOD Energy Threshold ({percentile:.1f}th pctl) = {tau_ood:.4f}")
     print(f"  In-Distribution Calibration Samples = {cal_sample_size}/{sample_size}")
 
-    _save_calibration_artifacts(
-        out_path=args.out,
-        metrics_path=args.metrics_out,
+    summary = _CalibrationSummary(
         alpha=args.alpha,
         q_hat=q_hat,
         tau_ood=tau_ood,
@@ -224,17 +273,20 @@ def calibrate_cli(argv: list[str] | None = None) -> int:
         empirical_coverage=empirical_coverage,
     )
 
-    from taxon_vision.models.training.tracking import log_stage_metrics_to_parent_run
-
-    log_stage_metrics_to_parent_run(
-        metrics={
-            "q_hat": q_hat,
-            "empirical_calibration_coverage": empirical_coverage,
-            "tau_ood": tau_ood if tau_ood is not None else 0.0,
-            "num_calibration_samples": sample_size,
-        },
-        prefix="conformal.",
+    _save_calibration_artifacts(
+        out_path=args.out,
+        metrics_path=args.metrics_out,
+        summary=summary,
     )
+
+    _log_calibration_to_mlflow(
+        summary=summary,
+        emb_path=emb_path,
+        out_path=args.out,
+        embeddings=embeddings if emb_path.exists() else None,
+        labels=labels if emb_path.exists() else None,
+    )
+
     return 0
 
 

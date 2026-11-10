@@ -10,7 +10,7 @@
 #     * training: epochs, batch_size, learning_rate, weight_decay, cb_beta, tune
 #     * export: quantize_int8
 #     * conformal: alpha (0.05 / 95% coverage), min_confidence, ood_tpr
-#     * evaluation: latency_sla_ms (25.0 ms fast-path SLA)
+#     * evaluation: latency_sla_ms (25.0 ms fast-path SLO)
 # - `config/default_config.yaml` (This File): Governs system runtime defaults,
 #   HTTP service parameters, paths, model registry mappings, telemetry, and
 #   external database infrastructure. Any overlapping keys defined in root `/params.yaml`
@@ -26,6 +26,7 @@ service:
   image_cache_max_items: 100        # ~20 MB RAM at ~200 KB per image
   image_cache_ttl_seconds: 900.0    # 15 minutes
   ui_top_k_candidates: 5
+  redis_url: null                   # Optional distributed Redis URL (e.g. redis://localhost:6379/0)
 
 model:
   default_extractor: "dinov3"
@@ -35,7 +36,7 @@ model:
   channels: 3
   mean: [0.485, 0.456, 0.406]
   std: [0.229, 0.224, 0.225]
-  onnx_model_path: "models/checkpoints/taxon_vision_quantized.onnx"
+  onnx_model_path: "models/checkpoints/model_int8.onnx"
   head_checkpoint_path: "models/checkpoints/head.pt"
   taxa_catalog_path: "config/taxa_catalog.yaml"
   eval_resize_ratio: 1.1428571428571428
@@ -47,6 +48,7 @@ model:
   allow_untrained_fallback: false
   prefer_onnx_runtime: true
   onnx_opset_version: 17
+  onnx_intra_op_threads: 2
   cam_numerical_epsilon: 1.0e-8
   ood_temperature: 1.0
   ood_energy_threshold: -2.40
@@ -92,8 +94,14 @@ ingestion:
   per_page: 200
 
 mlflow:
-  tracking_uri: "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
-  experiment_name: "taxon-vision-head-tuning"
+  tracking_uri: "http://127.0.0.1:5000"
+  fallback_sqlite_uri: "sqlite:///data/mlflow/mlflow.db"
+  dagshub_uri: "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
+  experiment_name: "taxon-vision-head-training"
+  drift_experiment_name: "taxon-vision-drift"
+  model_registry_name: "taxon_vision_classifier"
+  onnx_registry_name: "taxon_vision_onnx"
+  health_check_timeout_seconds: 1.0
 
 conformal:
   alpha: 0.05
@@ -124,5 +132,30 @@ optuna:
   min_resource: 3
   reduction_factor: 2
 
+telemetry:
+  database_url: "postgresql+psycopg://telemetry:taxon_telemetry_pass@localhost:5432/telemetry"
+  pool_min_size: 2
+  pool_max_size: 10
+  timeout_seconds: 5.0
+  allow_in_memory_fallback: false
+  fallback_buffer_size: 500
+
+drift:
+  window_size: 500
+  min_samples: 50
+  tau_w1: 0.15
+  mmd_max_samples: 500
+  mmd_permutations: 200
+  alpha: 0.01
+  config_path: "config/drift_config.yaml"
+  reference_embeddings_path: "data/embeddings/cal_embeddings.pt"
+
 evaluation:
-  latency_sla_ms: 25.0
+  latency_sla_ms: 120.0
+
+promotion:
+  quantization_drop_tol: 0.03
+  coverage_tolerance: 0.05
+  latency_slo_ms: 120.0
+  min_telemetry_samples: 50
+  drift_alpha: 0.01

@@ -3,11 +3,11 @@ type: Reference
 title: Automation & Scripts Reference
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
-version: 1.0
-description: Comprehensive operational reference for CI/CD automation, K3s GPU training orchestration, MLflow maintenance, and governance verification scripts.
-tags: [scripts, automation, ci-cd, jenkins, gpu, mlflow, okf, governance]
-generated: {by: "process:docs-librarian", at: "2026-10-24T22:25:00Z"}
-verified: {by: "process:docs-librarian", at: "2026-10-24T22:25:00Z"}
+version: 1.1
+description: Comprehensive operational reference for CI/CD automation, K3s GPU training orchestration, MLflow maintenance, synthetic traffic simulation, secret provisioning, and governance verification scripts.
+tags: [scripts, automation, ci-cd, jenkins, gpu, mlflow, okf, governance, simulation, secrets]
+generated: {by: "process:docs-librarian", at: "2026-11-10T16:00:00Z"}
+verified: {by: "process:docs-librarian", at: "2026-11-10T16:00:00Z"}
 ---
 
 # Automation & Scripts Reference
@@ -18,7 +18,7 @@ The `scripts/` directory houses structured automation, continuous integration, g
 
 ## 1. Canonical Pipeline CLI Entrypoints
 
-All 7 stages of the Epistemic Diamond DAG are implemented as first-class CLI entrypoints within `src/taxon_vision/pipelines/`. Per Rule 00, all commands must execute via `pixi run -e dev`:
+All 7 stages of the Epistemic Diamond DAG are implemented as first-class CLI entrypoints within `src/taxon_vision/pipelines/`. To guarantee reproducible hermetic environments and avoid unmanaged host dependencies, all commands execute via `pixi run -e dev`:
 
 ```bash
 # Stage 1: Ingestion from iNaturalist
@@ -109,7 +109,7 @@ Local developer validation harness reproducing the GitHub Actions CI pipeline wi
 
 #### Workflow Targets
 
-* `quality`: Enforces the Pure Pixi environment invariant (asserts no `.venv` or `uv.lock` exist), executes Markdown Rule 04 verification, audits OKF frontmatter, and runs Ruff linting, formatting, and MyPy type checks.
+* `quality`: Enforces the Pure Pixi environment invariant (asserts no `.venv` or `uv.lock` exist), executes Markdown typography and formatting verification, audits OKF frontmatter, and runs Ruff linting, formatting, and MyPy type checks.
 * `tests`: Executes the complete pytest test suite with coverage assertions ($\ge 80\%$), integration and invariant checks, and license compliance audits.
 * `docs`: Audits OKF frontmatter and compiles documentation using Zensical in strict mode (`zensical build --strict`).
 * `all`: Executes all three passes sequentially (default).
@@ -120,6 +120,20 @@ Local developer validation harness reproducing the GitHub Actions CI pipeline wi
 
 # Skip dependency re-sync
 TAXON_SKIP_SYNC=1 ./scripts/ci/local_ci.sh quality
+```
+
+---
+
+### `scripts/ci/smoke_test_mlflow.sh`
+
+Validation utility verifying that the in-cluster or local MLflow tracking server is live, operational, and responsive over HTTP before running pipeline feature extraction or model registration.
+
+* Probes `http://mlflow-server:5000/health` with retry bounds.
+* Verifies S3 artifact connectivity against SeaweedFS (`http://seaweedfs:8333`).
+
+```bash
+# Verify MLflow tracking server availability
+bash scripts/ci/smoke_test_mlflow.sh
 ```
 
 ---
@@ -143,6 +157,45 @@ pixi run -e dev python scripts/maintenance/cleanup_mlflow_registry.py
 
 # Execute pruning on remote DagsHub MLflow registry
 pixi run -e dev python scripts/maintenance/cleanup_mlflow_registry.py --execute --keep-last 10 --keep-top-k 5
+```
+
+---
+
+### `scripts/maintenance/visualize_airflow_dag.py`
+
+Zero-dependency offline visualizer that statically inspects Airflow DAG files using Python's native `ast` module, rendering terminal dependency trees in $< 100\,\text{ms}$ without requiring active Docker containers or background daemon processes.
+
+#### Operational Capabilities
+
+* **Offline AST Parsing:** Statically scans `airflow/dags/*.py` to extract tasks, operators, and bitshift dependency chains (`>>`).
+* **Interactive Filtering:** Supports targeted inspection of individual DAGs (`prediction_drift_monitor`, `model_retraining`) or complete repository scans.
+* **Residue Prevention:** Provides immediate developer feedback on DAG topologies without allocating memory in Docker or leaving container processes behind.
+
+```bash
+# Inspect all DAGs
+just airflow-dag
+
+# Inspect specific DAG
+just airflow-dag prediction_drift_monitor
+just airflow-dag model_retraining
+```
+
+---
+
+### `scripts/maintenance/simulate_traffic.py`
+
+Synthetic traffic generation and statistical drift evaluation harness for warming Prometheus metric buffers, populating PostgreSQL telemetry records, and verifying end-to-end drift alerting pipelines.
+
+#### Traffic Simulation Features
+
+* **Sequential Pacing:** Iterates through genuine sample images in `data/sample/`, formats multipart HTTP POST requests, and transmits them to `/api/v1/predict` at a controlled rate (`--delay-ms`, default 50ms).
+* **Telemetry Store Population:** Dispatches requests through FastAPI `BackgroundTasks` to populate `predictions` rows in PostgreSQL without blocking HTTP response latency.
+* **Immediate Drift Evaluation:** When `--trigger-drift` is set, invokes `POST /api/v1/drift/evaluate` upon completing the batch to calculate Tier 1 Wasserstein-1 distance and Tier 2 MMD² permutation tests.
+* **Cold-Start Elimination:** Warms empty Prometheus timeseries buffers on freshly deployed clusters, ensuring Grafana panels transition immediately from "No data" to active timeseries curves.
+
+```bash
+# Dispatch 60 synthetic predictions and evaluate drift
+pixi run -e dev python scripts/maintenance/simulate_traffic.py --count 60 --delay-ms 50 --trigger-drift
 ```
 
 ---
@@ -185,7 +238,7 @@ pixi run -e dev python scripts/governance/visualize_okf.py
 
 ### `scripts/governance/verify_markdown_rules.py`
 
-Syntax and formatting linter enforcing project-wide Markdown Rule 04 invariants.
+Syntax and formatting linter enforcing consistent Markdown typography and layout invariants.
 
 #### Enforced Invariants
 
@@ -200,6 +253,40 @@ pixi run -e dev python scripts/governance/verify_markdown_rules.py
 
 # Automatically fix non-compliant formatting
 pixi run -e dev python scripts/governance/verify_markdown_rules.py --fix
+```
+
+---
+
+### `scripts/governance/verify_hardware_invariants.py`
+
+Static repository auditor enforcing Rule 07 hardware invariants across all markdown, docstrings, and code comments.
+
+#### Hardware Invariants Checked
+
+* **Zero Hallucination:** Bans invented cloud GPU types (A100, H100, V100, L4, T4) or other consumer cards. Asserts that only verified hardware parameters (Intel Core i7-14700K, NVIDIA GeForce RTX 5070 Ti 16 GB, 128 GB DDR5, 2 TB PCIe Gen4 NVMe BTRFS zstd:3 non-CoW) are stated.
+* **Prohibited Trivia:** Bans PC-builder trivia (motherboard model, cooler brand, CAS latencies) that have no direct architectural consequence.
+* **Scientific Justification Standard:** Mandates that on-premise infrastructure choices are grounded strictly in mathematical unit economics, local kernel resource control, and zero-egress data advantages.
+
+```bash
+# Verify hardware invariants across all repository files
+pixi run -e dev python scripts/governance/verify_hardware_invariants.py
+```
+
+---
+
+### `scripts/governance/verify_code_invariants.py`
+
+Clean-code architecture and anti-pattern auditor enforcing Rule 08 across `src/taxon_vision/`.
+
+#### Code Invariants Checked
+
+* **Tuple Blindness Ban:** Detects untyped composite tuple returns, mandating typed dataclasses or NamedTuples.
+* **Parameter Arity Limit:** Flags non-trivial methods accepting $> 4$ primitive positional arguments.
+* **Dynamic Reflection Ban:** Prohibits `hasattr` and `getattr` dynamic workarounds in favor of explicit Pydantic models.
+
+```bash
+# Verify clean-code invariants
+pixi run -e dev python scripts/governance/verify_code_invariants.py
 ```
 
 ---
@@ -232,6 +319,23 @@ Dispatches the LUKS root disk unlock passphrase to the initramfs Dropbear SSH da
 
 ---
 
-### Top-Level CLI Forwarders (`scripts/validate_okf.py` & `scripts/visualize_okf.py`)
+## 6. Cluster Deployment & Secret Provisioning
 
-Convenience shims located directly under `scripts/`. They utilize Python's `runpy.run_path()` to dynamically resolve and invoke the canonical implementations in `scripts/governance/`, maintaining backward compatibility for legacy CI jobs and operator habit.
+### `scripts/deploy/provision_k8s_secrets.sh`
+
+Idempotent Kubernetes secret generator extracting credentials from a root-protected host environment file and injecting them into the cluster via `kubectl`.
+
+#### Secret Provisioning Mechanics
+
+* **Single-Source Ingestion:** Reads production credentials from a secure host file (`/etc/taxon-vision/production.env`, mode `0600`) outside the Git repository.
+* **Automatic Key Synthesis:** Automatically synthesizes high-entropy Base64 Fernet encryption keys and SHA-256 JWT tokens when absent from the environment file.
+* **Dry-Run Security Masking:** Generates and validates Kubernetes Secret manifests using `--dry-run=client`, sanitizing and masking sensitive values in CLI terminal outputs to prevent transcript credential leakage.
+* **Multi-Namespace Synchronization:** Injects `taxon-vision-secrets` and `airflow-secrets` into both `taxon-vision` and `taxon-vision-staging` namespaces.
+
+```bash
+# Dry-run validation (safe, masked output)
+bash scripts/deploy/provision_k8s_secrets.sh --dry-run /etc/taxon-vision/production.env
+
+# Apply secrets to cluster
+sudo bash scripts/deploy/provision_k8s_secrets.sh /etc/taxon-vision/production.env
+```

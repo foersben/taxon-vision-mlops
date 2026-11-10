@@ -47,7 +47,7 @@ run_quality() {
     echo "ERROR: .venv/ or uv.lock detected. The project solely relies on Pixi (.pixi/)." >&2
     exit 1
   fi
-  echo ">>> Enforcing Markdown Rule 04"
+  echo ">>> Enforcing Markdown formatting invariants"
   pixi run --frozen -e dev python scripts/governance/verify_markdown_rules.py
   echo ">>> Validating OKF Frontmatter and Links"
   pixi run --frozen -e dev python scripts/governance/validate_okf.py

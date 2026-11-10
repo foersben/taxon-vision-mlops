@@ -17,6 +17,8 @@ import base64
 import io
 import logging
 import math
+from functools import lru_cache
+from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 import numpy as np
@@ -24,10 +26,13 @@ import numpy.typing as npt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import yaml
 from PIL import Image
+from torchvision import transforms
 
 from taxon_vision.config import get_settings
-from taxon_vision.models.head import TaxonClassifier
+from taxon_vision.models.factory import create_feature_extractor, get_feature_dimension
+from taxon_vision.models.head import TaxonClassifier, load_head_checkpoint
 
 logger = logging.getLogger(__name__)
 
@@ -221,6 +226,45 @@ def _compute_spatial_cam(
     )
 
 
+@lru_cache(maxsize=1)
+def _get_cam_transform() -> transforms.Compose:
+    """Create and cache the preprocessing pipeline for CAM attribution."""
+    cfg = get_settings().model
+    return transforms.Compose(
+        [
+            transforms.Resize((cfg.image_size, cfg.image_size)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=cfg.mean, std=cfg.std),
+        ]
+    )
+
+
+def _resolve_default_classifier() -> TaxonClassifier:
+    """Construct or restore a standalone TaxonClassifier for CAM when none is injected."""
+    settings = get_settings()
+    backbone = create_feature_extractor(settings.model.default_extractor, pretrained=False, allow_fallback=True)
+    dim = get_feature_dimension(backbone)
+    catalog_path = Path(settings.model.taxa_catalog_path)
+    num_classes = 10
+    if catalog_path.is_file():
+        with open(catalog_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+            if isinstance(data, dict) and "taxa" in data:
+                num_classes = max(1, len(data["taxa"]))
+    classifier = TaxonClassifier(backbone=backbone, feature_dim=dim, num_classes=num_classes)
+    ckpt = Path(settings.model.head_checkpoint_path)
+    if ckpt.is_file():
+        try:
+            load_head_checkpoint(classifier.head, ckpt)
+        except Exception as exc:
+            if not settings.model.allow_untrained_fallback:
+                raise SaliencyExtractionError(f"Checkpoint incompatible for CAM: {exc}") from exc
+    elif not settings.model.allow_untrained_fallback:
+        raise SaliencyExtractionError(f"Head checkpoint missing at {ckpt} for CAM attribution.")
+    classifier.eval()
+    return classifier
+
+
 def generate_heatmap(
     image: Image.Image,
     classifier: nn.Module | None = None,
@@ -243,7 +287,7 @@ def generate_heatmap(
 
     Args:
         image: PIL Image instance representing the organism capture.
-        classifier: Optional TaxonClassifier instance. If None, resolves from service inference cache.
+        classifier: Optional TaxonClassifier instance. If None, resolves a standalone classifier.
         target_class: Target class index to explain. If None, defaults to the argmax prediction.
 
     Returns:
@@ -257,9 +301,7 @@ def generate_heatmap(
     model = classifier
     if model is None:
         try:
-            from taxon_vision.service.inference import get_classifier
-
-            model = get_classifier()
+            model = _resolve_default_classifier()
         except Exception as exc:
             logger.error("Failed to resolve classifier for CAM attribution: %s", exc)
             raise SaliencyExtractionError(f"Classifier model is not available for saliency extraction: {exc}") from exc
@@ -273,9 +315,7 @@ def generate_heatmap(
         logger.error("Classifier %s does not implement ClassifierWithBackboneAndHead", type(model))
         raise SaliencyExtractionError(f"Classifier model {type(model)} does not expose backbone and head.")
 
-    from taxon_vision.service.inference import get_image_transform
-
-    transform = get_image_transform()
+    transform = _get_cam_transform()
     tensor = transform(image.convert("RGB")).unsqueeze(0)
 
     linear = _extract_linear_layer(head)

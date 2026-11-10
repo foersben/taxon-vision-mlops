@@ -7,7 +7,7 @@ import logging
 import time
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 import numpy.typing as npt
@@ -30,6 +30,20 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 EVAL_RESIZE_RATIO = 256 / 224
 """Shorter-edge resize factor preceding the centre crop; identical to the feature-extraction transform."""
+
+
+class ReadinessStatus(NamedTuple):
+    """Typed container for Kubernetes readiness probe check outcomes."""
+
+    ready: bool
+    checks: dict[str, str]
+
+
+class ModelForwardOutputs(NamedTuple):
+    """Typed container for model forward pass logits and penultimate embeddings."""
+
+    logits: npt.NDArray[np.float32]
+    embeddings: npt.NDArray[np.float32] | None
 
 
 class InvalidImageError(ValueError):
@@ -148,12 +162,16 @@ def get_onnx_engine() -> ONNXInferenceEngine | None:
 
     onnx_path = _resolve_artifact(cfg.onnx_model_path)
     if not onnx_path.exists():
-        if cfg.inference_backend == "onnx":
+        canonical_fallback = _resolve_artifact("models/checkpoints/model_int8.onnx")
+        if canonical_fallback.exists():
+            onnx_path = canonical_fallback
+        elif cfg.inference_backend == "onnx":
             raise ModelNotReadyError(f"ONNX model not found at {onnx_path}. Run the export_onnx stage first.")
-        logger.warning("ONNX artefact %s not found; serving with the PyTorch classifier.", onnx_path)
-        return None
+        else:
+            logger.warning("ONNX artefact %s not found; serving with the PyTorch classifier.", onnx_path)
+            return None
 
-    engine = ONNXInferenceEngine(str(onnx_path))
+    engine = ONNXInferenceEngine(str(onnx_path), intra_op_num_threads=cfg.onnx_intra_op_threads)
     expected = len(load_taxa_catalog())
     if engine.num_classes is not None and engine.num_classes != expected:
         raise ModelNotReadyError(
@@ -163,14 +181,14 @@ def get_onnx_engine() -> ONNXInferenceEngine | None:
     return engine
 
 
-def check_readiness() -> tuple[bool, dict[str, str]]:
+def check_readiness() -> ReadinessStatus:
     """Probe every dependency required to serve predictions.
 
     Why:
         A readiness probe that always reports healthy routes traffic to pods that cannot answer. This probe loads the catalogue and the serving model (ONNX graph or PyTorch classifier), so a missing or incompatible artefact surfaces as not-ready.
 
     Returns:
-        Tuple of overall readiness and a mapping of check name to a human-readable status.
+        ReadinessStatus containing overall readiness and a mapping of check name to status string.
     """
     checks: dict[str, str] = {}
     ready = True
@@ -179,11 +197,11 @@ def check_readiness() -> tuple[bool, dict[str, str]]:
         catalog = load_taxa_catalog()
         if not catalog:
             checks["taxa_catalog"] = "failed: empty catalog"
-            return False, checks
+            return ReadinessStatus(ready=False, checks=checks)
         checks["taxa_catalog"] = f"ok ({len(catalog)} taxa)"
     except Exception as exc:
         checks["taxa_catalog"] = f"failed: {exc}"
-        return False, checks
+        return ReadinessStatus(ready=False, checks=checks)
 
     try:
         get_classifier()
@@ -201,7 +219,7 @@ def check_readiness() -> tuple[bool, dict[str, str]]:
         checks["model"] = f"failed: {exc}"
         ready = False
 
-    return ready, checks
+    return ReadinessStatus(ready=ready, checks=checks)
 
 
 @lru_cache(maxsize=1)
@@ -250,7 +268,7 @@ def _load_calibrated_ood_threshold() -> float | None:
             data = yaml.safe_load(f)
         if isinstance(data, dict):
             calib = data.get("calibration", {})
-            val = calib.get("ood_energy_threshold", calib.get("tau_ood"))
+            val = calib.get("ood_energy_threshold")
             if val is not None:
                 return float(val)
     except Exception as exc:
@@ -286,7 +304,7 @@ def get_image_transform() -> T.Compose:
     """Construct and cache the deterministic image preprocessing transform pipeline.
 
     Why:
-        In high-throughput biological inference, re-instantiating torchvision transform pipelines on every request introduces significant memory allocation overhead, triggering garbage collection cycles on the hot inference path. Pre-instantiating and caching an immutable composition preserves the zero-allocation hot-path invariant required for sub-25ms p95 latency SLAs.
+        In high-throughput biological inference, re-instantiating torchvision transform pipelines on every request introduces significant memory allocation overhead, triggering garbage collection cycles on the hot inference path. Pre-instantiating and caching an immutable composition preserves the zero-allocation hot-path invariant required for sub-25ms p95 latency SLOs.
 
     How:
         Retrieves global model configurations (target spatial resolution, per-channel normalization mean and standard deviation) and bundles Resize (shorter edge to 256/224 of the target), CenterCrop, ToTensor, and Normalize into a single cached torchvision.transforms.Compose instance. This is the same geometry as the feature-extraction transform used to produce the head's training embeddings, so training and serving see identical inputs.
@@ -343,7 +361,7 @@ def _get_image_tensor(image_bytes: bytes) -> torch.Tensor:
 
 def compute_model_outputs(
     tensor: torch.Tensor,
-) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.float32] | None]:
+) -> ModelForwardOutputs:
     """Compute raw class logits and optional visual embedding vector for a preprocessed image.
 
     Why:
@@ -364,8 +382,8 @@ def compute_model_outputs(
         tensor: Preprocessed image tensor of shape (1, 3, H, W).
 
     Returns:
-        Tuple of (logits, embeddings) where logits has shape (num_classes,) and
-        embeddings has shape (feature_dim,) or None if embeddings are unavailable.
+        ModelForwardOutputs containing logits of shape (num_classes,) and
+        embeddings of shape (feature_dim,) or None if embeddings are unavailable.
 
     Raises:
         ModelNotReadyError: If model artefacts fail to evaluate or are missing.
@@ -375,14 +393,14 @@ def compute_model_outputs(
         outputs = engine.predict_outputs(tensor.numpy())
         logits: npt.NDArray[np.float32] = outputs.logits[0]
         embedding: npt.NDArray[np.float32] | None = outputs.embeddings[0] if outputs.embeddings is not None else None
-        return logits, embedding
+        return ModelForwardOutputs(logits=logits, embeddings=embedding)
 
     with torch.no_grad():
         classifier = get_classifier()
         logits_t, embeddings_t = classifier.forward_with_embeddings(tensor)
         logits_arr: npt.NDArray[np.float32] = np.asarray(logits_t.squeeze(0).cpu().numpy(), dtype=np.float32)
         embeddings_arr: npt.NDArray[np.float32] = np.asarray(embeddings_t.squeeze(0).cpu().numpy(), dtype=np.float32)
-        return logits_arr, embeddings_arr
+        return ModelForwardOutputs(logits=logits_arr, embeddings=embeddings_arr)
 
 
 def compute_logits(tensor: torch.Tensor) -> npt.NDArray[np.float32]:
@@ -483,7 +501,7 @@ def run_prediction(image_bytes: bytes) -> dict[str, Any]:
 
     # Out-of-distribution energy and entropy detection
     ood_detector = get_ood_detector()
-    ood_energy_score = float(ood_detector.compute_energy_score(logits_np))
+    ood_energy_score = float(ood_detector.compute_energy(logits_np))
     is_energy_ood = ood_detector.is_ood(logits_np)
     is_entropy_ood = ood_detector.is_high_entropy(probabilities)
     shannon_entropy = float(ood_detector.compute_entropy(probabilities))

@@ -5,11 +5,19 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import NamedTuple
 
 import torch
 from torch import nn, optim
 
 from taxon_vision.models.head import TaxonClassifier
+
+
+class HeadEvaluationResult(NamedTuple):
+    """Validation loss and top-1 accuracy from evaluating a classification head."""
+
+    loss: float
+    accuracy: float
 
 
 def train_head_epoch(
@@ -62,8 +70,17 @@ def evaluate_head(
     model: TaxonClassifier,
     dataloader: Iterable[tuple[torch.Tensor, torch.Tensor]],
     criterion: nn.Module,
-) -> tuple[float, float]:
+) -> HeadEvaluationResult:
     """Evaluate classifier performance on a validation or test dataloader.
+
+    Why:
+        Provides an autograd-free evaluation loop over validation or test batches to measure generalization loss and top-1 taxonomic accuracy without accumulating activation graphs in GPU memory.
+
+    How:
+        Switches `model` to `eval()` mode, iterates over `(inputs, labels)` inside a `torch.no_grad()` block, accumulates batch losses and argmax top-1 hit counts, and normalizes by batch and sample totals.
+
+    Complexity:
+        O(N * C_feat) time complexity across N evaluation samples and O(B * C_feat) peak memory for batch size B.
 
     Args:
         model: The taxonomic classifier to evaluate.
@@ -71,8 +88,8 @@ def evaluate_head(
         criterion: Loss function to compute validation loss.
 
     Returns:
-        A pair `(val_loss, val_accuracy)` where `val_loss` is the average batch
-        loss and `val_accuracy` is top-1 accuracy in $[0.0, 1.0]$.
+        HeadEvaluationResult `(loss, accuracy)` where `loss` is the average batch
+        loss and `accuracy` is top-1 accuracy in $[0.0, 1.0]$.
     """
     model.eval()
     total_loss = 0.0
@@ -92,4 +109,4 @@ def evaluate_head(
 
     avg_loss = total_loss / max(1, num_batches)
     accuracy = correct / max(1, total_samples)
-    return avg_loss, accuracy
+    return HeadEvaluationResult(loss=avg_loss, accuracy=accuracy)

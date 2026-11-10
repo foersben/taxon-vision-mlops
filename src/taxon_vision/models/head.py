@@ -16,23 +16,27 @@ Typical usage example:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import NamedTuple
 
 import torch
 import torch.nn as nn
+
+
+class ClassifierOutputs(NamedTuple):
+    """Dual outputs emitted by TaxonClassifier forward execution."""
+
+    logits: torch.Tensor
+    embeddings: torch.Tensor
 
 
 def load_head_checkpoint(head: nn.Module, checkpoint_file: Path | str) -> None:
     """Strictly restore trained classification-head weights from disk onto CPU.
 
     Why:
-        Checkpoints may be written from GPU devices or wrapped in dictionaries, and a head restored with mismatched
-        shapes or missing keys would silently produce random-noise predictions. Loading with `strict=True` makes any
-        incompatibility (wrong backbone width, wrong class count) fail loudly instead.
+        Checkpoints may be written from GPU devices or wrapped in dictionaries, and a head restored with mismatched shapes or missing keys would silently produce random-noise predictions. Loading with `strict=True` makes any incompatibility (wrong backbone width, wrong class count) fail loudly instead.
 
     How:
-        Deserialises with `weights_only=True` and `map_location="cpu"`, unwraps `state_dict` / `model_state_dict`
-        containers, strips a leading `head.` prefix produced by saving a whole `TaxonClassifier`, and applies the
-        state dict strictly.
+        Deserialises with `weights_only=True` and `map_location="cpu"`, unwraps `state_dict` / `model_state_dict` containers, strips a leading `head.` prefix produced by saving a whole `TaxonClassifier`, and applies the state dict strictly.
 
     Args:
         head: The classification head module (e.g. `TaxonClassifier.head`) to populate.
@@ -136,14 +140,11 @@ class TaxonClassifier(nn.Module):
         features = self.forward_features(x)
         return self.forward_head(features)
 
-    def forward_with_embeddings(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward_with_embeddings(self, x: torch.Tensor) -> ClassifierOutputs:
         """Execute forward pass returning both taxonomic class logits and dense feature embeddings.
 
         Why:
-            Downstream inference consumers (e.g. OOD detection, active learning triage, metric storage)
-            require the penultimate feature representation in addition to discrete classification logits.
-            Emitting both tensors in a unified forward pass eliminates the performance penalty of duplicate
-            backbone feature extractions.
+            Downstream inference consumers (e.g. OOD detection, active learning triage, metric storage) require the penultimate feature representation in addition to discrete classification logits. Emitting both tensors in a unified forward pass eliminates the performance penalty of duplicate backbone feature extractions.
 
         How:
             Extracts feature representations via `forward_features(x)` and projects them through `forward_head(features)`.
@@ -155,9 +156,9 @@ class TaxonClassifier(nn.Module):
             x: 4D input image tensor of shape `(batch_size, channels, height, width)`.
 
         Returns:
-            Tuple of `(logits, embeddings)` where `logits` has shape `(batch_size, num_classes)` and
+            ClassifierOutputs of `(logits, embeddings)` where `logits` has shape `(batch_size, num_classes)` and
             `embeddings` has shape `(batch_size, feature_dim)`.
         """
         features = self.forward_features(x)
         logits = self.forward_head(features)
-        return logits, features
+        return ClassifierOutputs(logits=logits, embeddings=features)

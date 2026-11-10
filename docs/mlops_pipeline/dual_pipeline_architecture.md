@@ -82,17 +82,18 @@ $$K = |\text{Unique}(\mathbf{y})| \ge 2$$
 
 If this condition is violated during dataset ingestion or embedding caching, the pipeline halts with an explicit `UncertaintyCalibrationError` rather than proceeding to degenerate weight optimization.
 
-### 1.3 The 7-Stage Unified DVC Execution Graph
+### 1.3 The 8-Stage Unified DVC Execution Graph
 
-While conceptually decoupled, the execution lineage of Pipeline 1 and Pipeline 2 is unified through an unbroken seven-stage DVC Directed Acyclic Graph (`dvc.yaml`):
+While conceptually decoupled, the execution lineage of Pipeline 1 and Pipeline 2 is unified through an unbroken eight-stage DVC Directed Acyclic Graph (`dvc.yaml`):
 
-* `ingestion`: Parses DarwinCore archives and synthesizes streaming manifests.
-* `audit_license`: Validates permissive licensing (CC0, CC-BY, CC-BY-NC) and extracts attribution metadata.
-* `extract_features`: Streams images from S3 and projects them through frozen vision transformers (DINOv3/BioCLIP-2) into high-dimensional embeddings.
-* `train`: Optimizes the linear head with Class-Balanced Loss and Optuna Bayesian sweeps.
-* `export`: Compiles PyTorch weights into dynamic INT8 ONNX graphs with static calibration.
-* `calibrate`: Computes conformal quantile thresholds $\hat{q}_\alpha$ and Helmholtz energy boundaries $\tau_{\text{OOD}}$.
-* `eval`: Executes Pareto benchmarking, verifying marginal coverage and latency budgets.
+* `ingestion`: Parses DarwinCore archives and synthesizes streaming manifests (`2,000` raw records).
+* `audit_license`: Validates permissive licensing (CC0, CC-BY, CC-BY-NC) and retains attribution metadata (`1,646` verified records).
+* `extract_features`: Streams images from S3 and projects them through frozen vision transformers (`vit_small_patch16_dinov3`) into 4-way stratified embeddings (`1,153` train, `164` val, `164` cal, `164` test).
+* `data_drift`: Audits training representation stability (`train_embeddings.pt` vs `reference_train_embeddings.pt`) via Tier-1 1D Wasserstein-1 norm distance and Tier-2 multivariate RBF $\text{MMD}_u^2$.
+* `train`: Optimises the cosine classification head over 30 epochs with Class-Balanced Loss and optional Optuna Bayesian sweeps (`93.29%` validation accuracy).
+* `export`: Compiles PyTorch weights into dual-output INT8 ONNX graphs (`model_int8.onnx` and standalone `head_int8.onnx`).
+* `calibrate`: Computes conformal quantile thresholds ($\hat{q}_\alpha = 0.6337$, `96.77%` empirical calibration coverage) and Helmholtz energy boundaries ($\tau_{\text{OOD}} = -2.4029$) on $N_{\text{cal}} = 155$ inliers.
+* `eval`: Executes Pareto benchmarking and Four-Gate promotion (`92.07%` INT8 holdout test accuracy, `91.46%` empirical test coverage, and `50.38 ms` p95 CPU INT8 latency within the `120.0 ms` SLA ceiling).
 
 High-throughput intermediate embeddings (`data/embeddings/*.pt`) and local model checkpoints are persisted to the in-cluster SeaweedFS object store (`s3://taxon-dvc-cache/`), whilst final production release artifacts are mirrored to DagsHub S3 (`s3://dvc`).
 
@@ -139,10 +140,10 @@ This guarantees absolute cryptographic lineage connecting source code, DVC data 
 
 Before any candidate model enters the production registry, an automated evaluation pipeline executes two sequential epistemic verification gates:
 
-* **Post-Quantization Calibration (`src/taxon_vision/pipelines/calibrate.py`):** Calibrates the exact non-conformity threshold $\hat{q}_\alpha$ and Helmholtz OOD energy threshold $\tau_{\text{OOD}}$ on the holdout calibration partition $\mathcal{D}_{\text{cal}}$ ($10\%$ split via `data/embeddings/cal_embeddings.pt`) using the exported INT8 ONNX model (`models/checkpoints/model_int8.onnx`), serializing parameters to `config/conformal_config.yaml`.
-* **Holdout Coverage Verification (`src/taxon_vision/pipelines/evaluate.py`):** Formally asserts that the empirical marginal coverage on the holdout test partition $\mathcal{D}_{\text{test}}$ ($10\%$ split via `data/embeddings/test_embeddings.pt`) mathematically satisfies the nominal guarantee:
+* **Post-Quantization Calibration (`src/taxon_vision/pipelines/calibrate.py`):** Calibrates the exact non-conformity threshold $\hat{q}_\alpha = 0.6337$ and Helmholtz OOD energy threshold $\tau_{\text{OOD}} = -2.4029$ on the holdout calibration partition $\mathcal{D}_{\text{cal}}$ ($10\%$ split via `data/embeddings/cal_embeddings.pt`, $164$ observations / $155$ inliers) using the exported INT8 ONNX model (`models/checkpoints/model_int8.onnx`), serializing parameters to `config/conformal_config.yaml`.
+* **Holdout Coverage Verification (`src/taxon_vision/pipelines/evaluate.py`):** Formally asserts that the empirical marginal coverage on the holdout test partition $\mathcal{D}_{\text{test}}$ ($10\%$ split via `data/embeddings/test_embeddings.pt`, $n_{\text{test}} = 164$) satisfies the finite-sample promotion bound (accounting for $\epsilon_{\text{cov}} = 0.05$ finite-sample variance on $N=164$, achieving $96.77\%$ calibration coverage and $91.46\% \ge 90.0\%$ holdout test coverage):
 
-$$\text{Coverage}_{\text{empirical}} = \frac{1}{n_{\text{test}}} \sum_{i=1}^{n_{\text{test}}} \mathbb{I}\left(y_i \in \hat{C}(x_i)\right) \ge 1 - \alpha$$
+$$\text{Coverage}_{\text{empirical}} = \frac{1}{n_{\text{test}}} \sum_{i=1}^{n_{\text{test}}} \mathbb{I}\left(y_i \in \hat{C}(x_i)\right) \ge (1 - \alpha) - \epsilon_{\text{cov}}$$
 
 If empirical test coverage falls below $1 - \alpha$ (e.g., $95\%$ when $\alpha = 0.05$), the assertion fails, terminating the runner and preventing the uncalibrated model from reaching production.
 
@@ -160,7 +161,7 @@ The two independent pipelines converge exclusively at the serving boundary manag
 
 ## 4. Forward-Hooked Class Activation Mapping (CAM)
 
-Providing diagnostic transparency to human reviewers requires visual interpretability without violating strict latency SLAs. While modern extensions like Grad-CAM are popular, they require a backward pass (gradient backpropagation), which destroys low-latency serving and is incompatible with forward-only INT8 ONNX runtimes. We instead utilize standard Class Activation Mapping (CAM).
+Providing diagnostic transparency to human reviewers requires visual interpretability without violating strict latency SLOs. While modern extensions like Grad-CAM are popular, they require a backward pass (gradient backpropagation), which destroys low-latency serving and is incompatible with forward-only INT8 ONNX runtimes. We instead utilize standard Class Activation Mapping (CAM).
 
 TaxonVision bypasses backpropagation by intercepting the spatial feature maps $A^k$ emitted by the final convolutional or attention layer before global average pooling. Because the classification head is a linear layer, the importance weight $w_k^c$ of feature channel $k$ for class $c$ is directly extracted from the static weight matrix:
 

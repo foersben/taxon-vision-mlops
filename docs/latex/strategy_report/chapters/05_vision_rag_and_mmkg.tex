@@ -38,7 +38,7 @@ where $f_{\text{VFM}}$ represents the forward pass of the frozen vision backbone
 \]
 During vector search, similarity queries execute strictly over child embeddings ($z_{\text{child}}$); upon retrieval for multimodal reasoning, both the child crop and parent context are presented to the evaluator.
 
-\section[Single-Stage Filtered HNSW in LanceDB]{Vector Database: Single-Stage Filtered HNSW in LanceDB}
+\section[Single-Stage Filtered HNSW in LanceDB]{Vector Database:\\ Single-Stage Filtered HNSW in LanceDB}
 \label{sec:filtered_hnsw}
 
 Biological retrieval systems face a severe domain-specific failure mode known as \textit{convergent evolution}. Under similar ecological pressures, unrelated organisms across distinct continents frequently evolve nearly identical visual morphologies. For example, the European Hornet (\textit{Vespa crabro}) and the North American Cicada Killer (\textit{Sphecius speciosus}) exhibit strikingly similar body geometry and colouration patterns.
@@ -56,9 +56,9 @@ where $\mathcal{D}_{\text{geodesic}}$ is the great-circle geographic distance co
 \section{Conformal-Driven Lazy Execution}
 \label{sec:lazy_execution}
 
-Executing zero-shot entity linking, vector graph traversal, and generative multimodal reasoning for every incoming request imposes prohibitive latency and computational costs. In order to maintain an SLA of under $25\text{ ms}$ for high-volume inference, the Vision RAG pipeline utilises conformal-driven lazy execution governed by the 4-tier conformal routing contract:
+Executing zero-shot entity linking, vector graph traversal, and generative multimodal reasoning for every incoming request imposes prohibitive latency and computational costs. In order to maintain an SLO of under $25\text{ ms}$ for high-volume inference, the Vision RAG pipeline utilises conformal-driven lazy execution governed by the 4-tier conformal routing contract:
 \begin{enumerate}
-    \item \textbf{Decisive Classification ($|\hat{C}(X)| = 1$ with $\hat{\pi}_{\max}(X) \ge \tau_{\text{conf}}$):} The model exhibits high confidence and low epistemic ambiguity ($\hat{\pi}_{\max}(X) \ge \tau_{\text{conf}} = 0.60$). The endpoint dispatches the single predicted taxon immediately, fulfilling the strict sub-$25\text{ ms}$ Service Level Agreement (SLA) without activating retrieval overhead.
+    \item \textbf{Decisive Classification ($|\hat{C}(X)| = 1$ with $\hat{\pi}_{\max}(X) \ge \tau_{\text{conf}}$):} The model exhibits high confidence and low epistemic ambiguity ($\hat{\pi}_{\max}(X) \ge \tau_{\text{conf}} = 0.60$). The endpoint dispatches the single predicted taxon immediately, fulfilling the strict sub-$25\text{ ms}$ Service Level Objective (SLO) without activating retrieval overhead.
     \item \textbf{Moderate Ambiguity ($1 < |\hat{C}(X)| \le k_{\max}$, with $k_{\max} = 3$):} The conformal prediction set contains between two and three plausible sibling taxa. The serving engine executes a single-stage filtered HNSW traversal over LanceDB, constrained by the candidate class identifiers and spatio-temporal metadata, and performs Reciprocal Rank Fusion (RRF) over visual exemplar crops with less than $6\text{ ms}$ overhead to deliver a multi-candidate comparative differential to the operator.
     \item \textbf{Severe Ambiguity or Low Top-1 Confidence ($|\hat{C}(X)| > k_{\max}$ or ($|\hat{C}(X)| = 1 \land \hat{\pi}_{\max}(X) < \tau_{\text{conf}}$)):} The prediction set exceeds the bound of actionable human differential review, or a singleton set fails the minimum confidence threshold ($\hat{\pi}_{\max} < 0.60$). The query is scheduled for asynchronous multimodal resolution via gRPC to the quantised visual language model (\texttt{taxon-vision-vlm}, based on Qwen2-VL-2B) and appended to the Active Learning triage queue (\texttt{triage\_queue.lance}) on SeaweedFS for expert annotation.
     \item \textbf{Epistemic Novelty / Complete Abstention ($|\hat{C}(X)| = 0$):} The observed sample violates the conformal coverage boundary, indicating an out-of-distribution observation, unmodelled developmental instar, or extreme sensor degradation. The system executes complete epistemic abstention, bypasses automated classification entirely, executes an unconstrained nearest-neighbour retrieval over the global exemplar space, and dispatches an immediate priority triage alert to human taxonomists.
@@ -102,27 +102,27 @@ The Vision RAG architecture functions as the ingestion engine for human-in-the-l
 
 However, beyond classifying new observations, the system must dynamically adapt to Linnaean taxonomic realignments. Biological taxonomies are fluid; the scientific community frequently splits a single species into multiple distinct taxa, or lumps distinct taxa into a single unified classification. Retraining a neural network or recalculating millions of vector embeddings every time a nomenclature committee publishes an update is computationally unviable. 
 
-The Multimodal Knowledge Graph resolves this by decoupling the immutable visual embedding vectors from the mutable relational metadata using DuckDB operating over LanceDB dataset tables:
+The Multimodal Knowledge Graph resolves this by decoupling the immutable visual embedding vectors from the mutable relational metadata using the \textbf{DuckDB 2.0.0 LTS} analytical engine (codenamed ``Cinnamon Teal'') operating over LanceDB dataset tables via Apache Arrow zero-copy memory buffers:
 \begin{itemize}
-    \item \textbf{Taxonomic Lumps (Merging):} When two distinct taxa (e.g., Species A and Species B) are combined into a single valid species (Species C), the pipeline does not re-embed any visual data. Instead, it executes an $\mathcal{O}(1)$ alias mapping operation. A background DuckDB worker executes an in-place update on the relational Lance manifest, pointing historical taxon keys for A and B to the unified key for C. The underlying dense vectors residing in the HNSW index remain untouched, updating the taxonomic knowledge base in milliseconds with zero GPU compute overhead.
+    \item \textbf{Taxonomic Lumps (Merging):} When two distinct taxa (e.g., Species A and Species B) are combined into a single valid species (Species C), the pipeline does not re-embed any visual data. Instead, it executes an $\mathcal{O}(1)$ alias mapping operation. A background DuckDB 2.0.0 worker executes an in-place vectorized SQL update on the relational Lance manifest, pointing historical taxon keys for A and B to the unified key for C. The underlying dense vectors residing in the HNSW index remain untouched, updating the taxonomic knowledge base in milliseconds with zero GPU compute overhead.
     \item \textbf{Taxonomic Splits (Dividing):} When a recognised species is divided into two distinct taxa, historical visual crops associated with the parent taxon become scientifically ambiguous. The DuckDB reconciliation worker sets a boolean metadata flag \texttt{requires\_reannotation = true} over those specific records in the Lance table. LanceDB's single-stage filtered HNSW traversal natively excludes nodes where \texttt{requires\_reannotation = true}, preventing contaminated retrieval in production whilst routing the affected exemplars to Label Studio for expert sorting.
 \end{itemize}
 
 \section{End-to-End Latency \& Resource Allocation}
 \label{sec:latency_budget}
 
-Operating a decoupled serving architecture requires clear engineering resource bounds. To guarantee the overarching sub-$25\text{ ms}$ Service Level Agreement (SLA) on production GPU silicon (NVIDIA RTX 5070 Ti), the platform partitions the execution timeline into bounded budget allocations. Table~\ref{tab:rag_latency} details these engineering budget ceilings across the fast hot-path and the lazy retrieval path.
+Operating a decoupled serving architecture requires clear engineering resource bounds. To guarantee the overarching sub-$25\text{ ms}$ Service Level Objective (SLO) on production GPU silicon (NVIDIA RTX 5070 Ti), the platform partitions the execution timeline into bounded budget allocations. Table~\ref{tab:rag_latency} details these engineering budget ceilings across the fast hot-path and the lazy retrieval path.
 
-Crucially, these figures represent allocated architectural SLA ceilings rather than static, universal hardware constants. Physical backbone inference latency varies substantially across execution providers: a domain transformer such as BioCLIP-2 or DINOv3 executes in under $9\text{ ms}$ when compiled with FP16 TensorRT or ONNX Runtime on modern desktop GPU Tensor Cores, but requires $20\text{ to }50\text{ ms}$ or more when deployed on general-purpose CPUs without dedicated SIMD acceleration. Consequently, downstream operational deployments strictly profile candidate extractors dynamically using the Pareto benchmark suite rather than assuming static values from external literature. Furthermore, during active Jenkins GPU training windows, \texttt{taxon-vision-vlm} either scales to zero or offloads inference to the 16 host CPU P-cores and 128~GB system memory, guaranteeing that concurrent serving allocations never exceed the 4.8~GB VRAM reserve derived in Section~\ref{sec:gpu_partitioning}.
+Crucially, these figures represent allocated architectural SLO ceilings rather than static, universal hardware constants. Physical backbone inference latency varies substantially across execution providers: a domain transformer such as BioCLIP-2 or DINOv3 executes in under $9\text{ ms}$ when compiled with FP16 TensorRT or ONNX Runtime on modern desktop GPU Tensor Cores, but requires $20\text{ to }50\text{ ms}$ or more when deployed on general-purpose CPUs without dedicated SIMD acceleration. Consequently, downstream operational deployments strictly profile candidate extractors dynamically using the Pareto benchmark suite rather than assuming static values from external literature. Furthermore, during active Jenkins GPU training windows, \texttt{taxon-vision-vlm} either scales to zero or offloads inference to the 16 host CPU P-cores and 128~GB system memory, guaranteeing that concurrent serving allocations never exceed the 4.8~GB VRAM reserve derived in Section~\ref{sec:gpu_partitioning}.
 
 \begin{table}[htbp]
 \centering
 \small
-\caption{End-to-End Latency SLA Budget and Resource Allocation (GPU Serving Baseline)}
+\caption{End-to-End Latency SLO Budget and Resource Allocation (GPU Serving Baseline)}
 \label{tab:rag_latency}
 \begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X r r @{}}
 \toprule
-\textbf{Pipeline Segment} & \textbf{Execution Engine} & \textbf{SLA (ms)} & \textbf{Memory (MB)} \\
+\textbf{Pipeline Segment} & \textbf{Execution Engine} & \textbf{SLO (ms)} & \textbf{Memory (MB)} \\
 \midrule
 Zero-Shot Cropping & YOLO-World (ORT INT8) & $\le 12.0$ & $\le 400$ VRAM \\
 VFM Feature Extraction & Vision Backbone (ORT INT8) & $\le 9.0$ & $\le 800$ VRAM \\

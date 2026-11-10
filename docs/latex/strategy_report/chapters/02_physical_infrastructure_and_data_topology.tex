@@ -2,16 +2,21 @@
 \chapter{Physical Infrastructure and Data Topology}
 \label{ch:infrastructure_topology}
 
-The computational demands of high-throughput vision architectures strictly dictate physical and operational determinism. In order to move beyond volatile cloud abstractions, this chapter establishes the bare-metal hardware topography, memory budgeting, and cryptographic data storage strategies which are necessary to sustain continuous model training and real-time inference without performance degradation or unnecessary cloud expenditures.
+The deployment and continuous training of dense Vision Foundation Models (VFMs) require a balanced trade-off between infrastructure flexibility, execution predictability, and cost efficiency. While managed public cloud environments provide elastic scalability, sustaining persistent GPU instances and high-throughput data transfers for iterative research and continuous integration incurs prohibitive operational expenditures. To establish a cost-effective, self-contained development and execution plane, the platform deploys a dedicated on-premise compute node, combining hardware-level workload isolation with deterministic memory budgeting and transparent storage compression.
 
-\section{Heterogeneous Silicon and Physical Determinism}
-Training and deploying dense Vision Foundation Models (VFMs) at high throughput necessitate deterministic physical execution. Relying on shared public cloud infrastructure inevitably introduces hypervisor virtualisation overhead and variable PCIe bandwidth. This obscures true performance metrics during latency profiling. Consequently, the platform utilises a dedicated bare-metal host architecture.
+\section{Compute Topology and Workload Allocation}
 
-The computational core relies on an Intel Core i7-14700K processor (20-core / 28-thread architecture: 8 Performance-cores up to 5.5~GHz turbo boost, and 12 Efficient-cores up to 4.3~GHz) anchored by an ASRock B760M Pro RS Micro-ATX motherboard. This hybrid topology provides massive parallel compute capability to cleanly isolate heterogeneous workloads. High-frequency neural execution paths and PyTorch gradient calculations are pinned strictly to the 16 P-core execution threads (\texttt{taskset -c 0-15}), preserving dedicated 2\,MB L2 and 33\,MB Intel Smart Cache (L3) lines for mathematical hot loops. Conversely, background asynchronous I/O operations -- such as streaming HTTP requests, Apache Arrow columnar dataset extraction, and database indexing -- are pinned to the 12 single-threaded E-cores (\texttt{taskset -c 16-27}) to prevent CPU context switching.
+Rather than provisioning continuous, multi-tenant cloud GPU infrastructure, the platform standardises on a dedicated bare-metal host engineered to isolate distinct computational regimes. This architecture amortises infrastructure costs while granting direct control over kernel process isolation, thread pinning, and storage caching.
 
-Neural network acceleration is driven by a ZOTAC GAMING GeForce RTX 5070 Ti SOLID CORE graphics card possessing 16~GB of GDDR7 VRAM across a 256-bit interface, supported by 128~GB of Crucial DDR5-5600 system memory (installed in dual-channel configuration across slots A2 and B2). This provides the necessary computational throughput and absolute physical stability required to reliably prevent clock-speed variance during critical CI/CD latency validation tests and continuous multi-day benchmarking suites.
+The central processor features an Intel Core i7-14700K (20 cores, 28 threads: 8 Performance-cores and 12 Efficient-cores), supported by 128~GB of DDR5-5600 system memory. This hybrid core topology allows explicit segregation of heterogeneous workloads:
+\begin{itemize}
+    \item \textbf{Mathematical Hot Loops:} Compute-intensive operations---such as classification head forward passes, PyTorch gradient calculations, and ONNX Runtime execution---are pinned strictly to the 16 Performance-core threads (\texttt{taskset -c 0-15}), preserving dedicated L2 and L3 cache lines.
+    \item \textbf{Asynchronous I/O and Telemetry:} Concurrent background tasks---including Apache Arrow streaming, database indexing, Prometheus scraping, and HTTP ingress handling---are allocated to the 12 Efficient-core threads (\texttt{taskset -c 16-27}), eliminating thread context-switching on critical execution paths.
+\end{itemize}
 
-Storage I/O is managed across a 2~TB Seagate FireCuda 530 Gen4 NVMe SSD (Phison PS5018-E18 controller, 2,550 TBW endurance rating, seated in slot M2\_1). In order to maximise read bandwidth across the PCIe bus when streaming millions of small image chunks, the underlying BTRFS filesystem utilises transparent \texttt{zstd:3} compression. Because BTRFS operates as a Copy-on-Write (CoW) filesystem, continuous database writes and Data Version Control (DVC) chunk caching induce severe physical block fragmentation. To mitigate this, a dedicated storage subvolume is initialised with the NOCOW attribute (\texttt{chattr +C}), ensuring contiguous physical block allocations for all local data caches.
+Neural network acceleration is provided by an NVIDIA GeForce RTX 5070 Ti graphics processor equipped with 16~GB of GDDR7 VRAM across a 256-bit memory bus. This provides sufficient Tensor Core throughput and memory bandwidth to execute local batch training, static INT8 post-training quantisation, and sub-15\,ms inference validation without remote latency overhead.
+
+High-throughput storage I/O is backed by a 2~TB PCIe Gen4 NVMe solid-state drive. To maximise read bandwidth when streaming millions of citizen-science image crops, the underlying BTRFS filesystem applies transparent \texttt{zstd:3} compression. However, because BTRFS utilizes Copy-on-Write (CoW) allocation by default, continuous database writes and Data Version Control (DVC) chunk mutations induce significant block fragmentation. To guarantee deterministic read/write performance, all database backends and cache subvolumes are provisioned with the non-CoW attribute (\texttt{chattr +C}), ensuring contiguous physical block allocation across the NVMe bus.
 
 \section{Verified Software Baseline of the Host}
 \label{sec:host_baseline}
@@ -21,16 +26,26 @@ The host (\texttt{hive-mind}) runs Ubuntu 26.04.1 LTS (codename \textit{resolute
 \section{GPU Partitioning and Memory Budget}
 \label{sec:gpu_partitioning}
 
-Consumer GPUs do not support hardware Multi-Instance GPU (MIG) partitioning. Without further measures, a Kubernetes pod requesting one GPU would therefore lock the entire device and starve every co-located workload. The cluster consequently uses the time-slicing mode of the NVIDIA Kubernetes device plugin, which advertises the single physical GPU as four virtual devices. Time-slicing multiplexes compute cycles but does not isolate memory: all slices share the same VRAM. Isolation is therefore enforced in software, by capping the fraction $f$ of device memory available to the training process through the PyTorch per-process memory fraction. With $f = 0.7$ and a device memory of $M_{\text{VRAM}} = 16\text{ GB}$, the training budget evaluates to
-\[
-M_{\text{train}} = f \cdot M_{\text{VRAM}} = 0.7 \times 16\text{ GB} = 11.2\text{ GB},
-\]
-which leaves $M_{\text{VRAM}} - M_{\text{train}} = 4.8\text{ GB}$ for the INT8 ONNX serving process and the display server. The latter reserve is comfortably larger than the serving footprint of $\le 1.6\text{ GB}$ derived in Table~\ref{tab:rag_latency}. To guarantee that heavier secondary models do not violate this envelope, the auxiliary visual language model (\texttt{taxon-vision-vlm}) either scales to zero during active Jenkins GPU training windows or executes quantised VLM synthesis directly on the 16 host P-cores and 128~GB DDR5 system memory, maintaining the active GPU serving footprint strictly $\le 1.6\text{ GB}$ VRAM.
+Consumer GPUs do not support hardware Multi-Instance GPU (MIG) partitioning. Without further measures, a Kubernetes pod requesting one GPU would therefore lock the entire device and starve every co-located workload. The cluster consequently uses the time-slicing mode of the NVIDIA Kubernetes device plugin, which advertises the single physical GPU as four virtual devices. Time-slicing multiplexes compute cycles but does not isolate memory: all slices share the same VRAM.
+
+Workload allocation across these four virtual slots is strictly codified:
+\begin{enumerate}
+    \item \textbf{Jenkins CI Compute Slot (1 Virtual GPU):} Allocated exclusively to ephemeral GPU worker pods (\nolinkurl{deploy/k8s/jenkins-gpu-pod.yaml}) during DVC feature extraction, Bayesian Optuna sweeps, and Stage~7 holdout evaluation. Memory isolation is enforced in software by capping the PyTorch per-process memory fraction to $f = 0.7$, establishing an upper bound of $M_{\text{train}} = f \cdot M_{\text{VRAM}} = 0.7 \times 16\text{ GB} = 11.2\text{ GB}$.
+    \item \textbf{Production Serving Gateway (2 Virtual GPUs):} Allocated to the two production \texttt{taxon-vision-serving} replicas in the \texttt{taxon-vision} namespace, guaranteeing hardware-accelerated INT8 ONNX execution within an isolated $4.8\text{ GB}$ envelope ($\le 1.6\text{ GB}$ per serving replica).
+    \item \textbf{Multimodal Headroom Slot (1 Virtual GPU):} Reserved for the auxiliary Vision-Language Model (\texttt{taxon-vision-vlm}) or future batch retrieval expansion.
+\end{enumerate}
+
+Crucially, to eliminate resource contention between deployment verification and active CI/CD jobs, the platform enforces a strict \textbf{CPU Staging Discipline}: pods deployed into namespace \texttt{taxon-\allowbreak vision-\allowbreak staging} via Kustomize overlay (\texttt{deploy/k8s/overlays/}\allowbreak\texttt{staging/}\allowbreak\texttt{patch-replicas.yaml}) request zero GPU resources (\texttt{nvidia.com/gpu: 0}). Staging verification executes entirely on the host P-cores. This invariant guarantees that automated Jenkins test builds never fail due to agent offline timeouts or GPU slot starvation caused by staging environments.
 
 \section{Access Topology and Edge Security}
 \label{sec:access_topology}
 
 The host exposes no inbound port to the public internet. Both the CI/CD controller and the operator-facing service are reached through outbound-initiated Cloudflare Tunnels, so that no router port forwarding and no dynamic DNS record is required. A Web Application Firewall rule at the Cloudflare edge restricts the controller hostname (\texttt{jenkins.benjamin-foerster.eu}) to authenticated GitHub webhook deliveries, whilst the operator dashboard and REST API are served live at \texttt{https://taxon.benjamin-foerster.eu} routing directly to Kubernetes NodePort 30080 behind an identity-aware Zero Trust access policy. Remote maintenance after a reboot is possible despite the encrypted root volume, because a minimal SSH daemon (Dropbear) in the initial ramdisk accepts the unlock passphrase before the root file system is mounted.
+
+\subsection{Secret Governance and Vault Provisioning}
+\label{sec:secret_governance}
+
+To satisfy zero-trust security invariants without hardcoding cryptographic credentials in version control, sensitive cluster tokens (PostgreSQL passwords, MLflow basic auth, Airflow administrative keys, DagsHub access tokens, and webhook HMAC secrets) are provisioned through a unified script (\nolinkurl{scripts/infrastructure/provision_k8s_secrets.sh}). The provisioning engine generates cryptographic secrets deterministically, applying base64 payloads directly to Kubernetes \texttt{Secret} objects across the \texttt{taxon-vision} and \texttt{taxon-vision-staging} namespaces whilst preventing token leakage into git history or build logs.
 
 \section{Cryptographic Storage Economics}
 A primary architectural constraint for open-source and low-budget MLOps is data storage costs. The platform standardises on DagsHub as the central management plane, which enforces a 20 GB free-tier storage limit on its DVC remote. This limit is fully viable, provided that the pipeline enforces a strict physical separation between bulk raw observation streams and versioned metadata artefacts.
@@ -77,7 +92,7 @@ SeaweedFS solves this structural bottleneck by adopting the Facebook Haystack ne
 \[
 \text{Memory}_{\text{Index}} = N \times 16 \text{ bytes} \approx 100{,}000 \times 16\text{ B} = 1.6\text{ MB}.
 \]
-Consequently, object lookups require exactly $O(1)$ disk seeks, enabling SeaweedFS to sustain sub-$2\text{ ms}$ p95 read latencies on our Seagate FireCuda 530 NVMe drive under saturated 4~KiB random-read workloads.
+Consequently, object lookups require exactly $O(1)$ disk seeks, enabling SeaweedFS to sustain sub-$2\text{ ms}$ p95 read latencies on host NVMe storage under saturated 4~KiB random-read workloads.
 
 \subsubsection{Consolidated Cluster Daemon and Dynamic Bucket Provisioning}
 In Kubernetes, SeaweedFS is deployed as a consolidated, lightweight single-container daemon executing \texttt{weed server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -volume.max=20}. This encapsulates four coordinated internal subsystems within an active memory envelope of approximately 80~MB RAM:
@@ -95,10 +110,56 @@ wget -q -O - --post-data="" "http://127.0.0.1:8888/buckets/triage-queue/?op=mkdi
 \end{minted}
 
 \subsubsection{Filesystem Invariants and Multi-Remote Routing}
-To prevent physical block fragmentation across the NVMe bus, the underlying persistent directory (\texttt{/var/lib/taxon-vision/seaweedfs}) is mounted onto a dedicated BTRFS subvolume configured with the \texttt{NOCOW} (\texttt{chattr +C}) attribute. Automatic volume compaction runs in the background whenever deleted needle space exceeds 30\%, reclaiming disk space without interrupting live inference loops.
+To prevent physical block fragmentation across the NVMe bus, the underlying persistent directory (\texttt{/var/lib/taxon-vision/seaweedfs}) is mounted onto a dedicated BTRFS subvolume configured with the \texttt{NOCOW} (\texttt{chattr +C}) attribute. Furthermore, because SeaweedFS volume daemons lock underlying volume data files (\texttt{.dat}), the Kubernetes Deployment enforces \texttt{strategy.type: Recreate}. This prevents multi-attach volume lock collisions on single-node NVMe persistent volumes during rolling updates by guaranteeing that the terminating pod releases file locks before the replacement pod initialises. Automatic volume compaction runs in the background whenever deleted needle space exceeds 30\%, reclaiming disk space without interrupting live inference loops.
 
 DVC synchronisation is partitioned strictly across two distinct remotes:
 \begin{itemize}
-    \item \textbf{The In-Cluster High-Throughput Remote (\texttt{local-seaweedfs}):} Targeting \texttt{s3://taxon-dvc-cache} at \texttt{http://seaweedfs.taxon-vision.svc.cluster.local:8333}. Dedicated to multi-gigabyte embedding caches (\texttt{train\_embeddings.pt}, \texttt{val\_embeddings.pt}, \texttt{cal\_embeddings.pt}, \texttt{test\_embeddings.pt}), enabling zero-egress, wire-speed caching for Bayesian hyperparameter optimisation sweeps.
-    \item \textbf{The Public Lineage Remote (\texttt{origin}):} Targeting \texttt{s3://dvc} at DagsHub. Dedicated to release model checkpoints (\texttt{head.pt}) and INT8 quantised runtimes (\texttt{model\_int8.onnx}).
+    \item \textbf{The In-Cluster High-Throughput Remote (\texttt{local-seaweedfs}):}\\
+    Targeting \nolinkurl{s3://taxon-dvc-cache} at the internal cluster FQDN:\\
+    \url{http://seaweedfs.taxon-vision.svc.cluster.local:8333}.\\
+    This remote is dedicated to multi-gigabyte partitioned embedding tensors across all four canonical splits (training, validation, calibration, and test), enabling zero-egress, wire-speed caching for Bayesian hyperparameter optimisation sweeps.
+    \item \textbf{The Public Lineage Remote (\texttt{origin}):} Targeting \nolinkurl{s3://dvc} at DagsHub. Dedicated to release model checkpoints and INT8 quantised ONNX runtimes.
 \end{itemize}
+
+\subsection{In-Cluster Ephemeral Upload Cache: Redis Architecture and Split-Brain Elimination}
+\label{sec:redis_upload_cache}
+
+While static assets and multi-gigabyte training tensors reside in SeaweedFS and DagsHub, the production serving layer introduces an ephemeral data plane requirement: holding raw uploaded image bytes across multi-step user interaction workflows.
+
+\subsubsection{Multi-Pod Split-Brain in Interactive Explainability}
+In the TaxonVision dashboard, an operator uploads an unlabelled organism crop to obtain conformal prediction sets via \texttt{POST /predict}. If the classification result exhibits epistemic ambiguity (e.g. $|\hat{C}| > 1$), the operator clicks ``Explain CAM'' in the web UI, which triggers a secondary request to \texttt{POST /explain} supplying the SHA-256 image hash.
+
+In a horizontally scaled serving topology with two or more FastAPI pods behind Traefik ingress, an in-memory image cache (\texttt{OrderedDict} with threading locks) causes a catastrophic \textit{multi-pod split-brain}:
+\begin{enumerate}
+    \item \textbf{Pod 1} processes the initial \texttt{/predict} upload, storing the decompressed image array in its private process heap memory.
+    \item Traefik's round-robin or least-connections load-balancing algorithm routes the subsequent \texttt{/explain} call to \textbf{Pod 2}.
+    \item \textbf{Pod 2} inspects its local process RAM, fails to locate the hash, and returns HTTP 422 Unprocessable Entity (``Image not found or expired'').
+\end{enumerate}
+
+\subsubsection{Redis Ephemeral Cache Implementation}
+To resolve this split-brain without imposing sticky sessions or heavy cloud object store latency, the cluster provisions an in-cluster \textbf{Redis Ephemeral Cache} (\texttt{redis-ephemeral:6379}). The cache architecture enforces strict resource and lifecycle bounds:
+\begin{itemize}
+    \item \textbf{Memory Envelope and Eviction:} Memory is capped at 64~MB with \texttt{maxmemory-policy allkeys-lru}. Because each raw JPEG/WebP crop averages 45--60~KB, a 64~MB envelope comfortably buffers over 1,000 concurrent active operator sessions.
+    \item \textbf{Deterministic Expiration:} Raw image bytes are written via atomic \texttt{SETEX} with a 900-second (15-minute) time-to-live:
+    \[
+    \texttt{redis.setex(f"img:\{image\_hash\}", 900, raw\_bytes)}
+    \]
+    This guarantees zero memory leak accumulation without requiring background thread garbage-collection loops in Python.
+    \item \textbf{Sub-Millisecond Retrieval:} Any serving pod can retrieve the cached image payload in sub-millisecond latency ($t_{\text{redis}} < 0.5\text{ ms}$ over localhost loopback/cluster SDN), enabling Pod~2 to compute Grad-CAM overlays seamlessly.
+    \item \textbf{Graceful Degradation:} If the Redis service becomes temporarily unreachable, the upload cache component (\texttt{UploadCache}) automatically falls back to local in-memory caching and logs a structured warning, ensuring service resilience during cache restarts.
+\end{itemize}
+
+\section{Consolidated Relational and Telemetry Data Topology}
+\label{sec:postgres_topology}
+
+Early system prototypes fragmented state persistence across multiple disconnected SQLite database files (for MLflow runs, Optuna studies, and local telemetry logs). Under high-frequency concurrent traffic -- such as parallel Bayesian hyperparameter trials running concurrently with live inference telemetry writes and Airflow scheduler heartbeats -- SQLite's file-level locking mechanism inevitably induced write-lock contention (\texttt{database is locked}) and transaction timeouts on host NVMe storage.
+
+To establish enterprise ACID transaction durability without introducing unwieldy operational overhead, the platform consolidates all relational and time-series metadata into a single, high-performance \textbf{PostgreSQL 16} cluster (\texttt{postgres:16-alpine}) hosted in-cluster. Operating with an active memory footprint of less than 80~MB RAM (dispelling the misconception that PostgreSQL imposes an intolerable 1.0 to 2.0~GB overhead for single-node deployments), the cluster establishes four strictly isolated logical databases provisioned during initialisation:
+\begin{enumerate}
+    \item \textbf{\texttt{mlflow}:} Serves as the primary metadata tracking backend for the self-hosted MLflow 3.x tracking proxy server, managing experiment runs, first-class \texttt{LoggedModel} entities, 4-split dataset lineage records, and logged metric parameters.
+    \item \textbf{\texttt{airflow}:} Backs the Apache Airflow 3 control plane under the \texttt{LocalExecutor}, maintaining stateful DAG definitions, task instance execution states, and connection credential vaults.
+    \item \textbf{\texttt{telemetry}:} Houses the production prediction telemetry store (\nolinkurl{service/telemetry_store.py}). High-frequency inference events are recorded sequentially into the \texttt{predictions} table, persisting client coordinates, Linnaean taxonomic predictions, conformal prediction set sizes ($|\hat{C}(X)|$), Helmholtz free energy scores ($E(x)$), and unconstrained pre-normalised 768-dimensional latent embedding vectors ($\tilde{z}$) required for streaming drift audits.
+    \item \textbf{\texttt{optuna}:} Provides centralised persistence for Bayesian hyperparameter studies (\nolinkurl{models/training/tuning.py}). To ensure driver compatibility across container boundaries, the application leverages modern \texttt{psycopg} (v3) while connecting the official Optuna Dashboard (\texttt{ghcr.io/optuna/optuna-dashboard:latest}) via the bundled \texttt{postgresql+psycopg2://} dialect.
+\end{enumerate}
+
+To guarantee continuous physical block allocation and prevent write amplification across the host NVMe SSD, the persistent PostgreSQL database cluster volume (\nolinkurl{/var/lib/taxon-vision/postgres}) is initialized on a dedicated BTRFS subvolume with the non-Copy-on-Write attribute applied (\texttt{chattr +C}). Crucially, to maintain developer agility and offline testing parity, SQLite is retained strictly as an automatic fallback: when \texttt{TAXON\_DATABASE\_URL} is absent or PostgreSQL is unreachable in local test environments, services automatically degrade to isolated SQLite WAL files without throwing unhandled connection errors.

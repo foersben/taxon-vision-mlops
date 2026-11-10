@@ -12,7 +12,7 @@ import time
 import warnings
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import mlflow
 import optuna
@@ -24,13 +24,30 @@ from torch import nn, optim
 
 from taxon_vision.config import get_settings
 from taxon_vision.models.loss import ClassBalancedLoss
+from taxon_vision.models.training.dataset import get_dvc_dataset_hash
 from taxon_vision.models.training.embeddings import train_head_on_cached_embeddings
-from taxon_vision.models.training.tracking import _get_dvc_dataset_hash
+from taxon_vision.models.training.tracking import _inject_lineage_tags
 from taxon_vision.models.training.types import EmbeddingSplit, HeadTrainingConfig, TuningConfig
+from taxon_vision.models.training.visualizations import log_optuna_diagnostic_plots
 
 warnings.filterwarnings("ignore", category=ExperimentalWarning)
 
 logger = logging.getLogger(__name__)
+
+
+class TrialComponents(NamedTuple):
+    """Instantiated classification head, loss criterion, and optimizer for an Optuna trial."""
+
+    head: nn.Module
+    criterion: ClassBalancedLoss
+    optimizer: optim.Optimizer
+
+
+class TuningResult(NamedTuple):
+    """Best hyperparameter mapping paired with the completed Optuna Study object."""
+
+    best_params: dict[str, Any]
+    study: optuna.Study
 
 
 class HyperparameterObjective:
@@ -95,14 +112,14 @@ class HyperparameterObjective:
             "noise_std": trial.suggest_float("noise_std", 0.0, 0.05),
         }
 
-    def _construct_components(self, params: dict[str, Any]) -> tuple[nn.Module, ClassBalancedLoss, optim.Optimizer]:
+    def _construct_components(self, params: dict[str, Any]) -> TrialComponents:
         """Construct the classification head, loss criterion, and optimizer.
 
         Args:
             params: Hyperparameter configuration.
 
         Returns:
-            Tuple containing the classification head, loss criterion, and optimizer.
+            TrialComponents containing the classification head, loss criterion, and optimizer.
         """
         lr = float(params.get("learning_rate", params.get("lr", 1e-3)))
         beta = float(params.get("cb_beta", params.get("beta", 0.9999)))
@@ -114,7 +131,7 @@ class HyperparameterObjective:
         )
         criterion = ClassBalancedLoss(samples_per_class=self.samples_per_class, beta=beta)
         optimizer = optim.AdamW(head.parameters(), lr=lr, weight_decay=weight_decay)
-        return head, criterion, optimizer
+        return TrialComponents(head=head, criterion=criterion, optimizer=optimizer)
 
     def _start_mlflow_trial(self, trial: optuna.Trial, params: dict[str, Any]) -> Any:
         """Initialize an MLflow nested run and log trial parameters.
@@ -145,7 +162,8 @@ class HyperparameterObjective:
         if run is None:
             return
         try:
-            run_id = getattr(getattr(run, "info", None), "run_id", None)
+            run_info = run.info if run is not None else None
+            run_id = str(run_info.run_id) if run_info is not None and run_info.run_id is not None else None
             now_ms = int(time.time() * 1000)
             metrics: list[Metric] = []
             for ep, (t_loss, v_loss, v_acc, v_f1, v_pr) in enumerate(
@@ -225,20 +243,27 @@ class HyperparameterObjective:
             self._log_trial_metrics(active_run, history)
 
             if trial.should_prune():
+                if active_run:
+                    epochs_completed = len(history.get("val_pr_auc", []))
+                    mlflow.set_tag("optuna.trial_state", "PRUNED")
+                    mlflow.set_tag("optuna.pruned_at_epoch", str(epochs_completed))
+                    mlflow.end_run(status="KILLED")
+                    active_run = None
                 raise optuna.TrialPruned()
 
             best_val = float(max(history["val_pr_auc"])) if history.get("val_pr_auc") else 0.0
             if active_run:
                 try:
+                    mlflow.set_tag("optuna.trial_state", "COMPLETE")
                     mlflow.log_metric("peak_val_pr_auc", best_val)
-                except Exception:
-                    pass
+                except Exception as metric_err:
+                    logger.debug("Failed to log peak_val_pr_auc metric: %s", metric_err)
             return best_val
 
         finally:
             if active_run is not None:
                 with contextlib.suppress(Exception):
-                    mlflow.end_run()
+                    mlflow.end_run(status="FINISHED")
 
 
 def _setup_mlflow(cfg: TuningConfig) -> bool:
@@ -273,55 +298,7 @@ def _setup_mlflow(cfg: TuningConfig) -> bool:
 
 def _apply_git_lineage_tags() -> None:
     """Resolve and attach Git commit and branch tags to active MLflow run."""
-    try:
-        import os
-        import subprocess
-
-        git_sha = os.environ.get("GIT_COMMIT")
-        if not git_sha:
-            git_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-        git_branch = os.environ.get("GIT_BRANCH")
-        if not git_branch:
-            git_branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
-        mlflow.set_tag("git.commit_sha", git_sha)
-        mlflow.set_tag("git.branch", git_branch)
-    except Exception:
-        pass
-
-
-def _log_optuna_diagnostic_plots(study: optuna.Study | None) -> None:
-    """Render and log Optuna optimization history and parameter importance plots.
-
-    Args:
-        study: Optuna study instance containing completed evaluation trials.
-    """
-    if study is None or len(study.trials) == 0:
-        return
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    import optuna.visualization.matplotlib as optuna_plt
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        try:
-            ax_hist = optuna_plt.plot_optimization_history(study)
-            mlflow.log_figure(ax_hist.figure, "visualizations/optuna_optimization_history.png")
-            plt.close()
-        except Exception as err:
-            logger.debug("Failed to log Optuna optimization history plot: %s", err)
-
-        try:
-            completed_values = [
-                t.value for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE and t.value is not None
-            ]
-            if len(set(completed_values)) > 1:
-                ax_imp = optuna_plt.plot_param_importances(study)
-                mlflow.log_figure(ax_imp.figure, "visualizations/optuna_param_importances.png")
-                plt.close()
-        except Exception as err:
-            logger.debug("Failed to log Optuna parameter importance plot: %s", err)
+    _inject_lineage_tags()
 
 
 def _log_best_run(
@@ -341,14 +318,12 @@ def _log_best_run(
     if not active:
         return
     try:
-        from taxon_vision.models.training.tracking import _get_dvc_dataset_hash
-
         active_run = mlflow.active_run()
         if active_run:
-            mlflow.log_params(best_params)
             mlflow.log_metric("best_val_pr_auc", best_value)
             mlflow.set_tag("optuna.optimization_algorithm", "TPE+ASHA")
-            _log_optuna_diagnostic_plots(study)
+            mlflow.set_tag("optuna.best_trial_number", str(study.best_trial.number) if study else "0")
+            log_optuna_diagnostic_plots(study)
         else:
             with mlflow.start_run(run_name="optuna_best_model"):
                 mlflow.log_params(best_params)
@@ -356,12 +331,12 @@ def _log_best_run(
                 mlflow.set_tag("optuna.optimization_algorithm", "TPE+ASHA")
                 mlflow.set_tag("pipeline.stage", "Phase1_Step3_Tuning")
 
-                dvc_hash = _get_dvc_dataset_hash()
+                dvc_hash = get_dvc_dataset_hash()
                 if dvc_hash:
                     mlflow.log_param("dvc_dataset_hash", dvc_hash)
 
                 _apply_git_lineage_tags()
-                _log_optuna_diagnostic_plots(study)
+                log_optuna_diagnostic_plots(study)
     except Exception as err:
         logger.debug("Failed to log best run to MLflow: %s", err)
 
@@ -485,7 +460,7 @@ def _persist_best_params(
             "best_val_pr_auc": round(best_val, 6),
             "n_trials": len(study.trials),
             "updated_at_utc": datetime.now(UTC).isoformat(),
-            "dvc_dataset_hash": _get_dvc_dataset_hash(),
+            "dvc_dataset_hash": get_dvc_dataset_hash(),
         }
 
         with best_params_yaml.open("w", encoding="utf-8") as f:
@@ -503,7 +478,7 @@ def tune_hyperparameters(
     config: TuningConfig | None = None,
     checkpoint_dir: Path | str = "models/checkpoints",
     reports_dir: Path | str = "reports",
-) -> tuple[dict[str, Any], optuna.Study]:
+) -> TuningResult:
     r"""Automate Bayesian hyperparameter tuning using Optuna with ASHA pruning and MLflow tracking.
 
     Why:
@@ -530,7 +505,7 @@ def tune_hyperparameters(
         reports_dir: Destination directory for tuning_trials.parquet export.
 
     Returns:
-        A tuple `(best_params, study)` of the best configuration and the Optuna study.
+        TuningResult `(best_params, study)` of the best configuration and the Optuna study.
     """
     cfg = config or TuningConfig()
     settings = get_settings()
@@ -566,7 +541,12 @@ def tune_hyperparameters(
         mlflow_available=mlflow_available,
     )
 
-    study.optimize(objective, n_trials=cfg.n_trials)
+    # Ensure child runs are always grouped under a Parent Run node in MLflow 3 UI
+    if mlflow_available and mlflow.active_run() is None:
+        with mlflow.start_run(run_name=f"optuna_study_{study_name}"):
+            study.optimize(objective, n_trials=cfg.n_trials)
+    else:
+        study.optimize(objective, n_trials=cfg.n_trials)
 
     best_params = study.best_params
     if "learning_rate" in best_params and "lr" not in best_params:
@@ -580,4 +560,4 @@ def tune_hyperparameters(
     _export_trials_history(study, Path(reports_dir))
 
     _log_best_run(best_params, study.best_value, mlflow_available, study=study)
-    return best_params, study
+    return TuningResult(best_params=best_params, study=study)

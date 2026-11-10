@@ -1,0 +1,29 @@
+<View>
+  <!-- Header and Annotation Guidance -->
+  <Header value="TaxonVision Active Learning Triage Interface" />
+  <Text name="instructions" value="Review the flagged observation crop below. Select the matching verified biological species, or classify as Out of Distribution if the specimen belongs outside the target catalog." />
+
+  <!-- Primary Visual Crop Display -->
+  <Image name="image" value="$image_url" zoom="true" rotateControl="true" />
+
+  <!-- Photographer Attribution and License Integrity Pill -->
+  <View style="margin-top: 10px; margin-bottom: 15px; padding: 10px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+    <Text name="attribution_pill" value="Attribution: $photographer_name | License: $license_code | Observation UUID: $observation_uuid" />
+  </View>
+
+  <!-- Canonical Taxonomic Class Selection -->
+  <Header value="Taxonomic Identification" size="5" />
+  <Choices name="taxon_choice" toName="image" choice="single" showInline="false" required="true">
+    <Choice value="Danaus plexippus (Monarch Butterfly)" alias="48662" />
+    <Choice value="Apis mellifera (Western Honey Bee)" alias="47219" />
+    <Choice value="Turdus migratorius (American Robin)" alias="12727" />
+    <Choice value="Cyanocitta cristata (Blue Jay)" alias="8229" />
+    <Choice value="Taraxacum officinale (Common Dandelion)" alias="47602" />
+    <Choice value="Helianthus annuus (Common Sunflower)" alias="57983" />
+    <Choice value="Canis lupus (Gray Wolf)" alias="47144" />
+    <Choice value="Vulpes vulpes (Red Fox)" alias="42069" />
+    <Choice value="Amanita muscaria (Fly Agaric)" alias="48715" />
+    <Choice value="Boletus edulis (King Bolete)" alias="48701" />
+    <Choice value="Out of Distribution (Non-Target / Novel Organism)" alias="ood" />
+  </Choices>
+</View>

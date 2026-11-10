@@ -61,6 +61,22 @@ stages:
       - data/embeddings/cal_embeddings.pt
       - data/embeddings/test_embeddings.pt
 
+  data_drift:
+    cmd: >-
+      pixi run -e dev python -m taxon_vision.pipelines.data_drift
+      --reference data/reference/reference_train_embeddings.pt
+      --current data/embeddings/train_embeddings.pt
+      --metrics-out reports/data_drift.json
+    deps:
+      - data/reference/reference_train_embeddings.pt
+      - data/embeddings/train_embeddings.pt
+      - src/taxon_vision/monitoring/drift.py
+      - src/taxon_vision/monitoring/drift_runner.py
+      - src/taxon_vision/pipelines/data_drift.py
+    metrics:
+      - reports/data_drift.json:
+          cache: false
+
   train:
     cmd: >-
       pixi run -e dev python -m taxon_vision.pipelines.train
@@ -75,6 +91,7 @@ stages:
     deps:
       - data/embeddings/train_embeddings.pt
       - data/embeddings/val_embeddings.pt
+      - reports/data_drift.json
       - src/taxon_vision/models/loss.py
       - src/taxon_vision/models/training/
       - src/taxon_vision/pipelines/train.py

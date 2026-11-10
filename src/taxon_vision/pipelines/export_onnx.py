@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: MIT
 """Stage 5: ONNX Model Export & Quantization Pipeline.
 
-First-class CLI entrypoint that traces trained PyTorch backbone representations
-and classification head into a production ONNX graph with optional INT8 quantization.
+First-class CLI entrypoint that traces trained PyTorch backbone representations and classification head into a production ONNX graph with optional INT8 quantization.
 """
 
 from __future__ import annotations
@@ -13,6 +12,8 @@ import logging
 import sys
 from pathlib import Path
 
+import mlflow
+
 from taxon_vision.config import get_settings
 from taxon_vision.inference.onnx_exporter import (
     _build_and_restore_classifier,
@@ -21,6 +22,8 @@ from taxon_vision.inference.onnx_exporter import (
     _resolve_export_output,
     export_to_onnx,
 )
+from taxon_vision.models.head import TaxonClassifier
+from taxon_vision.models.training.tracking import MLflowTracker, resume_parent_mlflow_run
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +100,39 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _export_dedicated_head(
+    classifier: TaxonClassifier,
+    target_artifact: Path,
+    quantize_int8: bool,
+) -> None:
+    """Export the standalone classification head as an ONNX graph for embedding projections.
+
+    Why:
+        Executing linear classification on pre-computed feature representations via ONNX Runtime
+        avoids parsing raw tensor initializers or loading PyTorch models in inference runtimes.
+
+    Args:
+        classifier: Trained TaxonClassifier containing the linear projection head.
+        target_artifact: Path to the exported model graph (used to determine checkpoint directory).
+        quantize_int8: Whether dynamic INT8 quantization should also be applied to the head.
+    """
+    head_dir = target_artifact.parent
+    head_fp32 = head_dir / "head.onnx"
+    try:
+        logger.info("Exporting dedicated classification head ONNX graph to %s...", head_fp32)
+        export_to_onnx(classifier.head, head_fp32, input_shape=(1, classifier.feature_dim))
+        if quantize_int8:
+            from taxon_vision.inference.quantizer import quantize_onnx_dynamic
+
+            head_int8 = head_dir / "head_int8.onnx"
+            quantize_onnx_dynamic(head_fp32, head_int8)
+            logger.info("Quantized dedicated classification head ONNX graph saved to %s", head_int8)
+            if head_fp32.exists():
+                head_fp32.unlink()
+    except Exception as exc:
+        logger.warning("Could not export dedicated classification head ONNX graph: %s", exc)
+
+
 def export_onnx_cli(argv: list[str] | None = None) -> int:
     """CLI entrypoint for Stage 5: ONNX Model Export & Quantization.
 
@@ -114,6 +150,7 @@ def export_onnx_cli(argv: list[str] | None = None) -> int:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%H:%M:%S",
         stream=sys.stdout,
+        force=True,
     )
 
     output_file, temp_fp32_path = _resolve_export_output(args.output, args.quantize_int8)
@@ -138,29 +175,25 @@ def export_onnx_cli(argv: list[str] | None = None) -> int:
         if args.quantize_int8:
             target_artifact = _quantize_exported_graph(output_file, args, settings)
 
-        import mlflow
-
-        if mlflow.active_run():
-            from taxon_vision.models.training.tracking import MLflowTracker
-
-            MLflowTracker.log_onnx_model(
-                onnx_model=target_artifact,
-                artifact_path="model",
-                num_classes=classifier.num_classes,
-                image_size=image_dim,
-                registered_model_name="taxon_vision_onnx",
-            )
-
-        from taxon_vision.models.training.tracking import log_stage_metrics_to_parent_run
+        _export_dedicated_head(classifier, target_artifact, args.quantize_int8)
 
         file_size_mb = target_artifact.stat().st_size / (1024 * 1024) if target_artifact.exists() else 0.0
-        log_stage_metrics_to_parent_run(
-            metrics={
-                "onnx_model_size_mb": round(file_size_mb, 2),
-                "quantized_int8": 1.0 if args.quantize_int8 else 0.0,
-            },
-            prefix="export.",
-        )
+
+        with resume_parent_mlflow_run() as ctx:
+            if ctx is not None:
+                MLflowTracker.log_onnx_model(
+                    onnx_model=target_artifact,
+                    artifact_path="onnx_model",
+                    num_classes=classifier.num_classes,
+                    image_size=image_dim,
+                    registered_model_name="taxon_vision_onnx",
+                )
+                mlflow.log_metrics(
+                    {
+                        "export.onnx_model_size_mb": round(file_size_mb, 2),
+                        "export.quantized_int8": 1.0 if args.quantize_int8 else 0.0,
+                    }
+                )
 
         return _finalize_export_artifacts(target_artifact, args.output, args.quantize_int8)
 
@@ -172,12 +205,9 @@ def export_onnx_cli(argv: list[str] | None = None) -> int:
             temp_fp32_path.unlink()
 
 
-export_classifier_cli = export_onnx_cli
-
-
 def main(argv: list[str] | None = None) -> int:
     """CLI entrypoint for Stage 5: ONNX Model Export & Quantization."""
-    return export_classifier_cli(argv)
+    return export_onnx_cli(argv)
 
 
 if __name__ == "__main__":

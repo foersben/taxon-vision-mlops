@@ -18,12 +18,15 @@ from PIL import Image
 from taxon_vision.inference.cli import main as predict_cli_main
 from taxon_vision.models.training import runner as runner_mod
 from taxon_vision.models.training.runner import (
-    _dispatch_remote_training,
     configure_cuda_memory_budget,
     run_training_pipeline,
+)
+from taxon_vision.models.training.types import TrainingPipelineResult
+from taxon_vision.pipelines.train import (
+    dispatch_remote_training,
+    main as train_pipeline_main,
     train_cli,
 )
-from taxon_vision.pipelines.train import main as train_pipeline_main
 
 
 @pytest.fixture
@@ -134,7 +137,7 @@ def test_train_cli_require_promotion_archived(monkeypatch: pytest.MonkeyPatch) -
     """Verify --require-promotion returns non-zero when candidate model fails promotion."""
     orig_run = runner_mod.run_training_pipeline
 
-    def mock_run(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    def mock_run(*args: Any, **kwargs: Any) -> TrainingPipelineResult:
         res = orig_run(*args, **kwargs)
         res["promotion_status"] = "Archived"
         return res
@@ -173,9 +176,47 @@ def test_dispatch_remote_training(monkeypatch: pytest.MonkeyPatch) -> None:
         raise URLError("Connection refused")
 
     monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen_success)
-    ret_ok = _dispatch_remote_training("http://localhost:8000", "dinov3", 1, 16, 0.001)
+    ret_ok = dispatch_remote_training("http://localhost:8000", "dinov3", 1, 16, 0.001)
     assert ret_ok == 0
 
     monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen_fail)
-    ret_fail = _dispatch_remote_training("http://localhost:8000", "dinov3", 1, 16, 0.001)
+    ret_fail = dispatch_remote_training("http://localhost:8000", "dinov3", 1, 16, 0.001)
     assert ret_fail == 1
+
+
+def test_build_training_components_typed() -> None:
+    """Verify build_training_components typed container and sequence unpacking."""
+    from taxon_vision.models.training.runner import build_training_components
+    from taxon_vision.models.training.types import TrainingComponents, TrainingHyperparameters
+
+    hparams = TrainingHyperparameters(
+        learning_rate=0.001,
+        weight_decay=1e-4,
+        dropout=0.2,
+        cb_beta=0.999,
+        batch_size=16,
+        noise_std=0.01,
+        hyperparameter_source="test",
+    )
+
+    # Test canonical build_training_components
+    components = build_training_components(
+        dim=32,
+        num_classes=3,
+        samples=[10, 20, 30],
+        hparams=hparams,
+        epochs=2,
+        extractor="dinov3",
+    )
+    assert isinstance(components, TrainingComponents)
+    assert components.params["extractor"] == "dinov3"
+    assert components.params["num_classes"] == 3
+    assert components.config.epochs == 2
+
+    # Verify sequence unpacking support
+    head, criterion, optimizer, config, params = components
+    assert head is components.head
+    assert criterion is components.criterion
+    assert optimizer is components.optimizer
+    assert config is components.config
+    assert params is components.params

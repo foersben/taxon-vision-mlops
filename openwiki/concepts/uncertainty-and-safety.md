@@ -5,16 +5,16 @@ description: Mathematical foundation and operational implementation of split con
 tags: [uncertainty, conformal-prediction, ood-detection, free-energy, cam, active-learning, triage, safety]
 verified:
   - by: openwiki/0.7.2
-    at: 2026-10-15T19:46:36.219Z
+    at: 2026-11-08T17:07:25.915Z
 sources:
-  - id: openwiki-source-8e72812dd1b19bee5573c46c
-    resource: repo://src/taxon_vision/pipelines/calibrate.py
   - id: openwiki-source-3371ed1f3cb580f413973243
     resource: repo://src/taxon_vision/active_learning/query.py
   - id: openwiki-source-73c7bf66219b83ba25891873
     resource: repo://src/taxon_vision/active_learning/triage_queue.py
   - id: openwiki-source-62eb77aedcfd0f37b33fbbb9
     resource: repo://src/taxon_vision/inference/cam.py
+  - id: openwiki-source-6f347bf5748129f386084c48
+    resource: repo://src/taxon_vision/pipelines/calibrate.py
   - id: openwiki-source-644dda467779a35ba1ffdc4c
     resource: repo://src/taxon_vision/service/inference.py
   - id: openwiki-source-26c079c34916fb6d294b65ef
@@ -35,7 +35,7 @@ sources:
     resource: repo://tests/unit/test_models_components.py
   - id: openwiki-source-f4894f7d85bd06b9a97eeedb
     resource: repo://tests/unit/test_ood_energy.py
-generated: { by: "openwiki/0.7.2", at: "2026-10-15T19:46:36.219Z" }
+generated: { by: "openwiki/0.7.2", at: "2026-11-08T17:07:25.915Z" }
 ---
 
 # Uncertainty Quantification & Safety
@@ -52,59 +52,56 @@ For related system context, see [System Architecture & Design](../architecture/s
 
 The inference lifecycle enforces a tiered uncertainty gating mechanism on every photographic occurrence before predictions are emitted to automated cataloging systems or client Hypermedia / REST interfaces.
 
-<!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Heuristic: a semicolon inside a label breaks rendering; rephrase the label. -->
+<!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Heuristic: an unescaped angle bracket inside a label breaks rendering; rephrase the label. -->
 ```text
 flowchart TD
     IMG["Input Image Capture"] --> PRE["Image Preprocessing and Normalization"]
     PRE --> FWD["Forward Model Evaluation<br/>(ONNX Runtime or PyTorch TaxonClassifier)"]
-    FWD --> LOGITS["Raw Class Logits z and Embeddings"]
+    FWD --> LOGITS["Raw Class Logits z and Embeddings e"]
     
-    LOGITS --> ENG["Helmholtz Free Energy Scoring<br/>E(x; T) = -T * ln( sum exp(z_i / T) )"]
+    LOGITS --> ENG["Helmholtz Free Energy Scoring<br/>E(x, T) = -T * ln( sum exp(z_i / T) )"]
     LOGITS --> SOFT["Temperature-Scaled Softmax<br/>p = softmax(z / T)"]
     
-    ENG --> OOD_CHECK{"Energy E(x) > energy_threshold<br/>or Entropy H(p) > entropy_threshold?"}
+    ENG --> OOD_CHECK{"Energy E(x) exceeds tau_energy<br/>or Entropy H(p) exceeds tau_entropy?"}
     SOFT --> OOD_CHECK
     
-    OOD_CHECK -- "Yes (Elevated Energy or Noise)" --> OOD_FLAG["Set is_ood = True"]
-    OOD_CHECK -- "No (In-Distribution Density)" --> CONF_SET["Split Conformal Set Construction<br/>C(x) = { i | (1 - p_i) <= q_hat }"]
+    OOD_CHECK -- "Yes (Out-of-Distribution)" --> OOD_FLAG["Set is_ood = True"]
+    OOD_CHECK -- "No (In-Distribution Density)" --> CONF_SET["Split Conformal Set Construction<br/>Admit classes where non-conformity s_i does not exceed q_hat"]
     
-    OOD_FLAG --> GATE{"Epistemic Referral Gating"}
-    CONF_SET --> GATE
+    CONF_SET --> ROUTING{"Determine Conformal Routing Tier<br/>(Card = set size, Conf = top-1 prob)"}
     
-    GATE --> COND1{"Set Cardinality |C(x)| == 0<br/>(Empty Prediction Set)?"}
-    GATE --> COND2{"Set Cardinality |C(x)| > k_max<br/>(Ambiguous Prediction Set)?"}
-    GATE --> COND3{"Top-1 Confidence p_max < min_confidence<br/>(Low Model Confidence)?"}
-    GATE --> COND4{"is_ood Flag Asserted<br/>(Out-of-Distribution Input)?"}
+    ROUTING -- "Card is 0" --> TIER_ABSTAIN["ABSTENTION Tier<br/>(Empty Prediction Set)"]
+    ROUTING -- "Card is 1 and Conf at least tau_conf" --> TIER_DECISIVE["DECISIVE Tier<br/>(Single Confident Taxon)"]
+    ROUTING -- "Card between 2 and 3" --> TIER_MODERATE["MODERATE_AMBIGUITY Tier<br/>(Compact Candidate Set)"]
+    ROUTING -- "Card exceeds 3 or Conf below tau_conf" --> TIER_SEVERE["SEVERE_AMBIGUITY Tier<br/>(Diffuse or Low-Confidence Set)"]
     
-    COND1 -- Yes --> REFER["Mandate Human Expert Review<br/>requires_human_review = True"]
-    COND2 -- Yes --> REFER
-    COND3 -- Yes --> REFER
-    COND4 -- Yes --> REFER
+    OOD_FLAG --> GATE{"Epistemic Safety Gate<br/>is_ood or Tier is not DECISIVE"}
+    TIER_ABSTAIN --> GATE
+    TIER_DECISIVE --> GATE
+    TIER_MODERATE --> GATE
+    TIER_SEVERE --> GATE
     
-    COND1 -- No --> PASS_ALL
-    COND2 -- No --> PASS_ALL
-    COND3 -- No --> PASS_ALL
-    COND4 -- No --> PASS_ALL["All Referral Checks Passed"]
+    GATE -- "Pass (In-Distribution DECISIVE)" --> AUTO["Automated Classification Accepted<br/>requires_human_review = False"]
+    GATE -- "Fail (OOD or Ambiguous Tier)" --> REFER["Mandate Expert Triage<br/>requires_human_review = True"]
     
-    PASS_ALL --> AUTO["Automated Classification Accepted<br/>requires_human_review = False"]
+    REFER --> PERSIST["Persist Flagged Observation<br/>(Metadata JSON, Embedding NPY, Crop JPG, manifest.jsonl)"]
+    PERSIST --> QUEUE["Enqueue into TriageQueue<br/>Max-Heap prioritized by Uncertainty (1 - Margin)"]
     
-    REFER --> STAGE["Persist Flagged Observation<br/>(Metadata JSON, Embeddings NPY, manifest.jsonl)"]
-    STAGE --> TRIAGE["Enqueue into TriageQueue<br/>Max-Heap prioritized by Uncertainty (1 - Margin)"]
+    AUTO --> RESP["Emit PredictionResponse<br/>(Top Taxon, Routing Tier, Valid Conformal Set, Latency)"]
+    QUEUE --> RESP
     
-    AUTO --> RESP["Emit PredictionResponse<br/>(Top Taxon, Valid Conformal Set, Latency)"]
-    TRIAGE --> RESP
-    
-    RESP -. "On Diagnostic Request" .-> CAM["Forward-Only CAM Heatmap<br/>L_CAM = ReLU( sum_k w_k^c * A^k )"]
+    RESP -. "Diagnostic Request (explain=True)" .-> CAM["Forward-Only CAM Overlay<br/>(Alpha-blended Viridis Heatmap)"]
 ```
-Uncertainty and safety decision flow: Helmholtz free-energy OOD screening, split conformal set construction, multi-criteria referral gating, and priority triage.
+Epistemic safety gating architecture: dual Helmholtz energy and entropy OOD screening, four-tier conformal ambiguity triage, and active learning referral.
 
 When an observation enters `taxon_vision.service.inference.run_prediction`:
 1. The preprocessed image tensor passes through the visual backbone and classification head in a zero-gradient block, returning unnormalized logit vector $z \in \mathbb{R}^K$ and optional spatial embedding representation $e \in \mathbb{R}^D$.
 2. The logits undergo temperature scaling ($z / T$) and are converted into class probabilities $p \in \Delta^{K-1}$ via softmax.
 3. The detector evaluates the Helmholtz free energy score $E(x; T)$ on the raw logits and predictive entropy $H(p)$ on the probability distribution.
 4. The conformal engine evaluates candidate non-conformity scores against the calibrated threshold $\hat{q}$, assembling the finite-sample prediction set $C(x)$.
-5. The gating logic checks whether any triage trigger fires: out-of-distribution status, empty set, set cardinality exceeding $k_{\text{max}}$, or top-1 probability failing $p_{\text{top1}} \ge \text{min\_confidence\_threshold}$.
-6. If any referral condition holds, `requires_human_review` is asserted, and the observation metadata, confidence metrics, and dense visual embedding are asynchronously persisted for expert triage and active learning ingestion.
+5. The gating logic assesses the four-tier conformal routing contract via `determine_routing_tier`.
+6. If the observation is out-of-distribution or fails to meet the `DECISIVE` tier requirements, `requires_human_review` is asserted (`requires_human_review = is_ood or (routing_tier != ConformalRoutingTier.DECISIVE)`).
+7. Flagged observation metadata, dense visual embeddings, and raw image crops are persisted asynchronously for expert triage and active learning ingestion.
 
 ---
 
@@ -159,7 +156,7 @@ Rather than setting arbitrary heuristic thresholds, `EnergyOODDetector.calibrate
 
 $$\theta_{\text{energy}} = \text{Percentile}_{95.0}\Big( \big\{ E(x_j; T) \big\}_{j=1}^{N_{\text{val}}} \Big)$$
 
-Setting the cutoff at the 95th percentile of in-distribution validation occurrences guarantees a fixed 5% false-positive rejection rate on valid in-distribution captures while eliminating out-of-domain noise. During model training via `taxon_vision.models.training.runner`, this calibration runs automatically over validation logits.
+Setting the cutoff at the 95th percentile of in-distribution validation occurrences guarantees a fixed 5% false-positive rejection rate on valid in-distribution captures while eliminating out-of-domain noise. During model training via `taxon_vision.models.training.runner` and pipeline calibration via `calibrate.py`, this calibration runs automatically over validation logits.
 
 ---
 
@@ -167,7 +164,7 @@ Setting the cutoff at the 95th percentile of in-distribution validation occurren
 
 While energy scoring detects non-organism noise, ambiguous in-distribution observations (such as cryptic sister species with overlapping phenotypes) require statistical confidence bounds. Heuristic cutoffs (e.g., accepting predictions where softmax probability exceeds 80%) fail catastrophically because deep neural networks are notoriously uncalibrated on long-tailed biological distributions.
 
-TaxonVision adopts **Split Conformal Prediction** (Angelopoulos & Bates, 2021) within `src/taxon_vision/uncertainty/conformal.py` and `scripts/calibrate_conformal.py` to produce prediction sets $C(x)$ with rigorous mathematical guarantees.
+TaxonVision adopts **Split Conformal Prediction** (Angelopoulos & Bates, 2021) within `src/taxon_vision/uncertainty/conformal.py` and `src/taxon_vision/pipelines/calibrate.py` to produce prediction sets $C(x)$ with rigorous mathematical guarantees.
 
 ### Theoretical Foundations
 
@@ -175,20 +172,58 @@ Let $(X_1, Y_1), \dots, (X_n, Y_n)$ be a calibration dataset $\mathcal{D}_{\text
 
 $$P\big(Y_{n+1} \in C(X_{n+1})\big) \ge 1 - \alpha$$
 
-This coverage guarantee holds unconditionally in finite samples under exchangeability, without requiring parametric assumptions about the data geometry, underlying model architecture, or softmax calibration quality.
+This coverage guarantee holds unconditionally in finite samples under exchangeability, without requiring parametric assumptions about data geometry, underlying model architecture, or softmax calibration quality.
+
+<!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Heuristic: an unescaped angle bracket inside a label breaks rendering; rephrase the label. -->
+```text
+flowchart TD
+    subgraph CALIB["Offline Calibration Phase (src/taxon_vision/pipelines/calibrate.py)"]
+        CAL_DATA["Holdout Calibration Split<br/>(cal_embeddings.pt with n samples)"] --> ONNX_FWD["ONNX Graph Forward Projection<br/>(models/checkpoints/model_int8.onnx)"]
+        ONNX_FWD --> CAL_LOGITS["Validation Logits and Probabilities"]
+        
+        CAL_LOGITS --> OOD_CALIB["EnergyOODDetector.calibrate_threshold_from_logits<br/>(95th percentile of in-distribution energies)"]
+        OOD_CALIB --> TAU_OOD["Calibrated Helmholtz Threshold tau_ood"]
+        
+        CAL_LOGITS --> SCORE_CALC["Compute True-Class Non-Conformity Scores<br/>s_i = 1 - p(y_i given x_i)"]
+        TAU_OOD --> OOD_FILTER["Filter OOD Calibration Samples<br/>(Preserves exchangeability assumption)"]
+        SCORE_CALC --> OOD_FILTER
+        
+        OOD_FILTER --> QUANTILE["SplitConformalPredictor.compute_quantile<br/>Order statistic at ceil((n+1)(1-alpha)) / n"]
+        QUANTILE --> Q_HAT["Calibrated Quantile Cutoff q_hat"]
+        
+        Q_HAT --> SERIALIZE["Serialize Calibration Artifacts<br/>(config/conformal_config.yaml and MLflow)"]
+        TAU_OOD --> SERIALIZE
+    end
+
+    subgraph ONLINE["Online Serving Phase (src/taxon_vision/uncertainty/conformal.py)"]
+        TEST_IMG["Incoming Test Capture x"] --> MODEL["Model Forward Pass"]
+        MODEL --> TEST_PROBS["Softmax Probabilities p_1 to p_K"]
+        
+        TEST_PROBS --> VEC_SCORE["Compute Non-Conformity Vector<br/>s_i = 1.0 - p_i for all classes"]
+        VEC_SCORE --> ADMIT{"Filter Candidate Classes<br/>s_i does not exceed q_hat"}
+        
+        SERIALIZE -. "Loads q_hat and tau_ood" .-> ADMIT
+        
+        ADMIT --> PRED_SET["Prediction Set C(x)<br/>Guaranteed Coverage: P(y in C(x)) at least 1 - alpha"]
+        PRED_SET --> ROUTE_TIER["determine_routing_tier<br/>(DECISIVE, MODERATE, SEVERE, ABSTENTION)"]
+    end
+```
+Offline split conformal calibration and online distribution-free prediction set construction flow.
 
 ### Calibration Procedure (`src/taxon_vision/pipelines/calibrate.py`)
 
 Calibration is executed on the dedicated calibration partition $\mathcal{D}_{\text{cal}}$ (`data/embeddings/cal_embeddings.pt`) that was excluded from backbone feature extraction and classifier head weight tuning:
 
-1. **Non-Conformity Scoring**: For each calibration sample $(X_i, Y_i)$, compute the model probability assigned to the ground-truth taxon $Y_i$. The non-conformity score $s_i$ measures the degree to which the observation disagrees with the ground truth:
+1. **Embedding Projection**: Consumes the quantized ONNX graph (`models/checkpoints/model_int8.onnx`) or PyTorch classifier, projecting calibration embeddings into class logits and softmax probabilities via `ONNXInferenceEngine`.
+2. **OOD Energy Calibration & Filtering**: Computes Helmholtz free energy on calibration logits and determines the threshold $\tau_{\text{ood}}$ at the 95th percentile. Observations exceeding $\tau_{\text{ood}}$ are filtered out prior to conformal calibration, guaranteeing that the exchangeability assumption holds for in-distribution calibration.
+3. **Non-Conformity Scoring**: For each in-distribution calibration sample $(X_i, Y_i)$, compute the model probability assigned to the ground-truth taxon $Y_i$. The non-conformity score $s_i$ measures the degree to which the observation disagrees with the ground truth:
    $$s_i = 1 - p(Y_i \mid X_i)$$
    Scores range from $0.0$ (perfect confidence in the true label) to $1.0$ (zero probability assigned to the true label).
-2. **Quantile Evaluation**: Compute the empirical $(1 - \alpha)$ quantile threshold $\hat{q}$ adjusted for finite-sample correction:
+4. **Finite-Sample Quantile Evaluation**: Compute the empirical $(1 - \alpha)$ quantile threshold $\hat{q}$ adjusted for finite-sample correction:
    $$p_{\text{level}} = \min\left(1.0, \max\left(0.0, \frac{\lceil (n + 1)(1 - \alpha) \rceil}{n}\right)\right)$$
    $$\hat{q} = \text{Quantile}\big(\{s_1, \dots, s_n\}, p_{\text{level}}, \text{method} = \text{"higher"}\big)$$
    Selecting the higher order statistic guarantees that the coverage probability satisfies $P(Y \in C(X)) \ge 1 - \alpha$.
-3. **Artifact Serialization**: The resulting calibration metadata ($\alpha$, nominal coverage $1 - \alpha$, calibrated cutoff $\hat{q}$, sample size $n$) and Helmholtz OOD energy threshold $\tau_{\text{energy}}$ are saved to `config/conformal_config.yaml`.
+5. **Artifact Serialization & MLflow Lineage**: The calibrated parameters ($\alpha$, nominal coverage $1 - \alpha$, cutoff $\hat{q}$, OOD energy threshold $\tau_{\text{ood}}$, sample size $n$) are saved to `config/conformal_config.yaml` and optional metrics JSON (`--metrics-out`). Metrics, calibration input lineage, and artifacts are logged to MLflow via `resume_parent_mlflow_run`.
 
 ### Online Prediction Set Construction (`ConformalPredictionEngine`)
 
@@ -199,41 +234,68 @@ During real-time inference, `ConformalPredictionEngine.predict_set` evaluates ca
    $$C(x) = \big\{ i \in \{1, \dots, K\} \;\big|\; s_i \le \hat{q} \big\} \equiv \big\{ i \in \{1, \dots, K\} \;\big|\; p_i \ge 1 - \hat{q} \big\}$$
 3. **Computational Efficiency**: Evaluating $s_i \le \hat{q}$ across $K$ classes requires an $O(K)$ vector operation using NumPy vectorization, achieving sub-millisecond execution with zero dynamic heap allocations.
 
-### Referral Criteria
+---
 
-A prediction set satisfying marginal coverage may still be operationally unsafe for automated ingestion if the set is empty, contains too many competing taxa, or has inadequate top confidence. `ConformalPredictionEngine` and `run_prediction` enforce three referral criteria:
+## Ambiguity Triage & Four-Tier Routing Contract
 
-1. **Empty Set ($|C(x)| = 0$)**: No cataloged taxon achieved the minimum inclusion probability $p_i \ge 1 - \hat{q}$. This signals severe model uncertainty or a novel organism.
-2. **Ambiguity Cardinality Overflow ($|C(x)| > k_{\text{max}}$)**: The set contains more candidate taxa than allowed by configuration (default $k_{\text{max}} = 3$). A large set indicates the model cannot separate competing sister species.
-3. **Deficient Top-1 Confidence ($\max_i p_i < \text{min\_confidence\_threshold}$)**: Even if a singleton set is formed, if the top candidate probability falls below the threshold (default $0.60$), the prediction is marked for triage.
+A prediction set satisfying marginal coverage may still be operationally unsafe for automated ingestion if the set is empty, contains too many competing taxa, or has inadequate top confidence. TaxonVision formalizes this operational policy through a four-tier conformal routing contract implemented in `determine_routing_tier` (`src/taxon_vision/service/inference.py`):
 
-If any of these conditions are met, `refer_to_human` is returned as `True`.
+```python
+def determine_routing_tier(
+    cardinality: int,
+    top_confidence: float,
+    min_confidence_threshold: float,
+) -> ConformalRoutingTier:
+    if cardinality == 0:
+        return ConformalRoutingTier.ABSTENTION
+    if cardinality == 1:
+        if top_confidence >= min_confidence_threshold:
+            return ConformalRoutingTier.DECISIVE
+        return ConformalRoutingTier.SEVERE_AMBIGUITY
+    if cardinality <= 3:
+        return ConformalRoutingTier.MODERATE_AMBIGUITY
+    return ConformalRoutingTier.SEVERE_AMBIGUITY
+```
+
+### The Four Operational Tiers
+
+| Routing Tier | Cardinality $\|C(x)\|$ | Confidence Condition | System Action | Human Review Required |
+|---|---|---|---|---|
+| `DECISIVE` | $\|C(x)\| = 1$ | $p_{\text{top1}} \ge \tau_{\text{conf}}$ (default 0.60) | Automated classification accepted; fast-path sub-25ms response emitted. | `False` (unless OOD) |
+| `MODERATE_AMBIGUITY` | $1 < \|C(x)\| \le 3$ | Any | Bounded candidate set; triggers LanceDB metadata-filtered HNSW + Reciprocal Rank Fusion (RRF) vector retrieval. | `True` |
+| `SEVERE_AMBIGUITY` | $\|C(x)\| > 3$ OR $\|C(x)\| = 1$ | $p_{\text{top1}} < \tau_{\text{conf}}$ | High taxonomic contestation or diffuse singleton; enqueued in expert triage queue. | `True` |
+| `ABSTENTION` | $\|C(x)\| = 0$ | Any | Model refuses to predict; rejected out-of-hand; enqueued for anomaly examination. | `True` |
+
+### Referral Logic in the Inference Service
+
+In `taxon_vision.service.inference.run_prediction`, human review referral is asserted if either the OOD screening fires or the routing tier deviates from `DECISIVE`:
+
+$$\text{requires\_human\_review} = \text{is\_ood} \lor (\text{routing\_tier} \neq \text{ConformalRoutingTier.DECISIVE})$$
+
+When `requires_human_review` is `True`:
+- The service updates Prometheus monitoring metrics (`REFERRAL_RATE.inc()`).
+- The observation is staged to disk via `persist_flagged_observation`.
+- The occurrence is entered into the active learning priority triage queue for expert taxonomist review.
 
 ---
 
-## Forward-Only Class Activation Mapping (CAM) Attribution
+## Attention Visualization & Class Activation Mapping (CAM)
 
-In production ecological services operating under strict Service Level Agreements (SLAs)—such as TaxonVision's target sub-25ms p95 latency budget—diagnostic interpretability must not compromise throughput.
+In production ecological services operating under strict Service Level Objectives (SLOs)—such as TaxonVision's target sub-25ms p95 latency budget—diagnostic interpretability must not compromise throughput.
 
-### The Latency Barrier of Grad-CAM
+### The Latency Barrier: Grad-CAM vs. Score-CAM vs. Forward-Only CAM
 
-Conventional attribution techniques like Grad-CAM compute gradients of the target class score $y^c$ with respect to spatial feature map activations $A^k$:
+Attribution techniques explain which image regions influenced the classifier's taxon prediction:
 
-$$\alpha_k^c = \frac{1}{Z} \sum_{i} \sum_{j} \frac{\partial y^c}{\partial A_{i, j}^k}$$
-
-This formulation requires a full backward autograd pass, retaining computation graphs, allocating backward activation buffers, and increasing inference latency by 15ms to 30ms. In high-throughput settings, backward passes exceed the entire SLA budget.
-
-### Mathematical Formulation of Forward-Only CAM
-
-TaxonVision's classifier architecture couples a vision backbone (e.g., DINOv3, BioCLIP, MobileNetV4) with a linear projection head following global spatial pooling:
-
-$$y^c = \sum_{k=1}^D w_k^c \left(\frac{1}{H \cdot W} \sum_{x=1}^H \sum_{y=1}^W A_{x, y}^k\right)$$
-
-Because the classification head is purely linear, the spatial attribution map $L_{\text{CAM}}^c$ can be obtained in the forward direction by directly weighting spatial feature maps $A^k$ with the linear head weights $w^c$, bypassing backward differentiation entirely:
-
-$$L_{\text{CAM}}^c = \text{ReLU}\left( \sum_{k=1}^D w_k^c \cdot A^k \right)$$
-
-This forward projection executes in $<3\text{ms}$ while preserving anatomical focus on diagnostic morphological features (such as petal structures, wing venation, or plumage patterns).
+1. **Grad-CAM (Gradient-weighted Class Activation Mapping)**: Computes gradients of the target class score $y^c$ with respect to spatial feature activations $A^k$:
+   $$\alpha_k^c = \frac{1}{Z} \sum_{i} \sum_{j} \frac{\partial y^c}{\partial A_{i, j}^k}$$
+   Grad-CAM requires a full backward autograd pass, retaining computation graphs, allocating backward activation buffers, and increasing inference latency by 15ms to 30ms. In high-throughput settings, backward passes exceed the entire SLO budget.
+2. **Score-CAM (Perturbation-based Attribution)**: Eliminates gradient dependency by masking the input image with each channel's feature map and performing a forward pass to measure score difference. However, for a backbone emitting $M$ feature channels (typically 384 to 768), Score-CAM requires $M$ separate forward passes, pushing latency well above 100ms.
+3. **Forward-Only CAM (TaxonVision Implementation)**: TaxonVision's classifier architecture couples a vision backbone (e.g., DINOv3, BioCLIP, MobileNetV4) with a linear projection head following global spatial pooling:
+   $$y^c = \sum_{k=1}^D w_k^c \left(\frac{1}{H \cdot W} \sum_{x=1}^H \sum_{y=1}^W A_{x, y}^k\right)$$
+   Because the classification head is purely linear, the spatial attribution map $L_{\text{CAM}}^c$ can be obtained in the forward direction by directly weighting spatial feature maps $A^k$ with the linear head weights $w^c$, bypassing backward differentiation entirely:
+   $$L_{\text{CAM}}^c = \text{ReLU}\left( \sum_{k=1}^D w_k^c \cdot A^k \right)$$
+   This forward projection executes in $<3\text{ms}$ with zero backward passes and zero input perturbations while preserving anatomical focus on diagnostic morphological features (such as petal structures, wing venation, or plumage patterns).
 
 ### Multi-Backbone Projection Implementations
 
@@ -261,6 +323,10 @@ torch.einsum("d, bdxy -> bxy", w_c, feats)    torch.einsum("d, bxy d -> bxy", w_
             Min-Max Normalization with Epsilon
                             ▼
               Normalized CAM Heatmap [0.0, 1.0]
+                            ▼
+           Alpha Blending with Viridis Colormap
+                            ▼
+             Base64-Encoded PNG Overlay Rendering
 ```
 
 - **Convolutional Backbones (4D: $B \times C \times H \times W$)**:
@@ -295,6 +361,24 @@ The resulting attribution is min-max scaled into $[0.0, 1.0]$ using a numerical 
 $$\text{norm} = \frac{\text{cam} - c_{\min}}{c_{\max} - c_{\min} + \epsilon_{\text{cam}}}$$
 
 If the model head lacks an `nn.Linear` layer or the backbone emits non-spatial outputs, the generator raises `SaliencyExtractionError`, which the web service maps to HTTP 422.
+
+### Overlay Rendering & Base64 PNG Serialization
+
+Ecologists and taxonomic reviewers require interpretable visual overlays blended onto the original organism photograph. In `src/taxon_vision/inference/cam.py`:
+
+- **Heatmap Colorization and Alpha-Blending (`overlay_cam_on_image`)**:
+  Applies Matplotlib's `viridis` colormap to the 2D float32 attribution map, converts the RGBA output to RGB uint8, resizes to original image dimensions with bilinear resampling, and alpha-blends with the source image using PIL:
+  ```python
+  import matplotlib.cm as cm
+  colored = cm.viridis(heatmap)
+  heatmap_rgb = (colored[:, :, :3] * 255).astype(np.uint8)
+  heatmap_img = Image.fromarray(heatmap_rgb).resize((width, height), resample=Image.Resampling.BILINEAR)
+  overlay = Image.blend(image.convert("RGB"), heatmap_img, alpha=alpha)
+  ```
+- **Base64 Serialization (`encode_image_base64_png`)**:
+  Encodes the blended PIL Image into an in-memory `io.BytesIO` buffer as a PNG image and formats it as a UTF-8 base64 string suitable for direct HTML `data:image/png;base64,...` image rendering.
+- **End-to-End Overlay Generation (`generate_cam_overlay`)**:
+  Orchestrates `generate_heatmap`, `overlay_cam_on_image`, and `encode_image_base64_png` in a single helper invoked by REST endpoints (`/api/v1/predict?explain=true`) and HTMX UI partials (`/ui/cam/{hash}`).
 
 ---
 
@@ -360,7 +444,8 @@ When `run_prediction` flags an observation (`is_ood = True` or `requires_human_r
 
 1. **Tabular Decision Metadata**: Stored as an individual JSON file (`{observation_id}_meta.json`) containing timestamp, top prediction, conformal set names, OOD energy score, raw probabilities, and review flags.
 2. **Dense Visual Embedding**: Serialized as a binary NumPy file (`{observation_id}_embedding.npy`). Caching the embedding ensures downstream active learning loops and vector stores (e.g., LanceDB) can consume representations without re-executing heavy vision foundation forward passes.
-3. **Audit Log Manifest**: Appends the JSON record to an append-only line-delimited log (`manifest.jsonl`).
+3. **Visual Crop**: Saves the raw input crop as `{observation_id}_crop.jpg` if image bytes are provided.
+4. **Audit Log Manifest**: Appends the JSON record to an append-only line-delimited log (`manifest.jsonl`).
 
 ---
 
@@ -371,7 +456,7 @@ The uncertainty and safety subsystem is governed by declarative schemas defined 
 | Configuration Key | Schema Model | Default Value | Description |
 |---|---|---|---|
 | `conformal.alpha` | `ConformalConfig` | `0.05` | Nominal error rate bound ($1 - \alpha = 0.95$ marginal coverage guarantee). |
-| `conformal.q_hat` | `ConformalConfig` | `0.85` | Calibrated non-conformity quantile cutoff. |
+| `conformal.quantile_threshold` / `q_hat` | `ConformalConfig` | `0.85` | Calibrated non-conformity quantile cutoff. |
 | `conformal.k_max` | `ConformalConfig` | `3` | Maximum prediction set size before triggering human expert referral. |
 | `conformal.min_confidence_threshold` | `ConformalConfig` | `0.60` | Minimum top-1 confidence required to bypass human review. |
 | `ood.energy_threshold` | `OODConfig` | `-2.40` | Helmholtz free energy cutoff above which inputs are rejected as OOD. |
@@ -385,9 +470,9 @@ The uncertainty and safety subsystem is governed by declarative schemas defined 
 The uncertainty subsystem is verified by dedicated unit and invariant test suites:
 
 - **Empirical Conformal Coverage Invariant** (`tests/invariants/test_conformal_coverage_invariant.py`):
-  Evaluates holdout coverage across Dirichlet probability vectors, confirming that empirical coverage matches or exceeds the theoretical $1 - \alpha$ bound under exchangeability.
-- **Conformal Bound Checks** (`tests/unit/test_conformal_bounds.py`):
-  Verifies that high-confidence inputs yield compact singleton sets (`pred_set == [0]`), diffuse distributions produce sets exceeding $k_{\text{max}}$ triggering referral (`assert refer`), and singleton sets with confidence below `min_confidence_threshold` (e.g., 48.2% < 60%) assert `refer_to_human`.
+  Evaluates holdout coverage across Dirichlet probability vectors, confirming that empirical coverage matches or exceeds the theoretical $1 - \alpha$ bound under exchangeability within a 3-sigma binomial confidence interval. Also validates coverage evaluation across discrete 4-way `EmbeddingSplit` partitions.
+- **Conformal Bound Checks & Routing Contract** (`tests/unit/test_conformal_bounds.py`):
+  Verifies that high-confidence inputs yield compact singleton sets (`pred_set == [0]`), diffuse distributions produce sets exceeding $k_{\text{max}}$ triggering referral (`assert refer`), and singleton sets with confidence below `min_confidence_threshold` (e.g., 48.2% < 60%) assert `refer_to_human`. Verifies the 4-tier conformal routing contract across `DECISIVE`, `MODERATE_AMBIGUITY`, `SEVERE_AMBIGUITY`, and `ABSTENTION`.
 - **OOD Energy Detection** (`tests/unit/test_ood_energy.py`):
   Confirms that in-distribution logits produce energy below threshold ($E \approx -3.92 < -2.40$), flat zero logits trigger OOD detection ($E \approx -2.30 > -2.40$), and empirical threshold calibration accurately captures the 95th percentile.
 - **Active Learning Margin & Priority Triage** (`tests/unit/test_active_learning.py`):

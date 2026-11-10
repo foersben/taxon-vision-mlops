@@ -5,7 +5,7 @@ description: Developer onboarding, environment bootstrapping with Pixi, Just rec
 tags: [quickstart, developer-guide, onboarding, pixi, justfile, workflow, configuration, task-routing]
 verified:
   - by: openwiki/0.7.2
-    at: 2026-10-15T19:46:36.219Z
+    at: 2026-11-08T17:07:25.915Z
 sources:
   - id: openwiki-source-978a014826b061d298cf1c14
     resource: repo://config/default_config.yaml
@@ -13,15 +13,17 @@ sources:
     resource: repo://Justfile
   - id: openwiki-source-05ccef8d4cf1698187f20464
     resource: repo://pyproject.toml
-  - id: openwiki-source-12914d3b78b4a80693643804
+  - id: openwiki-source-1ac79913349bce2af3b7abcd
     resource: repo://scripts/ci/local_ci.sh
-  - id: openwiki-source-7079947a60e14bc71bc44a0e
-    resource: repo://src/taxon_vision/config/__init__.py
+  - id: openwiki-source-f9877bd3dd93a230a053b0ff
+    resource: repo://src/taxon_vision/config/loader.py
+  - id: openwiki-source-77d249ee5507a55297f57b97
+    resource: repo://src/taxon_vision/config/schemas.py
   - id: openwiki-source-f0a6e7dc03522b2682f88655
     resource: repo://tests/conftest.py
   - id: openwiki-source-60b001159f253a7d5bdf9f0f
     resource: repo://tests/invariants/test_pure_pixi_invariant.py
-generated: { by: "openwiki/0.7.2", at: "2026-10-15T19:46:36.219Z" }
+generated: { by: "openwiki/0.7.2", at: "2026-11-08T17:07:25.915Z" }
 ---
 
 # Quickstart & Developer Guide
@@ -64,7 +66,7 @@ Before setting up the repository, ensure the following core tools are installed 
 
 ### Pure Pixi Workspace Invariant
 
-TaxonVision strictly adheres to a **Pure Pixi Invariant**. The repository prohibits standard Python virtual environments (`.venv/`) and alternate package lockfiles (`uv.lock`). All Conda packages and PyPI wheels are declared in `pyproject.toml` and locked deterministically in `pixi.lock`. IDEs such as VSCode are configured to route directly to `.pixi/envs/dev/bin/python`. This invariant is formally enforced in CI and local test passes via `tests/invariants/test_pure_pixi_invariant.py` and `scripts/local_ci.sh`.
+TaxonVision strictly adheres to a **Pure Pixi Invariant**. The repository prohibits standard Python virtual environments (`.venv/`) and alternate package lockfiles (`uv.lock`). All Conda packages and PyPI wheels are declared in `pyproject.toml` and locked deterministically in `pixi.lock`. IDEs such as VSCode are configured to route directly to `.pixi/envs/dev/bin/python`. This invariant is formally enforced in CI and local test passes via `tests/invariants/test_pure_pixi_invariant.py` and `scripts/ci/local_ci.sh`.
 
 ---
 
@@ -130,15 +132,14 @@ This launches JupyterLab on `http://127.0.0.1:8888` scoped strictly to `./scratc
 
 The following diagram illustrates the developer journey from initial workspace initialization through code verification, local CI gating, and model deployment:
 
-<!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Heuristic: an unescaped angle bracket inside a label breaks rendering; rephrase the label. -->
-```text
+```mermaid
 flowchart TD
     subgraph S_BOOT["1. Workspace Bootstrapping"]
         CLONE["git clone taxon-vision-mlops"]
         SETUP["just setup --scratch"]
-        PIXI["pixi install -e dev<br/>pre-commit install"]
-        SCRATCH["scratch/ git init<br/>nbstripout & ipykernel"]
-        
+        PIXI["pixi install -e dev / pre-commit install"]
+        SCRATCH["scratch/ git init / nbstripout and ipykernel"]
+
         CLONE --> SETUP
         SETUP --> PIXI
         SETUP --> SCRATCH
@@ -146,32 +147,32 @@ flowchart TD
 
     subgraph S_DEV["2. Inner Development Loop"]
         SHELL["just init (pixi shell)"]
-        EDIT["Author Code, Tests, & Config"]
-        FMT["just lint (Ruff + MyPy)"]
-        TEST["just test (Pytest & Invariants)"]
-        
+        EDIT["Author Code, Tests, and Config"]
+        FMT["just lint (Ruff and MyPy)"]
+        TEST["just test (Pytest and Invariants)"]
+
         PIXI --> SHELL
         SHELL --> EDIT
         EDIT --> FMT
         FMT --> TEST
     end
 
-    subgraph S_CI["3. Verification & Gating"]
-        LOC_CI["just ci (scripts/local_ci.sh)"]
+    subgraph S_CI["3. Verification and Gating"]
+        LOC_CI["just ci (scripts/ci/local_ci.sh)"]
         OKF["just validate-okf"]
         CHECK["just check (pre-commit all)"]
-        
+
         TEST --> LOC_CI
         LOC_CI --> OKF
         LOC_CI --> CHECK
     end
 
-    subgraph S_APP["4. Execution & Delivery"]
-        SERV["just run (FastAPI & HTMX)"]
+    subgraph S_APP["4. Execution and Delivery"]
+        SERV["just run (FastAPI and HTMX)"]
         TRAIN["just train (Class-Balanced Head)"]
         ONNX["just export-onnx"]
-        BENCH["just pareto"]
-        
+        BENCH["just pareto (Evaluate and Pareto)"]
+
         TEST --> SERV
         TEST --> TRAIN
         TRAIN --> ONNX
@@ -208,25 +209,38 @@ taxon-vision-mlops/
 │   └── checkpoints/         # Trained PyTorch linear heads and quantized ONNX models
 ├── openwiki/                # OpenWiki engineering knowledge base
 ├── scratch/                 # Isolated workspace for interactive Jupyter experimentation
-├── scripts/                 # Automation utilities (ingestion, calibration, benchmarks, audits)
-│   ├── ingest_data.py       # Ingests observations from iNaturalist to Parquet
-│   ├── download_samples.py  # Fetches verified open-license sample imagery
-│   ├── calibrate_conformal.py# Calibrates split conformal prediction quantile q_hat
-│   ├── benchmark_pareto.py  # Evaluates latency, accuracy, and cost trade-offs
-│   ├── audit_license_compliance.py # Audits dataset manifests for open licenses
-│   ├── validate_okf.py      # Validates OKF frontmatter and cross-document link integrity
-│   ├── verify_markdown_rules.py    # Enforces strict Rule 04 Markdown formatting
-│   ├── verify_deployment.sh # Validates live Kubernetes service health and inference
-│   └── local_ci.sh          # Native host runner executing complete multi-pass CI checks
+├── scripts/                 # Automation utilities (CI, data harvesting, governance, maintenance)
+│   ├── ci/                  # Local CI runner, deployment verifier, and training scripts
+│   │   ├── local_ci.sh      # Native host runner executing complete multi-pass CI checks
+│   │   ├── verify_deployment.sh # Validates live Kubernetes service health and inference
+│   │   └── jenkins_gpu_train.sh # Remote headless Jenkins training job runner
+│   ├── data/                # Data download automation
+│   │   └── download_samples.py # Fetches verified open-license sample imagery
+│   ├── governance/          # Governance, invariant enforcement, and documentation tools
+│   │   ├── validate_okf.py  # Validates OKF frontmatter and cross-document link integrity
+│   │   ├── verify_markdown_rules.py # Enforces strict Rule 04 Markdown formatting
+│   │   ├── verify_code_invariants.py # Asserts architectural AST invariants
+│   │   └── visualize_okf.py # Generates interactive OKF knowledge graphs
+│   └── maintenance/         # Airflow and MLflow registry maintenance utilities
 ├── src/taxon_vision/        # Core application package
 │   ├── active_learning/     # Uncertainty triage and diversity acquisition sampling
-│   ├── config.py            # Pydantic BaseSettings models and SSOT YAML loader
+│   ├── config/              # Centralized Pydantic schemas and hierarchical YAML loader
+│   │   ├── loader.py        # SSOT hierarchical config loader with LRU caching
+│   │   └── schemas.py       # Pydantic BaseSettings and subsystem configuration models
 │   ├── data/                # iNaturalist API client, license filter, and S3 streamer
 │   ├── domain/              # DarwinCore entities, TaxonNode, Observation, and License
 │   ├── inference/           # ONNX engine, Grad-CAM visualizer, and exporter
 │   ├── models/              # Vision backbones, representation caching, and head trainer
 │   ├── monitoring/          # Prometheus metrics exporter and drift telemetry
-│   ├── pipelines/           # Training and inference orchestration pipelines
+│   ├── pipelines/           # End-to-end DVC pipeline stage runners
+│   │   ├── ingest.py        # Stage 1: Ingests citizen-science occurrences from iNaturalist
+│   │   ├── audit_license.py # Stage 2: Validates open-access license compliance
+│   │   ├── extract_features.py # Stage 3: Generates 4-way representation splits
+│   │   ├── data_drift.py    # Stage 4: Detects distribution shift via Wasserstein & MMD
+│   │   ├── train.py         # Stage 5: Trains classification head with Class-Balanced Loss
+│   │   ├── export_onnx.py   # Stage 6: Graph optimization and INT8 quantization
+│   │   ├── calibrate.py     # Stage 7: Split conformal and OOD threshold calibration
+│   │   └── evaluate.py      # Stage 8: Pareto benchmarking and conformal test verification
 │   ├── service/             # FastAPI REST endpoints, HTMX dashboard, and file storage
 │   └── uncertainty/         # Split conformal prediction and Helmholtz free energy OOD
 ├── tests/                   # Testing pyramid suites
@@ -234,7 +248,7 @@ taxon-vision-mlops/
 │   ├── unit/                # Fast unit tests mocking models and network calls
 │   ├── integration/         # Multi-module integration tests and FastAPI endpoint tests
 │   └── invariants/          # Mathematical coverage and architectural invariant suites
-├── dvc.yaml                 # DVC pipeline stages (ingestion, train, export_onnx)
+├── dvc.yaml                 # DVC pipeline stages (ingest, audit, extract, train, export, calibrate, eval)
 ├── Justfile                 # Central command automation catalog
 ├── pixi.lock                # Deterministic cross-platform package lockfile
 └── pyproject.toml           # Packaging manifest, Pixi environments, and tool configs
@@ -275,7 +289,7 @@ The `Justfile` defines recipes grouped into logical engineering domains. Run `ju
 | `just test-unit` | Runs fast unit tests only (`tests/unit/`). |
 | `just test-integration` | Runs integration tests validating multi-component workflows and FastAPI routes (`tests/integration/`). |
 | `just test-conformal` | Verifies mathematical $1 - \alpha$ finite-sample coverage guarantees on holdout distributions (`tests/invariants/test_conformal_coverage_invariant.py`). |
-| `just ci [job]` | Executes local CI runner (`scripts/local_ci.sh`) without Docker container overhead. Options: `all`, `quality`, `tests`, `docs`. |
+| `just ci [job]` | Executes local CI runner (`scripts/ci/local_ci.sh`) without Docker container overhead. Options: `all`, `quality`, `tests`, `docs`. |
 | `just ci-test` | Alias for `just ci tests`. |
 
 ### Data Ingestion & MLOps Pipelines
@@ -286,10 +300,9 @@ The `Justfile` defines recipes grouped into logical engineering domains. Run `ju
 | `just fetch-sample` | Streams a sample batch of observation images from AWS Open Data S3 into `data/sample/`. |
 | `just download-samples [per_taxon]` | Downloads verified open-license sample images for all 10 catalog taxa (defaults to 1 per taxon). |
 | `just train [epochs] [extractor]` | Trains the classification head using frozen backbone representation caching and Class-Balanced Loss. |
-| `just train-baseline [extractor]` | Quick baseline training run using `bioclip-2` for 5 epochs. |
 | `just export-onnx` | Exports the PyTorch vision backbone and linear classification head to an optimized ONNX computational graph. |
-| `just pareto` | Benchmarks Pareto frontier trade-offs (Accuracy vs Latency vs Cost) across candidate backbones. |
-| `just calibrate` | Computes split conformal non-conformity quantile $\hat{q}$ on holdout validation data ($\alpha = 0.05$). |
+| `just calibrate` | Computes split conformal non-conformity quantile $\hat{q}$ and OOD threshold on holdout validation data ($\alpha = 0.05$). |
+| `just pareto` | Evaluates holdout test set with conformal bounds and benchmarks Pareto frontier trade-offs (Accuracy vs Latency vs Cost). Maps to DVC `eval` stage (`just eval` / `just bench-pareto`). |
 | `just predict [image]` | Runs CLI inference, conformal set generation, and OOD energy evaluation on a target image file. |
 | `just dvc-push` | Authenticates via Linux Secret Service and pushes versioned dataset manifests and models to DagsHub. |
 | `just dvc-pull` | Pulls tracked dataset manifests and model checkpoints from DagsHub remote S3 storage. |
@@ -300,7 +313,7 @@ The `Justfile` defines recipes grouped into logical engineering domains. Run `ju
 |---|---|
 | `just run` | Starts the unified FastAPI web service and HTMX diagnostic dashboard with live reloading on `http://localhost:8000`. |
 | `just run-api` | Direct invocation of Uvicorn server running `taxon_vision.service.api:app`. |
-| `just verify-deployment [namespace]`| Runs the automated Kubernetes verification script (`scripts/verify_deployment.sh`) to test live endpoints and inference. |
+| `just verify-deployment [namespace]`| Runs the automated Kubernetes verification script (`scripts/ci/verify_deployment.sh`) to test live endpoints and inference. |
 
 ### Documentation & Visualization
 
@@ -321,13 +334,16 @@ TaxonVision maintains a deterministic configuration architecture preventing conf
 
 Configuration settings are resolved by `taxon_vision.config.get_settings()` through a strict six-tier hierarchy:
 
-1. **Base Declarative Defaults**: `config/default_config.yaml` declares system defaults for web serving, vision backbones, calibration parameters, and OOD thresholds.
-2. **Pipeline Hyperparameters**: Root `params.yaml` overlays training epochs, batch sizes, and learning rates (synchronized with DVC stages).
+1. **Base Declarative Defaults**: `config/default_config.yaml` declares system defaults for web serving, vision backbones, calibration parameters, telemetry, and OOD thresholds.
+2. **Pipeline Hyperparameters**: Root `params.yaml` overlays training epochs, batch sizes, learning rates, and data split proportions (synchronized with DVC stages).
 3. **Conformal Quantiles**: `config/conformal_config.yaml` overlays calibrated non-conformity threshold values ($\hat{q}$ and $k_{\max}$).
-4. **Custom YAML Overrides**: Specified via the `TAXON_CONFIG_PATH` environment variable or an explicit filesystem argument.
+4. **Custom YAML Overrides**: Specified via the `TAXON_CONFIG_PATH` environment variable or an explicit filesystem path passed to `get_settings()`.
 5. **Direct Environment Overrides**: Targeted runtime environment variables for test execution and offline sandboxing:
     * `TAXON_ALLOW_UNTRAINED_FALLBACK=true`: Permits uninitialized model weights during offline test suites without network downloads.
     * `TAXON_FLAGGED_STORAGE_DIR=/path/to/dir`: Redirects OOD and ambiguous observation triage payloads.
+    * `TAXON_OPTUNA_STORAGE_URI`: Overrides Optuna study persistence URI.
+    * `TAXON_MLFLOW_TRACKING_URI` / `MLFLOW_TRACKING_URI`: Redirects MLflow experiment tracking.
+    * `TAXON_TELEMETRY_ALLOW_IN_MEMORY_FALLBACK=true`: Enables bounded in-memory fallback for prediction telemetry during tests.
 6. **Nested Environment Variables**: Overrides any configuration field using the `TAXON_` prefix and double underscore `__` delimiter:
     ```bash
     export TAXON_MODEL__IMAGE_SIZE=336
@@ -335,7 +351,7 @@ Configuration settings are resolved by `taxon_vision.config.get_settings()` thro
     export TAXON_SERVICE__PORT=8080
     ```
 
-Every setting is strictly validated at runtime using Pydantic `BaseSettings` models (`ServiceConfig`, `ModelConfig`, `TrainingConfig`, `ConformalConfig`, `OODConfig`, `MLflowConfig`).
+Every setting is strictly validated at runtime using Pydantic `BaseSettings` models (`Settings` in `src/taxon_vision/config/schemas.py`, composing `ServiceConfig`, `ModelConfig`, `TrainingConfig`, `IngestionConfig`, `StreamingConfig`, `OptunaConfig`, `TelemetryConfig`, `DriftConfig`, `EvaluationConfig`, `PromotionConfig`, `ConformalConfig`, `OODConfig`).
 
 ### Critical Runtime & Testing Invariants
 
@@ -355,14 +371,14 @@ Use this task-routing map to navigate directly to the appropriate documentation 
 | Engineering Objective | Primary Wiki Guide | Key Files & Modules | Core Commands |
 |---|---|---|---|
 | **Taxonomy Perimeter & Species Catalog** | [Domain Entities & Taxonomy Perimeter](architecture/domain-and-taxa.md) | `config/taxa_catalog.yaml`<br/>`src/taxon_vision/domain/` | `just download-samples` |
-| **System Architecture & Dual Pipeline** | [System Architecture & Design](architecture/system-overview.md) | `src/taxon_vision/config.py`<br/>`config/default_config.yaml` | `just init`<br/>`just clean` |
-| **Data Ingestion, S3 Streaming, & DVC** | [Data Ingestion & Dataset Versioning](workflows/data-ingestion-and-versioning.md) | `scripts/ingest_data.py`<br/>`src/taxon_vision/data/`<br/>`dvc.yaml` | `just ingest-data`<br/>`just fetch-sample`<br/>`just dvc-push` |
-| **Model Training & Experiment Tracking** | [Model Training & Experiment Tracking](workflows/model-training-and-tracking.md) | `src/taxon_vision/models/`<br/>`src/taxon_vision/pipelines/` | `just train`<br/>`just train-baseline` |
-| **ONNX Export, Quantization, & Pareto** | [Inference Optimization & ONNX Runtime](workflows/inference-and-optimization.md) | `src/taxon_vision/inference/onnx_exporter.py`<br/>`scripts/benchmark_pareto.py` | `just export-onnx`<br/>`just pareto` |
-| **Conformal Prediction & Safety Triage** | [Uncertainty Quantification & Safety](concepts/uncertainty-and-safety.md) | `src/taxon_vision/uncertainty/`<br/>`scripts/calibrate_conformal.py` | `just calibrate`<br/>`just test-conformal` |
+| **System Architecture & Dual Pipeline** | [System Architecture & Design](architecture/system-overview.md) | `src/taxon_vision/config/`<br/>`config/default_config.yaml` | `just init`<br/>`just clean` |
+| **Data Ingestion, S3 Streaming, & DVC** | [Data Ingestion & Dataset Versioning](workflows/data-ingestion-and-versioning.md) | `src/taxon_vision/pipelines/ingest.py`<br/>`src/taxon_vision/data/`<br/>`dvc.yaml` | `just ingest-data`<br/>`just fetch-sample`<br/>`just dvc-push` |
+| **Model Training & Experiment Tracking** | [Model Training & Experiment Tracking](workflows/model-training-and-tracking.md) | `src/taxon_vision/models/`<br/>`src/taxon_vision/pipelines/train.py` | `just train`<br/>`just mlflow-ui` |
+| **ONNX Export, Quantization, & Pareto** | [Inference Optimization & ONNX Runtime](workflows/inference-and-optimization.md) | `src/taxon_vision/inference/onnx_exporter.py`<br/>`src/taxon_vision/pipelines/evaluate.py` | `just export-onnx`<br/>`just pareto` |
+| **Conformal Prediction & Safety Triage** | [Uncertainty Quantification & Safety](concepts/uncertainty-and-safety.md) | `src/taxon_vision/uncertainty/`<br/>`src/taxon_vision/pipelines/calibrate.py` | `just calibrate`<br/>`just test-conformal` |
 | **FastAPI Service & HTMX Dashboard** | [API Service & Web Interface](operations/service-and-api.md) | `src/taxon_vision/service/`<br/>`src/taxon_vision/inference/` | `just run`<br/>`just predict` |
 | **Kubernetes, Telemetry, & Runbooks** | [Deployment, Scheduling & Observability](operations/deployment-and-observability.md) | `deploy/k8s/`<br/>`src/taxon_vision/monitoring/` | `just verify-deployment` |
-| **Quality Gates, Pytest, & Invariants** | [Testing Strategy & Quality Invariants](testing/test-strategy-and-invariants.md) | `tests/`<br/>`scripts/local_ci.sh`<br/>`scripts/validate_okf.py` | `just test`<br/>`just lint`<br/>`just ci` |
+| **Quality Gates, Pytest, & Invariants** | [Testing Strategy & Quality Invariants](testing/test-strategy-and-invariants.md) | `tests/`<br/>`scripts/ci/local_ci.sh`<br/>`scripts/governance/validate_okf.py` | `just test`<br/>`just lint`<br/>`just ci` |
 
 ### Detailed Task Routing
 
@@ -382,7 +398,7 @@ To train classifier heads on top of frozen vision backbones (`BioCLIP-2`, `DINOv
 To convert PyTorch weights to high-throughput ONNX computational graphs:
 * Consult [Inference Optimization & ONNX Runtime](workflows/inference-and-optimization.md) for graph architecture details, dynamic vs static calibration, and dual-output heads (logits + Grad-CAM feature activations).
 * Run `just export-onnx` to produce `models/checkpoints/model_int8.onnx`.
-* Run `just pareto` to evaluate latency, throughput, and memory consumption across backbones.
+* Run `just pareto` (mapping to the DVC `eval` pipeline stage) to evaluate latency, throughput, and memory consumption across backbones.
 
 #### 4. Calibrating Statistical Uncertainty & OOD Detection
 To adjust conformal coverage error bounds or free-energy thresholds:
@@ -393,7 +409,7 @@ To adjust conformal coverage error bounds or free-energy thresholds:
 #### 5. Developing & Running the Web Service
 To test the FastAPI REST API, live prediction endpoints, or the HTMX dashboard:
 * See [API Service & Web Interface](operations/service-and-api.md) for OpenAPI specification details, multipart image upload formats, and Grad-CAM overlay generation.
-* Run `just run` to launch the Uvicorn server with live reloading on `http://localhost:8000`.
+* Run `just run` (or `just run-api`) to launch the Uvicorn server with live reloading on `http://localhost:8000`.
 * Test image classification directly from the terminal with `just predict image=data/sample/406185885_taxon_47120.jpg`.
 
 #### 6. Deploying to Kubernetes & Monitoring Production

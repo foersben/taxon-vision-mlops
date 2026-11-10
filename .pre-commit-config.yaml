@@ -1,6 +1,6 @@
 minimum_pre_commit_version: "3.7.0"
 default_stages: [pre-commit]
-exclude: ^(site/|docs/viz\.html|\.cache/|\.pixi/|scratch/|docs/\.archive/)
+exclude: ^(site/|docs/viz\.html|\.cache/|\.pixi/|scratch/|scripts/scratch/|docs/\.archive/)
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -25,7 +25,7 @@ repos:
       - id: gitleaks
 
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.49.1
+    rev: v0.50.0
     hooks:
       - id: markdownlint
         args: ["--fix", "--config", "config/lint/.markdownlint.yaml"]
@@ -42,7 +42,7 @@ repos:
     rev: 0.9.1
     hooks:
       - id: nbstripout
-        files: ^(notebooks/|scratch/)
+        files: ^(notebooks/|scratch/|scripts/scratch/)
 
   - repo: local
     hooks:
@@ -86,6 +86,13 @@ repos:
         language: system
         files: ^(docs/|\.agents/|openwiki/).*\.md$
         pass_filenames: true
+
+      - id: verify-hardware-invariants
+        name: Enforce Rule 07 Hardware Invariants
+        entry: pixi run -e dev python scripts/governance/verify_hardware_invariants.py
+        language: system
+        files: ^(docs/|\.agents/|README\.md)
+        pass_filenames: false
 
       - id: openwiki-sync
         name: Update OpenWiki Code Documentation (OKF)

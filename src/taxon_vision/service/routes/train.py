@@ -4,16 +4,48 @@
 
 from __future__ import annotations
 
+import tempfile
 from functools import partial
+from pathlib import Path
 
 import anyio
 from fastapi import APIRouter, BackgroundTasks, status
+from filelock import FileLock
 
 from taxon_vision.config import get_settings
 from taxon_vision.models.training.runner import run_training_pipeline
+from taxon_vision.models.training.types import TrainingPipelineResult
 from taxon_vision.service.schemas import TrainingRequest, TrainingResponse
 
 router = APIRouter(tags=["Training"])
+_LOCK_PATH = Path(tempfile.gettempdir()) / "taxon_vision_training.lock"
+_TRAINING_FILE_LOCK = FileLock(str(_LOCK_PATH))
+
+
+def _execute_locked_training(
+    extractor: str,
+    epochs: int,
+    batch_size: int,
+    learning_rate: float,
+) -> TrainingPipelineResult:
+    """Execute head training pipeline under an OS-level file lock to prevent multi-worker collisions.
+
+    Args:
+        extractor: Backbone extractor identifier.
+        epochs: Number of training epochs.
+        batch_size: Mini-batch size.
+        learning_rate: Optimizer learning rate.
+
+    Returns:
+        Structured TrainingPipelineResult dictionary.
+    """
+    with _TRAINING_FILE_LOCK:
+        return run_training_pipeline(
+            extractor=extractor,
+            epochs=epochs,
+            batch_size=batch_size,
+            learning_rate=learning_rate,
+        )
 
 
 @router.post(
@@ -71,7 +103,7 @@ async def trigger_training(
 
     if req.background:
         background_tasks.add_task(
-            run_training_pipeline,
+            _execute_locked_training,
             extractor=extractor,
             epochs=epochs,
             batch_size=batch_size,
@@ -87,7 +119,7 @@ async def trigger_training(
         )
 
     train_func = partial(
-        run_training_pipeline,
+        _execute_locked_training,
         extractor=extractor,
         epochs=epochs,
         batch_size=batch_size,

@@ -36,7 +36,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Pixi Environment (CPU ci-dev)
-        uses: prefix-dev/setup-pixi@v0.10.2
+        uses: prefix-dev/setup-pixi@v0.11.2
         with:
           environments: ci-dev
 
@@ -73,7 +73,7 @@ jobs:
           pixi run --frozen -e ci-dev python -m zipfile -l dist/*.whl
 
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: python-distribution-package
           path: dist/
@@ -89,7 +89,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Download Build Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: python-distribution-package
           path: dist
@@ -100,7 +100,7 @@ jobs:
           subject-path: "dist/*"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
           name: Release ${{ github.event.inputs.tag_name || github.ref_name }}

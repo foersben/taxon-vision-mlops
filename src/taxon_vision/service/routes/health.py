@@ -18,7 +18,7 @@ def health() -> dict[str, str]:
     """Perform a lightweight liveness check confirming service availability.
 
     Why:
-        Orchestration platforms (Docker Compose, Kubernetes kubelet, systemd) require a rapid, zero-side-effect probe to determine process liveness and container readiness. Executing heavy model checks or I/O on the liveness probe risks false-positive pod restarts under transient traffic spikes. A decoupled, lightweight endpoint satisfies orchestration SLAs without adding CPU or GPU contention.
+        Orchestration platforms (Docker Compose, Kubernetes kubelet, systemd) require a rapid, zero-side-effect probe to determine process liveness and container readiness. Executing heavy model checks or I/O on the liveness probe risks false-positive pod restarts under transient traffic spikes. A decoupled, lightweight endpoint satisfies orchestration SLOs without adding CPU or GPU contention.
 
     How:
         Returns an immediate JSON payload with operational status "healthy" and the service identifier string, bypassing disk access, database lookups, and model inference.

@@ -17,12 +17,12 @@ import torch
 from taxon_vision.models.training.tuning import (
     HyperparameterObjective,
     _log_best_run,
-    _log_optuna_diagnostic_plots,
     _resolve_optuna_storage,
     _setup_mlflow,
     tune_hyperparameters,
 )
 from taxon_vision.models.training.types import EmbeddingSplit, TuningConfig
+from taxon_vision.models.training.visualizations import log_optuna_diagnostic_plots
 
 
 @pytest.fixture
@@ -89,7 +89,7 @@ def test_log_best_run(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(mlflow, "log_metric", mock_log_metric)
     monkeypatch.setattr(mlflow, "set_tag", mock_set_tag)
     monkeypatch.setattr(mlflow, "log_param", mock_log_param)
-    monkeypatch.setattr("taxon_vision.models.training.tracking._get_dvc_dataset_hash", lambda: "hash123")
+    monkeypatch.setattr("taxon_vision.models.training.tuning.get_dvc_dataset_hash", lambda: "hash123")
 
     _log_best_run({"lr": 1e-3}, 0.85, active=True)
     mock_start_run.assert_called_once_with(run_name="optuna_best_model")
@@ -167,14 +167,14 @@ def test_resolve_optuna_storage(tmp_path: Path) -> None:
 
 
 def test_log_optuna_diagnostic_plots_zero_variance(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify _log_optuna_diagnostic_plots safely suppresses param importance on zero variance."""
+    """Verify log_optuna_diagnostic_plots safely suppresses param importance on zero variance."""
     mock_log_figure = MagicMock()
     monkeypatch.setattr(mlflow, "log_figure", mock_log_figure)
 
     # Empty study or None study returns cleanly
-    _log_optuna_diagnostic_plots(None)
+    log_optuna_diagnostic_plots(None)
     empty_study = optuna.create_study()
-    _log_optuna_diagnostic_plots(empty_study)
+    log_optuna_diagnostic_plots(empty_study)
     assert mock_log_figure.call_count == 0
 
     # Study with identical values (zero variance: all trials 1.0)
@@ -183,7 +183,7 @@ def test_log_optuna_diagnostic_plots_zero_variance(monkeypatch: pytest.MonkeyPat
         trial = study.ask()
         study.tell(trial, 1.0)
 
-    _log_optuna_diagnostic_plots(study)
+    log_optuna_diagnostic_plots(study)
     # plot_optimization_history is called, but plot_param_importances is skipped because len(set) == 1
     assert mock_log_figure.call_count == 1
     call_args = mock_log_figure.call_args_list[0]
@@ -197,7 +197,7 @@ def test_tune_hyperparameters_custom_study_and_reset(
     """Verify tune_hyperparameters honors study_name and reset_study flags."""
     monkeypatch.setattr("taxon_vision.models.training.tuning._setup_mlflow", lambda _cfg=None: False)
     monkeypatch.setattr("taxon_vision.models.training.tuning._log_best_run", MagicMock())
-    monkeypatch.setattr("taxon_vision.models.training.tuning._log_optuna_diagnostic_plots", MagicMock())
+    monkeypatch.setattr("taxon_vision.models.training.tuning.log_optuna_diagnostic_plots", MagicMock())
 
     cfg = TuningConfig(
         n_trials=1,
@@ -268,7 +268,7 @@ def test_resolve_tier_hyperparameters(
     # Tier 1: tune=True -> optuna_live_study
     monkeypatch.setattr("taxon_vision.models.training.tuning._setup_mlflow", lambda _cfg=None: False)
     monkeypatch.setattr("taxon_vision.models.training.tuning._log_best_run", MagicMock())
-    monkeypatch.setattr("taxon_vision.models.training.tuning._log_optuna_diagnostic_plots", MagicMock())
+    monkeypatch.setattr("taxon_vision.models.training.tuning.log_optuna_diagnostic_plots", MagicMock())
 
     tier1_res = _resolve_tier_hyperparameters(
         extractor="tier1_extractor",

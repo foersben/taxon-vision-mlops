@@ -66,6 +66,12 @@
           <div class="prob-val-wrapper">
             <span class="prob-val">{{ cand.confidence_pct }}%</span>
             {% if cand.in_conformal_set %}<span class="pill-conformal" title="Member of the conformal prediction set">C(x)</span>{% endif %}
+            <button hx-post="/api/v1/explain?image_hash={{ image_hash }}&amp;target_class_index={{ cand.taxon_id }}"
+                    hx-target="#cam-container"
+                    hx-swap="innerHTML"
+                    hx-indicator="#cam-loading"
+                    class="btn-mini-cam"
+                    title="Inspect CAM attribution for {{ cand.scientific_name }}">👁️</button>
           </div>
         </div>
       {% endfor %}
@@ -112,7 +118,7 @@
           <span class="btn-icon">👁️</span> Inspect CAM for top prediction
         </button>
       </div>
-      {% set differential = top_candidates|selectattr("in_conformal_set")|rejectattr("taxon_id", "equalto", top_taxon_id)|list %}
+      {% set differential = top_candidates|rejectattr("taxon_id", "equalto", top_taxon_id)|list %}
       {% if differential %}
         <div class="cam-differential">
           <span class="cam-differential-label">Compare differential candidates:</span>
@@ -121,8 +127,8 @@
                     hx-target="#cam-container"
                     hx-swap="innerHTML"
                     hx-indicator="#cam-loading"
-                    class="btn-subtle-cam">
-              {{ cand.scientific_name }}
+                    class="btn-subtle-cam{% if cand.in_conformal_set %} in-conformal{% endif %}">
+              {{ cand.scientific_name }}{% if cand.in_conformal_set %} (C(x)){% endif %}
             </button>
           {% endfor %}
         </div>

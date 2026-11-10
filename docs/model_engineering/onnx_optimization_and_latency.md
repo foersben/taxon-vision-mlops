@@ -1,124 +1,137 @@
 ---
 type: System Pattern
-title: ONNX Runtime Optimization & Latency Invariants
+title: ONNX Runtime Optimisation & Latency Invariants
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
-version: 1.0
-description: INT8 static PTQ quantization, zero-allocation memory execution, and forward-hooked visual CAM under a strict 25ms p95 latency budget.
-tags: [onnx, quantization, latency, vnni, cam, optimization]
-generated: {by: process:docs-librarian, at: "2026-10-06T12:00:00Z"}
-verified: {by: process:docs-librarian, at: "2026-10-06T12:00:00Z"}
+version: 1.1
+description: Dual-output INT8 ONNX compilation, zero-allocation memory execution, cross-stage MLflow run resumption, and forward-hooked visual CAM under a strict 25ms p95 microservice latency budget.
+tags: [onnx, quantization, latency, vnni, cam, optimization, pyfunc]
+generated: {by: "process:docs-librarian", at: "2026-11-08T17:27:00Z"}
+verified: {by: "process:docs-librarian", at: "2026-11-08T17:27:00Z"}
 sources:
   - resource: "docs/latex/strategy_report/strategy_report.pdf"
   - resource: "src/taxon_vision/inference/onnx_engine.py"
+  - resource: "src/taxon_vision/inference/onnx_exporter.py"
   - resource: "src/taxon_vision/inference/quantizer.py"
   - resource: "src/taxon_vision/inference/cam.py"
+  - resource: "src/taxon_vision/inference/mlflow_model.py"
   - resource: "src/taxon_vision/pipelines/export_onnx.py"
 ---
 
-# ONNX Runtime Optimization & Latency Invariants
+# ONNX Runtime Optimisation & Latency Invariants
 
-Operating an interactive biodiversity identification platform requires strict adherence to latency Service Level Agreements (SLAs). While unoptimized PyTorch forward passes on general-purpose CPUs often exceed 100 to 200 ms depending on batch size and architecture, TaxonVision enforces a dual-target latency SLA:
+Operating an interactive biodiversity identification and camera-trap triage platform requires strict adherence to deterministic latency Service Level Objectives (SLOs). Whilst unoptimised PyTorch forward passes on general-purpose CPUs often exceed 100 to 200 ms due to Python interpreter dispatch overhead and un-fused FP32 memory reads, TaxonVision-MLOps enforces a verified multi-tier latency hierarchy:
 
-* **Bare-Metal GPU / INT8 Fast-Path Target:** Target p95 latency strictly **$\le 15.0\text{ ms}$** under quantized ONNX Runtime execution on bare-metal production nodes (`params.yaml`), verified for single-stream sequential execution (multi-client concurrent ingress stress-testing scheduled for Phase 2.5).
-* **General-Purpose CPU / CI Testbed Ceiling:** Hard ceiling p95 latency **$\le 25.0\text{ ms}$** enforced by project mandate `Rule 02` (`02-inference-latency-invariants.md`) and automated CI regression gates.
+* **GPU Execution Budget (FP16 CUDA EP):** End-to-end inference latency targets **$\le 10.0 - 15.0\,\text{ms}$ p95** on the NVIDIA GeForce RTX 5070 Ti (16 GB GDDR7 VRAM).
+* **CPU Execution Profile (INT8 Quantised):** On the Intel Core i7-14700K Performance cores (`taskset -c 0-15`), the standalone quantised head (`head_int8.onnx`) executes in **$< 0.2\,\text{ms}$**, edge CNN backbones (`mobilenetv4_conv_small`) target **$\le 15.0\,\text{ms}$ p95**, and the full fused 12-block DINOv3 ViT-S/16 + cosine head graph (`model_int8.onnx`, ~21.6M parameters) achieves **`47.38 ms` p50 / `50.38 ms` p95** (`20.9 FPS` in `reports/pareto_evaluation.json`).
+* **Pipeline & Microservice SLO Ceiling:** Stage 7 Gate 3 (`params.yaml: evaluation.latency_sla_ms` and `promotion.latency_slo_ms`) enforces a hard **`<= 120.0 ms` p95 ceiling** that accommodates both full-graph CPU INT8 execution (`50.38 ms`) and shared CI runners, while GPU-accelerated serving targets **`< 25.0 ms` p95** HTTP round-trip latency.
 
-This latency bound is achieved through Open Neural Network Exchange (ONNX) graph compilation, static Post-Training Quantization (PTQ), zero-allocation hot paths, and forward-hooked interpretability.
+This latency profile is achieved through **dual-output ONNX graph compilation**, **INT8 Post-Training Quantisation (PTQ)**, **zero-allocation contiguous buffer reuse**, and **forward-hooked Class Activation Mapping (CAM)**.
 
 ```mermaid
-flowchart LR
-    subgraph PyTorch["PyTorch Training Checkpoint"]
-        P1["FP32 Model Weights<br/>(Illustrative 400 MB Artifact)"]
+flowchart TD
+    subgraph PyTorchArtifacts["Stage 4: Trained PyTorch Artefacts"]
+        B_FP32["Frozen Vision Backbone<br/>(DINOv3 ViT-S/16: 384-D)"]
+        H_FP32["Trained Classification Head<br/>(models/checkpoints/head.pt)"]
+        M_JSON["Parent Run Context<br/>(reports/train_metrics.json)"]
     end
 
-    subgraph Compilation["ONNX Export & Quantization Pipeline (pipelines.export_onnx)"]
-        C1["ONNX Graph Export<br/>Dynamic Batch Axes"] --> C2["Static INT8 PTQ<br/>Calibration Data Reader"]
-        C2 --> C3["Quantized Graph<br/>(models/checkpoints/model_int8.onnx)"]
+    subgraph ONNXCompilation["Stage 5: Dual-Output ONNX Compilation (pipelines.export_onnx)"]
+        direction TB
+        RES["resume_parent_mlflow_run()<br/>Re-enters Stage 4 MLflow Run"]
+        E1["Fused Dual-Output Graph Export (Opset 17)<br/>Input: images [B, 3, 224, 224]<br/>Outputs: logits [B, 10] & embeddings [B, 384]"]
+        Q1["INT8 Quantisation & Fidelity Check<br/>(models/checkpoints/model_int8.onnx)"]
+        REG["MLflow Registry: taxon_vision_onnx<br/>+ Bundled into TaxonVisionPyFuncModel (Stage 7)"]
+        RES --> E1 --> Q1 --> REG
     end
 
-    subgraph Serving["Production Inference Engine (FastAPI)"]
-        S1["Pre-allocated C Buffers<br/>Zero Dynamic Allocation"] --> S2["ONNX Runtime VNNI / AVX-512<br/>Execution on CPU P-Cores"]
-        S2 --> S3["Forward-Hooked CAM<br/>Spatial Heatmap Overhead (<5ms Budget)"]
-        S3 --> S4["Dual SLA: &le;15ms GPU / &le;25ms CPU"]
+    subgraph ServingRuntime["Zero-Allocation Serving Engine (ONNXInferenceEngine)"]
+        direction TB
+        S_ORT["Single Forward Pass (P-Cores 0-15)<br/>Emits both classification logits & raw 384-D embeddings"]
+        S_CONF["Split Conformal + Helmholtz OOD Gate<br/>Constructs C(X) & flags requires_review"]
+        S_TEL["Async BackgroundTask Telemetry<br/>Persists 384-D embedding to PostgreSQL predictions"]
+        S_ORT --> S_CONF --> S_TEL
     end
 
-    PyTorch --> Compilation --> Serving
+    B_FP32 --> E1
+    H_FP32 --> E1
+    M_JSON --> RES
+    Q1 --> S_ORT
 ```
 
 ---
 
-## 1. Static vs. Dynamic INT8 Quantization Mathematics
+## 1. Dual-Output ONNX Graph Standard & MLflow Continuity
 
-By default, PyTorch constructs weight matrices using 32-bit floating-point (FP32) precision. During production serving, FP32 operations saturate memory bandwidth and inflate cache requirements.
+### 1.1 Why a Dual-Output Graph Is Mandatory
 
-To optimize throughput, the [`quantizer.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/inference/quantizer.py) module maps continuous 32-bit floating-point weights onto a discrete 8-bit integer grid:
+Online covariate drift detection (Tier 1 Wasserstein-1 on vector norms and Tier 2 multivariate RBF MMD²) requires capturing the 384-dimensional penultimate feature embedding $\mathbf{z} \in \mathbb{R}^{384}$ for every production inference request, whilst the user-facing response requires the taxonomic classification logits $\mathbf{f}(\mathbf{x}) \in \mathbb{R}^{K}$.
 
-$$q = \text{round}\left(\frac{x}{S}\right) + Z$$
+Running two separate models - one for feature extraction and another for classification - would double vision backbone compute and violate the $15\,\text{ms}$ CPU latency budget. Therefore, [`src/taxon_vision/inference/onnx_exporter.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/inference/onnx_exporter.py) wraps the frozen backbone and trained classification head into a single unified graph (`opset_version = 17`) with two named output tensors:
+
+1. **`logits` (`float32[batch, num_classes]`):** Unnormalised class scores fed into temperature-scaled softmax, Helmholtz free energy OOD gating, and Split Conformal set generation.
+2. **`embeddings` (`float32[batch, embedding_dim]`):** Raw pre-normalised penultimate feature vectors returned simultaneously by [`ONNXInferenceEngine.predict_outputs()`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/inference/onnx_engine.py) and dispatched asynchronously to the PostgreSQL `predictions` table via FastAPI `BackgroundTasks`.
+
+### 1.2 Cross-Stage MLflow Resumption & PyFunc Packaging
+
+When Stage 5 ([`src/taxon_vision/pipelines/export_onnx.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/pipelines/export_onnx.py)) executes under `dvc repro`, it invokes `resume_parent_mlflow_run("reports/train_metrics.json")` to re-enter the parent MLflow run created by Stage 4 (`train`). It logs the quantised graph to the `taxon_vision_onnx` registry with an explicit `ModelSignature` (`input_images: float32[-1, 3, 224, 224] -> taxonomic_logits: float32[-1, 10]`). Subsequently, Stage 7 (`evaluate.py`) packages `model_int8.onnx` alongside `config/conformal_config.yaml` and `config/taxa_catalog.yaml` into the self-contained [`TaxonVisionPyFuncModel`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/inference/mlflow_model.py).
+
+---
+
+## 2. Static vs. Dynamic INT8 Quantisation Mathematics
+
+By default, PyTorch stores weight matrices in 32-bit floating-point (FP32) precision. During production serving, FP32 matrix multiplications saturate memory bandwidth and L2/L3 CPU caches.
+
+To optimise throughput, [`src/taxon_vision/inference/quantizer.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/inference/quantizer.py) maps continuous FP32 weights and activations onto a discrete 8-bit integer grid:
+
+$$q = \operatorname{round}\left(\frac{x}{S}\right) + Z$$
 
 Where:
 
-* $q \in [-128, 127]$ is the resulting 8-bit signed quantized integer.
-* $x \in \mathbb{R}$ is the continuous 32-bit floating-point weight or activation value.
-* $S \in \mathbb{R}^+$ is the continuous scale factor:
+* $q \in [-128, 127]$ (or $[0, 255]$) is the 8-bit quantised integer.
+* $x \in \mathbb{R}$ is the continuous FP32 weight or activation value.
+* $S = \frac{x_{\max} - x_{\min}}{255} \in \mathbb{R}^+$ is the continuous scale factor.
+* $Z \in \mathbb{Z}$ is the integer zero-point offset aligning real $0.0$ with an exact integer grid value.
 
-$$S = \frac{x_{\max} - x_{\min}}{255}$$
+### Static vs. Dynamic PTQ Modes
 
-* $Z \in \mathbb{Z}$ is the integer zero-point offset, aligning real zero with the discrete zero grid to preserve sparse zero-padding accuracy.
+* **Dynamic INT8 Quantisation (`--quantize-mode dynamic`):** Pre-quantises static weight matrices offline to INT8 while computing activation scale factors $S$ and zero-points $Z$ dynamically per forward pass. This is the default mode for Vision Transformer (`dinov3`, `bioclip-2`) linear projections (`MatMul` / `Gemm` nodes), where activation ranges vary across token positions.
+* **Static INT8 PTQ (`--quantize-mode static`):** Passes a representative calibration image set (`calibration_samples = 128`) through convolutional backbones (`mobilenetv4_conv_small`) offline via [`calibration.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/inference/calibration.py) to precompute static $S$ and $Z$ constants for every spatial convolution layer.
+* **Standalone Head Export (`--export-head`):** Optionally exports the standalone linear head (`head.onnx` / `head_int8.onnx`) for sub-millisecond ($< 0.2\,\text{ms}$) evaluation directly over pre-extracted embedding tensors (`ONNXInferenceEngine.project_embeddings()`).
 
-### Static PTQ (Vision Backbones)
+### Silicon Acceleration & Gate 1 Fidelity Verification
 
-Static Post-Training Quantization (PTQ) is mathematically required for the convolutional and vision transformer backbones. Because convolution activations vary spatially, calculating activation scales dynamically at runtime introduces severe computational overhead. Instead, static PTQ passes a subset of representative data (a calibration dataset) through the model offline to precompute static $S$ and $Z$ values for every layer, guaranteeing zero runtime allocation overhead.
+Quantising to INT8 yields three hardware-level advantages:
 
-### Dynamic Quantization (Linear Projections)
-
-Dynamic quantization evaluates $S$ and $Z$ on-the-fly for every forward pass based on observed activation distributions. This is reserved exclusively for Vision-Language Models (VLMs) or standalone linear heads where variations between tokens are massive and matrix multiplications dominate.
-
-### Silicon Acceleration via SIMD & VNNI
-
-### ONNX Runtime Execution Providers & Operator Fusion
-
-The ONNX Runtime engine executes the graph utilizing hardware-specific Execution Providers (EP). When deploying on x86-64 CPUs, the OpenVINO or default CPU EP accelerates operations via AVX-512 VNNI instructions. On GPU targets, the TensorRT EP compiles the ONNX graph into FP16 or INT8 engines. Crucially, ONNX Runtime aggressively performs **operator fusion** (e.g., fusing Convolution, BatchNorm, and ReLU into a single kernel execution). This minimizes memory bandwidth bottlenecks by keeping intermediate activations in fast L1/L2 cache rather than writing them back to main memory.
-
-Combined with the zero-allocation hot inference path, these optimizations ensure deterministic sub-15ms latency on bare-metal GPU and sub-25ms latency on CPU production infrastructure.
-
-Quantizing to INT8 yields immediate computational benefits:
-
-* **Memory Footprint Compression:** Compresses model parameter footprint by **$75\%$** (an exact $4:1$ bit-width ratio; e.g., reducing an illustrative 400 MB checkpoint to approximately 100 MB).
-* **Vector Instructions:** Modern x86-64 silicon packs four 8-bit integer operations into the same register space as a single 32-bit float, leveraging AVX-512 Vector Neural Network Instructions (VNNI) or Tensor Cores.
-* **Accuracy Preservation:** Published deployment benchmarks across standard vision backbones report a **$2\times$ to $4\times$ latency speedup** on CPU inference with typically less than **$1\%$ degradation** in Top-1 accuracy (subject to verification on target domain splits).
+1. **4:1 Memory Footprint Compression:** Reduces model checkpoint size by approximately $75\%$, keeping weight tensors resident in the Intel Core i7-14700K's L2/L3 cache.
+2. **AVX-512 VNNI / Tensor Core Vectorisation:** Packs four 8-bit integer multiply-accumulate operations into a single SIMD instruction word alongside ONNX Runtime operator fusion (`Conv + BatchNorm + ReLU`).
+3. **Gate 1 Quantisation Drop Guardrail:** Stage 7 (`evaluate.py`) compares the FP32 validation baseline against the INT8 ONNX model on the holdout split. If the accuracy drop exceeds `promotion.quantization_drop_tol` ($3.0\%$), Gate 1 (`quantization_drop_exceeded`) automatically rejects the model (`@Archived`).
 
 ---
 
-## 2. Zero-Allocation Hot Inference Path
+## 3. Zero-Allocation Hot Inference Path
 
-Dynamic memory allocation during high-concurrency inference triggers Python memory fragmentation and garbage collection pauses.
+Dynamic heap allocations inside high-frequency inference loops trigger Python garbage collection pauses and inflate p95 tail latency. [`ONNXInferenceEngine`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/inference/onnx_engine.py) enforces Rule 02 (Zero-Allocation Inference):
 
-TaxonVision enforces Project Mandate `02-inference-latency-invariants.md`:
-
-* **Pre-allocated Contiguous Buffers:** Tensor inputs and intermediate inference arrays are pre-allocated as contiguous C-order NumPy arrays during engine startup ([`ONNXInferenceEngine`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/inference/onnx_engine.py)).
-* **Zero Object Boxing:** Predictions stream through pre-allocated memory addresses without allocating intermediate Python wrapper objects.
-* **CPU Core Isolation:** High-frequency ONNX execution threads are pinned strictly to physical Performance-cores (P-cores) to prevent L2/L3 cache evictions.
+* **Contiguous C-Order Buffers:** Input batches are validated and coerced via `np.ascontiguousarray(..., dtype=np.float32)` before crossing the C++ ONNX Runtime C-API boundary, eliminating internal array copying.
+* **Zero Python Object Boxing on the Hot Path:** `predict_outputs()` returns a lightweight typed structure holding direct NumPy array views (`logits` and `embeddings`) rather than boxing individual floating-point scalars into Python dictionaries per class.
+* **OS Thread Affinity Pinning:** On the bare-metal host (`hive-mind`), ONNX Runtime intra-op execution threads are pinned to the 16 physical Performance-core threads (`taskset -c 0-15`), isolating matrix math from asynchronous E-core telemetry and database I/O (`16-27`).
 
 ---
 
-## 3. Forward-Hooked Class Activation Mapping (CAM)
+## 4. Forward-Hooked Class Activation Mapping (CAM)
 
-Visual explainability is crucial for taxonomic validation. While modern extensions like Grad-CAM are popular, they require calculating backward gradients:
+Visual explainability is essential for biological verification, allowing taxonomists to inspect whether the model focused on the organism's morphology (wing venation, beak curvature, petal arrangement) or spurious background foliage. Standard Grad-CAM requires computing backward spatial gradients:
 
 $$\alpha_k^c = \frac{1}{Z} \sum_{i} \sum_{j} \frac{\partial Y^c}{\partial A_{i, j}^k}$$
 
-Executing gradient backpropagation in a forward-only INT8 ONNX engine is impossible and would introduce significant runtime latency and memory overhead.
+Executing backward gradient propagation through a forward-only INT8 ONNX graph is impossible and would violate latency and memory envelopes. Instead, [`ForwardHookCAM`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/inference/cam.py) computes a forward-only linear projection over spatial patch tokens or penultimate convolutional feature maps $A^k$:
 
-[`ForwardHookCAM`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/inference/cam.py) replaces backpropagation with a forward-only linear combination:
+$$L_{\text{CAM}}^c = \operatorname{ReLU}\left(\sum_{k} w_k^c A^k\right)$$
 
-$$L_{\text{CAM}}^c = \text{ReLU}\left(\sum_{k} w_k^c A^k\right)$$
+Where $w_k^c$ is the static classification head weight connecting feature channel $k$ to target taxon $c$.
 
-Where $A^k$ represents the spatial feature activations captured during the forward pass, and $w_k^c$ is the static weight connecting channel $k$ to class $c$.
+### Operational Serving & Distributed Cache Integration
 
-This operation computes pixel-level anatomical heatmaps with minimal forward-pass overhead (targeted under 2 to 5 milliseconds), fully preserving the forward-only, quantization-friendly execution paradigm.
-
-### Operational Serving & UI Integration
-
-* **Zero-Allocation Fast Path:** Primary automated camera-trap traffic hits `POST /api/v1/predict` with `explain=false` (default), bypassing CAM extraction entirely to strictly enforce the $\le 15.0\text{ ms}$ p95 latency invariant.
-* **On-Demand Client Flag:** Interactive applications and field mobile devices pass `explain=true` to receive a base64-encoded PNG overlay (`cam_heatmap_base64`) aligned with the top-1 predicted taxon.
-* **HTMX Operator Cockpit:** In `/ui/predict-htmx`, the prediction card renders an on-demand button (`#btn-inspect-cam`) that lazily targets `POST /api/v1/explain` with `HX-Request: true` to inject a styled Viridis attribution card into the DOM without full page refresh.
+* **Zero-Allocation Fast Path (`explain=false`):** Automated camera-trap requests to `POST /api/v1/predict` default to `explain=false`, bypassing CAM rendering entirely to maintain the $< 15.0\,\text{ms}$ CPU / $< 25.0\,\text{ms}$ HTTP p95 latency ceiling.
+* **On-Demand HTMX Inspection (`POST /api/v1/explain`):** When a field biologist uploads a specimen in the web dashboard (`/ui/predict-htmx`), the raw image bytes are cached in the in-cluster Redis ephemeral store (`taxon:img:{sha256}`, 15-minute rolling TTL). Clicking **Explain CAM** dispatches an asynchronous HTMX request that retrieves the image from Redis, computes the forward-hooked Viridis heatmap inside an AnyIO worker thread (`await anyio.to_thread.run_sync(...)`), and swaps the rendered attribution overlay into the DOM without blocking the event loop.

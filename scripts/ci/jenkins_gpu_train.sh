@@ -19,7 +19,7 @@ pixi run --frozen -e dev dvc config --local remote.local-seaweedfs.access_key_id
 pixi run --frozen -e dev dvc config --local remote.local-seaweedfs.secret_access_key taxonadmin
 
 # 1. Prime cached features, manifests, and checkpoints from host volume tier if available
-mkdir -p data/embeddings data/manifests models/checkpoints
+mkdir -p data/embeddings data/manifests data/reference models/checkpoints
 
 if [ -f "/var/lib/taxon-vision/embeddings/train_embeddings.pt" ]; then
   echo ">>> Found cached features on host tier; priming data/embeddings/*.pt..."
@@ -29,6 +29,11 @@ fi
 if [ -f "/var/lib/taxon-vision/manifests/raw_manifest.parquet" ]; then
   echo ">>> Found cached manifests on host tier; priming data/manifests/*.parquet..."
   cp -f /var/lib/taxon-vision/manifests/*.parquet data/manifests/ 2>/dev/null || true
+fi
+
+if [ -f "/var/lib/taxon-vision/reference/reference_train_embeddings.pt" ]; then
+  echo ">>> Found cached reference on host tier; priming data/reference/*.pt..."
+  cp -f /var/lib/taxon-vision/reference/*.pt data/reference/ 2>/dev/null || true
 fi
 
 if [ -f "/var/lib/taxon-vision/checkpoints/head.pt" ]; then
@@ -46,6 +51,7 @@ for artifact in \
   "data/embeddings/val_embeddings.pt" \
   "data/embeddings/cal_embeddings.pt" \
   "data/embeddings/test_embeddings.pt" \
+  "data/reference/reference_train_embeddings.pt" \
   "models/checkpoints/head.pt" \
   "models/checkpoints/model_int8.onnx"; do
   if [ ! -f "$artifact" ]; then
@@ -76,6 +82,13 @@ fi
 if [ ! -f "data/manifests/raw_manifest.parquet" ]; then
   echo ">>> raw_manifest.parquet is missing from all caches and remotes; forcing INGEST_DATA=true to unfreeze and regenerate."
   export INGEST_DATA=true
+fi
+
+# 4. Fail-safe: If reference_train_embeddings.pt is still missing, seed from train_embeddings.pt if present
+if [ ! -f "data/reference/reference_train_embeddings.pt" ] && [ -f "data/embeddings/train_embeddings.pt" ]; then
+  echo ">>> reference_train_embeddings.pt missing; bootstrapping reference baseline from train_embeddings.pt..."
+  mkdir -p data/reference
+  cp -f data/embeddings/train_embeddings.pt data/reference/reference_train_embeddings.pt
 fi
 
 # Execute unified 7-stage DVC pipeline
@@ -124,6 +137,11 @@ pixi run --frozen -e dev dvc repro
 # Persist generated features to host volume cache
 if [ -d "/var/lib/taxon-vision/embeddings" ] && [ -f "data/embeddings/train_embeddings.pt" ]; then
   cp -f data/embeddings/*.pt /var/lib/taxon-vision/embeddings/ 2>/dev/null || true
+fi
+
+# Persist reference features to host volume cache
+if [ -d "/var/lib/taxon-vision/reference" ] && [ -f "data/reference/reference_train_embeddings.pt" ]; then
+  cp -f data/reference/*.pt /var/lib/taxon-vision/reference/ 2>/dev/null || true
 fi
 
 # Persist generated manifests to host volume cache

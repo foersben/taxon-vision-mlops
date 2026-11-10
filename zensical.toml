@@ -33,12 +33,15 @@ watch = [
     ".agents/",
 ]
 
-extra_css = ["stylesheets/extra.css"]
+extra_css = [
+    "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css",
+    "stylesheets/extra.css",
+]
 
 extra_javascript = [
     "javascripts/katex.js",
-    "https://unpkg.com/katex@0/dist/katex.min.js",
-    "https://unpkg.com/katex@0/dist/contrib/auto-render.min.js",
+    "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js",
+    "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js",
     "javascripts/mermaid.js",
     "javascripts/widgets/applet_viewport.js",
     "javascripts/widgets/conformal_simulator.js",
@@ -133,10 +136,12 @@ toc = { permalink = true, toc_depth = 4 }
         { "Architecture Overview" = "architecture/index.md" },
         { "Config & Parameter Encyclopedia" = "architecture/repository_and_config_encyclopedia.md" },
         { "Package & Call Graph" = "architecture/package_and_call_graph.md" },
+        { "Data Flow Matrix" = "architecture/data_flow_matrix.md" },
         { "Interactive Codebase Explorer" = "architecture/codebase_explorer.md" },
     ] },
     { "MLOps Pipelines & Storage" = [
         { "Pipelines Overview" = "mlops_pipeline/index.md" },
+        { "Closed-Loop MLOps Overview" = "mlops_pipeline/closed_loop_overview.md" },
         { "Asymmetric Dual-Pipeline" = "mlops_pipeline/dual_pipeline_architecture.md" },
         { "Arrow S3 & DVC Versioning" = "mlops_pipeline/ingestion_and_versioning.md" },
         { "Polyglot Storage & Databases" = "mlops_pipeline/storage_and_databases.md" },
@@ -150,6 +155,8 @@ toc = { permalink = true, toc_depth = 4 }
         { "Model Engineering Overview" = "model_engineering/index.md" },
         { "Backbones & Class-Balanced Loss" = "model_engineering/model_architecture.md" },
         { "Head Training, Optuna & MLflow" = "model_engineering/training_pipeline.md" },
+        { "MLflow 3.x Tracking & Registry" = "model_engineering/mlflow_tracking_and_registry.md" },
+        { "Four-Gate Model Promotion" = "model_engineering/model_promotion_gates.md" },
         { "ONNX INT8 & Forward CAM" = "model_engineering/onnx_optimization_and_latency.md" },
         { "Interactive Pareto Benchmark" = "model_engineering/backbone_benchmarking_pareto.md" },
     ] },
@@ -170,12 +177,16 @@ toc = { permalink = true, toc_depth = 4 }
         { "Operations Overview" = "operations/index.md" },
         { "Bare-Metal & k3s Topology" = "operations/current_infrastructure.md" },
         { "GPU Time-Slicing & Scheduling" = "operations/gpu_resource_scheduling.md" },
+        { "Security & Credentials Governance" = "operations/security_and_credentials.md" },
+        { "Multi-Tier Deployment Strategy" = "operations/deployment_strategy.md" },
         { "Jenkins Ephemeral CI/CD" = "operations/jenkins_ci_infrastructure.md" },
         { "Deployment & Scaling Runbook" = "operations/deployment_runbook.md" },
     ] },
     { "Service, Telemetry & Governance" = [
         { "FastAPI & OpenAPI Reference" = "operations/api_reference.md" },
-        { "Prometheus & Drift Telemetry" = "operations/prometheus_and_observability.md" },
+        { "Drift Detection & Telemetry" = "operations/drift_detection_and_telemetry.md" },
+        { "Apache Airflow 3 Orchestration" = "operations/airflow_orchestration.md" },
+        { "Prometheus & Grafana Observability" = "operations/prometheus_and_observability.md" },
         { "Agentic Governance & OKF v0.2" = "operations/agentic_governance_and_okf.md" },
         { "Implementation Status & Roadmap" = "operations/implementation_status.md" },
         { "Automation & Scripts Reference" = "operations/automation_and_scripts.md" },

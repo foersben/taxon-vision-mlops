@@ -39,9 +39,9 @@
 };
 
 \node[fill=black!4, draw=black!25, rounded corners=2pt, inner sep=2.5pt, font=\footnotesize\bfseries, align=center] at (0, 14.7) {
-    \textbf{Target:} Bare-Metal Host (RTX 5070 Ti, i7-14700K) $\cdot$ Remote-Only Training\\ % \quad$\vert$\quad
-    \textbf{Epistemic Guarantee:} Conformal Coverage $1-\alpha \ge 0.95$\\
-    \textbf{Inference SLA:} Fast Path $<25$\,ms p95
+    \textbf{Target:} Dedicated Compute Node (RTX 5070 Ti, i7-14700K) $\cdot$ Remote-Only Execution\\ % \quad$\vert$\quad
+    \textbf{Epistemic Guarantee:} Conformal Coverage $1-\alpha \ge 0.95$ $\cdot$ 4-Slot Virtual GPU Allocation\\
+    \textbf{Inference SLO:} Fast Path $<25$\,ms p95 $\cdot$ Staging CPU Discipline
 };
 
 %% ======================================================================
@@ -49,19 +49,19 @@
 %%  Left: DagsHub (-4.7) | Right: CI/CD (+4.7), width = 6.9cm
 %% ======================================================================
 \node[hubbox={6.9cm}] (dagshub) at (-4.7, 12.4) {%
-    \textbf{\footnotesize\color{mblueborder} DagsHub \& SeaweedFS MLOps Hub}\\[0.8mm]
+    \textbf{\footnotesize\color{mblueborder} DagsHub, SeaweedFS \& PostgreSQL Hub}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
-    \textbullet\ \textbf{Data Version Control (DVC):} Remote storage, Parquet \& Lance manifests\\
-    \textbullet\ \textbf{Experiment Tracking:} MLflow metrics, hyperparameters \& Registry\\
-    \textbullet\ \textbf{Annotation Backend:} Integrated Label Studio human triage workspace
+    \textbullet\ \textbf{Data Version Control (DVC):} Remote storage, Parquet manifests\\
+    \textbullet\ \textbf{In-Cluster Object \& Cache:} SeaweedFS (Local S3) \& Redis (Uploads)\\
+    \textbullet\ \textbf{Tracking \& Registry:} MLflow 3.x LoggedModels \& PostgreSQL
 };
 
 \node[hubbox={6.9cm}] (cicd) at (4.7, 12.4) {%
-    \textbf{\footnotesize\color{mblueborder} GitHub Actions \& Jenkins CI/CD}\\[0.8mm]
+    \textbf{\footnotesize\color{mblueborder} GitHub Actions, Jenkins \& Airflow 3}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
-    \textbullet\ \textbf{Deployment Target:} k3s Pods with GPU Time-Slicing (4 slots)\\
-    \textbullet\ \textbf{Quality Gates:} Ruff linting, MyPy static typing, CC open-licence audit\\
-    \textbullet\ \textbf{Epistemic Safety Gate:} Empirical coverage $\ge 95\%$ on calibration holdout
+    \textbullet\ \textbf{Airflow 3 LocalExecutor:} Hourly drift DAG \& retraining trigger\\
+    \textbullet\ \textbf{Jenkins GPU Agent:} Ephemeral RTX 5070 Ti pod for DVC builds\\
+    \textbullet\ \textbf{GitHub Actions:} PR gates, 203 pytest tests, MyPy strict, 0 Ruff warnings
 };
 
 \begin{scope}[on background layer]
@@ -100,13 +100,13 @@
 %%  Left: Pipeline 1 (-4.7) | Right: Pipeline 2 (+4.7), width = 6.9cm
 %% ======================================================================
 \node[classbox={6.9cm}] (pipe1) at (-4.7, 3.3) {%
-    \textbf{\footnotesize\color{mgrayborder} Epistemic Diamond: Train, Export, Calibrate \& Eval}\\[0.8mm]
+    \textbf{\footnotesize\color{mgrayborder} Pipeline 1: Epistemic Diamond DAG}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
-    \textbullet\ \textbf{Stage 4: \texttt{train}:} Class-Balanced Loss on train/val $\to$ \nolinkurl{head.pt}\\
-    \textbullet\ \textbf{Stage 5: \texttt{export\_onnx}:} Dual logits/embeds $\to$ \nolinkurl{model_int8.onnx}\\
+    \textbullet\ \textbf{Stage 3.5: \texttt{data\_drift}:} $W_1$ \& $\text{MMD}^2$ vs static anchor\\
+    \textbullet\ \textbf{Stage 4: \texttt{train}:} Modular sibling training $\to$ \nolinkurl{head.pt} (CB-Loss)\\
+    \textbullet\ \textbf{Stage 5: \texttt{export\_onnx}:} \nolinkurl{model_int8.onnx} (Dual-output PTQ)\\
     \textbullet\ \textbf{Stage 6: \texttt{calibrate}:} $\hat{q}_\alpha$, $\tau_{\text{energy}}$ on cal $\to$ \nolinkurl{conformal_config.yaml}\\
-    \textbullet\ \textbf{Stage 7: \texttt{evaluate}:} $1-\alpha$ bound check on test $\to$ \nolinkurl{pareto_evaluation.json}\\
-    \textbullet\ \textbf{Fast-Path CAM:} Forward-only Class Activation Mapping (${<}2$\,ms)
+    \textbullet\ \textbf{Stage 7: \texttt{eval}:} Four-Gate Promotion Verdict \& Holdout Audit
 };
 
 \node[pipebox={6.9cm}] (pipe2) at (4.7, 3.3) {%
@@ -114,7 +114,7 @@
     \rule{\linewidth}{0.4pt}\\[0.6mm]
     \textbullet\ \textbf{Vector Indexing:} Async I/O streaming writes to LanceDB (HNSW)\\
     \textbullet\ \textbf{Metadata Filter:} Haversine distance + seasonal month $\pmod{12}$\\
-    \textbullet\ \textbf{Taxonomic Engine:} DuckDB taxon lump/split synchronisation\\
+    \textbullet\ \textbf{Taxonomic Engine:} DuckDB 2.0.0 LTS lump/split synchronisation\\
     \textbullet\ \textbf{Multimodal Diagnosis:} Qwen2-VL-2B VLM for ambiguous candidates\\
     \textbullet\ \textbf{Zero Retraining:} Exemplars inserted dynamically without weight updates
 };
@@ -131,13 +131,14 @@
     \textbf{\footnotesize\color{mgreenborder} FastAPI Serving Gateway \& Conformal Routing}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
     \textbf{Split Conformal Prediction (SCP) Gating ($\alpha=0.05$, $95\%$ Coverage):}\\
-    \textbullet\ \textbf{Tier 1 (Decisive):} $|\hat{C}|=1 \land \hat{\pi}_{\max} \ge \tau_{\text{conf}} \implies$ Decisive INT8 ONNX (${<}25$\,ms SLA)\\
+    \textbullet\ \textbf{Tier 1 (Decisive):} $|\hat{C}|=1 \land \hat{\pi}_{\max} \ge \tau_{\text{conf}} \implies$ Decisive INT8 ONNX (${<}25$\,ms SLO)\\
     \textbullet\ \textbf{Tier 2 (Moderate):} $1 < |\hat{C}| \le k_{\max} \implies$ LanceDB HNSW + RRF rank fusion (${<}6$\,ms)\\
     \textbullet\ \textbf{Tier 3 (Ambiguous):} $|\hat{C}| > k_{\max} \lor (|\hat{C}|=1 \land \hat{\pi}_{\max} < \tau_{\text{conf}}) \implies$ Async VLM triage\\
     \textbullet\ \textbf{Tier 4 (Abstention):} $|\hat{C}|=0 \implies$ Global nearest-neighbour search + urgent audit\\[0.8mm]
-    \textbf{Observability \& Epistemic Monitoring:}\\
-    \textbullet\ Prometheus metrics: Latency histograms, conformal set size tracking, OOD rate\\
-    \textbullet\ \textbf{Two-Tier Drift:} Live $W_1$ scalar norm monitoring \& Offline full-manifold MMD
+    \textbf{Observability \& Telemetry Pipeline:}\\
+    \textbullet\ \textbf{Dual Dashboards:} 10 MLOps panels + 14 Infrastructure \& Logging panels\\
+    \textbullet\ \textbf{Loki v13 \& Promtail:} Structured JSON log aggregation with non-CoW NVMe storage\\
+    \textbullet\ \textbf{Telemetry Store:} PostgreSQL pre-normalised activations ($L_2$ norm $W_1$ drift)
 };
 
 \node[box={5.1cm}] (k8s) at (5.65, -1.9) {%
@@ -148,12 +149,13 @@
     \begin{tabular}{|p{2.2cm}|p{2.2cm}|}
     \hline
     \textbf{\tiny taxon-vision-serving} & \textbf{\tiny taxon-vision-vlm} \\
-    \tiny ONNX + Conformal & \tiny LanceDB + Qwen2-VL \\
-    \tiny VRAM: $<1.5$\,GB & \tiny VRAM: $>2.2$\,GB \\
-    \tiny Scaling: CPU / GPU & \tiny Dedicated GPU RAM \\
+    \tiny Prod: 2 Pods (2 GPU slots) & \tiny LanceDB + Qwen2-VL \\
+    \tiny Staging: 1 Pod (CPU-only) & \tiny VRAM: $>2.2$\,GB (Dedicated) \\
+    \tiny VRAM: $<1.5$\,GB / Pod & \tiny On-Demand / Sablier \\
     \hline
-    \end{tabular}}\\[1.2mm]
-    \textbullet\ Low-latency Envoy Ingress routing\\
+    \end{tabular}}\\[1.0mm]
+    \textbullet\ Traefik v3.1 Ingress (80/20 Canary)\\[0.2mm]
+    \textbullet\ Redis upload cache (\texttt{redis-ephemeral})\\[0.2mm]
     \textbullet\ Autonomous self-healing health probes
 };
 
@@ -210,7 +212,7 @@
 
 %%  (6) Pipeline 1 -> Serving Gateway (Vertical, left axis X = -4.7)
 \draw[arrow] (pipe1.south) -- (pipe1.south |- serving.north)
-    node[lbl, midway] {INT8 ONNX Model ($<25$\,ms)};
+    node[lbl, midway] {INT8 ONNX \& Head Models ($<25$\,ms)};
 
 %%  (7) Pipeline 2 -> K8s Microservices (Vertical, right axis X = +4.7)
 \draw[arrow] (pipe2.south) -- (pipe2.south |- k8s.north)
@@ -234,7 +236,7 @@
 \draw[arrow, draw=morangeborder, line width=1.4pt, rounded corners=3mm]
     (k8s.east) -- (8.8, -1.4) -- (8.8, 12.4) -- (cicd.east);
 \node[lbl, rotate=-90, text=morangeborder, draw=morangeborder!50] at (8.8, 5.5)
-    {Wasserstein-1 Feature Drift Alert (Retrain Webhook)};
+    {Grafana Drift Alert $\to$ Webhook Relay $\to$ Airflow Retrain DAG};
 
 \end{tikzpicture}%
   }%

@@ -143,7 +143,7 @@ def fetch_all_model_versions(client: MlflowClient, model_name: str) -> list[Mode
             page_token=page_token,
         )
         versions.extend(paged_list)
-        page_token = getattr(paged_list, "token", None)
+        page_token = paged_list.token
         if not page_token:
             break
 

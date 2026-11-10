@@ -23,10 +23,10 @@ The system enforces strict operational separation between two physical machines:
 
 * **Workstation (`flagship`):** Local developer machine used exclusively as an authoring, code review, and orchestration plane. It possesses zero dedicated GPU compute allocations for PyTorch model training or feature extraction.
 * **Bare-Metal Compute Node (`hive-mind`):** Remote production server running Ubuntu 26.04.1 LTS (codename `resolute`):
-    * **Processor (CPU):** Intel Core i7-14700K (20 physical cores, 28 threads).
-    * **System Memory (RAM):** 128 GB DDR5.
-    * **Graphics Hardware (GPU):** NVIDIA GeForce RTX 5070 Ti (16 GB VRAM, Blackwell architecture, compute capability 12.0) with NVIDIA driver 615.71.09 (CUDA 13.4 user-mode driver).
-    * **Storage:** NVMe SSD storage with Full Disk Encryption (LUKS).
+    * **Processor (CPU):** Intel Core i7-14700K (20 physical cores, 28 threads: 8 Performance-cores, 12 Efficient-cores). Workloads are segregated via OS-level thread affinity (`taskset`): 16 Performance-core threads (`0-15`) are pinned to synchronous matrix math and tensor feature extraction; 12 Efficient-core threads (`16-27`) are allocated to asynchronous I/O, Arrow streaming, and Prometheus telemetry scrapes.
+    * **System Memory (RAM):** 128 GB DDR5, sized for high-throughput in-memory feature embedding caching (train, val, cal, test splits) and LanceDB vector index querying without swap thrashing.
+    * **Graphics Hardware (GPU):** NVIDIA GeForce RTX 5070 Ti (16 GB GDDR7 VRAM, Blackwell architecture, compute capability 12.0) with NVIDIA driver 615.71.09 (CUDA 13.4 user-mode driver). Under Kubernetes time-slicing, PyTorch per-process memory fraction is constrained to $f=0.7 \implies 11.2\text{ GB}$ for training runs, reserving an isolated $4.8\text{ GB}$ envelope for the live INT8 ONNX serving runtime and system overhead.
+    * **Storage:** 2 TB PCIe Gen4 NVMe SSD with Full Disk Encryption (LUKS) and BTRFS transparent `zstd:3` compression. Database and DVC storage directories (`seaweedfs/`, `mlflow.db`, `sqlite3/`, `prometheus/`) are initialized with the non-Copy-on-Write attribute (`chattr +C`) to eliminate block fragmentation across the NVMe bus.
 
 ### Remote Boot & Remote LUKS Decryption Setup
 
@@ -137,9 +137,17 @@ kubectl get nodes "-o=custom-columns=NAME:.metadata.name,GPU:.status.allocatable
 
 The output confirms 4 allocatable `nvidia.com/gpu` virtual units on the `hive-mind` node, permitting concurrent multi-tenant execution across Web API inference, PyTorch batch training, and CI test runners without exclusive locking.
 
-### Live Production Ingress
+### Live Production Ingress & Traefik A/B Canary Routing
 
-The live API and server-rendered operator dashboard are publicly accessible at `https://taxon.benjamin-foerster.eu/`. Edge traffic terminates on Cloudflare and routes through an outbound-initiated Cloudflare Tunnel (`cloudflared`) directly to the Kubernetes NodePort service (`30080`) in the `taxon-vision` namespace, maintaining a zero-open-inbound-ports posture on the host network.
+The live API and server-rendered operator dashboard are publicly accessible at `https://taxon.benjamin-foerster.eu/`. Edge traffic terminates on Cloudflare and routes through an outbound-initiated Cloudflare Tunnel (`cloudflared`) directly into the cluster:
+
+* **Zero Public Inbound Ports:** The host firewall blocks all incoming WAN connections; edge traffic reaches the host exclusively via the authenticated Cloudflare Tunnel.
+* **Traefik v3.1 IngressRoute & A/B Canary Routing:** Deployed via [`deploy/k8s/traefik-ingress.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/traefik-ingress.yaml), incoming requests are evaluated by custom resources in the `traefik.io/v1alpha1` API group:
+    * `IngressRoute` (`taxon-vision-ingress`): Matches host `taxon.benjamin-foerster.eu` and routes to `taxon-vision-serving:8000`.
+    * `TraefikService` (`taxon-vision-ab-service`): Weighted Canary / A/B routing distributing live inference traffic:
+        * Production baseline (`taxon-vision-serving:8000`): Weight $80$ ($80\%$ of inbound requests).
+        * Challenger model (`taxon-vision-serving-challenger:8000`): Weight $20$ ($20\%$ of inbound requests).
+* **Zero-Downtime Weight Shifting:** Traffic split weights are updated in-place via declarative YAML changes without restarting application pods or dropping in-flight HTTP connections.
 
 ## Actions Runner Controller (ARC) Setup
 
@@ -283,7 +291,7 @@ just dvc-push
 * **Package & Environment Management:** Strictly managed via `pixi`. We utilise a dual-environment strategy: `ci-dev` (CPU only) for continuous integration, and `dev` (GPU enabled) for the remote GPU runners; model training is never executed on the developer workstation.
 * **Task Automation:** All pipeline steps, testing, and linting are executed via `just` (as defined in our `Justfile`).
 * **CI/CD Pipelines:** GitHub Actions (`.github/workflows/ci.yml`) triggers on pushes or pull requests to `main` and `develop`. It runs automated quality gates (Ruff, MyPy, pytest coverage with an 80% threshold, license compliance, OKF frontmatter validation, and cognitive complexity via `complexipy`). Upon merging to `main`, GitHub Actions automatically builds and publishes the production container to GitHub Container Registry (`ghcr.io/foersben/taxon-vision-mlops:latest` and `:sha-...`), pulling model checkpoints from DagsHub DVC. All legacy manual deployment approvals and phantom environments have been removed.
-* **Data Versioning & Tracking:** We rely on DVC for dataset immutability and MLflow (hosted on DagsHub) for experiment tracking.
+* **Data Versioning & Tracking:** We rely on DVC (`local-seaweedfs` in-cluster primary cache + DagsHub S3 offsite archive) for dataset immutability and self-hosted MLflow v3.16.0 on `hive-mind` (backed by PostgreSQL 16 and SeaweedFS S3) for experiment tracking and Model Registry governance.
 
 ## In-Cluster Storage Architecture: SeaweedFS Object Store
 
@@ -301,18 +309,20 @@ Rather than relying on legacy MinIO or remote-only S3 endpoints, the cluster hos
     ```bash
     wget -q -O - --post-data="" "http://127.0.0.1:8888/buckets/taxon-dvc-cache/?op=mkdir"
     wget -q -O - --post-data="" "http://127.0.0.1:8888/buckets/triage-queue/?op=mkdir"
+    wget -q -O - --post-data="" "http://127.0.0.1:8888/buckets/mlflow-artifacts/?op=mkdir"
     ```
 
 * **Persistent Host Tier & NOCOW Subvolumes:** SeaweedFS persists data to `/var/lib/taxon-vision/seaweedfs` on the host NVMe drive, mounted onto a dedicated BTRFS subvolume configured with the `NOCOW` (`chattr +C`) attribute to eliminate filesystem block fragmentation.
 
 ---
 
-## Persistent Bayesian Telemetry Plane: Optuna & SQLite WAL
+## Consolidated Relational & Tracking Plane: PostgreSQL 16, MLflow 3.x & Optuna
 
-To optimize hyperparameters across candidate vision backbones without volatile state loss, the cluster hosts a dedicated Optuna telemetry plane:
+Rather than operating separate SQLite files or multiple database containers, the cluster consolidates relational state into a single tuned **PostgreSQL 16** deployment (`postgres:16-alpine` in [`deploy/k8s/postgres.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/postgres.yaml)) alongside the **MLflow v3.16.0** tracking server and **Optuna Dashboard** ([`deploy/k8s/mlops-storage-and-optuna.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/mlops-storage-and-optuna.yaml)):
 
-* **ACID-Compliant SQLite in WAL Mode:** Hyperparameter trials executed by `taxon_vision.models.training.runner` persist their search histories directly into an SQLite database (`/workspace/optuna/optuna_studies.db`) configured with Write-Ahead Logging (`WAL`). WAL mode permits concurrent, non-blocking reads by the web dashboard while background GPU workers write trial losses and PR-AUC scores.
-* **Cluster Optuna Dashboard:** Deployed alongside SeaweedFS in [`deploy/k8s/mlops-storage-and-optuna.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/mlops-storage-and-optuna.yaml) (`ghcr.io/optuna/optuna-dashboard:latest`), the dashboard mounts `/workspace/optuna` from host path `/var/lib/taxon-vision/optuna` and exposes port `8080` cluster-wide via NodePort `30081`. Operators can monitor Bayesian convergence, ASHA trial pruning, and parameter importance plots in real time.
+* **Consolidated PostgreSQL 16 Cluster (`NodePort 30432`):** Tuned for a compact memory footprint (`shared_buffers=128MB`, `max_connections=40`, `work_mem=4MB`) on `/var/lib/taxon-vision/postgres` (BTRFS `chattr +C` non-CoW). An initialisation ConfigMap (`postgres-init-sql`) provisions isolated roles and databases for `telemetry` (FastAPI prediction & drift records), `optuna` (Bayesian HPO studies), `airflow` (Airflow 3 scheduler state), and `mlflow` (experiment runs, `LoggedModel` lineage, and Model Registry aliases).
+* **MLflow v3.16.0 Tracking & Registry Server (`NodePort 30500`):** Runs with `--backend-store-uri postgresql+psycopg2://mlflow:...@postgres.taxon-vision.svc.cluster.local:5432/mlflow` and `--artifacts-destination s3://mlflow-artifacts --serve-artifacts`, proxying binary plots and `TaxonVisionPyFuncModel` bundles directly into SeaweedFS.
+* **Optuna Dashboard (`NodePort 30081`):** Connects directly to the `optuna` PostgreSQL database (`postgresql+psycopg2://optuna:...@postgres.taxon-vision.svc.cluster.local:5432/optuna`), eliminating SQLite file-locking contention during concurrent GPU trials. Kept at `replicas: 0` when idle and scaled on demand during HPO inspection.
 
 ---
 
@@ -328,32 +338,107 @@ The system implements a production two-layer CI/CD architecture:
     * `Integration & Conformal Invariants` - Verifies integration endpoints and asserts split conformal prediction empirical coverage bounds ($1 - \alpha \ge 0.90$).
     * `Documentation Strict Build` - Validates OKF knowledge graph and verifies documentation integrity via `zensical build --strict`.
     * `Model Training & Checkpoint (GPU)` - Runs on `develop` or `main` within a dedicated GPU agent pod requesting `nvidia.com/gpu: 1` on `hive-mind`. Pulls DVC manifests, streams real image observations from AWS S3 via `extract_features.py` into 4 stratified embedding splits on SeaweedFS, trains the head via Optuna sweeps, exports the ONNX graph, and pushes updated release checkpoints to DagsHub DVC.
-    * `Deploy to Kubernetes` - Automatically injects SeaweedFS credentials, hydrates models (with fallback to host-volume checkpoints), applies [`deploy/k8s/api-deployment.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml) (`imagePullPolicy: Always`), executes a zero-downtime rolling restart, and runs the automated verification smoke test ([`scripts/ci/verify_deployment.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/ci/verify_deployment.sh)).
+    * `Deploy to Kubernetes` - Automatically injects SeaweedFS credentials, hydrates models (with fallback to host-volume checkpoints), applies branch-aware Kustomize overlays ([`deploy/k8s/overlays/staging`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/overlays/staging) on `develop` or [`deploy/k8s/overlays/production`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/overlays/production) on `main`), executes a zero-downtime rolling restart, and runs the automated verification smoke test ([`scripts/ci/verify_deployment.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/ci/verify_deployment.sh)) targeting the respective namespace.
+
+---
+
+## In-Cluster Observability Plane: Prometheus, Loki & Grafana on K3s
+
+To guarantee operational autonomy without external telemetry egress or SaaS dependencies, the cluster hosts an in-cluster observability stack in `namespace: taxon-vision`, deployed via [`deploy/k8s/monitoring-prometheus-grafana.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/monitoring-prometheus-grafana.yaml):
+
+* **Service Endpoints & NodePort Registry:**
+    * **Port `30080`:** FastAPI inference service & operator dashboard (`taxon-vision-serving:8000`).
+    * **Port `30081`:** Optuna Bayesian hyperparameter search visualizer (`optuna-dashboard:8080`, scaled to 0 when idle).
+    * **Port `30090`:** Prometheus TSDB web UI and API (`prometheus:9090`), scraping targets every 15 seconds.
+    * **Port `30300`:** Grafana visualizer (`grafana:3000`), authenticated with auto-provisioned Prometheus and Loki datasources, dual dashboards (10-panel Production Overview + 14-panel Infrastructure & Hardware Invariants), and Alertmanager webhook relay rules.
+    * **Port `30432`:** Consolidated PostgreSQL 16 relational database (`postgres:5432`) hosting `telemetry`, `optuna`, `airflow`, and `mlflow`.
+    * **Port `30500`:** MLflow v3.16.0 tracking and model registry server (`mlflow-server:5000`).
+    * **Port `3100`:** Grafana Loki single-binary log engine (`config/loki.yaml`) with TSDB indexing and 168h retention.
+    * **Internal Port `9080`:** Promtail log shipper (`config/promtail.yaml`) parsing FastAPI JSON logs, Airflow DAG/task execution traces, and Traefik access streams.
+    * **Internal Port `6379`:** In-cluster Redis ephemeral upload cache (`redis-ephemeral:6379`), providing 64 MB bounded LRU memory for multipart specimen uploads and on-demand CAM attribution across replicas.
+    * **Internal Port `8333`:** SeaweedFS S3-compatible object gateway (`seaweedfs:8333`) hosting `taxon-dvc-cache`, `triage-queue`, and `mlflow-artifacts`.
+* **Storage Persistence & BTRFS NOCOW Allocation:** Prometheus, Grafana, and Loki persist time-series indices, dashboard state, and chunk files to `/var/lib/taxon-vision/prometheus`, `/var/lib/taxon-vision/grafana`, and `/var/lib/taxon-vision/loki` on the NVMe drive. Subvolumes are marked with the `NOCOW` (`chattr +C`) attribute to eliminate filesystem block fragmentation from frequent write appends.
+* **Linux Process Isolation & Root initContainers:** Unprivileged containers (Prometheus UID `65534`, Grafana UID `472`) are paired with root `initContainers` (`docker.io/busybox:latest`) that enforce correct ownership (`chown -R 65534:65534 /prometheus`, `chown -R 472:472 /var/lib/grafana`) and mode `775` before the main processes spawn, preventing `permission denied` startup crashes on hostPath volumes.
+* **Declarative Datasource Auto-Provisioning:** Grafana boots with pre-configured datasource ConfigMaps targeting `http://prometheus:9090` and `http://loki:3100` internally, enabling immediate out-of-the-box metric and log exploration without manual UI setup.
+
+---
+
+## On-Demand Scale-to-Zero Architecture: Sablier & Traefik
+
+To optimize compute resources on dedicated bare-metal silicon during periods of zero external traffic, the cluster integrates **Sablier** (`deploy/k8s/sablier-scaler.yaml`) with the Traefik v3 reverse proxy (`deploy/k8s/traefik-sablier-config.yaml`):
+
+* **Dynamic Inactivity Idling:** When no incoming HTTP requests hit the dashboard for 15 minutes (`timeout: 15m`), the Sablier scaler automatically scales the `taxon-vision-serving` deployment to 0 replicas, freeing system RAM and GPU allocations.
+* **Transparent Scale-on-Demand:** Upon receiving a new inbound HTTP request, the Traefik Sablier middleware intercepts the connection, triggers a scale-up to 1 replica, and presents the user with an interactive waiting page (theme `dynamic` or `shuffle`) with automated 2-second polling.
+* **Readiness-Gated Reverse Proxying:** As soon as the pod passes its Kubernetes readiness probe (`GET /health/ready`), Sablier transparently proxies the user's browser directly to the loaded dashboard without dropping the connection.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Dormant: Pod scaled to 0 replicas (Idle > 15m)
+    Dormant --> RequestIntercepted: Inbound HTTP request hits Traefik Ingress
+    RequestIntercepted --> ScalingUp: Traefik Sablier Plugin triggers scale-up
+    ScalingUp --> WaitingPage: Sablier renders interactive waiting HTML (auto-refresh 2s)
+    WaitingPage --> ScalingUp: Poll pod readiness probe
+    ScalingUp --> ActiveServing: Pod readiness probe returns HTTP 200
+    ActiveServing --> ProxyConnection: Sablier transparently proxies browser to dashboard
+    ProxyConnection --> ActiveServing: Continuous user interaction
+    ActiveServing --> Dormant: Inactivity timer exceeds 15m (scaled to 0)
+```
+
+---
+
+## Cluster Pod Hygiene & Revision Limits
+
+Continuous CI/CD execution can accumulate stale ReplicaSets and completed/failed pods in etcd. To ensure deterministic cluster hygiene:
+
+* **Revision History Truncation:** All workload manifests declare `revisionHistoryLimit: 3`, preventing historical ReplicaSet proliferation during automated Jenkins continuous deployments.
+* **Automated Dead Pod Pruning:** Jenkins pipeline post-actions execute automated pruning of non-running pods across the `taxon-vision` namespace via `kubectl delete pod --field-selector=status.phase==Failed` and `status.phase==Succeeded`.
+
+---
+
+## Two-Tier Representation Drift & Airflow 3 Orchestration Architecture
+
+To monitor ecological representation drift across non-stationary visual environments and automate model retraining, the platform implements a two-tier drift detection engine ([`src/taxon_vision/monitoring/drift.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/monitoring/drift.py) and [`src/taxon_vision/monitoring/drift_runner.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/monitoring/drift_runner.py)) coordinated by **Apache Airflow 3** (detailed in [Representation Drift Detection & Telemetry](drift_detection_and_telemetry.md) and [Apache Airflow 3 Orchestration](airflow_orchestration.md)):
+
+* **Tier 1 (1D Wasserstein-1 Distance on Pre-Normalised Embedding Norms):** Evaluates the Kantorovich-Rubinstein distance $W_1(P_{\text{ref}}, P_{\text{curr}})$ across $L_2$ embedding norms in $< 1\text{ ms}$ on CPU (`taxon_embedding_drift_w1`), catching optical degradation and exposure shifts.
+* **Tier 2 (Multivariate RKHS RBF $\text{MMD}_u^2$ Permutation Test & Evidently 0.7 PCA Snapshot):** Evaluates the unbiased squared Maximum Mean Discrepancy over 384-D embeddings with median-heuristic bandwidth $\gamma$ and $B=200$ Gram-matrix permutations (`taxon_embedding_drift_mmd2`, `taxon_embedding_drift_mmd_pvalue`), accompanied by an 8-D PCA `DataDriftPreset` HTML report (`reports/drift_latest.html`).
+* **Closed-Loop Retraining Relay:** Hourly drift evaluations are triggered by the Airflow `prediction_drift_monitor` DAG (`POST /api/v1/drift/evaluate`). When drift alerts fire in Grafana, Alertmanager invokes `POST /api/v1/retrain/webhook`, which authenticates and triggers the Airflow `model_retraining` DAG to merge human feedback, dispatch the Jenkins GPU pipeline, and audit the Four-Gate Promotion outcome.
+
+---
+
+## Enterprise Cloud-Native Alternatives & Evolution Horizons
+
+The bare-metal K3s architecture is designed for deterministic execution on on-premise hardware (`hive-mind`). For enterprise multi-cluster environments, components transition directly to standard cloud-native equivalents:
+
+* **Metrics & Observability:** Transition from single-pod Prometheus to **Prometheus Operator (`kube-prometheus-stack`)** or distributed TSDB engines like **VictoriaMetrics** / **Thanos** for multi-year deduplicated storage; Grafana transitions to **Grafana Enterprise** or **Datadog / Dynatrace** with OpenTelemetry distributed tracing.
+* **Model & Data Drift:** Transition from custom `drift.py` and batch Evidently HTML reports to **Evidently Enterprise**, **Arize AI**, or **Fiddler AI** for real-time embedding vector ingestion, interactive UMAP projections, and automated root-cause analysis.
+* **Model Serving & Ingress:** Transition from Traefik CRDs to **Istio** or **Linkerd Service Mesh** with mTLS and request mirroring, or **Cilium Service Mesh** for eBPF-accelerated L7 routing with zero sidecar proxy overhead.
+* **Continuous Delivery:** Transition from in-cluster Jenkins ServiceAccount execution to **Enterprise GitOps (ArgoCD / Flux CD)**, separating CI build pipelines from deployment cluster credentials and enabling continuous pull-based reconciliation.
+
+---
 
 ## Local Development Stack
 
-For local development and debugging, a `docker-compose.local.yaml` is provided in
-`deploy/compose/docker-compose.local.yaml`. It spins up the infrastructure components that cannot run inside Pixi:
+For local multi-service orchestration and debugging, a canonical [`docker-compose.yml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/docker-compose.yml) is provided in the repository root. It orchestrates the complete 11-container topology using committed non-sensitive test defaults (see [Security Architecture & Credentials Governance](security_and_credentials.md)):
 
-* **SeaweedFS** (ports `8333` / `9333` / `8888`) - S3-compatible local object store for DVC remotes
-  and S3 streamer development without hitting real AWS.
-* **Prometheus** (port `9090`) - scrapes the local FastAPI `/metrics` endpoint at
-  `host.docker.internal:8000`. Configuration lives in `config/prometheus.yaml`.
-* **Grafana** (port `3000`) - connected to the local Prometheus instance for building
-  and testing dashboards before exporting to production.
+* **PostgreSQL 16** (port `5432`) - Consolidated relational store hosting `telemetry`, `optuna`, `airflow`, and `mlflow` databases.
+* **SeaweedFS** (ports `8333` / `9333` / `8888`) - S3-compatible local object store auto-initialising `taxon-dvc-cache`, `triage-queue`, and `mlflow-artifacts` buckets.
+* **MLflow v3.16.0** (port `5000`) - Experiment tracking and Model Registry server backed by PostgreSQL and SeaweedFS `--serve-artifacts`.
+* **Apache Airflow 3.0.0 (`LocalExecutor`)** (port `8085`) - 4-container orchestration stack (`airflow-init`, `airflow-apiserver`, `airflow-scheduler`, `airflow-dag-processor`) running `prediction_drift_monitor` and `model_retraining`.
+* **Redis 7** (port `6379`) - Bounded 64 MB ephemeral upload and CAM state cache.
+* **Optuna Dashboard** (port `8080`) - Interactive Bayesian hyperparameter search visualizer.
+* **Prometheus** (port `9090`) - Scrapes `/metrics` endpoints (`config/prometheus.yaml`).
+* **Grafana** (port `3000`) - Auto-provisioned with Prometheus and Loki datasources, dual dashboards (Production Overview + Infrastructure & Hardware Invariants), and Alertmanager webhook rules (credentials: `admin` / `admin`).
+* **Grafana Loki** (port `3100`) - Local log TSDB indexing structured logs and access streams.
+* **Promtail** (port `9080`) - Tails and streams application, Airflow, and Traefik access logs to Loki.
 
-Start the stack with:
+Start the full local stack with:
 
 ```bash
-docker compose -f deploy/compose/docker-compose.local.yaml up -d
+docker compose up -d
 ```
 
-The MLflow local tracking server is managed via Pixi (not Docker) to keep it inside the
-correct Python environment:
+Alternatively, for lightweight local development without Docker, start a local MLflow tracking server directly via Pixi:
 
 ```bash
 pixi run -e dev mlflow
 ```
-
-This starts MLflow on `http://localhost:5000`, persisting runs to `./mlruns` and
-`./mlflow.db`.

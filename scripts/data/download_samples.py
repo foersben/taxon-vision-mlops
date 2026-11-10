@@ -190,11 +190,11 @@ def _process_taxon_sample(
     return collected
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     """Orchestrate downloading samples for all catalog taxa."""
     parser = argparse.ArgumentParser(description="Download sample images for trained catalog taxa.")
     parser.add_argument("--per-taxon", type=int, default=1, help="Number of sample images per taxon (default: 1).")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     SAMPLE_DIR.mkdir(parents=True, exist_ok=True)
     catalog = _load_catalog()

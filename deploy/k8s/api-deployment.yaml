@@ -8,6 +8,7 @@ metadata:
     app.kubernetes.io/part-of: taxon-vision-mlops
 spec:
   replicas: 2
+  revisionHistoryLimit: 3
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -42,6 +43,28 @@ spec:
           value: "8000"
         - name: TAXON_SERVICE__HOST
           value: "0.0.0.0"
+        - name: TAXON_SERVICE__REDIS_URL
+          value: "redis://redis-ephemeral.taxon-vision.svc.cluster.local:6379/0"
+        - name: TAXON_OPTUNA__OPTUNA_STORAGE_URI
+          valueFrom:
+            secretKeyRef:
+              name: taxon-vision-secrets
+              key: OPTUNA_STORAGE_URI
+        - name: TAXON_TELEMETRY__DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: taxon-vision-secrets
+              key: TELEMETRY_DATABASE_URL
+        - name: TAXON_INTERNAL_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: taxon-vision-secrets
+              key: INTERNAL_API_TOKEN
+        - name: TAXON_RETRAIN_WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: taxon-vision-secrets
+              key: RETRAIN_WEBHOOK_SECRET
         resources:
           requests:
             cpu: "200m"
@@ -55,6 +78,8 @@ spec:
         - name: checkpoints-volume
           mountPath: /app/models/checkpoints
           readOnly: true
+        - name: flagged-observations-volume
+          mountPath: /app/data/flagged_observations
         livenessProbe:
           httpGet:
             path: /health
@@ -75,6 +100,10 @@ spec:
       - name: checkpoints-volume
         hostPath:
           path: /var/lib/taxon-vision/checkpoints
+          type: DirectoryOrCreate
+      - name: flagged-observations-volume
+        hostPath:
+          path: /var/lib/taxon-vision/flagged_observations
           type: DirectoryOrCreate
 ---
 apiVersion: v1

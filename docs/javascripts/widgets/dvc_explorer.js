@@ -1,9 +1,9 @@
 /**
- * TaxonVision-MLOps Interactive 7-Stage Epistemic Diamond DVC DAG Explorer
+ * TaxonVision-MLOps Interactive 8-Stage Epistemic Diamond DVC DAG Explorer
  */
 (function () {
 /**
- * Interactive 7-Stage Epistemic Diamond DVC DAG & Live Metrics Inspector (Part 2)
+ * Interactive 8-Stage Epistemic Diamond DVC DAG & Live Metrics Inspector (Part 2)
  */
 function initDVCExplorer() {
     const mountPoint = document.getElementById("taxon-dvc-explorer");
@@ -30,15 +30,15 @@ function initDVCExplorer() {
             outs: [
                 "data/manifests/raw_manifest.parquet"
             ],
-            metrics: "N/A (Metadata manifest stage)",
+            metrics: "N/A (Metadata manifest stage: 2,000 raw observations)",
             algorithm: [
                 "Parses Level 1 perimeter taxa catalog from config/taxa_catalog.yaml.",
                 "Executes paginated HTTP queries to iNaturalist v1 REST API (per_page=200).",
-                "Filters observation records requiring research-grade verification and coordinate retention.",
-                "Serializes metadata into Snappy-compressed columnar Parquet format (< 500 KB on disk)."
+                "Merges verified human-triage corrections from data/feedback/verified_feedback.parquet when available.",
+                "Serialises metadata into Snappy-compressed columnar Parquet format (< 500 KB on disk)."
             ],
             triggers: "Triggered when config/taxa_catalog.yaml, inat_client.py, ingest.py, or ingestion.* parameters change.",
-            downstreamRadius: "Invalidates: Stage 2 (audit_license), Stage 3 (extract_features), Stage 4 (train), Stage 5 (export), Stage 6 (calibrate), and Stage 7 (eval)."
+            downstreamRadius: "Invalidates: Stage 2 (audit_license), Stage 3 (extract_features), Stage 3.5 (data_drift), Stage 4 (train), Stage 5 (export), Stage 6 (calibrate), and Stage 7 (eval)."
         },
         {
             id: "audit_license",
@@ -58,16 +58,16 @@ function initDVCExplorer() {
             outs: [
                 "data/manifests/dataset_manifest.parquet"
             ],
-            metrics: "reports/license_audit.json: 1,689 / 2,000 Verified (84.5%), 311 Violations Screened, Status: PASSED",
+            metrics: "reports/license_audit.json: 1,646 / 2,000 Verified (82.3%), 354 Violations Screened, Status: PASSED",
             algorithm: [
                 "Reads raw_manifest.parquet into zero-copy Apache Arrow table.",
                 "Evaluates each observation's license_code against the OpenLicense StrEnum.",
-                "Rejects un-licensed images, proprietary copyrights, and commercial-restricted media.",
-                "Retains photographer attribution strings and writes verified dataset_manifest.parquet.",
+                "Rejects unlicensed images, proprietary copyrights, and non-derivative media (354 records purged).",
+                "Retains photographer attribution strings and writes 1,646 verified records to dataset_manifest.parquet.",
                 "Emits reports/license_audit.json tracking compliance percentage."
             ],
             triggers: "Triggered when raw_manifest.parquet, license_filter.py, domain/license.py, or audit_license.py changes.",
-            downstreamRadius: "Invalidates: Stage 3 (extract_features) and all downstream training, calibration, and evaluation stages."
+            downstreamRadius: "Invalidates: Stage 3 (extract_features) and all downstream drift, training, calibration, and evaluation stages."
         },
         {
             id: "extract_features",
@@ -91,31 +91,63 @@ function initDVCExplorer() {
                 "feature_extraction.test_split = 0.10"
             ],
             outs: [
-                "data/embeddings/train_embeddings.pt (DagsHub origin & SeaweedFS cache)",
-                "data/embeddings/val_embeddings.pt (DagsHub origin & SeaweedFS cache)",
-                "data/embeddings/cal_embeddings.pt (DagsHub origin & SeaweedFS cache)",
-                "data/embeddings/test_embeddings.pt (DagsHub origin & SeaweedFS cache)"
+                "data/embeddings/train_embeddings.pt (1,153 x 384)",
+                "data/embeddings/val_embeddings.pt (164 x 384)",
+                "data/embeddings/cal_embeddings.pt (164 x 384)",
+                "data/embeddings/test_embeddings.pt (164 x 384)"
             ],
-            metrics: "N/A (Tensors tracked to DagsHub origin & mirrored to SeaweedFS cache)",
+            metrics: "1,645 streamed observations partitioned into 4 non-overlapping stratified tensors (384-D)",
             algorithm: [
-                "Instantiates frozen foundation backbone (DINOv3, BioCLIP-2, or MobileNetV4) via BackboneFactory.",
+                "Instantiates frozen foundation backbone (vit_small_patch16_dinov3) via BackboneFactory.",
                 "Streams raw observation JPEG bytes on demand from s3://inaturalist-open-data with local LRU caching.",
-                "Normalizes images (ImageNet mean & std) and computes 384-dimensional representation vectors.",
-                "Executes deterministic 4-way stratified hash split (70% train, 10% val, 10% cal, 10% test, seed=42).",
-                "Persists memory-mapped PyTorch .pt tensors to DagsHub S3 origin and in-cluster SeaweedFS cache."
+                "Normalises images (ImageNet mean & std) and computes 384-dimensional representation vectors.",
+                "Executes deterministic 4-way stratified hash split (70% train = 1,153, 10% val = 164, 10% cal = 164, 10% test = 164, seed=42).",
+                "Persists PyTorch .pt tensors to DagsHub S3 origin and in-cluster SeaweedFS cache."
             ],
             triggers: "Triggered when model.extractor, model.image_size, split ratios, dataset_manifest.parquet, or backbone factory code changes.",
-            downstreamRadius: "Invalidates: Stage 4 (train), Stage 5 (export), Stage 6 (calibrate), and Stage 7 (eval). Heavy compute boundary."
+            downstreamRadius: "Invalidates: Stage 3.5 (data_drift), Stage 4 (train), Stage 5 (export), Stage 6 (calibrate), and Stage 7 (eval). Heavy compute boundary."
+        },
+        {
+            id: "data_drift",
+            number: "3.5",
+            title: "3.5. Training Data Drift Gate (Two-Tier Representation Audit)",
+            dvcStage: "data_drift",
+            cmd: "pixi run -e dev python -m taxon_vision.pipelines.data_drift --reference-embeddings data/embeddings/reference_train_embeddings.pt --current-embeddings data/embeddings/train_embeddings.pt --drift-config config/drift_config.yaml --out reports/data_drift.json",
+            deps: [
+                "config/drift_config.yaml",
+                "data/embeddings/reference_train_embeddings.pt",
+                "data/embeddings/train_embeddings.pt",
+                "src/taxon_vision/monitoring/drift.py",
+                "src/taxon_vision/pipelines/data_drift.py"
+            ],
+            params: [
+                "drift.mmd_alpha = 0.01",
+                "drift.num_permutations = 500",
+                "drift.fail_on_drift = false"
+            ],
+            outs: [
+                "reports/data_drift.json (metrics)"
+            ],
+            metrics: "reports/data_drift.json: W1: 0.01075 (<= tau_w1 0.12812), MMD^2: -0.00031 (p = 0.7413), Drift: FALSE",
+            algorithm: [
+                "Loads frozen baseline reference_train_embeddings.pt (N_ref=1,182) and candidate train_embeddings.pt (N_cur=1,153).",
+                "Computes Tier-1 1D Wasserstein-1 distance over L2 embedding norms against calibrated threshold tau_w1 = 0.12812.",
+                "Computes Tier-2 unbiased squared Maximum Mean Discrepancy (MMD_u^2) with multi-bandwidth RBF kernel and 500 permutations.",
+                "Emits reports/data_drift.json and logs representation shift telemetry before training begins."
+            ],
+            triggers: "Triggered when train_embeddings.pt, reference_train_embeddings.pt, config/drift_config.yaml, or monitoring/drift.py changes.",
+            downstreamRadius: "Gates Stage 4 (train) upon representation covariate shift."
         },
         {
             id: "train",
             number: "4",
             title: "4. Linear Probe Training (Class-Balanced Loss)",
             dvcStage: "train",
-            cmd: "pixi run -e dev python -m taxon_vision.pipelines.train --extractor dinov3 --epochs 5 --batch-size 32 --lr 0.001 --train-embeddings data/embeddings/train_embeddings.pt --val-embeddings data/embeddings/val_embeddings.pt --checkpoint-path models/checkpoints/head.pt --metrics-out reports/train_metrics.json",
+            cmd: "pixi run -e dev python -m taxon_vision.pipelines.train --extractor dinov3 --epochs 30 --batch-size 32 --lr 0.001 --train-embeddings data/embeddings/train_embeddings.pt --val-embeddings data/embeddings/val_embeddings.pt --checkpoint-path models/checkpoints/head.pt --metrics-out reports/train_metrics.json",
             deps: [
                 "data/embeddings/train_embeddings.pt",
                 "data/embeddings/val_embeddings.pt",
+                "reports/data_drift.json",
                 "src/taxon_vision/models/loss.py",
                 "src/taxon_vision/models/training/",
                 "src/taxon_vision/pipelines/train.py"
@@ -124,23 +156,23 @@ function initDVCExplorer() {
                 "model.extractor = dinov3",
                 "training.batch_size = 32",
                 "training.cb_beta = 0.9999",
-                "training.epochs = 5",
+                "training.epochs = 30",
                 "training.learning_rate = 0.001",
                 "training.tune = false",
                 "training.weight_decay = 0.0001"
             ],
             outs: [
-                "models/checkpoints/head.pt (pushed to origin/DagsHub)"
+                "models/checkpoints/head.pt (pushed to origin/DagsHub & SeaweedFS)"
             ],
-            metrics: "reports/train_metrics.json: Train Loss: 0.7524, Val Loss: 0.7694, Val Accuracy: 82.84%, Duration: 1.58s",
+            metrics: "reports/train_metrics.json: Train Loss: 0.2597, Val Loss: 0.2683, Val Accuracy: 93.29%, Duration: 3.61s (30 Epochs)",
             algorithm: [
-                "Loads pre-extracted train_embeddings.pt and val_embeddings.pt into memory.",
+                "Loads pre-extracted train_embeddings.pt (N=1,153) and val_embeddings.pt (N=164) via models.training.dataset.",
                 "Calculates Class-Balanced effective number weights: E_n = (1 - beta) / (1 - beta^n) with beta=0.9999.",
-                "Optimizes linear probe head (TaxonClassifier) using AdamW with weight decay 1e-4 for 5 epochs.",
-                "Tracks cross-entropy loss and validation accuracy per epoch, logging to MLflow.",
-                "Exports champion probe weights to models/checkpoints/head.pt."
+                "Executes 30 mini-batch SGD epochs via models.training.loops and models.training.embeddings with AdamW.",
+                "Tracks loss, Macro PR-AUC, and validation accuracy per epoch via RAII mlflow_run_scope().",
+                "Exports trained cosine classification head to models/checkpoints/head.pt."
             ],
-            triggers: "Triggered when training hyperparameters (lr, epochs, cb_beta), training embeddings, or loss code changes.",
+            triggers: "Triggered when training hyperparameters (lr, epochs, cb_beta), training embeddings, data_drift.json, or loss code changes.",
             downstreamRadius: "Invalidates: Stage 5 (export), Stage 6 (calibrate), and Stage 7 (eval). Does NOT invalidate Stage 3 feature extraction!"
         },
         {
@@ -148,7 +180,7 @@ function initDVCExplorer() {
             number: "5",
             title: "5. Graph Fusion & INT8 PTQ (ONNX Runtime)",
             dvcStage: "export",
-            cmd: "pixi run -e dev python -m taxon_vision.pipelines.export_onnx --extractor dinov3 --image-size 224 --checkpoint models/checkpoints/head.pt --quantize-int8 --quantize-mode dynamic --quantized-output models/checkpoints/model_int8.onnx",
+            cmd: "pixi run -e dev python -m taxon_vision.pipelines.export_onnx --extractor dinov3 --image-size 224 --checkpoint models/checkpoints/head.pt --quantize-int8 --quantize-mode dynamic --quantized-output models/checkpoints/model_int8.onnx --export-head",
             deps: [
                 "models/checkpoints/head.pt",
                 "src/taxon_vision/inference/onnx_exporter.py",
@@ -161,15 +193,16 @@ function initDVCExplorer() {
                 "model.image_size = 224"
             ],
             outs: [
-                "models/checkpoints/model_int8.onnx (pushed to origin/DagsHub)"
+                "models/checkpoints/model_int8.onnx (fused backbone + head)",
+                "models/checkpoints/head.onnx & head_int8.onnx (dedicated linear probe head)"
             ],
-            metrics: "N/A (Optimized INT8 runtime graph pushed to DagsHub remote)",
+            metrics: "N/A (Optimised INT8 runtime graph pushed to DVC remote)",
             algorithm: [
-                "Instantiates full computational graph fusing the DINOv3 backbone and trained linear probe head.",
-                "Exports unified PyTorch model to ONNX Opset 17 with dynamic batch axes.",
-                "Streams representative unlabelled images using TaxonCalibrationDataReader.",
-                "Applies MinMax Static Post-Training Quantization (PTQ) to convert FP32 weights and activations to INT8.",
-                "Validates numerical stability and exports models/checkpoints/model_int8.onnx."
+                "Instantiates full computational graph fusing the DINOv3 ViT-S/16 backbone and trained cosine head.",
+                "Exports dual-output PyTorch model (logits [B, 10] + embeddings [B, 384]) to ONNX Opset 17 with dynamic batch axes.",
+                "Exports dedicated standalone linear probe head graph (head.onnx and dynamic INT8 head_int8.onnx) for sub-millisecond (< 0.2 ms) scoring.",
+                "Applies logit-preserving dynamic INT8 Post-Training Quantisation (protecting final logit projection nodes via find_logit_nodes).",
+                "Validates numerical parity and exports models/checkpoints/model_int8.onnx."
             ],
             triggers: "Triggered when head.pt, export.quantize_int8, onnx_exporter.py, or quantizer.py changes.",
             downstreamRadius: "Invalidates: Stage 6 (calibrate) and Stage 7 (eval)."
@@ -196,13 +229,13 @@ function initDVCExplorer() {
             outs: [
                 "config/conformal_config.yaml (tracked in Git)"
             ],
-            metrics: "reports/conformal_metrics.json: Empirical Cal Coverage: 96.45%, q_hat: 0.8405, tau_ood: -2.2792",
+            metrics: "reports/conformal_metrics.json: Empirical Cal Coverage: 96.77%, q_hat: 0.6337, tau_ood: -2.4029 (N_cal = 155 inliers)",
             algorithm: [
-                "Runs zero-allocation ONNX Runtime inference over unseen cal_embeddings.pt (N=169).",
+                "Runs ONNX Runtime inference over unseen cal_embeddings.pt (164 samples; 155 inliers retained after 95% TPR OOD gating).",
                 "Calculates true-class non-conformity scores: s_i = 1 - f(x_i)_{y_i}.",
-                "Computes finite-sample inflated quantile q_hat at level ceil((n+1)(1-alpha))/n.",
+                "Computes finite-sample inflated quantile q_hat = 0.6337 at level ceil((n+1)(1-alpha))/n.",
                 "Computes Helmholtz Free Energy scores E(x) = -T * log sum(exp(logits/T)).",
-                "Establishes OOD decision threshold tau_ood anchoring In-Distribution TPR to exactly 95%.",
+                "Establishes OOD decision threshold tau_ood = -2.4029 anchoring In-Distribution TPR to 95%.",
                 "Writes calibrated parameters to config/conformal_config.yaml."
             ],
             triggers: "Triggered when cal_embeddings.pt, model_int8.onnx, conformal.alpha, or conformal.ood_tpr changes.",
@@ -211,9 +244,9 @@ function initDVCExplorer() {
         {
             id: "eval",
             number: "7",
-            title: "7. Pareto Evaluation & Latency SLA (Deployment Gate)",
+            title: "7. Pareto Evaluation & Four-Gate Promotion (Deployment Gate)",
             dvcStage: "eval",
-            cmd: "pixi run -e dev python -m taxon_vision.pipelines.evaluate --onnx-model models/checkpoints/model_int8.onnx --embeddings data/embeddings/test_embeddings.pt --conformal-config config/conformal_config.yaml --out docs/assets/pareto_results.json --metrics-out reports/pareto_evaluation.json --latency-sla-ms 25.0",
+            cmd: "pixi run -e dev python -m taxon_vision.pipelines.evaluate --onnx-model models/checkpoints/model_int8.onnx --embeddings data/embeddings/test_embeddings.pt --conformal-config config/conformal_config.yaml --out docs/assets/pareto_results.json --metrics-out reports/pareto_evaluation.json --latency-sla-ms 120.0",
             deps: [
                 "config/conformal_config.yaml",
                 "data/embeddings/test_embeddings.pt",
@@ -225,22 +258,20 @@ function initDVCExplorer() {
             ],
             params: [
                 "conformal.alpha = 0.05",
-                "evaluation.latency_sla_ms = 25.0"
+                "evaluation.latency_sla_ms = 120.0"
             ],
             outs: [
                 "docs/assets/pareto_results.json"
             ],
-            metrics: "reports/pareto_evaluation.json: Test Accuracy: 89.35%, Empirical Coverage: 96.45%, Mean Set Size: 1.72, Throughput: 20.7 FPS",
+            metrics: "reports/pareto_evaluation.json: Test Accuracy: 92.07%, Test Coverage: 91.46% (Cal: 96.77%), Mean Set Size: 1.01, p95: 50.38 ms (20.9 FPS)",
             algorithm: [
-                "Executes ONNX Runtime engine over holdout test_embeddings.pt (N=169).",
-                "Forms prediction sets C(X) = {y : f(x)_y >= 1 - q_hat}.",
-                "Asserts empirical test coverage satisfies 1 - alpha bound (96.45% >= 95.0%).",
-                "Executes 100 warm-up cycles and 500 timed inference loops to benchmark p50 and p95 latency.",
-                "Asserts p95 latency SLA <= 25.0 ms (flags deployment violation if SLA breached).",
-                "Writes reports/pareto_evaluation.json and exports Pareto frontier results for documentation portal."
+                "Executes ONNX Runtime engine over holdout test_embeddings.pt (N=164).",
+                "Forms prediction sets C(X) = {y : f(x)_y >= 1 - q_hat} (threshold 1 - 0.6337 = 0.3663).",
+                "Verifies Gate 1 (Accuracy 92.07%, INT8 drop 1.22% <= 3.0%), Gate 2 (Test coverage 91.46% >= 90.0% finite-sample bound), Gate 3 (p95 latency 50.38 ms <= 120.0 ms SLA), and Gate 4 (Worst-class AP 92.55% >= 25.0%).",
+                "Promotes qualifying candidate to @Production in MLflow Registry and writes reports/pareto_evaluation.json."
             ],
             triggers: "Triggered when test_embeddings.pt, model_int8.onnx, conformal_config.yaml, or latency_sla_ms changes.",
-            downstreamRadius: "Terminal stage. Exits with code 1 upon statistical coverage failure or SLA breach, preventing release."
+            downstreamRadius: "Terminal stage. Blocks @Production alias promotion upon statistical coverage failure or SLO breach."
         }
     ];
 
@@ -252,23 +283,23 @@ function initDVCExplorer() {
             <div class="dvc-metrics-summary">
                 <div class="dvc-metric-pill">
                     <span class="title">Stage 2: License Audit</span>
-                    <span class="value">1,689 / 2,000</span>
-                    <span class="subtext">84.5% Open Licensed (311 Violations Rejected)</span>
+                    <span class="value">1,646 / 2,000</span>
+                    <span class="subtext">82.3% Open Licensed (354 Violations Rejected)</span>
                 </div>
                 <div class="dvc-metric-pill">
                     <span class="title">Stage 4: Probe Training</span>
-                    <span class="value">82.84% Val Acc</span>
-                    <span class="subtext">Loss: 0.7524 → 0.7694 (5 Epochs in 1.58s)</span>
+                    <span class="value">93.29% Val Acc</span>
+                    <span class="subtext">Loss: 0.2597 → 0.2683 (30 Epochs in 3.61s)</span>
                 </div>
                 <div class="dvc-metric-pill">
                     <span class="title">Stage 6: Conformal Cal</span>
-                    <span class="value">96.45% Cov</span>
-                    <span class="subtext">q̂: 0.8405 | τ_ood: -2.2792 (α = 0.05)</span>
+                    <span class="value">96.77% Cal Cov</span>
+                    <span class="subtext">q̂: 0.6337 | τ_ood: -2.4029 (α = 0.05, N=155)</span>
                 </div>
                 <div class="dvc-metric-pill">
-                    <span class="title">Stage 7: Pareto Eval</span>
-                    <span class="value">89.35% Test Acc</span>
-                    <span class="subtext">Set Size: 1.72 | p95: 51.99 ms | $2.60/M</span>
+                    <span class="title">Stage 7: Holdout Eval</span>
+                    <span class="value">92.07% Test Acc</span>
+                    <span class="subtext">Set Size: 1.01 | CPU p95: 50.38 ms (20.9 FPS)</span>
                 </div>
             </div>
             <div class="dvc-stage-nav" id="dvc-stage-nav"></div>

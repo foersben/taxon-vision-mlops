@@ -1,166 +1,239 @@
 ---
 type: operations
 title: Deployment, Scheduling & Observability
-description: Kubernetes deployment manifests, NVIDIA GPU time-slicing, Prometheus telemetry metrics, Wasserstein-1 embedding drift detection, and operational verification runbooks.
-tags: [kubernetes, deployment, observability, prometheus, telemetry, drift-detection, gpu-time-slicing, rbac, runbooks]
+description: Kubernetes and Docker deployment manifests, Sablier scale-to-zero autoscaling, Prometheus metrics, telemetry storage, Airflow DAGs, and drift detection.
+tags: [kubernetes, deployment, docker, sablier, prometheus, telemetry, drift-detection, airflow, grafana, rbac]
 verified:
   - by: openwiki/0.7.2
-    at: 2026-10-15T19:46:36.219Z
+    at: 2026-11-08T17:07:25.915Z
 sources:
+  - id: openwiki-source-cc1e7b739acb03966fc5886e
+    resource: repo://airflow/dags/model_retraining.py
+  - id: openwiki-source-28e4b6ff7501aae6cf370fb3
+    resource: repo://airflow/dags/prediction_drift_monitor.py
   - id: openwiki-source-a55a8eb9fdc2426c9010c08b
     resource: repo://config/prometheus.yaml
+  - id: openwiki-source-1a0d8a98db0ff747dfbee636
+    resource: repo://deploy/docker/Dockerfile
   - id: openwiki-source-67ce6221cdcbd3b0ca969d34
     resource: repo://deploy/k8s/api-deployment.yaml
   - id: openwiki-source-b9df81af2f7f5ce78210bf26
     resource: repo://deploy/k8s/jenkins-agent-rbac.yaml
   - id: openwiki-source-948b3861f8fd9364bb8fd9eb
     resource: repo://deploy/k8s/nvidia-time-slicing-config.yaml
-  - id: openwiki-source-15e78b5bc4ff817f2847b1a5
+  - id: openwiki-source-b525b97cbf205d0e064ebe76
+    resource: repo://deploy/k8s/sablier-scaler.yaml
+  - id: openwiki-source-2e24373091085e0b0a3eebb8
+    resource: repo://deploy/k8s/traefik-ingress.yaml
+  - id: openwiki-source-b79fbbd921df689b4bbdc82f
+    resource: repo://docker-compose.yml
+  - id: openwiki-source-144a1a41c74eed8e69da0350
     resource: repo://scripts/ci/verify_deployment.sh
+  - id: openwiki-source-300cfdb8c055173b374f26a2
+    resource: repo://src/taxon_vision/monitoring/drift_runner.py
   - id: openwiki-source-d972e68d3d76a2fa6167a3ad
     resource: repo://src/taxon_vision/monitoring/drift.py
   - id: openwiki-source-af85e4e085de42b48e7e7b7f
     resource: repo://src/taxon_vision/monitoring/telemetry.py
+  - id: openwiki-source-0845222bce4f413a0859ff44
+    resource: repo://src/taxon_vision/pipelines/data_drift.py
   - id: openwiki-source-bf2eff889c741f839d852564
     resource: repo://src/taxon_vision/service/routes/health.py
   - id: openwiki-source-26c079c34916fb6d294b65ef
     resource: repo://src/taxon_vision/service/routes/predict.py
-generated: { by: "openwiki/0.7.2", at: "2026-10-15T19:46:36.219Z" }
+generated: { by: "openwiki/0.7.2", at: "2026-11-08T17:07:25.915Z" }
 ---
 
 # Deployment, Scheduling & Observability
 
-TaxonVision provides high-throughput biological species classification under strict reliability, calibration, and safety constraints. Operating this system requires a resilient, multi-tiered infrastructure stack capable of scheduling heterogeneous workloads (interactive REST API services, CI automation runners, and batch retraining pipelines) across shared hardware accelerators, continuously monitoring inference accuracy and latency, and detecting domain drift in real-time.
+TaxonVision provides high-throughput biological species classification under strict reliability, calibration, and safety constraints. Operating this system requires a resilient, multi-tiered infrastructure stack capable of scheduling heterogeneous workloads (interactive REST API services, CI automation runners, scale-to-zero inspection consoles, and batch retraining pipelines) across shared hardware accelerators, continuously monitoring inference latency and calibration drift, and orchestrating automated retraining when ecological domain shifts occur.
 
-This document details the production Kubernetes topology, NVIDIA GPU time-slicing configurations for consumer/prosumer accelerators, Prometheus telemetry instrumentation, Wasserstein-1 embedding drift detection, and operational deployment verification runbooks. For related operational surfaces, see [Service & API](service-and-api.md), [System Architecture & Design](../architecture/system-overview.md), and [Test Strategy & Invariants](../testing/test-strategy-and-invariants.md).
+This document details container packaging, multi-service Docker Compose orchestration, bare-metal Kubernetes deployment manifests, NVIDIA GPU time-slicing, Sablier lazy-scaling for idle workloads, Prometheus telemetry instrumentation, two-tier Wasserstein-1 and MMD² representation drift detection, scheduled Airflow monitoring DAGs, and operational deployment verification runbooks. For related operational surfaces, see [Service & API](service-and-api.md), [System Architecture & Design](../architecture/system-overview.md), [Model Training & Tracking](../workflows/model-training-and-tracking.md), and [Test Strategy & Invariants](../testing/test-strategy-and-invariants.md).
+
+---
+
+## Container Packaging & Multi-Service Orchestration
+
+TaxonVision supports two primary operational runtimes: a self-contained local/edge developer environment orchestrated via Docker Compose, and a resilient, multi-node bare-metal production topology managed through Kubernetes manifests.
+
+### Container Packaging (`deploy/docker/Dockerfile`)
+
+Production containers are packaged using Pixi and hardened for non-root execution:
+
+* **Base Layer**: Built on `ghcr.io/prefix-dev/pixi:latest` as an unprivileged runtime runner.
+* **Security Context**: Dedicated non-root user `appuser` and group `appgroup` (`UID: 10001`, `GID: 10001`). All application source files, configuration manifests, and storage directories (`models/checkpoints`, `data/sample`, `data/flagged_observations`, `reports`) are owned by `10001:10001`.
+* **Deterministic Environments**: Pixi installs the frozen CPU-safe inference and runtime environment directly from `pixi.lock` via `pixi install --frozen -e ci`. This locks binary dependencies and Python wheels without requiring dynamic package resolution.
+* **Container Healthcheck**: Configured with an integrated readiness healthcheck:
+  ```dockerfile
+  HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
+    CMD pixi run --frozen -e ci python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready')" || exit 1
+  ```
+* **Process Entrypoint**: Dispatches the ASGI server via `pixi run --frozen -e ci uvicorn taxon_vision.service.api:app --host 0.0.0.0 --port 8000`.
+
+### Multi-Service Docker Compose (`docker-compose.yml`)
+
+The root `docker-compose.yml` orchestrates the complete end-to-end MLOps microservice ecosystem for local workstations and staging nodes:
+
+<!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Heuristic: an unescaped angle bracket inside a label breaks rendering; rephrase the label. -->
+```text
+flowchart TD
+    subgraph S_EDGE["Edge Reverse Proxy"]
+        TRAEFIK["Traefik v3.1<br/>Port: 80, 8081, 9100"]
+    end
+
+    subgraph S_APPS["Core Serving & Visualisation"]
+        APP["FastAPI App: taxon_vision_app<br/>Port: 8000"]
+        OPTUNA["Optuna Dashboard<br/>Port: 8080"]
+        GRAFANA["Grafana Telemetry<br/>Port: 3000"]
+        MLFLOW["MLflow Tracking Server 3.16<br/>Port: 5000"]
+    end
+
+    subgraph S_ORCH["Airflow 3.0 Orchestration"]
+        AF_API["Airflow API Server<br/>Port: 8090"]
+        AF_SCHED["Airflow Scheduler"]
+        AF_DAG["Airflow DAG Processor"]
+    end
+
+    subgraph S_STORE["Persistence & Metrics Infrastructure"]
+        POSTGRES["PostgreSQL 16 Alpine<br/>Port: 5432"]
+        SEAWEED["SeaweedFS S3 Storage<br/>Port: 8333, 9333, 8888"]
+        PROM["Prometheus Server<br/>Port: 9090"]
+    end
+
+    TRAEFIK -->|PathPrefix: /| APP
+    TRAEFIK -->|Metrics Scrape| PROM
+    APP --> POSTGRES
+    APP --> SEAWEED
+    APP --> MLFLOW
+    OPTUNA --> POSTGRES
+    MLFLOW --> POSTGRES
+    MLFLOW --> SEAWEED
+    GRAFANA --> PROM
+    PROM --> APP
+    AF_SCHED --> POSTGRES
+    AF_API --> POSTGRES
+    AF_DAG --> POSTGRES
+    AF_SCHED -->|HTTP /api/v1/drift/evaluate| APP
+```
+*Multi-service Docker Compose topology illustrating Traefik edge ingress, Airflow orchestration, and shared storage layers.*
+
+1. **`traefik` (`traefik:v3.1`)**: Reverse proxy and ingress controller exposing public HTTP on port `80`, an administrative dashboard on port `8081`, and native Prometheus gateway metrics on port `9100`.
+2. **`app` (`deploy/docker/Dockerfile`)**: Core FastAPI inference microservice and Jinja2/HTMX dashboard serving on port `8000`.
+3. **`seaweedfs` (`chrislusf/seaweedfs:latest`)**: High-performance S3-compatible local object store providing S3 APIs on port `8333`, master UI on port `9333`, and filer UI on port `8888`.
+4. **`optuna-dashboard` (`ghcr.io/optuna/optuna-dashboard:latest`)**: Interactive Bayesian hyperparameter optimization visualizer on port `8080`, reading trial metadata from PostgreSQL.
+5. **`prometheus` (`prom/prometheus:latest`)**: Real-time time-series scraper collecting metrics every 5 seconds on port `9090`.
+6. **`grafana` (`grafana/grafana:latest`)**: Metric dashboard console on port `3000` with pre-provisioned Prometheus datasources.
+7. **`mlflow-server` (`ghcr.io/mlflow/mlflow:v3.16.0`)**: Experiment tracking registry on port `5000`, persisting metadata to PostgreSQL and raw run artifacts to SeaweedFS bucket `s3://mlflow-artifacts`.
+8. **`postgres` (`postgres:16-alpine`)**: Shared relational storage partitioned across databases for Airflow, MLflow, Optuna, and runtime prediction telemetry.
+9. **`airflow` (Airflow 3.0.0)**: Comprising `airflow-init`, `airflow-apiserver` (port `8090`), `airflow-scheduler`, and `airflow-dag-processor` running under `LocalExecutor`.
+10. **`pipeline-runner`**: Profile-triggered container (`profiles: ["pipeline"]`) executing batch DVC reproduction workflows (`pixi run ... dvc repro`).
 
 ---
 
 ## Kubernetes Deployment Topology
 
-The core inference service is deployed to a Kubernetes cluster (such as a bare-metal `k3s` environment) in the dedicated `taxon-vision` namespace. The architecture consists of a stateless API Deployment, a NodePort routing Service, and cross-namespace Role-Based Access Control (RBAC) bindings that govern continuous integration and automated deployment agents.
+In production environments, TaxonVision runs within a bare-metal Kubernetes cluster (such as lightweight `k3s`) under the dedicated `taxon-vision` namespace.
 
 <!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Heuristic: an unescaped angle bracket inside a label breaks rendering; rephrase the label. -->
 ```text
 flowchart TD
     subgraph S_EXT["External Traffic & Ingress"]
         CLIENT["Client / Field Biologist"]
-        PROM["Prometheus Server<br/>(Scrape: 5s)"]
+        PROM_EXT["Prometheus Server<br/>Scrape Interval: 10s"]
     end
 
-    subgraph S_K8S["Kubernetes Cluster (Namespace: taxon-vision)"]
-        SVC["Service: taxon-vision-api<br/>(NodePort: 30080 -> Port: 8000)"]
-        
-        subgraph S_DEPLOY["Deployment: taxon-vision-api (replicas: 2)"]
-            POD1["Pod: taxon-vision-api-xxxx-1<br/>UID: 10001 (Non-Root)<br/>Requests: 200m CPU, 512Mi RAM<br/>Limits: 2 CPU, 2Gi RAM, 1 GPU Slice"]
-            POD2["Pod: taxon-vision-api-xxxx-2<br/>UID: 10001 (Non-Root)<br/>Requests: 200m CPU, 512Mi RAM<br/>Limits: 2 CPU, 2Gi RAM, 1 GPU Slice"]
-        end
+    subgraph S_ING["Ingress Routing (Traefik v3)"]
+        ING["Traefik IngressRoute: taxon-vision-ingress"]
+        MID_OPT["Middleware: sablier-optuna"]
+        MID_GRAF["Middleware: sablier-grafana"]
+        MID_EVID["Middleware: sablier-evidently"]
+    end
 
-        HP["HostPath Volume (ReadOnly)<br/>/home/benni/taxon-vision-mlops/models/checkpoints<br/>Mount: /app/models/checkpoints"]
+    subgraph S_K8S["Namespace: taxon-vision"]
+        SVC_SERV["Service: taxon-vision-serving<br/>NodePort: 30080 to Port: 8000"]
+        DEPLOY_SERV["Deployment: taxon-vision-serving<br/>Replicas: 2 (Always Warm)<br/>UID: 10001 (Non-Root)<br/>Requests: 200m CPU, 512Mi RAM, 1 GPU Slice"]
+
+        SABLIER["Deployment: sablier (Port: 10000)<br/>ClusterRole: sablier-cluster-role"]
+
+        DASH_OPT["Deployment: optuna-dashboard<br/>Replicas: 0 (Scale-to-Zero)"]
+        DASH_GRAF["Deployment: grafana<br/>Replicas: 0 (Scale-to-Zero)"]
+        DASH_EVID["Deployment: evidently-ui<br/>Replicas: 0 (Scale-to-Zero)"]
+
+        VOL_CP["HostPath: /var/lib/taxon-vision/checkpoints<br/>Mount: /app/models/checkpoints (ReadOnly)"]
+        VOL_FLAG["HostPath: /var/lib/taxon-vision/flagged_observations<br/>Mount: /app/data/flagged_observations"]
     end
 
     subgraph S_CI["Namespace: jenkins-ci"]
-        SA["ServiceAccount: jenkins-agent"]
-        ROLE["Role: jenkins-deployer-role<br/>(Deployments, Services, Pods)"]
-        SA -.->|Bound via RoleBinding| ROLE
-        ROLE -.->|Deploys & Updates| S_DEPLOY
+        SA_JENKINS["ServiceAccount: jenkins-agent"]
+        ROLE_DEPLOY["Role: jenkins-deployer-role<br/>Deployments, Services, IngressRoutes"]
+        SA_JENKINS -.->|Cross-Namespace Binding| ROLE_DEPLOY
+        ROLE_DEPLOY -.->|Rolls out Updates| DEPLOY_SERV
     end
 
-    CLIENT -->|HTTP :30080| SVC
-    PROM -->|GET /metrics| SVC
-    SVC --> POD1
-    SVC --> POD2
-    HP --> POD1
-    HP --> POD2
+    CLIENT -->|HTTP Port 80| ING
+    ING -->|PathPrefix: /| SVC_SERV
+    ING -->|PathPrefix: /optuna| MID_OPT --> DASH_OPT
+    ING -->|PathPrefix: /grafana| MID_GRAF --> DASH_GRAF
+    ING -->|PathPrefix: /evidently| MID_EVID --> DASH_EVID
+
+    MID_OPT -.->|Queries Status & Scales| SABLIER
+    MID_GRAF -.->|Queries Status & Scales| SABLIER
+    MID_EVID -.->|Queries Status & Scales| SABLIER
+    SABLIER -.->|k8s API: patch scale replicas=1| DASH_OPT
+    SABLIER -.->|k8s API: patch scale replicas=1| DASH_GRAF
+    SABLIER -.->|k8s API: patch scale replicas=1| DASH_EVID
+
+    SVC_SERV --> DEPLOY_SERV
+    VOL_CP --> DEPLOY_SERV
+    VOL_FLAG --> DEPLOY_SERV
+    PROM_EXT -->|GET /metrics via NodePort 30080| SVC_SERV
 ```
-*Kubernetes deployment topology showing load balancing across non-root API pods, hostPath checkpoint mounting, Prometheus metrics scraping, and cross-namespace CI deployment RBAC.*
+*Kubernetes deployment architecture illustrating warm serving pods, Sablier lazy-scaling of inspection consoles, hostPath volumes, and Jenkins CI deployment RBAC.*
 
-### API Deployment Specification
+### Serving Deployment Specification (`deploy/k8s/api-deployment.yaml`)
 
-The declarative manifest `deploy/k8s/api-deployment.yaml` specifies the `taxon-vision-api` Deployment. Key structural attributes include:
+The `taxon-vision-serving` Deployment manages stateless visual classification workers:
 
-* **Replication & Rolling Strategy**: Configured with `replicas: 2` under a `RollingUpdate` strategy (`maxSurge: 1`, `maxUnavailable: 0`). This ensures zero-downtime updates: a new pod must achieve readiness before an old pod is terminated.
-* **Security Hardening**: Pods execute under a hardened container security context:
+* **Replication & Rolling Update**: Runs `replicas: 2` with `strategy.type: RollingUpdate` (`maxSurge: 1`, `maxUnavailable: 0`). A newly deployed pod must reach readiness before an active pod is terminated, ensuring uninterrupted serving.
+* **Security & Non-Root Execution**: Hardened against container breakouts:
   ```yaml
   securityContext:
     runAsNonRoot: true
     runAsUser: 10001
     runAsGroup: 10001
   ```
-* **Resource Allocation**:
-    * Requests: `cpu: "200m"`, `memory: "512Mi"`
-    * Limits: `cpu: "2"`, `memory: "2Gi"`
-    * Virtual GPU Slice: When NVIDIA time-slicing is activated, limits may request `nvidia.com/gpu: "1"` to access a virtualized time-slice of the host GPU.
-* **Storage & Checkpoint Mounting**: Model weights, classifier heads, and calibration artifacts are mounted read-only from the host via a `hostPath` volume:
-    * Host Path: `/home/benni/taxon-vision-mlops/models/checkpoints`
-    * Container Mount: `/app/models/checkpoints` (`readOnly: true`, `type: DirectoryOrCreate`)
-* **Health and Readiness Probing**:
-    * **Liveness Probe**: Queries `GET /health` on port 8000 (`initialDelaySeconds: 15`, `periodSeconds: 20`, `timeoutSeconds: 3`, `failureThreshold: 3`). A pure memory check returning `{"status": "healthy"}` without touching disk or GPU inference.
-    * **Readiness Probe**: Queries `GET /health/ready` on port 8000 (`initialDelaySeconds: 5`, `periodSeconds: 5`, `timeoutSeconds: 3`, `failureThreshold: 2`). Invokes `check_readiness()` in `src/taxon_vision/service/inference.py` to confirm the taxa catalog is non-empty and the classifier checkpoint is loaded and operational. Traffic is only routed to the pod once this probe returns HTTP 200.
+* **Resource Limits & Requests**: Requests `cpu: "200m"`, `memory: "512Mi"`, `nvidia.com/gpu: "1"` and sets limits to `cpu: "2"`, `memory: "1536Mi"`, `nvidia.com/gpu: "1"`.
+* **Graceful Teardown**: Enforces a `preStop` lifecycle hook executing `sleep 5` to allow active keep-alive HTTP sockets and reverse proxy routing tables to drain before SIGTERM handling.
+* **HostPath Volumes**:
+  * `checkpoints-volume`: Mounts `/var/lib/taxon-vision/checkpoints` as `readOnly: true` at `/app/models/checkpoints`.
+  * `flagged-observations-volume`: Mounts `/var/lib/taxon-vision/flagged_observations` as read-write at `/app/data/flagged_observations` for offline active learning triage.
+* **Decoupled Probing**:
+  * **Liveness Probe**: `GET /health` (`initialDelaySeconds: 15`, `periodSeconds: 20`, `timeoutSeconds: 3`, `failureThreshold: 3`). Pure memory check returning `{"status": "healthy"}` without hitting model forward passes.
+  * **Readiness Probe**: `GET /health/ready` (`initialDelaySeconds: 5`, `periodSeconds: 5`, `timeoutSeconds: 3`, `failureThreshold: 2`). Evaluates `check_readiness()` in `src/taxon_vision/service/inference.py` to confirm the taxa catalog contains species definitions and the model classifier is loaded and warm. Traffic is rejected (HTTP 503) until ready.
 
-### Service Definition
+### NodePort Service Definition
 
-Traffic is exposed outside the pod overlay network via the `taxon-vision-api` Service defined in `deploy/k8s/api-deployment.yaml`:
+The `taxon-vision-serving` Service exposes container port 8000 externally via NodePort 30080:
 
-* **Type**: `NodePort`
-* **Port Mapping**: Service port `8000` routes to container targetPort `8000`.
-* **NodePort Assignment**: Static node port `30080` allows direct ingress on bare-metal node IPs (`http://<node-ip>:30080`).
+* **Service Port**: Port `8000` routes directly to `targetPort: 8000`.
+* **NodePort**: Static port `30080` allows direct access from edge gateways or CI runners (`http://<node-ip>:30080`).
 
-### Cross-Namespace CI/CD RBAC
+### Cross-Namespace Jenkins CI RBAC (`deploy/k8s/jenkins-agent-rbac.yaml`)
 
-Automated deployment pipelines running in Jenkins are governed by RBAC declarations in `deploy/k8s/jenkins-agent-rbac.yaml`. To enforce least privilege while enabling CI runners to deploy application updates, permissions are partitioned across two namespaces:
+Continuous integration agents executing model verification and image rollouts are governed by strict least-privilege RBAC:
 
 1. **Namespace `jenkins-ci`**:
-    * `ServiceAccount`: `jenkins-agent`
-    * `Role`: `jenkins-agent-role` allows `pods`, `pods/exec`, and `pods/log` manipulation (verbs: `create`, `delete`, `get`, `list`, `patch`, `update`, `watch`) and `events` reading within `jenkins-ci`.
-    * `RoleBinding`: `jenkins-agent-binding` binds `jenkins-agent` to `jenkins-agent-role`.
+   * `ServiceAccount`: `jenkins-agent`
+   * `Role`: `jenkins-agent-role` allows pod manipulation (`pods`, `pods/exec`, `pods/log`) and event reading within `jenkins-ci`.
 2. **Namespace `taxon-vision`**:
-    * `Role`: `jenkins-deployer-role` grants deployment management capabilities over `apps/deployments` and core `services`, `pods`, `pods/log`, and `events`.
-    * `RoleBinding`: `jenkins-deployer-binding` binds the cross-namespace subject `ServiceAccount: jenkins-agent` (in `jenkins-ci`) to `jenkins-deployer-role` (in `taxon-vision`).
+   * `Role`: `jenkins-deployer-role` allows deployment management over `apps/deployments`, core resources (`services`, `pods`, `pods/log`, `events`, `configmaps`, `secrets`, `persistentvolumeclaims`), and Traefik custom resources (`traefik.io/ingressroutes`, `traefikservices`, `middlewares`).
+   * `RoleBinding`: `jenkins-deployer-binding` binds `ServiceAccount: jenkins-agent` in `jenkins-ci` to `jenkins-deployer-role` in `taxon-vision`.
 
-This setup allows Jenkins build agents to roll out new container images to the production API deployment without holding cluster-admin privileges.
+### NVIDIA GPU Time-Slicing (`deploy/k8s/nvidia-time-slicing-config.yaml`)
 
----
+Consumer or prosumer accelerators (such as an NVIDIA RTX 5070 Ti with 16 GB VRAM) lack hardware-level Multi-Instance GPU (MIG) partitioning. Requesting `nvidia.com/gpu: 1` would normally lock the entire physical adapter.
 
-## NVIDIA GPU Time-Slicing Configuration
-
-In resource-constrained environments (such as bare-metal edge nodes or developer workstations like `hive-mind` at `192.168.178.30`), high-end consumer or prosumer GPUs (such as an NVIDIA RTX 5070 Ti with 16 GB VRAM) lack hardware-level Multi-Instance GPU (MIG) partitioning - a feature reserved exclusively for enterprise GPUs (e.g. A100, H100).
-
-### The Scheduling Bottleneck
-
-Without device virtualization, requesting `nvidia.com/gpu: 1` places an exclusive lock on the physical PCI device. A single long-running pod (such as an interactive API service or a batch training run) starves all subsequent pods, forcing CI test jobs and auxiliary services to languish in a permanent `Pending` state.
-
-<!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Heuristic: an unescaped angle bracket inside a label breaks rendering; rephrase the label. -->
-```text
-flowchart TD
-    subgraph S_HW["Physical Hardware"]
-        GPU["Physical NVIDIA RTX 5070 Ti<br/>(16 GB GDDR7 VRAM)"]
-    end
-
-    subgraph S_PLUGIN["NVIDIA Device Plugin (kube-system)"]
-        CM["ConfigMap: nvidia-device-plugin-config<br/>timeSlicing.resources[0].replicas: 4"]
-        DS["NVIDIA Device Plugin DaemonSet"]
-        CM --> DS
-        GPU --> DS
-    end
-
-    subgraph S_SLICES["Virtual GPU Slices (nvidia.com/gpu: 4)"]
-        V1["Slice 1: taxon-vision-api Pod 1<br/>(INT8 ONNX Inference)"]
-        V2["Slice 2: taxon-vision-api Pod 2<br/>(INT8 ONNX Inference)"]
-        V3["Slice 3: Jenkins CI Runner<br/>(PyTest & Coverage)"]
-        V4["Slice 4: Batch Retraining Job<br/>(torch.cuda memory fraction clamped)"]
-    end
-
-    DS --> V1
-    DS --> V2
-    DS --> V3
-    DS --> V4
-```
-*Multiplexing a single physical GPU across 4 virtual slices via NVIDIA Device Plugin time-slicing and software memory clamping.*
-
-### Time-Slicing Specification
-
-TaxonVision leverages the NVIDIA Kubernetes Device Plugin time-slicing mechanism declared in `deploy/k8s/nvidia-time-slicing-config.yaml`. The configuration publishes 4 virtual GPU slices for a single physical device:
+The NVIDIA Device Plugin time-slicing ConfigMap multiplexes the physical device into 4 virtual slices:
 
 ```yaml
 apiVersion: v1
@@ -168,9 +241,6 @@ kind: ConfigMap
 metadata:
   name: nvidia-device-plugin-config
   namespace: kube-system
-  labels:
-    app.kubernetes.io/name: nvidia-device-plugin
-    app.kubernetes.io/part-of: taxon-vision-mlops
 data:
   config.yaml: |
     version: v1
@@ -181,267 +251,416 @@ data:
             replicas: 4
 ```
 
-### Compute Multiplexing vs. Memory Isolation
+Because driver-level time-slicing does not isolate VRAM, memory isolation is enforced in software:
+* Serving pods use quantized INT8 ONNX backbones (< 1.5 GB VRAM).
+* Retraining jobs constrain process growth via `torch.cuda.set_per_process_memory_fraction(0.40, device=0)`.
 
-Time-slicing multiplexes compute execution cycles at the NVIDIA driver layer using hardware context switching. However, **time-slicing does not enforce hardware VRAM memory isolation**. All 4 virtual slices share the unified 16 GB physical address space. If one process allocates 14 GB, other pods will encounter CUDA Out-Of-Memory (OOM) errors.
+---
 
-To guarantee operational stability across the multiplexed cluster, memory isolation is enforced at the software layer:
+## Sablier Lazy-Scaling & Scale-to-Zero Architecture
 
-1. **Web API Inference Pods**: Run lightweight INT8 quantized ONNX models or frozen backbone embeddings with small memory footprints (< 1.5 GB VRAM).
-2. **Batch Training Pods**: Explicitly constrain GPU memory growth in PyTorch via:
-   ```python
-   import torch
-   # Limit process allocation to a safe fraction (e.g., 40% of 16 GB ~ 6.4 GB)
-   torch.cuda.set_per_process_memory_fraction(0.40, device=0)
-   ```
-3. **CI Runner Pods**: Run test suites against synthetic tensors and small batch sizes to prevent memory contention during automated builds.
+To preserve CPU and memory budgets on dedicated silicon during idle periods, TaxonVision partitions workloads into **always-warm core services** and **on-demand scale-to-zero dashboards**.
 
-### Applying Time-Slicing Configuration
+### Workload Partitioning
 
-To apply the configuration to the Kubernetes cluster:
+| Workload | Scaling Strategy | Idle Replicas | Inactivity Timeout | Justification |
+|---|---|---|---|---|
+| `taxon-vision-serving` | Always Warm | 2 | N/A | Sub-50ms inference SLO for continuous field observation streams. |
+| `prometheus` | Always Warm | 1 | N/A | Continuous telemetry scraping and SLA calculation. |
+| `postgres` / `seaweedfs` | Always Warm | 1 | N/A | Foundational storage and database backends. |
+| `sablier` | Always Warm | 1 | N/A | Controller daemon managing scale events. |
+| `optuna-dashboard` | Scale-to-Zero | 0 | 15 minutes | Human-inspected Bayesian HPO dashboard; idle between hyperparameter tuning runs. |
+| `grafana` | Scale-to-Zero | 0 | 20 minutes | Operational telemetry dashboard; accessed periodically by on-call engineers. |
+| `evidently-ui` | Scale-to-Zero | 0 | 15 minutes | Diagnostic distribution drift inspection UI; consulted only upon drift alerts. |
 
-```bash
-# 1. Apply the ConfigMap to kube-system
-kubectl apply -f deploy/k8s/nvidia-time-slicing-config.yaml
+### Sablier Daemon & RBAC (`deploy/k8s/sablier-scaler.yaml`)
 
-# 2. Configure the NVIDIA Device Plugin DaemonSet to read the ConfigMap
-kubectl set env daemonset/nvidia-device-plugin-daemonset -n kube-system \
-  CONFIG_FILE=/etc/nvidia-container-runtime/config.yaml || true
+The Sablier scaler runs as a cluster deployment in `taxon-vision`:
+* **Image**: `ghcr.io/sablierapp/sablier:latest` listening on port `10000`.
+* **Arguments**: Configured with `--provider.name=kubernetes`, `--provider.kubernetes.ready-on-first-replica`, and `--sessions.default-duration=15m`.
+* **RBAC Authorisation**: Bound to `ClusterRole: sablier-cluster-role`, which grants `get`, `list`, `watch`, `update`, and `patch` verbs on `apps/deployments`, `apps/deployments/scale`, `apps/statefulsets`, and `postgresql.cnpg.io/clusters`.
 
-# 3. Verify node advertises 4 virtual GPUs
-kubectl get node hive-mind -o jsonpath='{.status.allocatable.nvidia\.com/gpu}'
-# Expected output: 4
+### Traefik Ingress Integration (`deploy/k8s/traefik-ingress.yaml`)
+
+Traefik v3 integrates with Sablier via the Traefik Sablier plugin (`deploy/k8s/traefik-sablier-config.yaml`). Each on-demand dashboard has a corresponding `Middleware` definition:
+
+```yaml
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: sablier-optuna
+  namespace: taxon-vision
+spec:
+  plugin:
+    sablier:
+      sablierUrl: http://sablier.taxon-vision.svc.cluster.local:10000
+      names: "deployment_taxon-vision_optuna-dashboard_1"
+      sessionDuration: "15m"
+      dynamic:
+        displayName: "Optuna Bayesian Dashboard"
+        theme: "hacker-terminal"
+        refreshFrequency: "2s"
 ```
+
+Similar middlewares are declared for `sablier-grafana` (theme: `ghost`, session: `20m`) and `sablier-evidently` (theme: `shuffle`, session: `15m`).
+
+### Scale-from-Zero Request Lifecycle
+
+```mermaid
+sequenceDiagram
+    participant User as Operator Browser
+    participant Traefik as Traefik Ingress
+    participant Sablier as Sablier Daemon
+    participant K8s as Kubernetes API
+    participant Pod as Dashboard Pod (Replicas: 0)
+
+    User->>Traefik: GET /optuna (or /grafana, /evidently)
+    activate Traefik
+    Traefik->>Sablier: Intercept request & query deployment status
+    activate Sablier
+    Sablier->>K8s: Query scale subresource (replicas == 0)
+    Sablier->>K8s: Patch deployment scale to replicas: 1
+    deactivate Sablier
+
+    loop While Replicas Starting (Every 2s)
+        Traefik-->>User: HTTP 200 Interactive Loading Screen (theme: hacker-terminal)
+        User->>Traefik: Auto-refresh probe
+        Traefik->>Sablier: Check ready status
+    end
+
+    K8s->>Pod: Schedule and initialize container
+    Pod-->>K8s: Readiness probe succeeds (HTTP 200)
+    Sablier-->>Traefik: First replica is ready
+    Traefik->>Pod: Reverse proxy GET /optuna request
+    activate Pod
+    Pod-->>Traefik: Dashboard HTML/WS stream
+    deactivate Pod
+    Traefik-->>User: Render live application
+    deactivate Traefik
+
+    Note over Sablier: Inactivity timer runs (sessionDuration: 15m)
+    alt Zero requests for 15 minutes
+        Sablier->>K8s: Patch deployment scale to replicas: 0
+    end
+```
+*Sablier scale-from-zero lifecycle showing request interception, temporary loading screen generation, pod awakening, and automatic idle teardown.*
 
 ---
 
 ## Prometheus Telemetry & Metrics Instrumentation
 
-Production observability is handled via native Prometheus telemetry instrumentation implemented in `src/taxon_vision/monitoring/telemetry.py` and exposed via `GET /metrics` in `src/taxon_vision/service/routes/health.py`.
+TaxonVision integrates native Prometheus metrics to monitor inference latency distributions, prediction throughput, out-of-distribution referral rates, and statistical drift indicators.
 
-```mermaid
-sequenceDiagram
-    participant C as Client Agent
-    participant API as FastAPI Router
-    participant M as Telemetry Engine
-    participant S as Staging Storage
-    participant P as Prometheus Server
-
-    C->>API: POST /api/v1/predict with image upload
-    activate API
-    Note over API: Start wall-clock timer t0
-    API->>API: Run inference and conformal evaluation
-    Note over API: Calculate execution latency
-
-    alt OOD or Conformal Ambiguity Flagged
-        API->>S: Stage observation metadata and embedding
-        API->>M: Increment PREDICTION_COUNTER with status success
-        API->>M: Update REFERRAL_RATE gauge
-    else Clean Prediction
-        API->>M: Increment PREDICTION_COUNTER with status success
+<!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Heuristic: an unescaped angle bracket inside a label breaks rendering; rephrase the label. -->
+```text
+flowchart TD
+    subgraph S_API["FastAPI Inference Service (taxon-vision-serving)"]
+        ROUTE_PRED["POST /api/v1/predict"]
+        ROUTE_DRIFT["POST /api/v1/drift/evaluate"]
+        ROUTE_METRICS["GET /metrics"]
+        
+        COLL_CORE["In-Memory Metrics Registry<br/>taxon_predictions_total<br/>taxon_inference_latency_seconds<br/>taxon_human_referrals_active"]
+        COLL_DRIFT["Custom DriftMetricsCollector<br/>(30-Second TTL Cache)"]
     end
-    API->>M: Observe LATENCY_HISTOGRAM duration
 
-    API-->>C: Return PredictionResponse JSON
-    deactivate API
-
-    loop Every 5 Seconds (scrape_interval)
-        P->>API: GET /metrics
-        API->>M: generate_latest()
-        API-->>P: Prometheus exposition payload (HTTP 200)
+    subgraph S_STORE["Persistent Telemetry Store"]
+        DB_TEL["PostgreSQL Telemetry Tables<br/>prediction_records<br/>drift_run_records"]
     end
+
+    subgraph S_SCRAPE["Prometheus Server (Scrape: 5s / 10s)"]
+        PROM_SRV["Prometheus TSDB"]
+    end
+
+    subgraph S_ALERT["Monitoring & Alerting"]
+        GRAF_DASH["Grafana Dashboards"]
+        ALERT_ENG["Alertmanager / PagerDuty Rules"]
+        AF_DAG["Airflow Hourly Drift Monitor"]
+    end
+
+    ROUTE_PRED -->|Observe Latency & Increment Counts| COLL_CORE
+    ROUTE_PRED -->|Async Background Task| DB_TEL
+    ROUTE_DRIFT -->|Persist Evaluation Outcome| DB_TEL
+    
+    COLL_DRIFT -->|Read Cached/Latest Drift Run| DB_TEL
+    ROUTE_METRICS --> COLL_CORE
+    ROUTE_METRICS --> COLL_DRIFT
+
+    PROM_SRV -->|Poll /metrics| ROUTE_METRICS
+    GRAF_DASH -->|PromQL Queries| PROM_SRV
+    ALERT_ENG -->|PromQL Alert Thresholds| PROM_SRV
+    AF_DAG -->|Hourly POST /api/v1/drift/evaluate| ROUTE_DRIFT
 ```
-*Telemetry flow during inference prediction, referral triage staging, and Prometheus metric scraping.*
+*End-to-end telemetry flow from request routing to database persistence, Prometheus exposition, and alerting dashboards.*
 
-### Core Metrics Inventory
+### Core Telemetry Metrics
 
-All metrics are automatically registered in the global Prometheus registry upon import:
+Metrics are declared in `src/taxon_vision/monitoring/telemetry.py` and exposed via `GET /metrics` in `src/taxon_vision/service/routes/health.py`:
 
 | Metric Identifier | Prometheus Type | Labels | Description & Operational Purpose |
 |---|---|---|---|
-| `taxon_predictions_total` | `Counter` | `status` | Total prediction calls evaluated. Tracks throughput and routing outcomes: `success` (valid prediction), `invalid_input` (empty or corrupted upload), `unavailable` (missing model artifact/503), or `error` (unhandled exception). |
-| `taxon_inference_latency_seconds` | `Histogram` | None | End-to-end inference execution duration in seconds. Measures preprocessing, neural network forward pass, and conformal evaluation to verify SLA compliance. |
-| `taxon_human_referrals_active` | `Gauge` | None | Count of active observations deferred to human taxonomic experts. Monitors epistemic uncertainty triage load and active learning staging backlog. |
+| `taxon_predictions_total` | `Counter` | `status` | Total prediction calls evaluated. Status labels: `success` (valid prediction), `invalid_input` (corrupt/empty image), `unavailable` (uninitialized classifier/503), or `error` (runtime crash). |
+| `taxon_inference_latency_seconds` | `Histogram` | None | End-to-end request duration from payload ingress through neural forward pass and conformal calibration. |
+| `taxon_human_referrals_active` | `Gauge` | None | Count of observations deferred to human taxonomists due to conformal set ambiguity or high OOD energy. |
+| `taxon_telemetry_write_failures_total` | `Counter` | None | Total database write failures encountered when persisting asynchronous prediction telemetry. |
+| `taxon_retrain_triggers_total` | `Counter` | `source`, `outcome` | Count of model retraining triggers dispatched by source (`prediction_drift_monitor`, `grafana_relay`) and outcome. |
 
-### Metric Implementation Details
+### Dynamic Persistent Drift Collector (`DriftMetricsCollector`)
 
-In `src/taxon_vision/monitoring/telemetry.py`:
+In multi-worker ASGI deployments (e.g. Uvicorn with multiple worker processes), in-memory Prometheus Gauges are isolated per process, causing oscillations across scrape cycles.
 
-```python
-from prometheus_client import Counter, Gauge, Histogram
+`DriftMetricsCollector` solves this by decoupling drift metrics from worker process memory:
+* Maintains a thread-locked in-memory cache with a 30-second TTL (`_cache_ttl_seconds = 30.0`).
+* On scrape (`collect()`), queries `store.latest_drift_run()` from PostgreSQL only if the cache has expired, avoiding database lock contention.
+* Exposes five gauge families:
+  * `taxon_drift_w1_distance`: Observed 1D Wasserstein-1 distance on embedding norms.
+  * `taxon_drift_w1_threshold`: Calibrated alert threshold $\tau_{w1}$.
+  * `taxon_drift_mmd2_p_value`: Multivariate MMD² permutation test p-value.
+  * `taxon_drift_detected`: Binary indicator flag (`1.0` if drift detected, `0.0` otherwise).
+  * `taxon_drift_last_run_timestamp_seconds`: UTC UNIX timestamp of the latest drift run execution.
 
-PREDICTION_COUNTER = Counter("taxon_predictions_total", "Total species predictions evaluated", ["status"])
-LATENCY_HISTOGRAM = Histogram("taxon_inference_latency_seconds", "Inference duration in seconds")
-REFERRAL_RATE = Gauge("taxon_human_referrals_active", "Number of observations routed to human review")
-```
+### Scrape Configuration & Grafana Datasource
 
-In `src/taxon_vision/service/routes/predict.py`, the endpoint instruments predictions:
+* **Local Scrape (`config/prometheus.yaml`)**:
+  ```yaml
+  global:
+    scrape_interval: 5s
+  scrape_configs:
+    - job_name: 'fastapi-app'
+      metrics_path: '/metrics'
+      static_configs:
+        - targets: ['app:8000', 'host.docker.internal:8000']
+    - job_name: 'traefik'
+      metrics_path: '/metrics'
+      static_configs:
+        - targets: ['traefik:9100', 'host.docker.internal:9100']
+  ```
+* **Kubernetes Scrape (`deploy/k8s/monitoring-prometheus-grafana.yaml`)**:
+  Configured with `scrape_interval: 10s` targeting `taxon-vision-serving:8000`. Grafana datasources are auto-provisioned via ConfigMap to proxy `http://prometheus:9090`.
 
-* **Success Path**: When classification succeeds, `PREDICTION_COUNTER.labels(status="success").inc()` is recorded. If flagged as Out-of-Distribution (`is_ood`) or requiring human review (`requires_human_review`), metadata and feature vectors are staged via `persist_flagged_observation()`.
-* **Invalid Payload Path**: Empty files or payloads exceeding `max_image_upload_bytes` trigger `PREDICTION_COUNTER.labels(status="invalid_input").inc()` and return HTTP 422 or HTTP 413.
-* **Failure Paths**: Unready models trigger `PREDICTION_COUNTER.labels(status="unavailable").inc()` (HTTP 503), and runtime inference crashes trigger `PREDICTION_COUNTER.labels(status="error").inc()` (HTTP 503).
+### Recommended PromQL Alerting Rules
 
-### Scrape Configuration
+Operations teams configure Grafana and Alertmanager alerts using the following rules:
 
-Prometheus scrapes the API server using the configuration declared in `config/prometheus.yaml`:
-
-```yaml
-global:
-  scrape_interval: 5s
-
-scrape_configs:
-  - job_name: 'fastapi-app'
-    metrics_path: '/metrics'
-    static_configs:
-      - targets: ['host.docker.internal:8000']
-```
-
-The scraper polls `GET /metrics` every 5 seconds. The route handler in `src/taxon_vision/service/routes/health.py` calls `generate_latest()` from the `prometheus_client` library and returns standard exposition text with `CONTENT_TYPE_LATEST` (`text/plain; version=0.0.4; charset=utf-8`).
-
-### Recommended PromQL Queries & Alerting Rules
-
-Operations teams can configure alerts in Alertmanager or Grafana using the following PromQL expressions:
-
-* **Inference Error Rate**: Alert if non-success responses exceed 1% over 5 minutes:
+* **Inference Error Rate (> 1% over 5m)**:
   ```promql
   sum(rate(taxon_predictions_total{status!="success"}[5m]))
   /
   sum(rate(taxon_predictions_total[5m])) > 0.01
   ```
-* **95th Percentile Latency SLO**: Alert if p95 latency exceeds 250 milliseconds:
+* **Inference Latency SLO Breach (p95 > 250ms)**:
   ```promql
   histogram_quantile(0.95, sum(rate(taxon_inference_latency_seconds_bucket[5m])) by (le)) > 0.25
   ```
-* **Expert Review Backlog Spike**: Alert if referrals grow rapidly:
+* **Active Learning Referral Spike (> 50 in 15m)**:
   ```promql
   delta(taxon_human_referrals_active[15m]) > 50
+  ```
+* **Active Distribution Drift Detected**:
+  ```promql
+  taxon_drift_detected == 1.0
   ```
 
 ---
 
-## Embedding Drift Detection via Wasserstein-1 Distance
+## Statistical Drift Detection Pipelines
 
-Continuous ecological classification models face severe non-stationary conditions: seasonal visual changes (e.g. spring flowering vs. winter defoliation), geographic variations, differing camera sensor optics, and taxonomic frequency shifts. Detecting representation drift is critical to trigger model fine-tuning before performance degrades.
+Ecological visual classification models face non-stationary domain conditions: seasonal phenological changes (flowering vs. defoliation), regional illumination variations, differing sensor optics, and shifts in relative species abundance. TaxonVision employs a two-tier statistical drift framework combined with PCA projections and Kolmogorov-Smirnov hypothesis testing.
 
-### Curse of Dimensionality & 1D Norm Projection
+### The Unnormalized Embedding Invariant
 
-Traditional high-dimensional drift detectors (such as Maximum Mean Discrepancy (MMD) or multi-dimensional Kolmogorov-Smirnov tests across 768 or 1024 embedding dimensions) suffer from the curse of dimensionality, require quadratic sample complexity $O(N^2 \cdot D)$, and incur prohibitive compute latency in production.
+A critical invariant in `src/taxon_vision/monitoring/drift.py` is that **embedding vectors must remain unnormalized pre-activations**:
+$$\|z\|_2 = \sqrt{\sum_{d=1}^D z_d^2}$$
+If embeddings are unit-normalized ($\|z\|_2 = 1.0$) prior to drift testing, all vector norms collapse identically to $1.0$, rendering norm-based Wasserstein-1 testing completely blind to domain shift ($|1.0 - 1.0| = 0.0$). ONNX exports and feature extraction pipelines therefore preserve raw feature norms, leaving unit-normalization to downstream cosine vector indexers (e.g. LanceDB) at the ingestion boundary.
 
-TaxonVision's drift engine in `src/taxon_vision/monitoring/drift.py` addresses this by projecting high-dimensional feature embeddings $z \in \mathbb{R}^D$ onto their L2 Euclidean norms:
-
-$$r = \|z\|_2 = \sqrt{\sum_{d=1}^D z_d^2}$$
-
-The 1D Wasserstein-1 (earth mover's) distance between the reference distribution $P_{\text{ref}}$ and the current production observation window $P_{\text{curr}}$ is approximated by the absolute difference between their empirical mean norms:
-
-$$W_1(P_{\text{ref}}, P_{\text{curr}}) \approx \left| \mathbb{E}\left[\|z_{\text{ref}}\|_2\right] - \mathbb{E}\left[\|z_{\text{curr}}\|_2\right] \right| = \left| \frac{1}{N_{\text{ref}}} \sum_{i=1}^{N_{\text{ref}}} \|z_{\text{ref}, i}\|_2 - \frac{1}{N_{\text{curr}}} \sum_{j=1}^{N_{\text{curr}}} \|z_{\text{curr}, j}\|_2 \right|$$
+### Two-Tier Drift Architecture
 
 <!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Heuristic: an unescaped angle bracket inside a label breaks rendering; rephrase the label. -->
 ```text
-flowchart LR
-    subgraph S_IN["High-Dimensional Embeddings (D = 768 or 1024)"]
-        REF["Reference Embeddings Batch<br/>(N_ref, D)"]
-        CURR["Current Production Batch<br/>(N_curr, D)"]
+flowchart TD
+    subgraph S_INPUT["Input Representations"]
+        REF["Reference Embeddings (N_ref, D)<br/>Cached from cal_embeddings.pt"]
+        CURR["Live Production Window (N_curr, D)<br/>Queried from TelemetryStore"]
     end
 
-    subgraph S_NORM["L2 Norm Projection (np.linalg.norm)"]
-        N_REF["ref_norm = L2 norm of z_ref<br/>Shape: (N_ref,)"]
-        N_CURR["curr_norm = L2 norm of z_curr<br/>Shape: (N_curr,)"]
+    subgraph S_TIER1["Tier 1: 1D Wasserstein-1 Distance (Fast)"]
+        NORM_REF["ref_norm = np.linalg.norm(ref, axis=-1)"]
+        NORM_CURR["curr_norm = np.linalg.norm(curr, axis=-1)"]
+        W1["wasserstein_distance(ref_norm, curr_norm)<br/>Exact empirical CDF integration<br/>Complexity: O(N * D + N log N)"]
+        CHECK_W1{"W1 > tau_w1<br/>(e.g., > 0.15)?"}
     end
 
-    subgraph S_W1["Wasserstein-1 Approximation"]
-        DIFF["Absolute Difference of Norm Means<br/>abs(mean(ref_norm) - mean(curr_norm))"]
-        ALERT{"Drift Score exceeds Threshold?"}
+    subgraph S_TIER2["Tier 2: Multivariate RBF MMD² Permutation Test"]
+        SUB["Subsample to max_samples (e.g. 500)"]
+        MED["Median Heuristic Bandwidth: sigma = sqrt(0.5 * median(D_ij^2))"]
+        GRAM["Gram Kernel Matrix: K = exp(-D^2 / (2 * sigma^2))"]
+        PERM["Monte Carlo Permutations (n=200)<br/>Finite-sample empirical p-value"]
+        CHECK_MMD{"p_value < alpha<br/>(e.g., < 0.01)?"}
     end
 
-    REF --> N_REF
-    CURR --> N_CURR
-    N_REF --> DIFF
-    N_CURR --> DIFF
-    DIFF --> ALERT
-    ALERT -->|Yes| WARN["Emit Drift Alert and Stage for Retraining"]
-    ALERT -->|No| OK["Feature Distribution Stable"]
+    subgraph S_EVID["Tabular Projection & Kolmogorov-Smirnov Audit"]
+        PCA_PROJ["8-Component PCA Projection + L2 Norm Column"]
+        EVID_REP["Evidently 0.7 DataDriftPreset<br/>Two-Sample Kolmogorov-Smirnov Tests<br/>Render HTML Report (reports/drift_report.html)"]
+    end
+
+    subgraph S_VERDICT["Composite Drift Verdict"]
+        DECISION{"Drift Detected?<br/>(W1 > tau_w1 OR p_value < alpha)"}
+        ALERT["Log to MLflow (taxon-vision-drift)<br/>Persist DriftRunRecord in PostgreSQL<br/>Trigger Automated Retraining DAG"]
+        STABLE["Feature Manifold Stable<br/>No Action Required"]
+    end
+
+    REF --> NORM_REF
+    CURR --> NORM_CURR
+    NORM_REF --> W1
+    NORM_CURR --> W1
+    W1 --> CHECK_W1
+
+    REF --> SUB
+    CURR --> SUB
+    SUB --> MED --> GRAM --> PERM --> CHECK_MMD
+
+    REF --> PCA_PROJ
+    CURR --> PCA_PROJ
+    PCA_PROJ --> EVID_REP
+
+    CHECK_W1 --> DECISION
+    CHECK_MMD --> DECISION
+    DECISION -->|Yes| ALERT
+    DECISION -->|No| STABLE
 ```
-*1D Wasserstein norm projection pipeline for rapid linear-time drift detection.*
+*Two-tier statistical drift evaluation pipeline combining 1D Wasserstein-1 norm distance, multivariate RBF MMD² permutations, and Kolmogorov-Smirnov PCA diagnostics.*
 
-### Implementation & Complexity
+1. **Tier 1: 1D Wasserstein-1 on Embedding Norms (`compute_wasserstein_drift`)**:
+   Projects high-dimensional vectors to 1D Euclidean norms and computes the exact Kantorovich-Rubinstein distance between empirical CDFs via `scipy.stats.wasserstein_distance`:
+   $$W_1(P_{\text{ref}}, P_{\text{curr}}) = \int_{-\infty}^{\infty} |F_{\text{ref}}(u) - F_{\text{curr}}(u)| \, du$$
+   Complexity is $O(N \cdot D + N \log N)$. Breaches of the calibrated threshold $\tau_{w1}$ (default: $0.15$) trigger drift alerts.
+2. **Tier 2: Multivariate RBF MMD² with Permutation Testing (`compute_mmd2_permutation`)**:
+   Evaluates Maximum Mean Discrepancy squared in a Reproducing Kernel Hilbert Space (RKHS) using an RBF kernel. Bandwidth $\sigma$ is selected using the median heuristic over off-diagonal pairwise squared distances. Permutation testing (200 random shuffles) produces an exact, finite-sample p-value without requiring asymptotic normality assumptions. A p-value below significance level $\alpha$ (default: $0.01$) indicates significant angular or covariance manifold shift.
+3. **Tabular Projection & Kolmogorov-Smirnov Reporting (`generate_evidently_drift_report`)**:
+   To diagnose individual coordinate shifts, embeddings are projected onto an 8-component PCA basis alongside their Euclidean norm ($[\|z\|_2, \text{pca}_0, \dots, \text{pca}_7]$). Evidently 0.7's `DataDriftPreset` executes two-sample **Kolmogorov-Smirnov (KS) tests** (`scipy.stats.ks_2samp`) across each continuous feature column, generating an interactive HTML diagnostic report (`reports/drift_report.html`).
+4. **Offline Training Data Drift Audit (`src/taxon_vision/pipelines/data_drift.py`)**:
+   Stage 3.5 in the training pipeline executes this audit comparing historical reference embeddings (`reference_train_embeddings.pt`) with newly extracted training features (`train_embeddings.pt`) prior to model head fine-tuning.
 
-The implementation in `src/taxon_vision/monitoring/drift.py` is concise and vectorized:
+### Microservice Endpoints (`src/taxon_vision/service/routes/drift.py`)
 
-```python
-import numpy as np
+* **`POST /api/v1/drift/evaluate`**: Protected by bearer token authentication (`TAXON_INTERNAL_API_TOKEN`). Offloads CPU-intensive matrix operations to AnyIO worker threads via `anyio.to_thread.run_sync(evaluate_recent_drift)`. Returns `DriftEvaluationResponse`.
+* **`GET /api/v1/drift/latest`**: Queries the latest `DriftRunRecord` from PostgreSQL without recomputing statistics, enabling real-time dashboard rendering.
 
-def compute_wasserstein_drift(reference_embeddings: np.ndarray, current_embeddings: np.ndarray) -> float:
-    """Compute 1D Wasserstein distance approximation on representation embedding norms."""
-    ref_norm = np.linalg.norm(reference_embeddings, axis=-1)
-    curr_norm = np.linalg.norm(current_embeddings, axis=-1)
-    return float(np.abs(np.mean(ref_norm) - np.mean(curr_norm)))
+---
+
+## Airflow Orchestration & Automated Retraining Triggers
+
+TaxonVision coordinates continuous monitoring and automated retraining through Airflow DAGs located in `airflow/dags/`.
+
+### Hourly Drift Monitor DAG (`airflow/dags/prediction_drift_monitor.py`)
+
+<!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Heuristic: an unescaped angle bracket inside a label breaks rendering; rephrase the label. -->
+```text
+flowchart TD
+    START(["Start Hourly Execution (@hourly)"]) --> EVAL["Task: evaluate_live_drift<br/>Dispatches HTTP POST to /api/v1/drift/evaluate<br/>via HttpHook(http_conn_id='taxon_app')"]
+    EVAL --> SHORT{"Task: is_drift_detected<br/>ShortCircuitOperator<br/>verdict['drift_detected'] == True?"}
+    SHORT -->|Yes| TRIG["Task: trigger_retraining<br/>TriggerDagRunOperator<br/>trigger_dag_id='model_retraining'"]
+    SHORT -->|No| SKIP(["Skip Retraining: Manifold Stable"])
+    TRIG --> RETRAIN(["Dispatch model_retraining DAG"])
 ```
+*Control flow of the hourly Airflow prediction drift monitor short-circuiting on stable distributions.*
 
-* **Computational Complexity**: Strictly $O(N \cdot D)$, where $N = \max(N_{\text{ref}}, N_{\text{curr}})$ and $D$ is feature dimensionality.
-* **Sensitivity**: Visual domain degradation (loss of focus, sensor noise, extreme overexposure) or severe concept shifts manifest as systematic expansions or contractions of the embedding manifold radius $\|z\|_2$.
-* **Retraining Gate**: In continuous monitoring jobs, when the estimated drift exceeds a calibrated tolerance threshold (e.g. $> 0.15$), the pipeline automatically alerts MLOps engineers and queues the staged observations for active learning re-calibration.
+* **Schedule**: Configured with `schedule="@hourly"`, `max_active_runs=1`, `catchup=False`, and 2 retries with a 5-minute backoff.
+* **Execution**:
+  1. `evaluate_live_drift`: Obtains connection credentials for `taxon_app`, constructs an authenticated Bearer token header, and executes a POST request against `/api/v1/drift/evaluate` with a 300-second timeout.
+  2. `is_drift_detected`: Decorated with `@task.short_circuit`. Reads the response verdict payload; if `drift_detected` is `False`, execution terminates immediately.
+  3. `trigger_retraining`: Dispatches a `TriggerDagRunOperator` targeting DAG `model_retraining` with configuration `{"trigger_source": "prediction_drift_monitor"}`.
+
+### Retraining Orchestrator DAG (`airflow/dags/model_retraining.py`)
+
+When distribution drift or Grafana threshold alerts trigger retraining, the event-driven `model_retraining` DAG (`schedule=None`, `max_active_runs=1`) executes the following stages:
+
+```mermaid
+sequenceDiagram
+    participant AF as Airflow Scheduler
+    participant LS as Label Studio Store
+    participant Jenkins as Jenkins GPU Runner
+    participant MLflow as MLflow Registry
+
+    AF->>AF: Task: merge_human_feedback
+    AF->>LS: Read data/flagged_observations/label_studio_export.json
+    LS-->>AF: Append verified records to training manifest
+    
+    AF->>AF: Task: trigger_jenkins_build
+    AF->>Jenkins: POST /job/taxon-vision-mlops/buildWithParameters
+    Note over AF,Jenkins: RETRAIN_MODEL=true, INGEST_DATA=true
+    Jenkins-->>AF: HTTP 201 Created (Location: /queue/item/42)
+
+    AF->>AF: Task: wait_for_jenkins_build
+    loop Poll Queue & Build Status
+        AF->>Jenkins: Query build execution status
+        Jenkins-->>AF: Build running (INT8 ONNX export & calibration)
+    end
+    Jenkins-->>AF: Terminal Result: SUCCESS
+
+    AF->>AF: Task: report_promotion_outcome
+    AF->>MLflow: Query Four-Gate Promotion Verdict
+    MLflow-->>AF: Gates Passed: predictive_superiority, conformal_coverage, latency_slo, exchangeability_mmd2
+    AF->>AF: Update XCom: taxon_vision_onnx@Production promoted
+```
+*Retraining workflow orchestrating human feedback merging, Jenkins GPU training execution, and MLflow promotion gating.*
+
+1. **`merge_human_feedback`**: Scans `data/flagged_observations/label_studio_export.json` for verified human labels from epistemic triage queues and merges them into the DVC dataset manifest via `merge_feedback_to_manifest()`.
+2. **`trigger_jenkins_build`**: Uses `HttpHook(http_conn_id="jenkins")` to dispatch a parameterized build request to Jenkins (`/job/taxon-vision-mlops/buildWithParameters?RETRAIN_MODEL=true&INGEST_DATA=...`).
+3. **`wait_for_jenkins_build`**: Polls the Jenkins build queue and console log with bounded exponential backoff until completion.
+4. **`report_promotion_outcome`**: Inspects the resulting MLflow run metadata and extracts the Four-Gate Promotion Verdict (`predictive_superiority`, `conformal_coverage`, `latency_slo`, `exchangeability_mmd2`), recording the new production model alias in Airflow XCom.
 
 ---
 
 ## Operational Verification Runbooks
 
-To guarantee reproducible, deterministic validation of Kubernetes deployments before opening public ingress, TaxonVision provides the automated verification script `scripts/verify_deployment.sh`.
+To guarantee deterministic, zero-defect rollouts before admitting user traffic, deployments are validated via `scripts/ci/verify_deployment.sh`.
 
-### Verification Script: `scripts/verify_deployment.sh`
+### Verification Script: `scripts/ci/verify_deployment.sh`
 
-The verification script executes a 5-step operational gate against the target cluster:
+The verification gate executes a 5-step validation sequence against the specified namespace:
 
 ```bash
 #!/usr/bin/env bash
-# Usage: ./scripts/verify_deployment.sh [NAMESPACE]
-./scripts/verify_deployment.sh taxon-vision
+./scripts/ci/verify_deployment.sh taxon-vision
 ```
 
-The script performs the following validation steps:
+The script evaluates:
 
-1. **Step 1/5: Deployment Rollout Status**:
-   Waits for rollout completion with a 60-second timeout:
+1. **Step 1/5: Rollout Completion Status**:
+   Waits for deployment rollout to complete within 60 seconds:
    ```bash
-   kubectl rollout status deployment/taxon-vision-api -n taxon-vision --timeout=60s
+   kubectl rollout status deployment/taxon-vision-serving -n taxon-vision --timeout=60s
    ```
 2. **Step 2/5: Pod State Inspection**:
-   Lists pod status, restart counts, and node placements:
-   ```bash
-   kubectl get pods -n taxon-vision -l app.kubernetes.io/name=taxon-vision-api -o wide
-   ```
-3. **Step 3/5: Resolving Service Endpoint**:
-   Extracts ClusterIP and service port via `jsonpath`:
-   ```bash
-   CLUSTER_IP=$(kubectl get svc taxon-vision-api -n taxon-vision -o jsonpath='{.spec.clusterIP}')
-   PORT=$(kubectl get svc taxon-vision-api -n taxon-vision -o jsonpath='{.spec.ports[0].port}')
-   TARGET_URL="http://${CLUSTER_IP}:${PORT}"
-   ```
+   Inspects pod restart counts, phase readiness, and node placements across labels `app.kubernetes.io/name=taxon-vision-serving`.
+3. **Step 3/5: Dynamic Endpoint Discovery**:
+   Discovers the target endpoint via a 3-tier fallback resolution mechanism:
+   * **Tier 1 (Direct ClusterIP)**: Resolves `.spec.clusterIP` and attempts an HTTP connect with a 1-second timeout.
+   * **Tier 2 (LAN NodePort)**: If ClusterIP is unreachable (developer workstation mode), resolves the node internal IP and NodePort `30080`.
+   * **Tier 3 (Ephemeral Port-Forward)**: If LAN ingress is blocked, launches a background `kubectl port-forward` to `127.0.0.1:18000` with an automatic exit trap (`trap cleanup EXIT INT TERM`).
 4. **Step 4/5: Probing HTTP Health & Readiness**:
-   Issues curl requests to verify both endpoints return HTTP 200 OK:
+   Validates that both liveness and readiness probes respond with HTTP 200 OK:
    ```bash
    curl -s -o /dev/null -w "%{http_code}" "${TARGET_URL}/health"
    curl -s -o /dev/null -w "%{http_code}" "${TARGET_URL}/health/ready"
    ```
-   If either probe returns non-200, the verification script exits with an error.
-5. **Step 5/5: Live Prediction Inference & Telemetry Scrape**:
-   Executes a test multipart prediction request and validates that the Prometheus metrics endpoint exposes `taxon_predictions_total`:
+5. **Step 5/5: Live Prediction Inference & Telemetry Verification**:
+   Submits a multipart test image upload and verifies that Prometheus metrics expose `taxon_predictions_total`:
    ```bash
    curl -s -X POST "${TARGET_URL}/api/v1/predict" -F 'file=@/dev/null;filename=probe.jpg;type=image/jpeg'
    curl -s "${TARGET_URL}/metrics" | grep -c "taxon_predictions_total"
    ```
-
-When all five steps succeed, the script outputs `DEPLOYMENT VERIFICATION PASSED: TaxonVision is operational!`.
+   Prunes any failed or evicted pods from historical rollouts and asserts `DEPLOYMENT VERIFICATION PASSED`.
 
 ---
 
 ## Troubleshooting Procedures
 
-The table below outlines common operational failure modes, root cause diagnoses, and remediation runbooks:
-
 | Symptom / Failure | Root Cause | Diagnostic Command | Remediation Runbook |
 |---|---|---|---|
-| **Pod in `CrashLoopBackOff` or Readiness Probe 503** | Model checkpoint or taxa catalog missing on hostPath mount. | `kubectl logs deployment/taxon-vision-api -n taxon-vision` and `kubectl describe pod <pod_id>` | 1. Inspect host directory `/home/benni/taxon-vision-mlops/models/checkpoints`.<br/>2. Ensure valid checkpoint file (`.pt` or `.onnx`) and `taxa_catalog.yaml` exist.<br/>3. Check read permissions for non-root UID 10001. |
-| **Pods Stuck in `Pending` with `0/1 nodes available: Insufficient nvidia.com/gpu`** | NVIDIA device plugin not running or time-slicing ConfigMap missing. | `kubectl get pods -n kube-system -l name=nvidia-device-plugin-ds` and `kubectl describe node` | 1. Apply `deploy/k8s/nvidia-time-slicing-config.yaml`.<br/>2. Restart the NVIDIA device plugin daemonset: `kubectl rollout restart daemonset/nvidia-device-plugin-daemonset -n kube-system`.<br/>3. Verify `nvidia.com/gpu: 4` under allocatable node resources. |
-| **CUDA OOM / Process Crashing during Retraining** | Shared time-slicing compute exceeded physical 16 GB VRAM limit. | `dmesg -T \| grep -i oom` and `nvidia-smi` | 1. Batch jobs must clamp PyTorch memory via `torch.cuda.set_per_process_memory_fraction()`.<br/>2. Reduce training batch size.<br/>3. Ensure inference services use INT8 ONNX execution. |
-| **Prometheus `UP == 0` / Scrape Target Down** | Network isolation, bad port mapping, or container crash. | `kubectl get ep taxon-vision-api -n taxon-vision` and `curl -v http://<node-ip>:30080/metrics` | 1. Confirm pods are ready (`kubectl get pods -n taxon-vision`).<br/>2. Verify endpoint resolution in Kubernetes.<br/>3. Ensure port 8000 (NodePort 30080) is accessible from the Prometheus network. |
-| **High Wasserstein Drift Score (`> 0.20`)** | Domain shift in camera sensors, extreme seasonal variations, or corrupted inputs. | Run offline drift diagnostic script on staged embeddings in `/app/models/checkpoints/flagged`. | 1. Inspect flagged images staged via `persist_flagged_observation`.<br/>2. If valid biological shift, trigger retraining with updated dataset.<br/>3. If sensor corruption, adjust ingestion quality filters. |
+| **Pod in `CrashLoopBackOff` or Readiness Probe HTTP 503** | Missing model weights or invalid `taxa_catalog.yaml` in hostPath volume. | `kubectl logs deployment/taxon-vision-serving -n taxon-vision` and `kubectl describe pod <pod_id>` | 1. Verify hostPath mount `/var/lib/taxon-vision/checkpoints` on the node.<br/>2. Ensure `best_model.onnx` or `model.pt` exists with read permissions for UID 10001.<br/>3. Ensure `taxa_catalog.yaml` is populated. |
+| **Pods Stuck in `Pending` with `Insufficient nvidia.com/gpu`** | NVIDIA Device Plugin not scheduled or time-slicing ConfigMap missing. | `kubectl get nodes -o jsonpath='{.items[0].status.allocatable}'` | 1. Apply `deploy/k8s/nvidia-time-slicing-config.yaml`.<br/>2. Restart NVIDIA daemonset: `kubectl rollout restart ds/nvidia-device-plugin -n kube-system`.<br/>3. Verify allocatable `nvidia.com/gpu: 4`. |
+| **CUDA OOM / Process Crashes during Retraining** | Shared GPU time-slicing exceeded physical 16 GB VRAM limit. | `dmesg -T \| grep -i oom` and `nvidia-smi` | 1. Ensure retraining scripts clamp memory via `torch.cuda.set_per_process_memory_fraction(0.40)`.<br/>2. Lower batch size in `params.yaml`.<br/>3. Ensure serving pods run INT8 ONNX models. |
+| **Dashboard Ingress Returns 504 Gateway Timeout** | Sablier failed to scale deployment from 0 within proxy timeout. | `kubectl logs deployment/sablier -n taxon-vision` and `kubectl get pods -n taxon-vision` | 1. Confirm Sablier has `ClusterRoleBinding` permissions on `deployments/scale`.<br/>2. Check image pull latency or node resource exhaustion for the target dashboard.<br/>3. Increase Traefik timeout in `deploy/k8s/traefik-ingress.yaml`. |
+| **Prometheus Metrics `UP == 0` / Scrape Target Down** | Network isolation, bad NodePort routing, or container crash. | `kubectl get ep taxon-vision-serving -n taxon-vision` | 1. Verify pod readiness status (`/health/ready`).<br/>2. Test local endpoint: `curl -v http://localhost:8000/metrics`.<br/>3. Verify firewall permits traffic on NodePort 30080. |
+| **Distribution Drift Alert (`taxon_drift_detected == 1.0`)** | Environmental concept drift (seasonal changes, illumination, sensor noise). | Inspect `reports/drift_report.html` and query `GET /api/v1/drift/latest`. | 1. Review PCA and Kolmogorov-Smirnov feature drift in Evidently report.<br/>2. Inspect flagged observations in `/var/lib/taxon-vision/flagged_observations`.<br/>3. If biological shift, trigger Airflow `model_retraining` DAG. |

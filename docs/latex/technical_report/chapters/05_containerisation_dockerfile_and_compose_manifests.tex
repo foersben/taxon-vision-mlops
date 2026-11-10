@@ -172,28 +172,51 @@ The \texttt{ENTRYPOINT} instruction utilises the JSON array syntax (exec form) r
 
 By employing the exec form, the \texttt{pixi run} command directly assumes PID 1 within the container namespace. The \texttt{--frozen -e ci} flags guarantee that the Uvicorn server is launched strictly within the rigorously constrained \texttt{ci} environment. The Uvicorn process correctly receives lifecycle signals, allowing it to gracefully drain active HTTP connections and flush pending telemetry metrics before termination, ensuring zero-downtime availability for the TaxonVision-MLOps inference service.
 
-\section{Local Composition Manifest: Infrastructure Telemetry and Storage Stack}
+\section{Local Composition Manifest: Microservice Orchestration Stack}
 \label{sec:local_composition_manifest}
 
-In addition to the standalone production serving container, the repository provides declarative orchestration for local development and observability infrastructure via Docker Compose. The configuration file \texttt{deploy/compose/docker-compose.local.yaml} codifies a reproducible local topology comprising an S3-compatible object store, a Prometheus time-series metric scraper, and a Grafana dashboard server.
+In addition to the standalone production serving container, the repository provides declarative orchestration for local development, inference serving, and observability infrastructure via Docker Compose. The configuration file \texttt{docker-compose.yml} codifies a reproducible local topology comprising the FastAPI serving application, an S3-compatible object store, an Optuna dashboard, a Prometheus time-series metric scraper, and a Grafana dashboard server.
 
 \begin{listing}[htbp]
 \begin{minted}{yaml}
-version: '3.8'
-
 services:
-  minio:
-    image: minio/minio:latest
-    container_name: taxon_minio
+  app:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile
+    container_name: taxon_vision_app
     ports:
-      - "9000:9000" # S3 API
-      - "9001:9001" # Web UI
+      - "8000:8000"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    command: server /data --console-address ":9001"
+      - PORT=8000
+      - HOST=0.0.0.0
+      - TAXON_OPTUNA_STORAGE_URI=sqlite:////optuna/optuna_studies.db
+      - TAXON_ALLOW_UNTRAINED_FALLBACK=true
     volumes:
-      - minio_data:/data
+      - ./data/optuna:/optuna
+      - ./data/flagged_observations:/app/data/flagged_observations
+      - ./models/checkpoints:/app/models/checkpoints
+      - ./data/sample:/app/data/sample
+    depends_on:
+      - seaweedfs
+      - prometheus
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    container_name: taxon_seaweedfs
+    ports:
+      - "8333:8333" # S3 API
+      - "9333:9333" # Master UI
+    volumes:
+      - ./data/seaweedfs:/data
+
+  optuna-dashboard:
+    image: ghcr.io/optuna/optuna-dashboard:latest
+    container_name: taxon_optuna_dashboard
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data/optuna:/optuna
 
   prometheus:
     image: prom/prometheus:latest
@@ -203,38 +226,33 @@ services:
     volumes:
       - ./config/prometheus.yaml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
 
   grafana:
     image: grafana/grafana:latest
     container_name: taxon_grafana
     ports:
       - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-    volumes:
-      - grafana_data:/var/lib/grafana
     depends_on:
       - prometheus
 
 volumes:
-  minio_data:
   prometheus_data:
   grafana_data:
 \end{minted}
-\caption{Docker Compose manifest (\texttt{deploy/compose/docker-compose.local.yaml}) defining local MinIO, Prometheus, and Grafana services.}
+\caption{Docker Compose manifest (\texttt{docker-compose.yml}) defining local FastAPI, SeaweedFS, Optuna Dashboard, Prometheus, and Grafana microservices.}
 \label{lst:docker_compose_local}
 \end{listing}
 
 \subsection{Service Topology and Operational Configuration}
 
-The composition manifest coordinates three interconnected services, establishing clear network and persistence boundaries:
+The composition manifest coordinates five interconnected services, establishing clear network and persistence boundaries:
 
 \begin{itemize}
-    \item \textbf{MinIO Object Storage (\texttt{minio}):} Deployed using the official \texttt{minio/minio:latest} image under container name \texttt{taxon\_minio}. It exposes port 9000 for AWS S3-compatible API communication (utilised by local DVC streaming pipelines and dataset caching) and port 9001 for the interactive administrative web console. Default local credentials (\texttt{minioadmin:minioadmin}) are configured via environment variables, and the object store persists raw observation data within the named Docker volume \texttt{minio\_data:/data}.
-    \item \textbf{Prometheus Scraper (\texttt{prometheus}):} Deployed via \texttt{prom/prometheus:latest} under container name \texttt{taxon\_prometheus} on port 9090. The daemon mounts the host configuration file \texttt{./config/prometheus.yaml} read-only to configure scrape targets. Crucially, the directive \texttt{extra\_hosts: ["host.docker.internal:host-gateway"]} configures internal container DNS resolution, enabling Prometheus running inside the container network to seamlessly scrape the host-bound FastAPI inference service operating at\\\url{http://host.docker.internal:8000/metrics}. Time-series telemetry samples are persisted across restarts in the named volume\\\texttt{prometheus\_data:/prometheus}.
+    \item \textbf{Inference Service (\texttt{app}):} Deployed using the multi-stage Dockerfile (\texttt{deploy/docker/Dockerfile}) under container name \texttt{taxon\_vision\_app}. It exposes port 8000 for the REST API and HTMX operator dashboard. Configured with \texttt{TAXON\_ALLOW\_UNTRAINED\_FALLBACK=true} to ensure graceful cold starts during local bootstrap, with persistent bind mounts for checkpoints, Optuna SQLite database, and flagged triage observations.
+    \item \textbf{SeaweedFS Object Storage (\texttt{seaweedfs}):} Deployed using \texttt{chrislusf/seaweedfs:latest} under container name \texttt{taxon\_seaweedfs}. It exposes port 8333 for AWS S3-compatible API communication (utilised by local DVC streaming pipelines and dataset caching) and port 9333 for administrative management. It persists raw observation chunks within \texttt{./data/seaweedfs}.
+    \item \textbf{Optuna Dashboard (\texttt{optuna-dashboard}):} Deployed via \texttt{ghcr.io/optuna/optuna-dashboard:latest} on port 8080, connecting to the shared SQLite database (\texttt{/optuna/optuna\_studies.db}) to render real-time Bayesian optimization Pareto frontiers.
+    \item \textbf{Prometheus Scraper (\texttt{prometheus}):} Deployed via \texttt{prom/prometheus:latest} under container name \texttt{taxon\_prometheus} on port 9090. The daemon mounts the host configuration file \texttt{./config/prometheus.yaml} read-only to configure scrape targets. It scrapes the containerised \texttt{app:8000} service alongside host-bound processes via \texttt{host.docker.internal:host-gateway}. Time-series telemetry samples are persisted across restarts in the named volume \texttt{prometheus\_data:/prometheus}.
     \item \textbf{Grafana Visualization Server (\texttt{grafana}):} Deployed via \texttt{grafana/grafana:latest} on port 3000, bound to the container name \texttt{taxon\_grafana}. It declares an explicit operational dependency (\texttt{depends\_on: [prometheus]}), ensuring the metrics ingestion pipeline is initialised before dashboard queries are served. Dashboard layout definitions and user authentication states are saved in \texttt{grafana\_data:/var/lib/grafana}.
 \end{itemize}
 
-This composition manifest decouples telemetry collection and object storage from the core Python application runtime. Local developers can instantiate the complete operational observability and data tier via a single command (\texttt{docker compose -f deploy/compose/docker-compose.local.yaml up -d}) while executing the FastAPI application directly within the Pixi environment (\texttt{pixi run -e dev api}), providing identical metric scraping semantics to the production Kubernetes cluster.
+This composition manifest orchestrates the complete operational observability, inference, and data tier via a single command (\texttt{docker compose up -d} or \texttt{just up}), providing identical metric scraping and storage semantics to the production Kubernetes cluster.

@@ -8,7 +8,7 @@ import io
 import logging
 import time
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, NamedTuple
 
 import anyio
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile, status
@@ -23,7 +23,7 @@ from taxon_vision.inference.cam import (
     generate_heatmap,
     overlay_cam_on_image,
 )
-from taxon_vision.service.inference import load_taxa_catalog
+from taxon_vision.service.inference import get_classifier, load_taxa_catalog
 from taxon_vision.service.storage import get_image_cache
 
 logger = logging.getLogger(__name__)
@@ -34,6 +34,14 @@ templates = Jinja2Templates(directory=str(templates_dir))
 
 HTMX_REQUEST_HEADER = "HX-Request"
 """str: Header set by HTMX on every request it issues."""
+
+
+class HeatmapGenerationResult(NamedTuple):
+    """Typed container for synchronous CAM heatmap generation results."""
+
+    status: str
+    shape: list[int]
+    overlay_base64: str
 
 
 class ExplainResponse(BaseModel):
@@ -98,7 +106,7 @@ def _decode_image(image_bytes: bytes) -> Image.Image:
         ) from exc
 
 
-def _resolve_image_payload(upload_bytes: bytes | None, image_hash: str | None) -> bytes | None:
+async def _resolve_image_payload(upload_bytes: bytes | None, image_hash: str | None) -> bytes | None:
     """Select the image to explain, honouring the documented source priority.
 
     Why:
@@ -107,7 +115,7 @@ def _resolve_image_payload(upload_bytes: bytes | None, image_hash: str | None) -
 
     How:
         1. A non-empty direct upload always wins.
-        2. Otherwise a supplied ``image_hash`` is resolved against the ephemeral cache.
+        2. Otherwise a supplied ``image_hash`` is resolved against the ephemeral cache via threadpool offloading.
         3. With neither, None is returned and the caller falls back to the headless probe image.
 
     Args:
@@ -124,7 +132,8 @@ def _resolve_image_payload(upload_bytes: bytes | None, image_hash: str | None) -
         return upload_bytes
     if image_hash is None:
         return None
-    cached = get_image_cache().get(image_hash)
+    cache = get_image_cache()
+    cached = await anyio.to_thread.run_sync(cache.get, image_hash)
     if cached is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -136,7 +145,7 @@ def _resolve_image_payload(upload_bytes: bytes | None, image_hash: str | None) -
 def _run_heatmap_generation(
     image_bytes: bytes | None,
     target_class: int | None = None,
-) -> tuple[str, list[int], str]:
+) -> HeatmapGenerationResult:
     """Execute synchronous Class Activation Map generation in a worker thread.
 
     Why:
@@ -156,7 +165,7 @@ def _run_heatmap_generation(
         target_class: Optional resolved target class index.
 
     Returns:
-        Tuple of (status_string, [height, width] of the heatmap, base64 overlay PNG).
+        HeatmapGenerationResult containing status, [height, width], and base64 overlay PNG.
 
     Raises:
         HTTPException: If the image cannot be decoded or saliency extraction fails.
@@ -169,12 +178,13 @@ def _run_heatmap_generation(
         image = Image.new("RGB", (size, size), color="green")
 
     try:
-        heatmap = generate_heatmap(image, target_class=target_class)
+        classifier = get_classifier()
+        heatmap = generate_heatmap(image, classifier=classifier, target_class=target_class)
     except SaliencyExtractionError as err:
         logger.warning("CAM generation failed: %s", err)
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(err)) from err
     overlay = overlay_cam_on_image(image, heatmap)
-    return "generated", list(heatmap.shape), encode_image_base64_png(overlay)
+    return HeatmapGenerationResult("generated", list(heatmap.shape), encode_image_base64_png(overlay))
 
 
 async def _read_upload(file: UploadFile | None) -> bytes | None:
@@ -247,7 +257,8 @@ async def explain_prediction(
     is_htmx = request.headers.get(HTMX_REQUEST_HEADER) == "true"
 
     try:
-        content = _resolve_image_payload(await _read_upload(file), image_hash)
+        upload_bytes = await _read_upload(file)
+        content = await _resolve_image_payload(upload_bytes, image_hash)
         resolved_class = _resolve_target_class_index(target_class_index)
         status_str, shape, overlay_b64 = await anyio.to_thread.run_sync(
             _run_heatmap_generation, content, resolved_class

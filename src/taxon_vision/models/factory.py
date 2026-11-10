@@ -15,7 +15,7 @@ Typical usage example:
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, NamedTuple
 
 import timm
 import torch
@@ -27,6 +27,13 @@ BACKBONE_REGISTRY: dict[str, str] = get_settings().model.backbone_registry
 """dict[str, str]: Mapping of canonical model identifiers to timm/HuggingFace model identifiers."""
 
 
+class CachedFeaturesResult(NamedTuple):
+    """Cached feature embedding matrix paired with ground-truth integer labels."""
+
+    features: torch.Tensor
+    labels: torch.Tensor
+
+
 def create_feature_extractor(
     model_name: str | None = None,
     pretrained: bool = False,
@@ -35,9 +42,14 @@ def create_feature_extractor(
 ) -> nn.Module:
     """Instantiate a frozen pre-trained feature extractor backbone.
 
-    Constructs a convolutional neural network or vision transformer backbone using `timm`. The network's classification head is removed (returning dense pooled feature embeddings), parameters are frozen by setting `requires_grad = False`, and the model is switched to evaluation mode (`eval()`).
+    Why:
+        Fine-tuning Vision Foundation Models end-to-end across long-tailed taxonomic classes risks catastrophic forgetting and exceeds the 11.2 GB VRAM training ceiling. Freezing the backbone (`requires_grad=False`) and removing its classification head (`num_classes=0`) decouples representation extraction from linear probing. A failed load raises by default so un-pretrained random weights are never silently substituted unless `allow_fallback=True` is explicitly passed for offline CI tests.
 
-    A failed load (e.g. unavailable Hugging Face weights) raises by default. Silently substituting an un-pretrained architecture would yield random backbone features and meaningless predictions, so the lightweight un-pretrained model in `config.fallback_extractor` is only used when `allow_fallback=True` (offline unit tests and CI smoke runs).
+    How:
+        Resolves `model_name` through `config.backbone_registry`, instantiates the `timm` backbone with `num_classes=0`, locks all parameters (`requires_grad=False`), and activates evaluation mode (`eval()`).
+
+    Complexity:
+        O(P) time and space where P is the number of backbone parameters.
 
     Args:
         model_name: Identifier for the desired model backbone. Can be a key from `config.backbone_registry` or any valid timm model name. If None, uses `config.default_extractor`.
@@ -79,7 +91,14 @@ def get_feature_dimension(
 ) -> int:
     """Retrieve the output feature embedding dimension for a given backbone.
 
-    Executes a single-sample forward pass with a zero dummy tensor in zero-grad inference mode to deterministically resolve the exact output representation dimensionality across CNN and ViT architectures without hardcoding output sizes.
+    Why:
+        Heterogeneous vision backbones (DINOv3, BioCLIP-2, MobileNetV4) emit varying penultimate feature dimensions (e.g. 512, 768, 1280) and expose inconsistent attribute names across `timm` families. Probing with a single dummy tensor deterministically resolves the true output dimensionality without reflection (`getattr`) or hardcoded architecture tables.
+
+    How:
+        Constructs a `(1, C, H, W)` zero tensor on the backbone's device, runs a single forward pass inside `torch.inference_mode()`, and reads `features.shape[-1]`.
+
+    Complexity:
+        O(1) single-sample forward pass through the frozen backbone.
 
     Args:
         model: The feature extractor backbone to inspect.
@@ -108,7 +127,14 @@ def extract_features(
 ) -> torch.Tensor:
     """Extract dense feature embeddings from a batch of images using a frozen backbone.
 
-    Executes inference in zero-grad mode (`torch.inference_mode`) without maintaining computational graphs, optimizing memory allocation and execution latency.
+    Why:
+        Executing forward passes inside `torch.inference_mode()` disables autograd view tracking and version counters, minimizing VRAM footprint and latency during batch embedding extraction.
+
+    How:
+        Aligns `model` and `images` onto `target_device`, switches `model` to `eval()`, and evaluates `model(images)` under `torch.inference_mode()`.
+
+    Complexity:
+        O(B) backbone forward evaluation where B is the batch size.
 
     Args:
         model: The frozen feature extractor backbone.
@@ -136,7 +162,7 @@ def extract_and_cache_features(
     model: nn.Module,
     dataloader: Iterable[tuple[torch.Tensor, torch.Tensor] | list[Any]],
     device: torch.device | str | None = None,
-) -> tuple[torch.Tensor, torch.Tensor]:
+) -> CachedFeaturesResult:
     """Iterate over an entire dataset to pre-compute and cache feature embeddings.
 
     Decouples feature extraction from linear head training. By passing the dataset through the frozen vision foundation model once and caching embeddings in memory or storage, subsequent classification head training iterations run in seconds rather than hours.
@@ -147,9 +173,9 @@ def extract_and_cache_features(
         device: Target execution device. If None, uses the model parameter device.
 
     Returns:
-        A tuple `(all_embeddings, all_labels)` where:
-            - `all_embeddings` is a 2D float tensor of shape `(total_samples, feature_dim)`.
-            - `all_labels` is a 1D integer tensor of shape `(total_samples,)`.
+        CachedFeaturesResult `(features, labels)` where:
+            - `features` is a 2D float tensor of shape `(total_samples, feature_dim)`.
+            - `labels` is a 1D integer tensor of shape `(total_samples,)`.
     """
     all_embeddings: list[torch.Tensor] = []
     all_labels: list[torch.Tensor] = []
@@ -161,6 +187,12 @@ def extract_and_cache_features(
         all_labels.append(labels.detach().cpu())
 
     if not all_embeddings:
-        return torch.empty((0, 0), dtype=torch.float32), torch.empty((0,), dtype=torch.long)
+        return CachedFeaturesResult(
+            features=torch.empty((0, 0), dtype=torch.float32),
+            labels=torch.empty((0,), dtype=torch.long),
+        )
 
-    return torch.cat(all_embeddings, dim=0), torch.cat(all_labels, dim=0)
+    return CachedFeaturesResult(
+        features=torch.cat(all_embeddings, dim=0),
+        labels=torch.cat(all_labels, dim=0),
+    )

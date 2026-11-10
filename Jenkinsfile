@@ -15,6 +15,7 @@ spec:
   containers:
   - name: ml-runner
     image: ghcr.io/prefix-dev/pixi:latest
+    imagePullPolicy: IfNotPresent
     command: ["sleep"]
     args: ["99d"]
     tty: true
@@ -23,6 +24,8 @@ spec:
       mountPath: /root/.cache/rattler/cache
     - name: host-manifests
       mountPath: /var/lib/taxon-vision/manifests
+    - name: host-reference
+      mountPath: /var/lib/taxon-vision/reference
     - name: host-checkpoints
       mountPath: /var/lib/taxon-vision/checkpoints
     resources:
@@ -40,6 +43,10 @@ spec:
   - name: host-manifests
     hostPath:
       path: /var/lib/taxon-vision/manifests
+      type: DirectoryOrCreate
+  - name: host-reference
+    hostPath:
+      path: /var/lib/taxon-vision/reference
       type: DirectoryOrCreate
   - name: host-checkpoints
     hostPath:
@@ -103,6 +110,7 @@ spec:
               data/embeddings/val_embeddings.pt \
               data/embeddings/cal_embeddings.pt \
               data/embeddings/test_embeddings.pt \
+              data/reference/reference_train_embeddings.pt \
               models/checkpoints/head.pt \
               models/checkpoints/model_int8.onnx || echo "WARNING: DVC pull skipped or failed; continuing with workspace cache."
           '''
@@ -164,7 +172,7 @@ spec:
             pixi run --frozen -e ci-dev pytest tests/integration/ tests/invariants/ \
               --cov=src/taxon_vision \
               --cov-append \
-              --cov-report=xml:coverage.xml \
+              --cov-report=xml:reports/coverage/coverage.xml \
               --cov-fail-under=80 \
               -x -q -o "addopts="
           '''
@@ -194,6 +202,7 @@ spec:
         EXTRACTOR = "${params.EXTRACTOR}"
       }
       when {
+        beforeAgent true
         anyOf {
           triggeredBy 'TimerTrigger'
           expression { params.INGEST_DATA == true }
@@ -241,6 +250,7 @@ spec:
 
     stage('Deploy to Kubernetes') {
       when {
+        beforeAgent true
         anyOf {
           branch 'main'
           branch 'develop'
@@ -290,16 +300,29 @@ spec:
               done
             fi
 
-            # Apply API deployment and service manifests
-            kubectl apply -f deploy/k8s/api-deployment.yaml
+            # Apply shared backing services
+            kubectl apply -f deploy/k8s/postgres.yaml
+            kubectl apply -f deploy/k8s/monitoring-prometheus-grafana.yaml
+
+            # Determine target overlay from Git branch
+            if [ "${BRANCH_NAME}" = "main" ]; then
+              TARGET_ENV="production"
+              TARGET_NS="taxon-vision"
+            else
+              TARGET_ENV="staging"
+              TARGET_NS="taxon-vision-staging"
+            fi
+
+            echo ">>> Deploying ${TARGET_ENV} overlay to namespace ${TARGET_NS} via Kustomize..."
+            kubectl apply -k deploy/k8s/overlays/${TARGET_ENV}
 
             # Trigger rolling restart to serve fresh weights
-            kubectl rollout restart deployment/taxon-vision-serving -n taxon-vision
+            kubectl rollout restart deployment/taxon-vision-serving -n ${TARGET_NS}
 
             # Verify deployment health
-            kubectl rollout status deployment/taxon-vision-serving -n taxon-vision --timeout=120s
-            bash scripts/ci/verify_deployment.sh taxon-vision
-            echo ">>> Deployment successfully verified."
+            kubectl rollout status deployment/taxon-vision-serving -n ${TARGET_NS} --timeout=120s
+            bash scripts/ci/verify_deployment.sh ${TARGET_NS}
+            echo ">>> Deployment successfully verified for ${TARGET_ENV}."
           '''
         }
       }
@@ -309,10 +332,12 @@ spec:
   post {
     always {
       script {
-        try {
-          cleanWs notFailBuild: true
-        } catch (Throwable t) {
-          echo "Workspace cleanup skipped: ${t.message}"
+        if (env.WORKSPACE != null) {
+          try {
+            cleanWs notFailBuild: true
+          } catch (Throwable t) {
+            echo "Workspace cleanup skipped: ${t.message}"
+          }
         }
       }
     }

@@ -3,11 +3,11 @@ type: Reference
 title: Jenkins CI/CD Architecture & Ephemeral Runner Topology
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
-version: 1.0
-description: Comprehensive architecture, security design, and operational record of the zero-open-ports Jenkins controller, Cloudflare Tunnel ingress, and k3s ephemeral agent topology.
-tags: [jenkins, cicd, k3s, cloudflare, pixi, infrastructure, docker]
-generated: {by: "process:docs-librarian", at: "2026-10-18T18:00:00Z"}
-verified: {by: "process:docs-librarian", at: "2026-10-18T18:00:00Z"}
+version: 1.2
+description: Comprehensive architecture, security design, and operational record of the zero-open-ports Jenkins controller, Cloudflare Tunnel ingress, 7-stage CI/CD pipeline, and k3s ephemeral agent topology.
+tags: [jenkins, cicd, k3s, cloudflare, pixi, infrastructure, docker, rbac, gpu-scheduling]
+generated: {by: "process:docs-librarian", at: "2026-11-10T16:00:00Z"}
+verified: {by: "process:docs-librarian", at: "2026-11-10T16:00:00Z"}
 ---
 
 # Jenkins CI/CD Architecture & Ephemeral Runner Topology
@@ -61,6 +61,8 @@ flowchart TD
     ML_Runner -->|Run Stage| S3["3. Pytest Suite (>= 80% Coverage)"]
     ML_Runner -->|Run Stage| S4["4. Invariants & Conformal Guarantees"]
     ML_Runner -->|Run Stage| S5["5. Zensical Strict Docs Build"]
+    ML_Runner -->|Conditional Handover| S6["6. Model Training & Checkpoint (GPU Pod: nvidia.com/gpu: 1)"]
+    ML_Runner -->|Branch-Aware CD| S7["7. Deploy to Kubernetes (Overlays: Staging vs Production)"]
 ```
 
 ---
@@ -310,14 +312,117 @@ The manifest declares eight Kubernetes objects designed to isolate runtime compu
     * Isolates the production web serving layer and model inference containers (`taxon-vision-api`) from CI/CD runners and cluster system daemons.
 
 * **7. Role (`jenkins-deployer-role`): Continuous Delivery Privileges**
-    * Grants permissions to create, update, patch, and watch `deployments` (apps API group) and `services`, `pods`, `events` (core API group) strictly inside `taxon-vision`.
-    * Powers the automated pipeline deployment step without requiring cluster-wide admin rights or brittle host-level cron/systemd automation.
+    * Grants permissions to create, update, patch, and watch `deployments` (apps API group), `services`, `pods`, `pods/log`, `events`, `configmaps`, `secrets`, `persistentvolumeclaims` (core API group), and `ingressroutes`, `traefikservices`, `middlewares` (`traefik.io` API group) strictly inside `taxon-vision`.
+    * Enables declarative deployment of serving pods, storage volumes, Traefik canary ingress routes, and monitoring stacks (Prometheus and Grafana) without requiring cluster-wide admin rights or brittle host-level automation.
 
 * **8. RoleBinding (`jenkins-deployer-binding`): Cross-Namespace Deployment Authorization**
     * Maps the `jenkins-agent` identity in `jenkins-ci` to `jenkins-deployer-role` in `taxon-vision`.
-    * Enables the in-cluster runner to execute `kubectl apply -f deploy/k8s/api-deployment.yaml` and `kubectl rollout restart deployment/taxon-vision-api` seamlessly upon successful test completion.
+    * Enables the in-cluster runner to execute `kubectl apply -f deploy/k8s/api-deployment.yaml`, `kubectl apply -f deploy/k8s/monitoring-prometheus-grafana.yaml`, and `kubectl rollout restart deployment/taxon-vision-api` seamlessly upon successful test completion.
 
-### 5.2 Kubernetes Cloud Configuration in Jenkins
+### 5.2 Architectural Alternatives for Continuous Delivery
+
+When designing continuous deployment into Kubernetes, engineering teams face distinct trade-offs across four operational paradigms:
+
+```mermaid
+flowchart TD
+    subgraph PatternA ["1. Scoped Role (Current Implementation)"]
+        JA1["jenkins-agent SA"] -->|Limited Verbs/Resources| R1["Role: jenkins-deployer-role<br/>(taxon-vision only)"]
+        R1 --> K8S1["k3s API Server"]
+    end
+
+    subgraph PatternB ["2. Namespaced Admin Pattern"]
+        JA2["jenkins-agent SA"] -->|RoleBinding| CA["ClusterRole: admin<br/>(Bound inside taxon-vision)"]
+        CA --> K8S2["k3s API Server"]
+    end
+
+    subgraph PatternC ["3. Enterprise GitOps Operator"]
+        GIT["Git Manifest Repo"] -->|Continuous Pull| ARGO["ArgoCD / Flux CD Controller<br/>(In-Cluster Reconciler)"]
+        ARGO -->|Zero CI Push Access| K8S3["k3s API Server"]
+        JC["Jenkins CI Pipeline"] -->|Push Image Tag| GIT
+    end
+
+    subgraph PatternD ["4. Host SSH Anti-Pattern (Strictly Prohibited)"]
+        JC_SSH["Jenkins Agent"] -.->|Bypasses K8s RBAC| SSH["Host SSH / sudo kubectl"]
+        SSH -.->|Host-level compromise| HOST["Host OS hive-mind"]
+    end
+```
+
+#### Architecture A: Scoped In-Cluster ServiceAccount (Current Production Baseline)
+
+* **Mechanism:** The ephemeral `jenkins-agent` pod runs with an in-cluster ServiceAccount token bound to an explicit `Role` within `namespace: taxon-vision`.
+* **Security Strengths:** Implements least-privilege RBAC. If a pipeline job is compromised, the blast radius is strictly confined to explicitly enumerated resource verbs within `taxon-vision`. The agent cannot access `kube-system`, cannot read cluster node secrets, and cannot alter cluster-wide daemonsets.
+* **Operational Overhead:** Requires manual RBAC manifest updates whenever new Kubernetes resource types (such as `ConfigMap`, `Secret`, or custom third-party CRDs like `IngressRoute`) are added to deployment manifests.
+
+#### Architecture B: Namespaced Admin RoleBinding Pattern
+
+* **Mechanism:** The `jenkins-agent` ServiceAccount is bound to the native Kubernetes default `ClusterRole/admin` via a namespaced `RoleBinding` inside `taxon-vision`:
+
+    ```yaml
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: RoleBinding
+    metadata:
+      name: jenkins-admin-binding
+      namespace: taxon-vision
+    subjects:
+      - kind: ServiceAccount
+        name: jenkins-agent
+        namespace: jenkins-ci
+    roleRef:
+      kind: ClusterRole
+      name: admin
+      apiGroup: rbac.authorization.k8s.io
+    ```
+
+* **Rationale & Trade-offs:** The pre-defined `admin` ClusterRole grants full create, read, update, and delete access to all standard namespaced resources (Deployments, Services, ConfigMaps, Secrets, PVCs, Ingress) while strictly forbidding cluster-scoped modifications (such as Nodes, PersistentVolumes, Namespaces, or RBAC definitions). Binding this role eliminates ongoing maintenance friction when expanding application manifests, while maintaining strong namespace isolation.
+
+#### Architecture C: Enterprise GitOps Operator Pattern (ArgoCD / Flux CD)
+
+* **Mechanism:** Continuous delivery is decoupled from the CI engine. Jenkins executes static quality gates, unit tests, GPU model training, and publishes immutable container images (`ghcr.io/foersben/taxon-vision-mlops:sha-<commit>`). Jenkins updates the desired image tag in a declarative Git repository. An in-cluster GitOps operator (ArgoCD or Flux CD) observes the repository and reconciles cluster state via continuous pull loops.
+* **Architectural Advantages:**
+    * **Zero Cluster Write Credentials in CI:** The CI runner requires zero Kubernetes write credentials or `kubectl` cluster access, eliminating token leakage risks from CI logs.
+    * **Automated Drift Detection & Self-Healing:** The GitOps controller continuously detects out-of-band cluster modifications and reverts them to the declarative Git ground truth.
+    * **Auditable Git Rollbacks:** Rolling back production requires solely reverting a Git commit (`git revert`), generating an immutable, cryptographic audit log.
+
+#### Architecture D: Host SSH Execution Anti-Pattern (Strictly Prohibited)
+
+* **The Anti-Pattern:** Granting Jenkins SSH access to the bare-metal host (e.g. `ssh taxon-main "kubectl apply ..."`) or mounting the host Docker socket (`/var/run/docker.sock`) and host kubeconfig (`/root/.kube/config`).
+* **Why It Is Forbidden:**
+    * **Host Boundary Violation:** Bypasses Kubernetes RBAC and container cgroups isolation, exposing host filesystems (`/home/benni/`, `/mnt/storage/`, LUKS decryption keys) to container processes.
+    * **Privilege Escalation:** Any pipeline vulnerability (such as a malicious dependency running arbitrary code during test execution) yields immediate root access to the physical server.
+    * **Auditability Collapse:** Kubernetes API server audit logs attribute changes to the cluster administrator rather than the automated CI service identity.
+
+---
+
+### 5.3 Credential Isolation & SSH Key Segregation Principles
+
+A fundamental requirement of production systems engineering is strict segregation between human developer identities and automated machine credentials:
+
+#### The Committer Identity Key Anti-Pattern
+
+Human developers sign Git commits and authenticate SSH terminal sessions using dedicated asymmetric key pairs (e.g. `id_ed25519` or GPG hardware tokens). Storing or loading a personal developer key inside Jenkins or CI runners is strictly prohibited:
+
+* **Identity Spoofing Risk:** A pipeline script executing with a personal key can push arbitrary commits, create signed tags, or access third-party repositories under the developer's name, destroying cryptographic non-repudiation.
+* **Credential Blast Radius:** If CI job workspaces or diagnostic memory dumps are inspected, personal SSH keys can be extracted and used to access personal workstations or infrastructure.
+
+#### The Dedicated Machine Deploy Key Pattern
+
+When CI/CD pipelines require Git write access (e.g. pushing automated DVC lockfile updates or generated documentation):
+
+* **Dedicated Machine Identity (`jenkins-ci-hivemind`):** A distinct ED25519 key pair generated exclusively for the CI controller.
+* **Scoped Repository Permissions:** Configured in GitHub as a repository Deploy Key with restricted write access strictly limited to `taxon-vision-mlops`, without organization-wide or account-wide permissions.
+* **Fine-Grained GitHub App / PAT:** Alternatively, automated automation utilizes a GitHub Fine-Grained Personal Access Token with read/write access scoped exclusively to repository contents and pull requests, expiring on a mandatory 90-day rotation schedule.
+
+#### In-Cluster ServiceAccount Token Isolation
+
+For Kubernetes deployment interactions, the pipeline uses in-cluster bearer tokens minted dynamically by the Kubernetes `service-account-token` controller:
+
+* Tokens are bound to the specific `jenkins-agent` ServiceAccount in `jenkins-ci`.
+* Tokens expire automatically and are rotated by the Kubernetes control plane.
+* Network boundaries ensure the token can only communicate with `https://192.168.178.30:6443` and cannot authenticate against external cloud providers or host SSH daemons.
+
+---
+
+### 5.4 Kubernetes Cloud Configuration in Jenkins
 
 The Jenkins Kubernetes plugin manages agent pod lifecycles using the following configuration parameters:
 
@@ -417,8 +522,8 @@ The provisioned Kubernetes pod instantiates two containers sharing network and f
 * **Integration & Conformal Invariants:** Validates FastAPI service endpoints and evaluates mathematical error bounds for split conformal prediction (asserting empirical coverage $1 - \alpha \ge 0.90$).
 * **Documentation Strict Build:** Generates the OKF knowledge graph visualizer (`docs/viz.html`) and executes `zensical build --strict` to verify syntax and reference integrity (strict Zensical MkDocs compilation).
 * **Model Training & Checkpoint (GPU - develop & main):** When triggered by module changesets or manual parameter `RETRAIN_MODEL = true`, the stage defines an ephemeral GPU agent pod requesting `nvidia.com/gpu: 1`, securing 1 of the 4 NVIDIA time-slicing partitions on `hive-mind`. It connects to in-cluster SeaweedFS (`http://seaweedfs.taxon-vision.svc.cluster.local:8333`) to retrieve or cache stratified embedding partitions (`data/embeddings/*.pt`). It then executes the unified 7-stage DVC pipeline (`dvc repro`), training the head with Class-Balanced Loss (CBL) and Optuna Bayesian optimization when enabled (`TUNE_HYPERPARAMETERS=true`). It exports the dual-output ONNX graph, calibrates conformal prediction thresholds, runs the Pareto quantization benchmark, and pushes updated checkpoints to DagsHub S3 (`origin`).
-* **Deployment Rollout & Smoke Verification:** Injects SeaweedFS credentials, hydrates model checkpoints from DVC with a resilient fallback to the host volume tier, applies [`deploy/k8s/api-deployment.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml), triggers `kubectl rollout restart deployment/taxon-vision-api -n taxon-vision`, and validates health endpoints and Prometheus counters via [`scripts/ci/verify_deployment.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/ci/verify_deployment.sh).
-* **Workspace Cleanup (`cleanWs()`):** Wipes the temporary checkout directory before pod termination.
+* **Deployment Rollout & Smoke Verification:** Injects SeaweedFS credentials, hydrates model checkpoints from DVC with a resilient fallback to the host volume tier, applies [`deploy/k8s/api-deployment.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/api-deployment.yaml), triggers `kubectl rollout restart deployment/taxon-vision-serving -n taxon-vision`, and validates health endpoints and Prometheus counters via [`scripts/ci/verify_deployment.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/ci/verify_deployment.sh).
+* **Guarded Workspace Teardown (`cleanWs()`):** Checks `fileExists(workspace)` before calling `cleanWs(deleteDirs: true, notFailBuild: true)`, preventing fatal pipeline aborts when the workspace directory has already been cleaned or was not instantiated.
 
 ### 6.3 Root-Cause Analysis and Hardening of Deployment Checkpoint Hydration (Build #33)
 
@@ -433,6 +538,151 @@ The deployment stage was hardened against these failure modes:
 
 * **Dynamic Credential Provisioning:** The deployment script checks for the active existence of `service/seaweedfs` in namespace `taxon-vision` and dynamically injects `taxonadmin` access keys into the ephemeral `.dvc/config.local` prior to any S3 network calls.
 * **Resilient Dual-Remote Hydration with Host-Tier Fallback:** Rather than enforcing a brittle fail-fast checkout, DVC attempts hydration sequentially from `local-seaweedfs` and `origin` (DagsHub S3). If remote artifacts are absent (e.g. during a non-training documentation or configuration commit), the script gracefully emits a warning and falls back to existing model checkpoints already mounted from the host NVMe drive (`/var/lib/taxon-vision/checkpoints/`). This guarantees continuous zero-downtime rolling deployments while preserving release model consistency.
+
+### 6.4 Post-Mortem & Forensic Root-Cause Analysis: ConfigMap RBAC Forbidden in Deployment Stage (Build #65)
+
+During continuous integration Build #65 on branch `develop`, all static quality gates, linting, type checks, and unit tests completed with zero errors. However, the pipeline failed during the `Deploy to Kubernetes` stage upon executing `kubectl apply -f deploy/k8s/monitoring-prometheus-grafana.yaml`:
+
+```text
+21:04:42 + kubectl apply -f deploy/k8s/monitoring-prometheus-grafana.yaml -n taxon-vision
+21:04:42 Error from server (Forbidden): error when retrieving current configuration of:
+21:04:42 Resource: "/v1, Resource=configmaps", GroupVersionKind: "/v1, Kind=ConfigMap"
+21:04:42 Name: "prometheus-config", Namespace: "taxon-vision"
+21:04:42 from server for: "deploy/k8s/monitoring-prometheus-grafana.yaml":
+21:04:42 configmaps "prometheus-config" is forbidden: User "system:serviceaccount:jenkins-ci:jenkins-agent"
+21:04:42 cannot get resource "configmaps" in API group "" in the namespace "taxon-vision"
+```
+
+#### Forensic Root-Cause Analysis (Build #65)
+
+1. **Role Scope Drift:** The `jenkins-deployer-role` was authored during Day-0 bootstrap when continuous deployment managed solely the stateless inference service (`deploy/k8s/api-deployment.yaml`). At that time, granting permissions across `deployments` (apps API group) and `services`, `pods`, `events` (core API group) satisfied all deployment requirements.
+2. **Incremental Infrastructure Expansion:** Build #65 introduced declarative in-cluster observability (`deploy/k8s/monitoring-prometheus-grafana.yaml`), requiring ConfigMaps (`prometheus-config`, `grafana-datasources`) to mount scrape jobs and datasources dynamically. When `kubectl apply` performed its initial server-side `get` request to compute three-way strategic merge diffs, the Kubernetes API server rejected the call with HTTP 403 Forbidden because `configmaps` was missing from the `resources` whitelist.
+3. **Privilege Escalation Prevention Invariant:** Because Kubernetes RBAC prevents ServiceAccounts from granting themselves permissions exceeding their current scope, the `jenkins-agent` could not mutate its own role.
+
+#### Architectural Remediation & Hardening Implemented
+
+* **Declarative RBAC Expansion:** [`deploy/k8s/jenkins-agent-rbac.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/jenkins-agent-rbac.yaml) was updated to grant comprehensive management of:
+    * Core resources: `services`, `pods`, `pods/log`, `events`, `configmaps`, `secrets`, `persistentvolumeclaims`.
+    * Traefik resources (`traefik.io` API group): `ingressroutes`, `traefikservices`, `middlewares`.
+* **Out-of-Band Administrative Application:** An administrator with cluster-admin context applied the updated manifest directly to the k3s cluster (`kubectl apply -f deploy/k8s/jenkins-agent-rbac.yaml`), unblocking subsequent CI/CD executions without granting excessive host-level access.
+* **Strategic Evolution:** Evaluated the Namespaced Admin Pattern (binding native `ClusterRole/admin` inside `taxon-vision`) and the Enterprise GitOps Operator Pattern (ArgoCD / Flux) to permanently eliminate RBAC verb maintenance during service additions.
+
+### 6.5 Post-Mortem: Guarded Workspace Teardown & Image Pull Optimization (Build #71)
+
+During continuous integration Build #71, the pipeline passed static verification and began pod teardown, but aborted abruptly with a fatal Jenkins Declarative Post Actions error:
+
+```text
+Post Actions: error in 'cleanWs' step
+continuous-integration/jenkins/branch - The build of this commit was aborted
+```
+
+#### Forensic Root-Cause Analysis (Build #71)
+
+1. **Unconditional Workspace Cleanup Failure:** In Declarative Jenkins pipelines, the `post { always { cleanWs() } }` block executes regardless of build outcome. If a build is cancelled early by `disableConcurrentBuilds` or encounters an infrastructure timeout before the workspace directory is allocated or populated, `cleanWs()` attempts to traverse a non-existent filesystem path and throws an unhandled Java exception, failing an otherwise healthy build.
+2. **Container Registry Rate-Limiting:** Continuous build triggers with `imagePullPolicy: Always` forced the Kubernetes kubelet to repeatedly hit Docker Hub and GHCR on every ephemeral pod spawn, risking transient HTTP 429 rate-limiting.
+
+#### Architectural Remediation & Handover Architecture
+
+* **Guarded Post-Action Execution:** In `Jenkinsfile`, the post-action was hardened with a defensive file existence guard:
+
+    ```groovy
+    post {
+        always {
+            script {
+                if (fileExists(workspace)) {
+                    cleanWs(deleteDirs: true, notFailBuild: true)
+                }
+            }
+        }
+    }
+    ```
+
+* **Local Container Cache Pinning:** Pinned `imagePullPolicy: IfNotPresent` for the `ml-runner` container pod template in `Jenkinsfile`. Because CI agents run on the dedicated `hive-mind` worker node, warm container layers are preserved locally, cutting pod initialization time from 45s down to 3s.
+
+The diagram below illustrates the complete two-pod agent handover (CPU $\to$ GPU) and the guarded teardown lifecycle:
+
+```mermaid
+flowchart TD
+    Start["Git Push Event"] --> Webhook["Authenticated Cloudflare Webhook"]
+    Webhook --> J_Master["Jenkins Controller (hive-mind)"]
+
+    subgraph CPU_Pod["Ephemeral CPU Agent Pod (imagePullPolicy: IfNotPresent)"]
+        S1["1. Toolchain & Rattler Cache Mount"] --> S2["2. Static Quality (Ruff, MyPy, OKF)"]
+        S2 --> S3["3. Pytest Regression & Coverage (>= 80%)"]
+        S3 --> S4["4. Invariants & Conformal Bounds"]
+        S4 --> S5["5. Zensical Strict Docs Build"]
+    end
+
+    subgraph GPU_Pod["Dedicated GPU Agent Pod (nvidia.com/gpu: 1)"]
+        G1["Hydrate Checkpoints from DVC"] --> G2["DVC Repro: Feature Extraction & Head Training"]
+        G2 --> G3["INT8 ONNX Compilation & Conformal Calibration"]
+        G3 --> G4["DVC Push to SeaweedFS & DagsHub"]
+        G4 --> G5["Zero-Downtime Rolling Update (k3s)"]
+    end
+
+    subgraph Teardown["Defensive Post-Actions Pipeline"]
+        C1{"fileExists(workspace)?"}
+        C1 -- Yes --> C2["cleanWs(deleteDirs: true, notFailBuild: true)"]
+        C1 -- No --> C3["Skip cleanWs (Prevents Fatal Pipeline Abort)"]
+        C2 --> Terminate["Pod Deletion (podRetention: Never)"]
+        C3 --> Terminate
+    end
+
+    J_Master --> CPU_Pod
+    S5 --> GPU_Pod
+    GPU_Pod --> Teardown
+```
+
+### 6.6 Post-Mortem: Staging RBAC 403 Forbidden in Deployment Stage (Build #85)
+
+During continuous integration Build #85 on branch `develop`, all verification gates and unit tests succeeded cleanly. However, the deployment stage aborted abruptly when executing `kubectl apply -k deploy/k8s/overlays/staging`:
+
+```text
+Error from server (Forbidden): services is forbidden: User "system:serviceaccount:jenkins-ci:jenkins-agent" cannot get resource "services" in API group "" in the namespace "taxon-vision-staging"
+```
+
+#### Forensic Root-Cause Analysis (Build #85)
+
+1. **Namespace Boundary Violation:** When Step 10 introduced multi-tier Kustomize overlays, `develop` builds were configured to deploy to `namespace: taxon-vision-staging`. However, the existing `jenkins-deployer-role` and `RoleBinding` in [`deploy/k8s/jenkins-agent-rbac.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/jenkins-agent-rbac.yaml) were scoped strictly to `namespace: taxon-vision`.
+2. **Missing Port-Forward Permissions:** The verification harness [`scripts/ci/verify_deployment.sh`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/scripts/ci/verify_deployment.sh) establishes an ephemeral `kubectl port-forward` to probe liveness and readiness endpoints when ClusterIP or NodePort routes are unreachable from the workstation or CI agent. The role lacked `pods/portforward` verbs.
+
+#### Remediation: Cross-Namespace RBAC Expansion
+
+[`deploy/k8s/jenkins-agent-rbac.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/jenkins-agent-rbac.yaml) was expanded to provision symmetric roles and bindings across both `taxon-vision` and `taxon-vision-staging`:
+
+* Granted `get`, `list`, `watch`, `create`, `update`, `patch`, `delete` over core resources (`services`, `deployments`, `pods`, `pods/log`, `events`, `configmaps`, `secrets`).
+* Granted `pods/portforward` explicitly to support non-root smoke verification.
+* Granted Traefik custom resource permissions (`ingressroutes`, `traefikservices`, `middlewares` in group `traefik.io`).
+
+---
+
+### 6.7 Post-Mortem: GPU Scheduling Deadlock & Staging CPU Invariant (Build #86)
+
+During Build #86, the pipeline passed all static and unit tests and entered the `Model Training & Checkpoint (GPU)` stage. The stage spun with an active hourglass for 28+ minutes, reporting:
+
+```text
+'taxon-vision-mlops-develop-86-t71wn-vrhx2-165kc' is offline
+```
+
+#### Forensic Root-Cause Analysis (Build #86)
+
+1. **Exhaustion of Virtual GPU Slots:** The bare-metal host `hive-mind` partitions its NVIDIA GeForce RTX 5070 Ti into **exactly 4 virtual GPU slots** via NVIDIA time-slicing. At the time of execution:
+    * Slot 0 was held by the standing ARC runner pod (`arc-systems`).
+    * Slots 1 & 2 were held by the 2 production serving replicas (`taxon-vision`).
+    * Slot 3 was held by the newly deployed staging pod (`taxon-vision-staging`).
+    * **Total allocated: 4 / 4 slots.**
+2. **Scheduler Starvation:** When Jenkins requested a 5th GPU slot for the dynamic `jenkins-gpu-pod`, the Kubernetes scheduler blocked:
+
+   ```text
+   0/1 nodes are available: 1 Insufficient nvidia.com/gpu.
+   ```
+
+   The pod remained in `Pending`, the JNLP agent could not connect to Jenkins, and the pipeline stalled indefinitely.
+
+#### Remediation: CPU-Only Staging Discipline
+
+1. **Immediate Intervention:** Temporarily scaled the staging deployment to 0 replicas (`kubectl scale deployment taxon-vision-serving -n taxon-vision-staging --replicas=0`). The 4th slot was immediately released; the Jenkins GPU training pod scheduled instantly and finished model training.
+2. **Permanent Structural Fix:** Because our INT8-quantised ONNX serving hot path achieves sub-15ms latency on the Intel Core i7-14700K Performance cores (Rule 02), staging does not require GPU silicon. Removed `nvidia.com/gpu` from [`deploy/k8s/base/api-deployment.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/base/api-deployment.yaml) and kept it exclusively in [`deploy/k8s/overlays/production/patch-replicas.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/overlays/production/patch-replicas.yaml). Staging now executes purely on CPU, guaranteeing that the 4th GPU slot remains permanently unblocked for CI training jobs.
 
 ---
 
@@ -469,4 +719,4 @@ As outlined in [gpu_resource_scheduling.md](gpu_resource_scheduling.md) and [cur
 * **Stage 2 - Static Gates & Unit Testing (CPU):** Concurrent Ruff linting, MyPy static analysis, open-license audit, OKF validation, and pytest coverage execution.
 * **Stage 3 - Conformal Invariant Assertions (CPU):** Formally asserts that empirical coverage of Split Conformal Prediction satisfies $1 - \alpha \ge 0.95$ on holdout splits.
 * **Stage 4 - Train & Export (GPU via Time-Slicing):** The ephemeral GPU agent claims 1 of 4 NVIDIA time-slicing slots on `hive-mind` (`nvidia.com/gpu: 1`) and enforces `TAXON_CUDA_MEMORY_FRACTION=0.7` to prevent VRAM starvation. The stage executes S3 feature extraction (`taxon_vision.pipelines.extract_features`), trains the classification head with Optuna tuning (`taxon_vision.pipelines.train`), re-exports the ONNX graph, logs to DagsHub MLflow, and pushes model checkpoints to the DagsHub DVC remote.
-* **Stage 5 - Zero-Downtime Deploy (CPU):** Dispatches rolling update to k3s via `kubectl rollout restart deployment/taxon-vision-api -n taxon-vision`. In-flight queries continue uninterrupted until newly warmed ONNX pods clear readiness probes.
+* **Stage 5 - Zero-Downtime Deploy (CPU):** Dispatches rolling update to k3s via `kubectl rollout restart deployment/taxon-vision-serving -n taxon-vision`. In-flight queries continue uninterrupted until newly warmed ONNX pods clear readiness probes.

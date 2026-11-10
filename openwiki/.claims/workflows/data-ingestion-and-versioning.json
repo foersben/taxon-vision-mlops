@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:73e0b1f43c28351864214e79773775935c3e7b0f6754f7648b6fc88a5df841ff",
+  "pageVersion": "sha256:f0ad8bac8a55e183dc97c30fd9ba9a7b18961fd43ddb3501266f9915fccedee6",
   "claims": [
     {
       "id": "claim_187004f2f3f74a7bb362dbe6dd9fb50c",
-      "statement": "The `INatAPIClient` rate-limits requests to 60 per minute by awaiting an `asyncio.sleep` delay before querying the iNaturalist v1 `/observations` endpoint, filters exclusively for research-grade observations with photos, and upgrades photo thumbnail URLs from square to medium resolution.",
+      "statement": "The `INatAPIClient` rate-limits requests to 60 per minute using an asynchronous leaky-bucket rate limiter (`AsyncLimiter`) before querying the iNaturalist v1 `/observations` endpoint, filters exclusively for research-grade observations with photos, and upgrades photo thumbnail URLs from square to medium resolution.",
       "evidence": [
         {
-          "resource": "repo://src/taxon_vision/data/inat_client.py#L13-L99",
-          "version": "repo-lines-v1:sha256:0ce4172e06e78ae86cea73a7c5787971ed141219f96380dbaf31e604adef1d17:eyJzZWxlY3RlZExpbmVDb3VudCI6ODcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZiZTVmZGU4MTliZDEyZTNkZGE5MzE2YzJhMWM0OGUzODVkYTQxYmJjMzQwOTMzMjU1YWZhM2RkOTY2Y2ViZTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjViZTI3OWNhOTNjZDYzYzU3ZTEwMjMyNzEyYjEwZTgxNjdlNjVhMWQ3NWJjYjZlMmJlZDcxNmNiNzM2MDM0NjYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVhNzcwNmFlNzM4MjhhNmZkOTkzOWMyOWRjM2FhMDczYzk0YTdkYmJkODkyMTdkNDJjMWQ1NWM0MGYyZmQxYjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+          "resource": "repo://src/taxon_vision/data/inat_client.py#L13-L100",
+          "version": "repo-lines-v1:sha256:b69864a1dba69df77e5224adf15fbce47ad2d19b7020b0a854a9569c645c0bc0:eyJzZWxlY3RlZExpbmVDb3VudCI6ODgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZiZTVmZGU4MTliZDEyZTNkZGE5MzE2YzJhMWM0OGUzODVkYTQxYmJjMzQwOTMzMjU1YWZhM2RkOTY2Y2ViZTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1MDMyZTk2NGQwOTMyMzUxZTVkMTg1MjY5MjgxYjE3MWEzYTA5YjA4YjI4NmU2NjFlYTQ3MDMyM2M4MmViNGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ5N2RjNTYwYWU2ZGE3ZDBkMWRmMzRmOGE0NjE2ZDJlZDE4NjI1ZTJjNjZmZGJhY2Y2NDkwMDU5NzQ1OTlmMWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA3ZWY3NTgyOWM0NjhjZThkYzAwOGExMWQwZTA1OTk2YjJjM2UzYTMwMjIzMWYyZWFjNDMzOGJmMjIyZTUzYTkifQ"
         }
       ]
     },
@@ -17,12 +17,12 @@
       "statement": "The `LicenseFilter` validates citizen-science metadata against the `OpenLicense` enum to admit only CC0, CC-BY, and CC-BY-NC licenses, rejects direct hotlinks to `static.inaturalist.org` unless verified against an open dataset registry, and constructs immutable `AttributionRecord` instances retaining photographer attribution.",
       "evidence": [
         {
-          "resource": "repo://src/taxon_vision/data/license_filter.py#L12-L101",
-          "version": "repo-lines-v1:sha256:d3e56fd33d46f6622b1e15294b4591e2bad8e5ee9ae904cb98b3bb8622791a05:eyJzZWxlY3RlZExpbmVDb3VudCI6OTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA3ODMxMjQ3NmI2OWM4NDFmNWE1NDFlNjA5ZWIwOThlYmNjNzU5NzkwNGMyMThiNmRkODI5MWZkYWRjMWQ5YzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU5MDlhNTNhNjE4ZDAyOGUxZDMwMDBjMGE3YWJjZWVjYmU1ZmIzN2Y0ZTUxMWVmZTQ2NjQzZmFkNmU2Njg3MmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk1YTYyZTFjZmMyMzExNGYyMDQ4NTE0NmZkYjQwZTQxYzc2MTNhNWZkYzRjOGI2NmFiYTU3Y2RlYjY5ZTFlOTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+          "resource": "repo://src/taxon_vision/data/license_filter.py#L12-L99",
+          "version": "repo-lines-v1:sha256:5295ea5a75464db324ff1145b8d65a5e35c787b9ade00ba0e319b5e0fb047e30:eyJzZWxlY3RlZExpbmVDb3VudCI6ODgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA3ODMxMjQ3NmI2OWM4NDFmNWE1NDFlNjA5ZWIwOThlYmNjNzU5NzkwNGMyMThiNmRkODI5MWZkYWRjMWQ5YzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU5MDlhNTNhNjE4ZDAyOGUxZDMwMDBjMGE3YWJjZWVjYmU1ZmIzN2Y0ZTUxMWVmZTQ2NjQzZmFkNmU2Njg3MmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNhODA2OGY0M2Y3YWJjZGExMWNiYTE1YTZmNzgxOTcyNGU1ZjY1ZGZmYzA2ZThjNmY4MmEyYjdhYWNmMzM4YzMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         },
         {
-          "resource": "repo://src/taxon_vision/domain/license.py#L50-L87",
-          "version": "repo-lines-v1:sha256:cb037fc65f016dd4662d4a12ef02738b7109fb91dc1225f1d1d78a4a1071fcd3:eyJzZWxlY3RlZExpbmVDb3VudCI6MzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3NjU3Yjk2MjhmNzViYzBkYjAyYjg0OTA3OTliZGU2ZTZlNjM5NTkzOTJlMjVjYjNjYjU4N2Q4YzQzZGUxOTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY2NjdmZDE4ZjFmOGMyYzUxMzE3YThhNzM0NGI1ZjkzZGZmMDk3ZDhjMWI1OGQ5NTNkZjhkZjAyODViZTM5YTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVlYWJlZjFkNTE5ZGM0YzlmNDMwNjFiMGJjNDkzNDE2MWNkMzNhOWJmNmYyZWJiODg5YzgxYThhNjc4ZWU0NjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+          "resource": "repo://src/taxon_vision/domain/license.py#L49-L81",
+          "version": "repo-lines-v1:sha256:b7f380f6058e06d928ee6d27e1c9766c5895678e62d692f1adab72bb3b011575:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg3NjdhMmMyNzJiZGJlMGUxNjk1NmQ5OGVjYjU5YzhiZTVmZDgwOGE4MjUwYjMxZmM4ODlkZWQ3MjY1MzY0MGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY2NjdmZDE4ZjFmOGMyYzUxMzE3YThhNzM0NGI1ZjkzZGZmMDk3ZDhjMWI1OGQ5NTNkZjhkZjAyODViZTM5YTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjAyM2I2MGM0M2FmYmFmYTk0NzU0ODE3NDY3NWRkYjA5MWQzZDMyNWE5NTA3ODg2NmZhMTdjNjcxMjI0ZTc0YTQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         }
       ]
     },
@@ -31,12 +31,16 @@
       "statement": "The data ingestion and audit pipeline retrieves observation metadata across configured catalog taxa using `INatAPIClient` to produce `data/manifests/raw_manifest.parquet`, filters records through `LicenseFilter`, and writes compliant observation records to `data/manifests/dataset_manifest.parquet` using Polars.",
       "evidence": [
         {
-          "resource": "repo://dvc.yaml#L2-L13",
-          "version": "repo-lines-v1:sha256:c4c089d314b7d313c1c22778a1945a02af54b0120b22d46ab60485b448b0c754:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI5OWQ4MTEyZDA2MGJiNGRjODc2MzllY2IyYzA4OGFlNDYxYzcyNGU4YTA3NWJiOGZmMTgyMmMzODI4ZTQ2MWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFiN2UxMGIzMmVlZGVmNWY0MGJlODA2ZjIxNjJiYjBlYTE0YTk4NGE5ZGZlMDUyZTcxOTVmMTBlYjI4ZWQ4ZGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjoxLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU0YTVlZmRiMzZlMDAzYWY3NTQzNGQzOWZiNmRiYWY0ZGNjZjFkZTA5YTVmODc0ZTFmYzQ0NzA4Njc2ZWQyZmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEyZGEwZWI3OWM1OTk2NWM4ZDRlYjgyYjljMzc4ZTllNmVkMGI1MGE1YmNlMzMxMmZjYzVjZmMzZjBhYzcyNTUifQ"
+          "resource": "repo://dvc.yaml#L1-L32",
+          "version": "repo-lines-v1:sha256:ee492438d3cb21925e6ecf678979ef9a8054fdd7c1ea8b3c1022ea2443f6e656:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU0YTVlZmRiMzZlMDAzYWY3NTQzNGQzOWZiNmRiYWY0ZGNjZjFkZTA5YTVmODc0ZTFmYzQ0NzA4Njc2ZWQyZmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlZTE3NTI2NjA0NWRmNTVmMGQxZTFjOWIwNjg5NDc0NWM4NDAzYzRlZTJiNjEzYzJkYjA5N2QzNWEwY2I5MzEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI5MjNlZjM3YzkwZjNlYmM3MGU5OGVhYzIxZTE4NWQxMWYxYjMxMTI2MjE0ZjY3YzE1MDhkYmFlMmM5MGZmMjUifQ"
         },
         {
-          "resource": "repo://src/taxon_vision/pipelines/ingest.py#L24-L86",
-          "version": "repo-lines-v1:sha256:38891563728cb612913b6aa4f77d71c2e2dd6af4dd6d98425665066be7d37785:eyJzZWxlY3RlZExpbmVDb3VudCI6NjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY4ZmY0NTMxOGFlNTRiYWE5OTczMjQyOGFjOTIyYWUyMzAyNDdlMThlZTQ4ZjA0ODdmNmFiNzljOTNlYjJiODIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFhMDc1MjkyYjIzZjIzMDQ3ZWNjZDcwMzA2OThlNjI2NGZiODgxOGNiODk0ZjVjNzFkYjc5Yjc2MDNjYzQ3ZWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJhNzI4ZmFmNzQ4NGNlMThkOTZmOGVkNjc2OTU2YjRjM2I3OTk2YzNiNTlmZTU1Y2FkNTg3OGQyM2NjNDdlZTcifQ"
+          "resource": "repo://src/taxon_vision/pipelines/audit_license.py#L107-L165",
+          "version": "repo-lines-v1:sha256:3d6e7c7b7c1cc11c8a33b5a71df9984a88e8a50a6fa051e98af15d7f685ba1e5:eyJzZWxlY3RlZExpbmVDb3VudCI6NTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVjZmQ5MDhkY2FjZWM3ZDEzYWViZDk2NjdiNThiM2QwMGRiNTAzMTA3ZGEzZmU4YTk3MDc5MDY0N2IwYjNhOTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE2Y2E3N2ZhYzE1Y2Y1MDQ2YzZmNjMyYTljM2Y3Y2EzMGRlNzJhM2JkMzRhN2Q1NDY2YjI1ZGFjZjc0NzgwNDciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjljZmUwZTM4NDQ0MmNhZWE5MzRjMDM1MzVhZGJlMjljM2U1MzI2ODBjNGU1YmI1ODU1NjQ2NjQwMjQzZGIwMDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY3OGMyYzY3YzYwYzBlZmEwOGRkMzUyMzVhY2RjYWU2NDZmODQ5ZTVjOGI1NWRiNzc2YTdhNjZlZjgwNTNlNjkifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/pipelines/ingest.py#L65-L100",
+          "version": "repo-lines-v1:sha256:e427a635a00b8f972940b0b65d188aea3b5007c1d56ce8a75367de6869e968e6:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc0NjI2OTA2MTFhZTFjODBkOWU3ZjJmNjhkOTkzODU0MTA0YzE3MjcyNWUyNzk5MDU5YmY2NjFkMWUxMzMxZTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFlOTM1YTI1Yjc1OTM5YTNhMWYwZjhiOGQxN2QwNDdkM2UzMWFmNDA5NjlmNmE0NDBhMTFiYTFkNTRiMWRhNDIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg2M2QxZTJlOWRlNGUzOTU2MDI5NzlhNDg4MmRhOWM0YTE2NDdlNDMyNTU3N2U4ODAxMDA1ZjBhOThiNGMxODUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc1NjVhNzYwNzA2NGJkZmRkZmE5NWZkZjgzMmI0MDI0YTJkNGM4NGI5YmUzMzkyNGFmNjU3MmNmNzM4YzBmYWUifQ"
         }
       ]
     },
@@ -45,8 +49,12 @@
       "statement": "The `S3ImageStreamer` loads the Parquet manifest into memory and lazily yields RGB PIL Image objects directly from remote S3 URLs without local image disk persistence, supporting persistent single-connection sequential streaming and multithreaded concurrent streaming via a `ThreadPoolExecutor`.",
       "evidence": [
         {
-          "resource": "repo://src/taxon_vision/data/s3_streamer.py#L92-L216",
-          "version": "repo-lines-v1:sha256:2fc06dcc7a38907eaffa4cc90bc6731267d1bb238ec2010a2ee843c1ead1e887:eyJzZWxlY3RlZExpbmVDb3VudCI6MTI1LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI2NmU0MjY0ZDYzNWI3YWJlNTBmMmI3NzEzYzU4NjIxNTM5ODU4YWU3NjljNjhiMGE4ZDhjYTIzMTNiN2E1MjE4IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIwMWJhNDcxOWM4MGI2ZmU5MTFiMDkxYTdjMDUxMjRiNjRlZWVjZTk2NGUwOWMwNThlZjhmOTgwNWRhY2E1NDZiIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJiZTcxMGQzNmU0OTdhNWMwZjQ4MWJmNThiOThkNDI0MzFiZDQ2ZGEyZjljMmZhMmZiNmYyOWU2ZDVmZjlkNTZiIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJjMWNhNWU5NjhmNGY3MWUzMDVmNGI3MTc4OTBhYzMxNmE2YjdkZTJmMWY1MmEyNzJlNmNlZmU4ODM4ZGIyZmQyIn0"
+          "resource": "repo://src/taxon_vision/data/s3_streamer.py#L275-L350",
+          "version": "repo-lines-v1:sha256:93e48a162e5f57f5d383c2e73a19b7d0f61c81c4f7bc0d30b130d3fb9ccf2ceb:eyJzZWxlY3RlZExpbmVDb3VudCI6NzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMyOTIzOGUwM2U3MjdhYjMzNjAzNjNjM2IxMGI3NjY5MTg1ZjZlMzdmMWJhYTZjNTM0YjIzZmNiYjkzNjZiMzQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY1ZTI5MzQ3ZTU5MmEwNDEyNDUyNTM4ODJjY2M4YmZiMjcwNTlmNDg1ZmI0ZThmMThiMzgwNmYyN2YyMTJmYzgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjczM2U4NDg3Yzg1ZGZkY2Y5ZmE3YjkzYzc0NmM5NDYyNWFlNDdlMTIwYzc5N2U3OTFlNzM3ZjllZDdmZmM3M2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFmZmI0YTYyZmQyZWMyMDA0MDZiMWJhODNhMDU5MmU5ZGZkZTRlYjQ0YjI2NGY2MWEyYTY1MWY4NzAxOTQwOGIifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/data/s3_streamer.py#L355-L445",
+          "version": "repo-lines-v1:sha256:186b402b71b15a0162fea3f3484fa0fbdd3e4cfe6f84920f2e93390da0a7689c:eyJzZWxlY3RlZExpbmVDb3VudCI6OTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdkMTE4YjJjYjc5YWRiYWI0ZmFhYTU0YTg1NDcxNWQ0OTQ0Yzc5NWNkNThiYjViMjgxNzQ0NTNmMTgzNzc0ZWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZjOWYzOWNmZjk3ODQ1ZTEyOGIyMjExNDU1ZjJiMWQ0M2Q2NmMwMjkzNWU1YzIwMjNjMzc3ZWM0YTE3YTEwODYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMxY2E1ZTk2OGY0ZjcxZTMwNWY0YjcxNzg5MGFjMzE2YTZiN2RlMmYxZjUyYTI3MmU2Y2VmZTg4MzhkYjJmZDIifQ"
         }
       ]
     },
@@ -55,8 +63,8 @@
       "statement": "The `_prepare_balanced_manifest` function samples observation records evenly across unique taxa based on a per-taxon quota, optionally shuffling partitions with a deterministic random seed before concatenation, to eliminate taxon representation imbalance during streaming.",
       "evidence": [
         {
-          "resource": "repo://src/taxon_vision/data/s3_streamer.py#L21-L76",
-          "version": "repo-lines-v1:sha256:764d96b0d64abff094b1dcb7c2488314b39c771ccce48e728038968bc35c15fd:eyJzZWxlY3RlZExpbmVDb3VudCI6NTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU3MGUwNDkyZTE5MWQyM2RhOGQ0MDA4YjQwOWE1ODRiYzg2ZWFkMTIzMDU2MDg1ZTk0NmRjZmI1M2YwNTlhNTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhM2E5ZjkxNjJiZWUyNDgzMzZhYWEwZGE2N2Y4NTQxMDhiODU2NmI5OGIyZWM2NWRhMWFlMjdmYTgxYzg5NWYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYyMDA5N2U0YWE1MDA2OGJhMTU3ZjlhMjczOWZhZDg2OTk1ZTFlMGNkY2NkYWRjNTg5N2MyMDM0Yzc0ZDNlZmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjcwNzEyNGIzYzkxZjJiZjBhNzA3MWFmNzQ4YjczNjJkOTc5MTQ2ODkzOWZmZTRhMjZlN2MwMDU2OGQ4YTZhZjUifQ"
+          "resource": "repo://src/taxon_vision/data/s3_streamer.py#L67-L91",
+          "version": "repo-lines-v1:sha256:74099418b32c02aa2e13414f459d392802c1e2b55f50d50acf59a032536322e1:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU3MGUwNDkyZTE5MWQyM2RhOGQ0MDA4YjQwOWE1ODRiYzg2ZWFkMTIzMDU2MDg1ZTk0NmRjZmI1M2YwNTlhNTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdmOTkxMDI3ZWZlMmM2OWE2NDkxOTEzMWZlNzI0NzQ1ODAzY2NjMDI4MzI2ZGNmMDhkMjdhODJjNTMwMTg4ZDIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhlMTAyYTE5YmE2NTQwZmFhMjNhMTQ4NTZkYmM0MTMyZTQ5MjFkYjA4OWM1NjA5NThjZGQ2ZDlkYTAwZjkyODYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI5ODE5MjYxNTg0YjhiODQxMzEzYmFmN2QzZWExNTg2ZmEyYzY5MDA4ZWY1N2Q2MTM2N2RhMjFhZjY2M2E0YmEifQ"
         }
       ]
     },
@@ -65,30 +73,38 @@
       "statement": "In the feature extraction pipeline, `build_taxon_index_map` projects external iNaturalist taxon IDs into dense zero-indexed class indices, and `create_stratified_embedding_split` partitions representations into four stratified splits (train, validation, calibration, test) saved as discrete PyTorch tensor files while computing empirical per-class sample frequencies for Class-Balanced Loss weighting.",
       "evidence": [
         {
-          "resource": "repo://src/taxon_vision/pipelines/extract_features.py#L27-L59",
-          "version": "repo-lines-v1:sha256:0cfd9cdfa4eb19b5a22f08f391ca8dc7c2c61c80f2ad96fa3800445463162793:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhlMGUwNTUyZTcyMTExMWYzNjViMDA5ZjQ2YmE2MmQ2ZGMwMTZiY2MzOTkzZDUzMWIwODQ4ZDBjZWUwMWQwMDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkMTk5ZjkxZDU2ODgxNjRkOTg2ODYzMjUzNjcwNDEyZGI1MjljZDM1MGVhZjA2NTYyMjEyZGVmZmUwYTgwMGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYyMDA5N2U0YWE1MDA2OGJhMTU3ZjlhMjczOWZhZDg2OTk1ZTFlMGNkY2NkYWRjNTg5N2MyMDM0Yzc0ZDNlZmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjcwY2UzZjI0YWI0N2MyZjVhOWQzMzdmMzc3ZWQ4NTczZmE1NjU4NDA3NjQwMmYxYWYwNTRhM2RlZDYxOTQ2MmYifQ"
+          "resource": "repo://src/taxon_vision/pipelines/extract_features.py#L226-L252",
+          "version": "repo-lines-v1:sha256:14063a50d3c5e8e97bb69ff687e653911182d9517181199662c3f092ef23ef4d:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIyZGYwOWI2NzU3NjgwODRiMGFkZWViMzI4MjkzOGE5OWNiYjZmMWUxZjllNWJhYTQ2YmM1ZGUyZGY5NGUyYjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM2ZDU2ODYwNGIyNTEyZWQwMjU5MzJiZTVjODA2Mzc3MDZiNWRlNGU3ZTMxYTdmZGM3ZWVkMTUxMjI4NzJhNTkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkxZDU1MzdlYjExOWQzN2Y0YWFkOWNkZjQ3YzEwY2Y4ZTI4Y2U1NTQ2ZDYyMzYxZGNmNDU0MGE5NjQxMTQwZDYifQ"
         },
         {
-          "resource": "repo://src/taxon_vision/pipelines/extract_features.py#L327-L373",
-          "version": "repo-lines-v1:sha256:ccca16f0194e9b778ed171b0afee09f16cbd2ed1013acb3b7838fb10ca2e75ba:eyJzZWxlY3RlZExpbmVDb3VudCI6NDcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFiMzFiYTg0YmU0NDU3ZjJkODY0MzdhNDBkMzI3NmZjYTVhYjI0NGJkMDRlNzQ4ZGNkNGMyZDY5N2ZlNWJhYjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwYzFmMTg4ZjE0MmVkN2E4MjQ2ODBiMjA3MTcyYzU1MTliYzYxNGE0OGZkYTdjZjE2N2VkYjhkZGY3OTk1NmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM1NmZkYzQ2MzVjYzZjNTQyODllOTAxYTdlNzZhNWE5NzNjNjAwZWJiNmQ0YjdjNjM0MTU1YmUwNWJmM2Y2ZDMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU4YTZjZTAxODMwMDFlNGNiYWQ4MTc4YmZkYTVmYWUxZDdjMWRjMmNkM2VmMDkxMDk3MTI1NTlkOTJhMmM5YzAifQ"
+          "resource": "repo://src/taxon_vision/pipelines/extract_features.py#L469-L538",
+          "version": "repo-lines-v1:sha256:0fb8860093174cb2f47028f63e64a6385ee116a61d50a1c13af0ebff424d72df:eyJzZWxlY3RlZExpbmVDb3VudCI6NzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFiMzFiYTg0YmU0NDU3ZjJkODY0MzdhNDBkMzI3NmZjYTVhYjI0NGJkMDRlNzQ4ZGNkNGMyZDY5N2ZlNWJhYjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwYzFmMTg4ZjE0MmVkN2E4MjQ2ODBiMjA3MTcyYzU1MTliYzYxNGE0OGZkYTdjZjE2N2VkYjhkZGY3OTk1NmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNmYzA3MWY5NGMxMzNjODA5N2M4ZjljZDI2NjkxNDQzZDNhZjgxNWU4NTIxZWJlZDM1YTA1ZDAxNzFkYzhhNTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU4YTZjZTAxODMwMDFlNGNiYWQ4MTc4YmZkYTVmYWUxZDdjMWRjMmNkM2VmMDkxMDk3MTI1NTlkOTJhMmM5YzAifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/pipelines/extract_features.py#L698-L733",
+          "version": "repo-lines-v1:sha256:570c3e2fbd7a0d55a34a19f79aa463eca12dbabcdc5127dd3be3f703dadb93e1:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc4NGJhNzBlNjI4OTZjNjQ0MmY5NjcwNWI2MmQ5MWY4Zjk4NmQ1MTRjMDY1Mzk2MzY0Zjc4OWQ2YjMyYzUzNTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVmYzg2MWNlMzkzNjJkZjcwMGEzNzZlYmNhOTI0MTBiOWY3OWMzMzE3NDYwZjRhM2I3NWNkOGEwNmVlYWM2NzQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE2ZDdiMGM1Zjg5ZTgzOTdlMDJiOWVjMDhlNTBmNDM4ZTczNmRhZDFiZjlkMTUxNDk0MDgwYzE4MjdjMjY0MTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFjM2JhNGNmZjM1N2Q4YWM3NjhkOGI2ZTNlZTg0NTI4OTEyNmQyYmJhMDA0MjIzYjg0Y2ZmOWE3M2MxNDc4OGIifQ"
         }
       ]
     },
     {
       "id": "claim_791bbad5364848e9af9d87659ffe9d6c",
-      "statement": "The DVC pipeline stages `ingest` and `audit_license` in `dvc.yaml` track ingestion and audit scripts, client dependencies, and parameters from root `params.yaml`, generating `data/manifests/raw_manifest.parquet` and `data/manifests/dataset_manifest.parquet` whose hashes recorded in `dvc.lock` are tracked for end-to-end dataset-to-checkpoint lineage.",
+      "statement": "The DVC pipeline stages `ingestion` and `audit_license` in `dvc.yaml` track ingestion and audit scripts, client dependencies, and parameters from root `params.yaml`, generating `data/manifests/raw_manifest.parquet` and `data/manifests/dataset_manifest.parquet` whose hashes recorded in `dvc.lock` are tracked for end-to-end dataset-to-checkpoint lineage.",
       "evidence": [
         {
-          "resource": "repo://dvc.lock#L1-L30",
-          "version": "repo-lines-v1:sha256:9e2e5978e3ea4ec2ff0745311131fb37ddf166fa7362784000df9705705cdba8:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNiOTJjMGE1YTM4MTMwYTE3ZmQyMzk2YzY0ZDM4ZmViN2FlNDIxNmNjODgxYWE5ODgzMDAzODA1N2ZhNTQxNDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNmNWNkNTBjYTI2NzZkODhkMWY1NzgwZTBiNDZlODljNzY2ZjE4ZGNkYmU3NDExNjJlMGM2NzMzOTE0MGFmZmEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM0NzgxYjhiNjQ3ZTVjNGVjMDViZDkxOTQ5MWU5YTllZGUxYzAwMTM5OWI2YTAwNzQ2MGI1MGQ0OTI4NzgzNDAifQ"
+          "resource": "repo://dvc.lock#L1-L68",
+          "version": "repo-lines-v1:sha256:ff17edaa5fcfca6a7c85e8c7b9b9916e82fbc225e57bd69fe7099e4d2a528475:eyJzZWxlY3RlZExpbmVDb3VudCI6NjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNiOTJjMGE1YTM4MTMwYTE3ZmQyMzk2YzY0ZDM4ZmViN2FlNDIxNmNjODgxYWE5ODgzMDAzODA1N2ZhNTQxNDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRlNTcwYmQwOGFjOWYyZWUyYTVmMzYwYTA5ZmFlM2NiOWJmOThhYjE1OTg0OTFmZTE3ZmY0ODJiODlmNWQ0OWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI2MjZlNDRjMzA2YmI5N2JiYmUwNDJiNjEzZmFhNzQ1OThkNWY2YzkyMTRlNGUzN2IxZTU1YmI1ZjI1OGM5NjcifQ"
         },
         {
-          "resource": "repo://dvc.yaml#L1-L13",
-          "version": "repo-lines-v1:sha256:9c9ca7b04d779500d67253e56dba4fce931cb8c8e3b352b8901d149690f3e20a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU0YTVlZmRiMzZlMDAzYWY3NTQzNGQzOWZiNmRiYWY0ZGNjZjFkZTA5YTVmODc0ZTFmYzQ0NzA4Njc2ZWQyZmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFiN2UxMGIzMmVlZGVmNWY0MGJlODA2ZjIxNjJiYjBlYTE0YTk4NGE5ZGZlMDUyZTcxOTVmMTBlYjI4ZWQ4ZGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEyZGEwZWI3OWM1OTk2NWM4ZDRlYjgyYjljMzc4ZTllNmVkMGI1MGE1YmNlMzMxMmZjYzVjZmMzZjBhYzcyNTUifQ"
+          "resource": "repo://dvc.yaml#L1-L32",
+          "version": "repo-lines-v1:sha256:ee492438d3cb21925e6ecf678979ef9a8054fdd7c1ea8b3c1022ea2443f6e656:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU0YTVlZmRiMzZlMDAzYWY3NTQzNGQzOWZiNmRiYWY0ZGNjZjFkZTA5YTVmODc0ZTFmYzQ0NzA4Njc2ZWQyZmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlZTE3NTI2NjA0NWRmNTVmMGQxZTFjOWIwNjg5NDc0NWM4NDAzYzRlZTJiNjEzYzJkYjA5N2QzNWEwY2I5MzEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI5MjNlZjM3YzkwZjNlYmM3MGU5OGVhYzIxZTE4NWQxMWYxYjMxMTI2MjE0ZjY3YzE1MDhkYmFlMmM5MGZmMjUifQ"
         },
         {
-          "resource": "repo://src/taxon_vision/models/training/tracking.py#L27-L54",
-          "version": "repo-lines-v1:sha256:3beba604ccdaa66abca482dfe6348b05af19f47e432c8c9d18f01c0f63ac3c0c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc4MGJjY2Q2OTdlMTQ1OGNjYjcyNWU2OGUzOGYxZjlhYTAwMmNlYWI2NmQ3NWM2ODEwZWEzZjQ3ODE0MDg5MGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFjZDcwYjg0YjYzMjEwOTg4NWNmNzhhNzU4NTQwNzRhMGYyNjA2NDE2ZWE1ODY0ZDhmM2E0OTk2ODFlMzMyMzEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNkNGExZDNiNzc3ZmIzY2Y0NGNmYmEyOTE2YWQ3OWM1MWQ3OWU3YjBhOGJkOTkxM2E4YTczYWI4ZWM0YTljZjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYzZTJhZWZhY2IxZWNjZDZmZWZmN2NiNzI0MDc3Zjc1OWNlY2Q2Y2U5ZDBhNjdkNDA0NTRlNTlhMTc0MDg5MDMifQ"
+          "resource": "repo://src/taxon_vision/models/training/dataset.py#L21-L75",
+          "version": "repo-lines-v1:sha256:27c4c61b1366a5c2831a4304058e4c170909d91f2ea6c8e1ddf9f262da3b3b78:eyJzZWxlY3RlZExpbmVDb3VudCI6NTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM5OWNjZTdlMDNlMWE4MjUxY2VhYTJhYWE0OWU2Y2I1MDYxZDVmNDhkOTM1YmZkZTRlM2JlYTUwODMxZmNmYWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYyZGI3NjcyMjNjZTM2YmViZGMyOTA2NWRmOWM0ZjdlMGFjYjBmOTU0NjU0ZmE4ZmQ3OGEwMWRjNjQ1NGFkNzEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYyMDA5N2U0YWE1MDA2OGJhMTU3ZjlhMjczOWZhZDg2OTk1ZTFlMGNkY2NkYWRjNTg5N2MyMDM0Yzc0ZDNlZmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjczZTlhM2IwNWEyNWRiYTYyNTc0MjdlNzNkMjM0NjJkMjliMjZlZjY0ZDg4YTY5MDhiZGIyYTFlYTFjNmUxODIifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/models/training/tracking.py#L284-L290",
+          "version": "repo-lines-v1:sha256:8b8dc9efe8669883947d7cab964e23f8daac2605fd489cd7c419f320b8768c45:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiM2FjYjdjOWEwYjI5NjRlZDViYTc1MDc3Y2IwYmVhMTE1YTllNTQ1NjExMTllNDM3YzEwMzkzZDI2Y2YyNWFhOCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzU4Yzg2Y2EyNDIwY2EwYWZhY2ZlM2RkMmI4ZDFiYTM4MzA4MDlkYzlhMzNjMGI0N2I3MzBkYTVhZmQyYzk2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMmU3ODI3ZWUxNGQwNjE2YmMzYzg2MTBkOWZjNjVmNmE3NTFjZWE3NGIwNTI3OWYwMGVjMjM3ZTZmNjM2ZDg4OCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNTJhYzNiNmIyYjhiMzBkOWIyNTE1OTI5ZDZlZGFiMDBjOGZjNDk3NzkxMzkwYmRmNzUwM2ZjMWEzMDQ3MWJhNiJ9"
         }
       ]
     },
@@ -97,18 +113,38 @@
       "statement": "DVC remote storage is configured to synchronize with DagsHub's S3-compatible backend (`s3://dvc`), where the Justfile recipes `dvc-push` and `dvc-pull` dynamically retrieve the access token from the OS Secret Service via `secret-tool` and export it in-memory to AWS credentials during execution.",
       "evidence": [
         {
-          "resource": "repo://.dvc/config#L1-L5",
-          "version": "repo-lines-v1:sha256:e134dae6c29e094dac374ec90a1c140d5e222b8594b909de5068a4f29655c5d6:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzRkOTJkMmZjODBmYjhhZmNlNzI0NTQxOWE2MTY1OWVkNjRkZjIzMTQzOWYxZDM3ZmUyYzM0NDlkZDJjNDYyNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjNlMjVjNTAzYjQyOTczZmViNTY0OTBmNjgyNzRkNjBlYjg1MDg2NzY2M2U2YzBlNjNjYTE0NTE0ZTBmZTM4OSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+          "resource": "repo://.dvc/config#L1-L8",
+          "version": "repo-lines-v1:sha256:9aeefdd1084397c2d1fcf49661556bb24dc0fc444350bf5543767bd2f2ed6390:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzRkOTJkMmZjODBmYjhhZmNlNzI0NTQxOWE2MTY1OWVkNjRkZjIzMTQzOWYxZDM3ZmUyYzM0NDlkZDJjNDYyNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiY2MxMDI1OTJlOGU2ZDU2YjEyNmNmNmQ5Y2RjODUyZTcwODY1YjlkNjM5YWJiM2E2MDMwNDIzNGVhZGY1ZTdhZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
         },
         {
-          "resource": "repo://Justfile#L180-L201",
-          "version": "repo-lines-v1:sha256:66893330d11a80caee9b89519079ed7175a14733fbaa3b93e2d54ec34a1b6b12:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc0MTBjMjVlNzM4ZDQzOTdhOGY0MDNiZTQyOTQwODZlZWZjNDdlOTFhZjAxZjExZjdmNjZiMDBjOTllODBlZmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRjZjUxNmJiYTgyOGY3YTM3ZTA4Y2Q4YWI1YjdkZGQ4ODg5M2EyZmQ0NGY3Zjc3M2ZjMmIyZWQ4NGNkMTUxN2UiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjMxOWM0YTM4MTk3YjRmYTZhY2E1MzU0MDYwMTEzMDk5YzBiYTIwY2FkZDcyZTNiMDZkNTdlYjFkZGIxMjViMDcifQ"
+          "resource": "repo://Justfile#L243-L270",
+          "version": "repo-lines-v1:sha256:40da01d6aa22f67082c45aaba4fa3b2852b014098b5f9332cc4d7e07f0eceaf2:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYyODU4YzUzNThhZDc3NWJlZWJmODEyOGVhYTU1ZmM1NzQyNTA5NTZhYTVhNDI0MjcyMTRkNTZkODliM2JkZDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJlY2IzODFhYjc5MmQ4MjNmMDEzZjgyYzcwNjdmY2YwNjE0NTZjY2I2ODU2ZTJmYTNkMzZkNDA2ODZiZjhlYjYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI4Mjc1ZTNhZjQ5Nzk4ZGVlNmU5MzAxMjNiMzVhZmRkNDJlZDAxYTdhYWM4ZjZmMjJkNjZmODM3NjQzMWVhYTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJiNGYzYWI1ZTA1YmRhNmUxZDEwYzY3ZDE3YWFhNThjZjhmYzFjYWY4OGRhYjdmN2QyYzJlYWJkY2JmYjZkZDcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c3a078fcd3244701aab72f05f2ea4b0a",
+      "statement": "The `merge_feedback_to_manifest` function parses expert triage annotations from Label Studio, resolves taxon identifiers against `config/taxa_catalog.yaml`, excludes out-of-distribution specimens, validates licensing and attribution compliance, deduplicates observation UUIDs, and atomically updates `data/manifests/dataset_manifest.parquet`.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/active_learning/feedback.py#L265-L333",
+          "version": "repo-lines-v1:sha256:9f2c2712bdc279d3979f85c5ad4af8263bdf98d1c3a658e5876739c465ebddc4:eyJzZWxlY3RlZExpbmVDb3VudCI6NjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg5MmIxNzNlMDkyYzNlYTlkYTZmNzMzMjg5YjViODIwODhlNGJhZjI0ZWFiMDc1ZDBiZTU3MDNlYTFlZDgxMDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwYzFmMTg4ZjE0MmVkN2E4MjQ2ODBiMjA3MTcyYzU1MTliYzYxNGE0OGZkYTdjZjE2N2VkYjhkZGY3OTk1NmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM5ZWZkOWUxNzJlNTE2NDhjYzY1N2RiZWEwNDYxM2ZiNzc5M2Q2ZjZjYmViOTIyZjE2YWVkYTZmZDRhMTlmNTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_86cb52efd3f245419d49689eefce97c3",
+      "statement": "The `create_streaming_http_client` factory provisions a persistent `httpx.Client` with bounded connection pool capacity, idle keep-alive preservation, and automatic retry with exponential backoff on transient 429 and 5xx HTTP errors during S3 image streaming.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/data/s3_streamer.py#L115-L195",
+          "version": "repo-lines-v1:sha256:8616dfae6fc99a47207a554e5ae09a53d3637c3b83095f8d9f34cdeb50a01bf0:eyJzZWxlY3RlZExpbmVDb3VudCI6ODEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1ZDQ4MzI2Y2Y3NzE0ZjM1NzJlNTY4ZjRmNGQwZGU3N2U3M2M4MWU3MWM5MTA4YjBkNDZmNTZhZjUzZjYxNTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImEwNTM5NGY5NWU3OGE0MTY1NmJiNjk1YzhlMjBjMmJkZmMxODAwNGNiNmQzMTRmNjIzMjhjNTk1MjZkZWIyYjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA0ZWY5ODk4ZDBlOGI3ZWI1Zjk1YjlkYTljYTcwODA0MzQ1NzE3YTE4NWUyMmMyNmE5YzJhZTA0ZWQ3ZTE5NjAifQ"
         }
       ]
     }
   ],
   "verification": {
     "by": "openwiki/0.7.2",
-    "at": "2026-10-15T19:46:36.219Z"
+    "at": "2026-11-08T17:07:25.915Z"
   }
 }

@@ -35,17 +35,9 @@ _setup-core:
 [private]
 _setup-scratch:
 	@echo "==> Configuring scratch experimentation repository..."
-	@mkdir -p scratch/notebooks
-	@if [ ! -d "scratch/.git" ]; then \
-		git -C scratch init; \
-		printf "# TaxonVision Scratch & Experimentation\n\nLocal isolated workspace for interactive notebooks.\n" > scratch/README.md; \
-		printf ".ipynb_checkpoints/\n__pycache__/\n*.pyc\n" > scratch/.gitignore; \
-		echo "*.ipynb filter=nbstripout" > scratch/.gitattributes; \
-		git -C scratch config filter.nbstripout.clean "pixi run -e dev nbstripout"; \
-		git -C scratch config filter.nbstripout.smudge cat; \
-	fi
+	@mkdir -p scripts/scratch/notebooks
 	@pixi run --frozen -e dev python -m ipykernel install --user --name=taxon-scratch --display-name="TaxonVision (Scratch)"
-	@echo "==> Scratch environment ready at ./scratch. Launch with: just lab"
+	@echo "==> Scratch environment ready at ./scripts/scratch. Launch with: just lab"
 
 # Enter activated Pixi development shell
 [group("setup")]
@@ -86,10 +78,20 @@ lint-markdown:
 validate-okf:
 	pixi run --frozen -e dev python scripts/governance/validate_okf.py
 
-# Verify and fix Markdown Rule 04 formatting invariants
+# Verify AST code invariants (dynamic reflection, arity <= 4, eager imports)
+[group("quality")]
+check-invariants:
+	pixi run --frozen -e dev python scripts/governance/verify_code_invariants.py
+
+# Verify and fix Markdown typography and layout formatting invariants
 [group("quality")]
 lint-md:
 	pixi run --frozen -e dev python scripts/governance/verify_markdown_rules.py --fix
+
+# Verify hardware specification invariants across documentation and LaTeX
+[group("quality")]
+check-hardware:
+	pixi run --frozen -e dev python scripts/governance/verify_hardware_invariants.py
 
 # ── Testing ─────────────────────────────────────────────────────────────────
 
@@ -145,13 +147,18 @@ verify-contracts:
 visualize-dag:
 	pixi run --frozen -e ci-dev dvc dag --mermaid
 
+# Render visual Airflow DAG topology and task hierarchy (pass DAG ID or leave empty for all)
+[group("mlops")]
+airflow-dag dag="":
+	pixi run --frozen -e dev python scripts/maintenance/visualize_airflow_dag.py {{dag}}
+
 # Micro-canary end-to-end pipeline verification (tests ONNX export, INT8 quantization, and conformal calibration offline)
 [group("testing")]
 test-canary:
 	@echo ">>> Running offline micro-canary verification..."
 	TAXON_ALLOW_UNTRAINED_FALLBACK=true pixi run --frozen -e ci-dev pytest tests/integration/ tests/invariants/ -v -o "addopts="
 
-# ── MLOps & Pipelines ───────────────────────────────────────────────────────
+# MLOps & Pipelines ───────────────────────────────────────────────────────
 
 # Stream sample image batch from S3 into local cache for inspection
 [group("mlops")]
@@ -198,15 +205,31 @@ calibrate:
 pareto:
 	pixi run --frozen -e dev python -m taxon_vision.pipelines.evaluate
 
-# Run CLI prediction script on an observation image
+# Run CLI prediction script on an observation image (downloads samples if absent)
 [group("mlops")]
 predict image="data/sample/406185885_taxon_47120.jpg":
+	@if [ ! -f "{{image}}" ]; then \
+		echo ">>> Sample image {{image}} not found; downloading verified sample observations..."; \
+		just download-samples; \
+	fi
 	pixi run --frozen -e dev python -m taxon_vision.inference.cli {{image}}
 
 # Download verified open-license sample images for all 10 catalog taxa from iNaturalist
 [group("mlops")]
 download-samples per_taxon="1":
 	pixi run --frozen -e dev python scripts/data/download_samples.py --per-taxon {{per_taxon}}
+
+# Compares the DVC workspace status to dvc.lock or remote (token req.)
+[group("mlops")]
+dvc-status cloud="":
+	@if [ "{{cloud}}" = "cloud" ]; then \
+		TOKEN="${DAGSHUB_TOKEN:-$(secret-tool lookup Title DagsHub 2>/dev/null || secret-tool lookup service dagshub 2>/dev/null || true)}"; \
+		[ -n "$TOKEN" ] || { echo "No DagsHub token found." >&2; exit 1; }; \
+		AWS_ACCESS_KEY_ID="$TOKEN" AWS_SECRET_ACCESS_KEY="$TOKEN" \
+		pixi run --frozen -e dev dvc status --cloud; \
+	else \
+		pixi run --frozen -e dev dvc status; \
+	fi
 
 # Push tracked datasets & models to DagsHub or local remote
 [group("mlops")]
@@ -221,14 +244,22 @@ dvc-push remote="origin":
 
 # Pull tracked datasets & models from DagsHub or local remote
 [group("mlops")]
-dvc-pull remote="origin":
-	@TOKEN=$(secret-tool lookup Title DagsHub 2>/dev/null || secret-tool lookup service dagshub 2>/dev/null); \
-	if [ -z "$TOKEN" ] && [ "{{remote}}" = "origin" ]; then \
-		echo "❌ Error: KeePassXC is locked or DagsHub token not found in Secret Service." >&2; \
-		exit 1; \
-	fi; \
-	AWS_ACCESS_KEY_ID="$TOKEN" AWS_SECRET_ACCESS_KEY="$TOKEN" \
-	pixi run --frozen -e dev dvc pull -r {{remote}}
+dvc-pull remote="origin" force="":
+	@FORCE_FLAG=""; \
+	case "{{force}}" in \
+		"") ;; \
+		force|--force) FORCE_FLAG="--force" ;; \
+		*) echo "Unknown option '{{force}}' (use: force)" >&2; exit 2 ;; \
+	esac; \
+	TOKEN="${DAGSHUB_TOKEN:-$(secret-tool lookup Title DagsHub 2>/dev/null || secret-tool lookup service dagshub 2>/dev/null || true)}"; \
+	if [ -n "$TOKEN" ]; then \
+		AWS_ACCESS_KEY_ID="$TOKEN" AWS_SECRET_ACCESS_KEY="$TOKEN" \
+		pixi run --frozen -e dev dvc pull -r {{remote}} $FORCE_FLAG; \
+	else \
+		echo "No DagsHub token found in environment or Secret Service; attempting anonymous pull..." >&2; \
+		pixi run --frozen -e dev dvc pull -r {{remote}} $FORCE_FLAG || { \
+			echo "Pull failed. Provide DAGSHUB_TOKEN or store the token in KeePassXC." >&2; exit 1; }; \
+	fi
 
 # Display DVC pipeline Directed Acyclic Graph
 [group("mlops")]
@@ -239,6 +270,37 @@ dvc-dag:
 [group("mlops")]
 dvc-repro:
 	pixi run --frozen -e dev dvc repro
+
+# Kill any lingering local processes holding ports 5000 or 5001
+[group("mlops")]
+mlflow-kill:
+    @fuser -k 5000/tcp 5001/tcp 2>/dev/null || true
+
+# Start local MLflow 3.x UI against the SQLite fallback database (port 5000)
+[group("mlops")]
+mlflow-ui port="5000":
+    @mkdir -p data/mlflow/artifacts
+    pixi run --frozen -e dev mlflow ui --backend-store-uri sqlite:///data/mlflow/mlflow.db --default-artifact-root ./data/mlflow/artifacts --port {{port}}
+
+# Clean the local SQLite MLflow store for a fresh offline baseline
+[group("mlops")]
+mlflow-clean-sqlite: mlflow-kill
+    rm -rf data/mlflow/mlflow.db data/mlflow/artifacts
+    @mkdir -p data/mlflow/artifacts
+
+# Start the containerised MLflow 3.x stack (PostgreSQL + SeaweedFS + MLflow Server)
+[group("mlops")]
+mlflow-up: mlflow-kill
+    docker compose up -d postgres seaweedfs mlflow-server
+
+# Run the ephemeral pipeline container in Dev mode (with bind mounts) or Prod mode
+[group("mlops")]
+pipeline-run mode="dev":
+    @if [ "{{mode}}" = "prod" ]; then \
+        docker compose -f docker-compose.yml -f deploy/compose/docker-compose.prod.yml run --rm pipeline-runner; \
+    else \
+        docker compose -f docker-compose.yml -f deploy/compose/docker-compose.dev.yml run --rm pipeline-runner; \
+    fi
 
 # ── Serving & Web UI ────────────────────────────────────────────────────────
 
@@ -251,6 +313,38 @@ run-api:
 [group("app")]
 run:
 	@just run-api
+
+# Launch complete multi-service microservice stack via Docker Compose in production mode
+[group("app")]
+up:
+	docker compose up -d --build
+
+# Launch complete multi-service microservice stack in development mode with host volume mounts
+[group("app")]
+up-dev:
+	docker compose -f docker-compose.yml -f deploy/compose/docker-compose.dev.yml up -d --build
+
+# Stop multi-service Docker Compose microservices
+[group("app")]
+down:
+	docker compose down
+
+# Stop and purge all containers, networks, volumes, and rootless bind-mount files
+[group("app")]
+clean-docker:
+	@docker compose down -v --remove-orphans
+	@podman unshare rm -rf data/postgres/* data/seaweedfs/* 2>/dev/null || rm -rf data/postgres/* data/seaweedfs/* 2>/dev/null || true
+	@echo "==> Purged all TaxonVision containers, volumes, networks, and persistent data files."
+
+# Follow live logs from Docker Compose microservices
+[group("app")]
+logs:
+	docker compose logs -f
+
+# Dispatch synthetic prediction traffic and trigger statistical drift evaluation to warm Grafana
+[group("app")]
+simulate-traffic count="60":
+	pixi run --frozen -e dev python scripts/maintenance/simulate_traffic.py --count {{count}}
 
 # Validate live Kubernetes deployment health, endpoints, and inference
 [group("app")]
@@ -306,10 +400,10 @@ wiki-viz:
 # Launch JupyterLab within the isolated scratch experimentation workspace
 [group("utils")]
 lab:
-	pixi run --frozen -e dev jupyter lab --notebook-dir=scratch --ip=127.0.0.1 --port=8888
+	pixi run --frozen -e dev jupyter lab --notebook-dir=scripts/scratch --ip=127.0.0.1 --port=8888
 
 # Clean build artifacts, caches, and ephemeral files
 [group("utils")]
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
-	rm -rf .cache site build dist .pytest_cache .mypy_cache .ruff_cache htmlcov .pixi .venv uv.lock
+	rm -rf .cache site build dist .pytest_cache .mypy_cache .ruff_cache htmlcov .coverage .coverage.* coverage.xml reports/coverage mlflow.db mlruns .complexipy_cache

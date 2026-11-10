@@ -1,5 +1,9 @@
 /manifests
 /embeddings
+/reference/*.pt
 /optuna
 /seaweedfs
+/airflow
+/postgres
+/logs
 *.pt

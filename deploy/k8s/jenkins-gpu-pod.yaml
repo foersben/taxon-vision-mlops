@@ -1,6 +1,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
+  name: jenkins-gpu-pod-template
   namespace: jenkins-ci
   labels:
     app.kubernetes.io/name: taxon-vision-jenkins-gpu-agent
@@ -9,6 +10,7 @@ spec:
   containers:
   - name: ml-runner
     image: ghcr.io/prefix-dev/pixi:latest
+    imagePullPolicy: IfNotPresent
     command: ["sleep"]
     args: ["99d"]
     tty: true
@@ -23,6 +25,8 @@ spec:
       mountPath: /var/lib/taxon-vision/embeddings
     - name: host-manifests
       mountPath: /var/lib/taxon-vision/manifests
+    - name: host-reference
+      mountPath: /var/lib/taxon-vision/reference
     - name: host-checkpoints
       mountPath: /var/lib/taxon-vision/checkpoints
     resources:
@@ -54,6 +58,10 @@ spec:
   - name: host-manifests
     hostPath:
       path: /var/lib/taxon-vision/manifests
+      type: DirectoryOrCreate
+  - name: host-reference
+    hostPath:
+      path: /var/lib/taxon-vision/reference
       type: DirectoryOrCreate
   - name: host-checkpoints
     hostPath:

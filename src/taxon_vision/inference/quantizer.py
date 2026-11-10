@@ -282,6 +282,9 @@ def quantize_onnx_model(
     How:
         `auto` resolves to static when calibration tensors are supplied and to dynamic otherwise. `static` requires calibration tensors. `dynamic` ignores them.
 
+    Complexity:
+        O(C * M) for static calibration over C batches and M graph nodes, or O(M) for dynamic quantization.
+
     Args:
         input_onnx: The input FP32 ONNX model.
         output_onnx: Destination of the quantized model.

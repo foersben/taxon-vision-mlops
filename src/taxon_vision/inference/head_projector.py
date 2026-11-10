@@ -5,8 +5,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
+
+
+class HeadWeights(NamedTuple):
+    """Extracted linear classification head weight matrix and bias vector."""
+
+    weight: np.ndarray
+    bias: np.ndarray
 
 
 def _extract_weight_from_inits(inits: dict[str, np.ndarray]) -> np.ndarray | None:
@@ -48,16 +56,23 @@ def _extract_bias_from_inits(inits: dict[str, np.ndarray]) -> np.ndarray | None:
     return None
 
 
-def extract_onnx_head_weights(onnx_path: str | Path) -> tuple[np.ndarray, np.ndarray]:
+def extract_onnx_head_weights(onnx_path: str | Path) -> HeadWeights:
     """Extract linear classification head projection weight and bias from an ONNX model.
 
-    Supports both FP32 and INT8 (quantized/dequantized) ONNX initializers.
+    Why:
+        Calibration (`calibrate.py`) and evaluation (`evaluate.py`) stages operate on pre-computed cached feature embeddings (`cal_embeddings.pt`, `test_embeddings.pt`) rather than re-running raw images through the full vision backbone. Extracting the terminal linear projection weights directly from the quantized ONNX graph ensures calibration and holdout evaluation reflect the exact serialized ONNX head parameters without instantiating PyTorch or repeating backbone inference.
+
+    How:
+        Parses ONNX initializers via `onnx.numpy_helper.to_array`, locates the classification head weight (dequantizing INT8 weights via scale and zero-point if quantized) and float32 bias vector, and returns them as a typed `HeadWeights` tuple.
+
+    Complexity:
+        O(I + D * K) where I is the number of ONNX graph initializers, D is feature dimension, and K is class count.
 
     Args:
         onnx_path: Path to serialized ONNX graph.
 
     Returns:
-        Tuple of (weight_matrix, bias_vector) as float32 numpy arrays.
+        HeadWeights of (weight, bias) as float32 numpy arrays.
 
     Raises:
         FileNotFoundError: If the ONNX file does not exist.
@@ -79,7 +94,7 @@ def extract_onnx_head_weights(onnx_path: str | Path) -> tuple[np.ndarray, np.nda
     if weight is None or bias is None:
         raise ValueError(f"Could not locate linear classification head weights/bias in ONNX graph: {path}")
 
-    return weight, bias
+    return HeadWeights(weight=weight, bias=bias)
 
 
 def compute_onnx_logits(embeddings: np.ndarray, weight: np.ndarray, bias: np.ndarray) -> np.ndarray:

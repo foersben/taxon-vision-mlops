@@ -1,18 +1,18 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:c6dcc8409857bbb21869cf573b731a897b4f66142293058c9abd36a8404c25ef",
+  "pageVersion": "sha256:bb723b17e23ce4c94e384b2c9de7f5d0794ca207dd7f160f02d5c012c76f6785",
   "claims": [
     {
       "id": "claim_9141a442929a4c6bb20390cb3aba5277",
       "statement": "The _ONNXDualOutputModule wraps TaxonClassifier to delegate forward execution to forward_with_embeddings, ensuring the exported ONNX computational graph concurrently emits both classification logits and penultimate dense feature embeddings.",
       "evidence": [
         {
-          "resource": "repo://src/taxon_vision/inference/onnx_exporter.py#L24-L56",
-          "version": "repo-lines-v1:sha256:f70c33f471cb81f280dc6aa01474301ba8b070f218faa3f7f3d3028aa06d0ed5:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRmZjdkNDgzY2RhZDVkMWU5N2Y4YmUzNDAwM2E4YjYzOGJhNmQ0MGZjZTNkMjFjYjAzNTg4NDhjMTdlYjBlOWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYyMDA5N2U0YWE1MDA2OGJhMTU3ZjlhMjczOWZhZDg2OTk1ZTFlMGNkY2NkYWRjNTg5N2MyMDM0Yzc0ZDNlZmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFmN2ZlMDIzZmVkY2Y3Mjk3ZmRjNDA0ZjI1MGY5MmRmNTNiNzBiMzJmZjc4N2MzNDM5OWYzZjc3MWQwNjI2YjQifQ"
+          "resource": "repo://src/taxon_vision/inference/onnx_exporter.py#L107-L117",
+          "version": "repo-lines-v1:sha256:90a19d17ed03d55b675a22a6068612f468a4357e8136df27cc86f27d01739e3c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhjMzExYTMxNGJkODBiZTA3Mjg5MzIwN2UyNGI0MzI2NWE5MWU4NjFkZDljMTBjZGZkNWRjMmE0NTE2NWY5YzEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUxODgyY2VjMmE0M2Q2OTI1ZDM2MTkxM2FiNjMwZDdmMmY4YzM5MDI0ODU5YjNmY2ZiZDkzNzExNzA1Y2U3M2YiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY5MDUxMmE4NDU0ZjBmODA5NzVhZGY2YTU3YWM2MTkxODUwMThkNGNiMmU0YzgyN2NmNzkyZWZhOThiODFlMjkifQ"
         },
         {
-          "resource": "repo://src/taxon_vision/inference/onnx_exporter.py#L88-L98",
-          "version": "repo-lines-v1:sha256:90a19d17ed03d55b675a22a6068612f468a4357e8136df27cc86f27d01739e3c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhjMzExYTMxNGJkODBiZTA3Mjg5MzIwN2UyNGI0MzI2NWE5MWU4NjFkZDljMTBjZGZkNWRjMmE0NTE2NWY5YzEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUxODgyY2VjMmE0M2Q2OTI1ZDM2MTkxM2FiNjMwZDdmMmY4YzM5MDI0ODU5YjNmY2ZiZDkzNzExNzA1Y2U3M2YiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQxOWQ1MWU5YTRkZDIyNDg5MWM1Y2M3NDMxMjg5ZTkwNTE2M2U4ZTg1M2FjYTY4YTZhOTljNzc2YmNiYWI3MWIifQ"
+          "resource": "repo://src/taxon_vision/inference/onnx_exporter.py#L42-L75",
+          "version": "repo-lines-v1:sha256:78e64107bc8745c5b5ced1a43b325e3af6d673a135924bc125776c718b941f9e:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRmZjdkNDgzY2RhZDVkMWU5N2Y4YmUzNDAwM2E4YjYzOGJhNmQ0MGZjZTNkMjFjYjAzNTg4NDhjMTdlYjBlOWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNjNWUzMGExOGYxNjIyN2VhMThlNjU0ZTdlOTIxM2JhMDc5MmJmNTI1NzhhMGIyYmMwNTk4MzIyN2Q1ZjA0NzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFmN2ZlMDIzZmVkY2Y3Mjk3ZmRjNDA0ZjI1MGY5MmRmNTNiNzBiMzJmZjc4N2MzNDM5OWYzZjc3MWQwNjI2YjQifQ"
         }
       ]
     },
@@ -21,8 +21,8 @@
       "statement": "The export_to_onnx function configures dynamic batching across input, logits, and embeddings tensors, runs graph constant folding, and serializes the model to the configured ONNX operator set version.",
       "evidence": [
         {
-          "resource": "repo://src/taxon_vision/inference/onnx_exporter.py#L58-L111",
-          "version": "repo-lines-v1:sha256:45eb2bf63fac08ce95d8785a704cde268f47e760af6ed702edd53119386142c8:eyJzZWxlY3RlZExpbmVDb3VudCI6NTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg5NzZlNWZmMjEwZjUzMTE5ZTcxNjcyOWUwYWM3Zjk3YjJhYjBjODk4ZTdhOWI4NGVjMjI3ZjU4Yzc5MDJlNWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJmNDY5ZDU3NDkwZDAxM2ZlODg3MjcxNzBmMzAyMmM1NDRmYmE3M2U3MjQ0MjNiOGFhZTE3Yzk5Mjg2ZDc5MDEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNmZGY0ZDA4OTJlNDc5YjA1MTUwMTFkNWY5YTkwZWYxMWRiZGU4MDI0ZjFjYzZkNWQzOWI4NTRiNTAzYzZlNzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM4MTMwNDNhMjExY2I0MzdjZGZlMmY2OTM4MmI5YWIwMmY5MmM0MmI4M2I1YmU1YzhmZjEwNGZjNGU3ZGMyYzYifQ"
+          "resource": "repo://src/taxon_vision/inference/onnx_exporter.py#L77-L131",
+          "version": "repo-lines-v1:sha256:f18090313dc2536fe2703fc8f0651f34fe336f24673e80eade28745d76a8d5a1:eyJzZWxlY3RlZExpbmVDb3VudCI6NTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg5NzZlNWZmMjEwZjUzMTE5ZTcxNjcyOWUwYWM3Zjk3YjJhYjBjODk4ZTdhOWI4NGVjMjI3ZjU4Yzc5MDJlNWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJmNDY5ZDU3NDkwZDAxM2ZlODg3MjcxNzBmMzAyMmM1NDRmYmE3M2U3MjQ0MjNiOGFhZTE3Yzk5Mjg2ZDc5MDEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNmZGY0ZDA4OTJlNDc5YjA1MTUwMTFkNWY5YTkwZWYxMWRiZGU4MDI0ZjFjYzZkNWQzOWI4NTRiNTAzYzZlNzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA1MDEyZWM2YzVlOTEwNmY4YjliZDBiZjllMzNlYTAxN2JiOGRjMmMxNDQ4NzA0ZGVjNGYwMDMyODBjY2RhZDQifQ"
         }
       ]
     },
@@ -31,12 +31,16 @@
       "statement": "The ONNX export CLI validates checkpoint compatibility and strictly aborts with exit code 1 on missing or mismatched checkpoints unless the untrained fallback flag is explicitly set.",
       "evidence": [
         {
-          "resource": "repo://src/taxon_vision/inference/onnx_exporter.py#L160-L208",
-          "version": "repo-lines-v1:sha256:d848555a118a3b5e1c0f9d42390ea0d1b4978307d3e8090cfa4c058037230f25:eyJzZWxlY3RlZExpbmVDb3VudCI6NDksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgyMmEwYmE2OTcxYzE1Y2I5MjljZDlkYmFkZGNlYjE0NTlkM2RmNjk0ZjFiOTRjOWYwYjVhNDY3OGRmMTQ5MTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjczM2U4NDg3Yzg1ZGZkY2Y5ZmE3YjkzYzc0NmM5NDYyNWFlNDdlMTIwYzc5N2U3OTFlNzM3ZjllZDdmZmM3M2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZjMWJjMTU0Mjc1ZTIzYjIxMGRlYmU5ZDQyZjk3NDI3MjkwMjkyOTUxODE2MjQwNWJiMmYyZjAwZjM2ZDA0N2EifQ"
+          "resource": "repo://src/taxon_vision/inference/onnx_exporter.py#L180-L224",
+          "version": "repo-lines-v1:sha256:a2892c038ea316faa6b073b7230bdf131289df097eda9d14bbbdc2dbb6c0da3f:eyJzZWxlY3RlZExpbmVDb3VudCI6NDUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgyMmEwYmE2OTcxYzE1Y2I5MjljZDlkYmFkZGNlYjE0NTlkM2RmNjk0ZjFiOTRjOWYwYjVhNDY3OGRmMTQ5MTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjczM2U4NDg3Yzg1ZGZkY2Y5ZmE3YjkzYzc0NmM5NDYyNWFlNDdlMTIwYzc5N2U3OTFlNzM3ZjllZDdmZmM3M2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZjMWJjMTU0Mjc1ZTIzYjIxMGRlYmU5ZDQyZjk3NDI3MjkwMjkyOTUxODE2MjQwNWJiMmYyZjAwZjM2ZDA0N2EifQ"
         },
         {
-          "resource": "repo://src/taxon_vision/inference/onnx_exporter.py#L355-L406",
-          "version": "repo-lines-v1:sha256:86d785157df21e9c568971491c7624da5fa115d03cc1d459300858ee273ca498:eyJzZWxlY3RlZExpbmVDb3VudCI6NTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkYTVjNjZlMTdiMTQ1Mzk3ODM0YjhjODU0ZGM0MTkzZTIxMjUxODBhODk5NmExNGMzMTg4MzMyNmIyZWZiY2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZiZTk4MDNlZjg0MGI3Y2FjNzkyNGRlOGMyYjE3NjgyNmE1ODAwZDZjYzE1MDRkM2I1MDE1YzgzMGE0NjYzMDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRkMjRhZWU3MDdiOTEwMzQwZGJjYjZiMTk3YjE0ZjBlZGRkM2RjYzcxMTM5OGE5YzhkNWNiNzdjZDA2YjI5MTMifQ"
+          "resource": "repo://src/taxon_vision/inference/onnx_exporter.py#L391-L425",
+          "version": "repo-lines-v1:sha256:dd283493ee94e07931ebf15e0c6130781ba05d09cdb62d7d923fa974f180a56d:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRlMWVlY2M2ZjAyMzE4NmM0NmQ2MmExNmNjNzcxYWQwZmViZDY4MTQzNzMwYjlmZWYyMDdkMjMzNDgxMTRjYjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjAyYTYxY2FkYjQ4ZjFjMTE4Zjg0ZWFhZmM2MDQ5NDE1ZjNlZTA4MzI0MmI4ZjU2YzIyYmI4OTk0YmM2ZWM3ZjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUyODAwMzI3OTI2ZDFjZGNjZjI0ZDE5ZWQyMmM2MWJlYWQwZDdjOWRmOGU1NzRiMWI5NjI4YjhjYTk0MDRkMzYifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/pipelines/export_onnx.py#L157-L163",
+          "version": "repo-lines-v1:sha256:dcfcac4639a15aa660358a17306344f0adc9c6370c2912e9a236ab16d1e94883:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYWRhNWM2NmUxN2IxNDUzOTc4MzRiOGM4NTRkYzQxOTNlMjEyNTE4MGE4OTk2YTE0YzMxODgzMzI2YjJlZmJjZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiM2U3NTk2MmNmODdkYmJiMzU2Mzk0YTcxNzMzOTFkMzU4MDFjZTk0NzZhYjIzZThkOTMwZDkyODZjMDZlOGFhNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjEyZGM2MzZmZDlkMjllNWNiYmMxOWIzNTIxNmQwOWNhZDA4NmZkZTU0NmZjNjk3NzUyMjEyZGI2OGYyNzRmMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNTJhNTdmNTk2ZGM2OGE4NzZlYjk4NGQ5NTZjZDk5MWMyMzFlN2NkYmM4OTcyMDQxZjM2ODUwM2VkNmU0MmZkYSJ9"
         }
       ]
     },
@@ -97,8 +101,8 @@
       "statement": "The quantize_onnx_model dispatcher resolves auto mode to static when calibration tensors are provided and to dynamic otherwise, raising an error if static quantization is requested without calibration data.",
       "evidence": [
         {
-          "resource": "repo://src/taxon_vision/inference/quantizer.py#L269-L315",
-          "version": "repo-lines-v1:sha256:0b4d1e134d82018c87d01c455229c55e4ad1806752ece99b62ce879018695266:eyJzZWxlY3RlZExpbmVDb3VudCI6NDcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZjMzJmMWQ1ZDExOTY1MGY3ZTNhNTkyODk2Zjg5ZTZmNDRmN2RiNzJhYTM0YWJhZWU5YTVjN2U5YmMxNThhMjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY3YTcxYjRmZWNiMGQ3MmM4YzAyNzJlNzRiZWY3MjkyODI0ZjgxYzI2YjEwMmRhNWRjNmUxMGU3YWY4ZDUxOWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk2ZTU4YTdmNGJhNGNhNTUyNDNiMjY0NjhkYjA2OTlkZjcxYmU1ZWQwNWNkOTlkMzM3YzIyMTg5ZGY4MmZmNjUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+          "resource": "repo://src/taxon_vision/inference/quantizer.py#L269-L318",
+          "version": "repo-lines-v1:sha256:c61fb0944d3025eedfd6cc539e3a4f12f2e04a91ef14c1f212efc1665223c7e7:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZjMzJmMWQ1ZDExOTY1MGY3ZTNhNTkyODk2Zjg5ZTZmNDRmN2RiNzJhYTM0YWJhZWU5YTVjN2U5YmMxNThhMjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY3YTcxYjRmZWNiMGQ3MmM4YzAyNzJlNzRiZWY3MjkyODI0ZjgxYzI2YjEwMmRhNWRjNmUxMGU3YWY4ZDUxOWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk2ZTU4YTdmNGJhNGNhNTUyNDNiMjY0NjhkYjA2OTlkZjcxYmU1ZWQwNWNkOTlkMzM3YzIyMTg5ZGY4MmZmNjUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         }
       ]
     },
@@ -107,12 +111,16 @@
       "statement": "ONNXInferenceEngine maintains a persistent ONNX Runtime session with graph optimization level ORT_ENABLE_ALL and executes single-pass inference returning an InferenceOutputs dataclass containing logits and optional embeddings.",
       "evidence": [
         {
-          "resource": "repo://src/taxon_vision/inference/onnx_engine.py#L14-L25",
-          "version": "repo-lines-v1:sha256:3a1b756c71af4751baa92e62da0c0e62d983b47c871591572293ae2289249487:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY2OWExMzk3NWMyNTZlYzgzMjBlMjAxNjA4M2M5NmRmNjM3Y2EzZDM1YmViZGUyMzE0YmVlM2E0NzExYjU2Y2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhhMmIyYTY2NmU4YWJjNWI2OWIwYWVhYWExNmM1NmIxMTViMjJjYThmZTNjNzAzMjE1ZjcyMmQwNmEzYmQ5OGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFmMzlhY2Y4Zjk4Y2E4MzU4ZGVhYTk4YzQ0ZTQ4N2VkODQ4YjdlNWYxYjg4YWYxZTZkMDkwOGFhYjJhODg5YjQifQ"
+          "resource": "repo://src/taxon_vision/inference/onnx_engine.py#L100-L122",
+          "version": "repo-lines-v1:sha256:0d049c44201a8b3f4d5187440c23e91c4bff92fe11211ced870e332759c8c1bb:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY3MDlhMTE5Y2FjYmQ5NzY5MmRlMDc1MWE4MjRkY2IyM2Y1YmViMDgxNTBjZWNmNTZjMjQxOGE0ZGZhYjcxYzAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcxODg4MmY1N2U2ZGEzYThiNTI4YzAzMDE3MGQ4MWU5YjI4ZWNiYjZmMDZjZjBlOWMxYzNmNDRiZDE1M2ZlMjkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU3MWYwMzUxMjZlODU0ZGUwMzQ2YjY2ZjFkMjc0YjJjZDkwMzdkZDdiNjM0MTM2YzEzZTczYjc5YzEzOGFmNmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY0ZmFmNjA4YmJiMjcyNTA5NzNlZmY5MGIzNzM2ODM4MDY3OWFmMzRlZWZhNzUxMWIzZDcwNWMzOWZlNWE1ZTYifQ"
         },
         {
-          "resource": "repo://src/taxon_vision/inference/onnx_engine.py#L48-L87",
-          "version": "repo-lines-v1:sha256:cbf2dbee09e641d40e5261d475d9448c5ab0a11c59214cab03073472851309a3:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdkODZmMTZiZTAxZTU5OGZlNDA2ODAzNmQ5MGM5Y2VmNjcwZmEwZjAwNzk1N2U0NjY2NWQ4OWQ2MGEzNzcxM2QiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcxODg4MmY1N2U2ZGEzYThiNTI4YzAzMDE3MGQ4MWU5YjI4ZWNiYjZmMDZjZjBlOWMxYzNmNDRiZDE1M2ZlMjkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU1NzcxOGJmM2Y2MzRkYTI0OGU3ZjMyOGJlNmVhOTA0NmIyZmViMmRjOTEwMWU5MGU1N2VhODFlMDAzN2VlYjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY0ZmFmNjA4YmJiMjcyNTA5NzNlZmY5MGIzNzM2ODM4MDY3OWFmMzRlZWZhNzUxMWIzZDcwNWMzOWZlNWE1ZTYifQ"
+          "resource": "repo://src/taxon_vision/inference/onnx_engine.py#L23-L33",
+          "version": "repo-lines-v1:sha256:4cdc2c11716eef7d7cd284c8365914f57de0519d900d4bae5d8df7ed0c612aef:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY2OWExMzk3NWMyNTZlYzgzMjBlMjAxNjA4M2M5NmRmNjM3Y2EzZDM1YmViZGUyMzE0YmVlM2E0NzExYjU2Y2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJjODY4NWRiZDA1MTFkZjdjZTA1YTY1ZWJkYjFiZWM0ZDUwNzMxZGMxOTlkMmRhMzc3ZTRiNzJmY2ExNjYxOGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYyMDA5N2U0YWE1MDA2OGJhMTU3ZjlhMjczOWZhZDg2OTk1ZTFlMGNkY2NkYWRjNTg5N2MyMDM0Yzc0ZDNlZmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhiZWNjOTRkZWQwNTA0NzVlNjk4NTA2OWYxZTI0ZjZlZGNjYTRmNjM5Mjc0ZGZhOWQ0OTAxYTYxNTdiNzljZTQifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/inference/onnx_engine.py#L57-L76",
+          "version": "repo-lines-v1:sha256:31352fe2bab13cc104da58e029fe59a7bd52f77904fc3b83cbaaa6ee01298925:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRiYjk2OGQ1ZmI2ZTFhOWNjOWRiYzhkYjE0YjdlNTA0NjgzMTg2YTNkMWQ4N2JiOTIwNzNhMDA5OTAzNzAxMjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU1NzcxOGJmM2Y2MzRkYTI0OGU3ZjMyOGJlNmVhOTA0NmIyZmViMmRjOTEwMWU5MGU1N2VhODFlMDAzN2VlYjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjEzOTkzNDA4ZWUxOTJjNDVhYjVkZWM0NmFkMmM1MWY3MTEzNjM2MmE1OTVlNDM3MjBiNjBhMzMxYWQ0ODMzZGMifQ"
         }
       ]
     },
@@ -121,32 +129,46 @@
       "statement": "The inference service router get_onnx_engine validates output class cardinality against the taxa catalog and enforces strict failure if the ONNX artifact is missing under inference_backend='onnx', while falling back to PyTorch with a warning under inference_backend='auto'.",
       "evidence": [
         {
-          "resource": "repo://src/taxon_vision/service/inference.py#L128-L163",
-          "version": "repo-lines-v1:sha256:2b74ba6645960c85d287f278b41cf2b8be8ad9c78d450d5d3862ba14ce6a512c:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkNmYxOWY4ZTlkMGU5YmQwYjI5MDkxNzU0Mzc5OGZhMTUwNzhmMDY5OWEyYTk5NGUzNDY5NjUwYjZmODk5NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUyNmYyYzAzNzQxYTU5NjA3NzA3YTQ2ZWIwODViZTgxMDFlYzE4ZTk2YzY3MGUwYzdjZTBmYTExYTk1ZjNjMjEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNhNjAwZDQwZjZhMDNmMTFiOThjYTYyYTY3MzZjODRhMmI1YmEzNmUxOGI0N2EzNDcyNDcxMjczM2M2ZjVmMzAifQ"
-        },
-        {
-          "resource": "repo://src/taxon_vision/service/inference.py#L329-L342",
-          "version": "repo-lines-v1:sha256:4be43a90815dba0e6627f447a7d7936ed40c73b57550e3746c5c474cced6e764:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA1NGVhZTFlOTQ1YzEwNWUyYjQ5MTU5NjlhMTJjYzFiM2I4ZjNiZjRhNmUyMjE1NGI1OWUzMWVkY2VhMjY4ZjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc1ZGM4OGQxZjYyZGZmYjNmNDJiNTcyNDY5N2NiYzFjYWE3OWFlM2Q1ZmI4MDNkNDkyMjA4NDc1OWQyOTlkYzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYxYWViMTc3MGU2ZDA0ZTc4M2I3OWMwNjE4ODM0MzkwODNjYTlmOGE3Y2NmMjE4ZmQ4ZTlhOTVjYjI2YzlmYjMifQ"
+          "resource": "repo://src/taxon_vision/service/inference.py#L143-L182",
+          "version": "repo-lines-v1:sha256:424205b2066dc7906bdf9b1e12a8655b83c6b2c5ce675434341911c70253300e:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkNmYxOWY4ZTlkMGU5YmQwYjI5MDkxNzU0Mzc5OGZhMTUwNzhmMDY5OWEyYTk5NGUzNDY5NjUwYjZmODk5NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUyNmYyYzAzNzQxYTU5NjA3NzA3YTQ2ZWIwODViZTgxMDFlYzE4ZTk2YzY3MGUwYzdjZTBmYTExYTk1ZjNjMjEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI5OWE4ODQxMTNlNTMwMGZlYTEyMzlhMGM4NDBiMTM5ZGIxYjFhYmQ0YWRiNzljMGRhYzJlNTQ4YzljMDRkOWIifQ"
         }
       ]
     },
     {
       "id": "claim_18b0850849d140e9ad047311214a7b40",
-      "statement": "The evaluation pipeline (src/taxon_vision/pipelines/evaluate.py) evaluates candidate vision backbones across accuracy baselines, P50/P95 latency, throughput, peak memory, and serving cost per million inferences to characterize architectural trade-offs between cloud GPU serving and edge CPU deployment.",
+      "statement": "The evaluation pipeline (src/taxon_vision/pipelines/evaluate.py) evaluates candidate vision backbones across canonical accuracy baselines, parameter footprint, feature dimensionality, P50/P95 latency, throughput, and peak VRAM to characterize architectural trade-offs between cloud GPU serving and edge CPU deployment.",
       "evidence": [
         {
-          "resource": "repo://src/taxon_vision/pipelines/evaluate.py#L155-L200",
-          "version": "repo-lines-v1:sha256:c865843eb904db9e0bb57b773b0e942f4004c4aa5d0dbbcfee687c6a220cb0c4:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkMzgxMjE2MTVhZjg4MjQ5OTQ4OGVmODVlYzQ0Y2VlOTNmNWVkZjY1MzZjYjBjNzU4NTIyNDM5ZDU2MmU0MGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE0ZDM1ZWM1MDUwNzBhMTAxNzY5ODU1ODk5YTc4ZmE2OWY5NGUyYzY2M2MyNzQ5NWU1ZDY0MGMzMzRlNGMxNzMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAzMmU2OTIyNTE4NDY1ZGVlOTg3MGU3NjAxNjU0YWVkZWI4OThiODQ5ZmJmNmMzZjA0OGM4YzE5MmY3M2JmMGUifQ"
+          "resource": "repo://src/taxon_vision/pipelines/evaluate.py#L102-L131",
+          "version": "repo-lines-v1:sha256:6da97fbc844dc283d0833f136dc411dfadf21c4ccdb718e5d783a0cffa706739:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY2OWExMzk3NWMyNTZlYzgzMjBlMjAxNjA4M2M5NmRmNjM3Y2EzZDM1YmViZGUyMzE0YmVlM2E0NzExYjU2Y2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJkYjAwNTljY2UyYjQzNTRlMGMwZWI2MGY0YjljM2M3NTA5N2UzYTc4Zjk4YzIzYzE3YzhlYzQ2MDMwZjYwODAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg4ZTM4YzQ0ODVmM2VjM2VjMjQwYTFmODJlZjM2Y2NkMGY1ZWM3MzRmMmIwMTJjZDBjMGJhNzRiOWI1MjljNDEifQ"
         },
         {
-          "resource": "repo://src/taxon_vision/pipelines/evaluate.py#L28-L140",
-          "version": "repo-lines-v1:sha256:76fcd55a97007e7222b650684d2d5d976f3d8457f54a69d27a7ad4b2aef40dd4:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEzLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJiNmZiYWUwYjkxZDQ0ZmMwZDQ5ZjVkZTY5MWRhNmZjNDMxZjI2MDEzNGJmNzMxZTBlMjFmNzY0ODA5NDMzNGNiIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJhZGQyNDQ1ODJiNmZiMDNkMjNiODQxNWFiZWNkMzQ2YjBjOWY0NjZiNmY3NTJiMDY4MTg5Y2U3ZTlhMmRjMzUwIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI2MjAwOTdlNGFhNTAwNjhiYTE1N2Y5YTI3MzlmYWQ4Njk5NWUxZTBjZGNjZGFkYzU4OTdjMjAzNGM3NGQzZWZhIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJmODc4ZWI0Mjk3ODAxY2UxZWNiNDhiZjZiMWM5N2E2ZjQ0OWUyODNmOTg0MWE1MWUyZTIzYzJkNDYxMjg2OTYxIn0"
+          "resource": "repo://src/taxon_vision/pipelines/evaluate.py#L209-L280",
+          "version": "repo-lines-v1:sha256:07776c208bac085cd7b8794e613a58187c43c80c0d6ae7a222b058a8a24b6c49:eyJzZWxlY3RlZExpbmVDb3VudCI6NzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk3NjhhNDhkZWY1YmI3OTc1YjgwZGYzYTUxMGU4MTZiZDllZDRlMWY2NDhmMzQ1MTdkMWQzZjhiZTQzY2U3OTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkZDI0NDU4MmI2ZmIwM2QyM2I4NDE1YWJlY2QzNDZiMGM5ZjQ2NmI2Zjc1MmIwNjgxODljZTdlOWEyZGMzNTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU4YWU2ZTVmZWVlYjBjY2VlNzU1N2EwYWI1OTE1ZjQwMmU0NTBhM2I2YjQ5ZDZmMjkwODc4MGM0MjgyYzcyNWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdlMGUzNjFlMTMyNmI3YjU1NzE1MTMxOWRlZjJjNTZjOTgwOTlmMDRiY2E5MjNhYjZiY2JmMjMzOTU5YWRmODgifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/pipelines/evaluate.py#L466-L500",
+          "version": "repo-lines-v1:sha256:471e9b5bec6ebd908fa4241a41150eebb6c9a65e3adeb694aea51d6dc79c2788:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg2ZmJiMDdiYmRjMTdmYmE1MDQ3ZjZjMjZlOGNhNDk2ODU2ZTk1Mzg5YTc5ZGQxZjdhMTIyYTdiM2FiNGQzN2MiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhjYzRhN2QxY2M3OTZhYmEzZTQ2NzIzMzI3ZjUxN2U5ZjgxMTk4MmQyNTBmMDcwMjk4NmU0YjU3NjRhZDk1ODkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdkYWM3OTQyMGZlZjA5ZmVlY2E2ZjJhYzE4ZmM0ZGFiMGYzZGUyNzFmMTY2ZDg1OWM0NjFhYWEwZWEzNDg5NmEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d3cae5c4ba7042718e25b2a974394ae7",
+      "statement": "ONNXInferenceEngine supports direct linear head projection and calibrated softmax scoring on pre-extracted embeddings via a dedicated head session or extracted weights, bypassing redundant vision backbone execution during evaluation and calibration.",
+      "evidence": [
+        {
+          "resource": "repo://src/taxon_vision/inference/onnx_engine.py#L149-L189",
+          "version": "repo-lines-v1:sha256:fbd26a7ea0f3da1276a44713a5569c719364a10b655394e28fe960f7dba50c5f:eyJzZWxlY3RlZExpbmVDb3VudCI6NDEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg3MWNkMjA5NTc4ZDFmZWZjZjk0ZWFlMGE1ZmViZjhmNWMyMWFmOTI5YTNlYjUyNDg1MGQ5MTBmY2Y5ZmEzMjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAwNWM5YTdiZTI5YWI4OTkxYzliYzg0NTBlYWQ0NTQzOThmYTk5N2VkNTYxOWZhNzgzM2I2YzZhMWE5NTc1Y2MiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM0Zjc2NDc0NGQ4YzU3NmU3YjdiNTNkMDkzM2E4MjgzZjEzNTk1ZGI3ZjdlNzkwNDIxYzI4MGNiMWRhNzI4YjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://src/taxon_vision/inference/onnx_engine.py#L77-L98",
+          "version": "repo-lines-v1:sha256:32f84dfcff26bfc9fa013c7305aff8193a7ab104d0fc8b1bf64189fc76d7cf0c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJjZThmMTEzM2VjZmZmMDllMmUyN2FmZjQ5NzA0M2FjMDk5ZjNkZWY1YTIwNDVhNTFiNTEzMDRkNjE5NmZlZjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVlN2M5NTdiY2I0NGZiNjczYzk4YjAwNTBhNzVkMzgwODJkYjgxZDkxOGRlMzEzYTNmMDdjMTIzNTMwNmQ3ZWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjViMmViODRkYWUyMTAyMTI3NDY3MzhiYTFiNzRmNTZmNGJjOTQ0YmFiM2NhZTcxYWFkYjZiZDU1NWUxYzBjMzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU1ZmM5ZjVjNDFmNzg5ZDFmMmUyNTJhZWQyYmYzZWU0MmQ0N2I1MmM3NDAwNTEzNGY0MDIyNjJiOTc1MTQwOWYifQ"
         }
       ]
     }
   ],
   "verification": {
     "by": "openwiki/0.7.2",
-    "at": "2026-10-15T19:46:36.219Z"
+    "at": "2026-11-08T17:07:25.915Z"
   }
 }

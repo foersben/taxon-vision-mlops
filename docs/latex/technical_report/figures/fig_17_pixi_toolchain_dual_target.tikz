@@ -83,10 +83,9 @@
     \textbf{\texttt{hive-mind} Compute Node}\\
     \scriptsize $\bullet$ OS: Ubuntu 26.04.1 LTS (\texttt{resolute})\\
     \scriptsize $\bullet$ CPU: Intel Core i7-14700K (20C/28T)\\
-    \scriptsize $\bullet$ Mobo: ASRock B760M Pro RS (mATX)\\
-    \scriptsize $\bullet$ RAM: 128\,GB Crucial DDR5-5600\\
-    \scriptsize $\bullet$ GPU: ZOTAC RTX 5070 Ti 16\,GB\\
-    \scriptsize $\bullet$ NVMe: 2TB Seagate FireCuda 530\\
+    \scriptsize $\bullet$ RAM: 128\,GB DDR5-5600\\
+    \scriptsize $\bullet$ GPU: NVIDIA RTX 5070 Ti 16\,GB\\
+    \scriptsize $\bullet$ NVMe: 2TB PCIe Gen4 SSD\\
     \scriptsize $\bullet$ Driver: 615.71.09 / CUDA UMD 13.4
 };
 
