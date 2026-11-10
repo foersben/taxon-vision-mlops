@@ -1,6 +1,7 @@
 # TaxonVision-MLOps: Automated Species Identification & Statistical Safety Platform
 
 [![CI & Deployment Pipeline](https://github.com/foersben/taxon-vision-mlops/actions/workflows/ci.yml/badge.svg)](https://github.com/foersben/taxon-vision-mlops/actions/workflows/ci.yml)
+[![Release: v0.1.0](https://img.shields.io/badge/release-v0.1.0-blue.svg)](https://github.com/foersben/taxon-vision-mlops/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Pixi Managed](https://img.shields.io/badge/managed%20by-pixi-blue)](https://pixi.sh)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
@@ -27,7 +28,7 @@ TaxonVision resolves these failure modes through an integrated architecture:
 2. **Convex Class-Balanced Linear Probe:** Fast, deterministic training weighted by the effective number of biological specimens per taxon.
 3. **Split Conformal Prediction Sets:** Mathematical guarantee that the prediction set contains the ground-truth taxon at user-specified coverage ($1 - \alpha = 95\%$), automatically routing ambiguous or empty sets to human expert review.
 4. **Two-Tier Representation Drift Engine:** Automated monitoring combining coordinate-wise Wasserstein-1 distance with multivariate Maximum Mean Discrepancy ($\text{MMD}^2$) in a Reproducing Kernel Hilbert Space (RKHS).
-5. **Zero-Allocation ONNX Serving:** Deterministic INT8 runtime execution guaranteeing sub-$55\,\text{ms}$ CPU p95 latency.
+5. **Zero-Allocation ONNX Serving:** Deterministic INT8 runtime execution constrained by thread-capping invariants (`intra_op_num_threads = 2`), guaranteeing sub-$25\,\text{ms}$ microservice latency and adhering to the $15.0\,\text{ms}$ CPU forward-pass benchmark specification.
 
 ---
 
@@ -195,38 +196,36 @@ TaxonVision couples its pipeline stages with an industrial MLOps serving and mon
 
 ```mermaid
 flowchart LR
-    subgraph IngressLayer ["Edge Ingress & Serving"]
-        User["Citizen Scientist / Biologist"] -->|HTTP /predict| Traefik["Traefik Edge Ingress"]
-        Traefik --> FastAPI["FastAPI Production Service<br/>(Zero-Allocation ONNX Engine)"]
-        FastAPI --> Dashboard["HTMX Operator Dashboard<br/>(Grad-CAM Heatmaps & DarwinCore)"]
+    subgraph IngressLayer ["Edge Ingress & Dual-Tier Serving"]
+        User["Citizen Scientist / Ecologist"] --> Traefik["Traefik Edge Ingress"]
+        Traefik -->|":30085 staging.taxon"| StagingFastAPI["FastAPI Staging Pod<br/>(develop / CPU Serving)"]
+        Traefik -->|":30080 taxon"| ProdFastAPI["FastAPI Production Pods<br/>(main / GPU Time-Slicing)"]
+        StagingFastAPI --> Redis["Redis Ephemeral Cache<br/>(taxon:img: SHA-256)"]
+        ProdFastAPI --> Redis
+        StagingFastAPI --> Dashboard["HTMX Operator Dashboard<br/>(Forward-Only CAM & Conformal Keys)"]
+        ProdFastAPI --> Dashboard
     end
 
-    subgraph ObservabilityLayer ["Telemetry & Drift Engine"]
-        FastAPI -.->|Async Feature Logging| PG["PostgreSQL 16"]
-        FastAPI -.->|Request Latencies & Set Sizes| Prom["Prometheus TSDB"]
+    subgraph ObservabilityLayer ["Telemetry, Logs & Drift Engine"]
+        ProdFastAPI -.->|Structured JSON Logs| Promtail["Promtail Log Shipper"]
+        Promtail --> Loki["Grafana Loki"]
+        ProdFastAPI -.->|Request Metrics| Prom["Prometheus TSDB"]
         Prom --> Grafana["Grafana Cockpit (6 Panels)"]
-        PG --> Airflow["Apache Airflow 3.0<br/>(Hourly Drift DAG)"]
-        Airflow -->|Evidently 0.7 PCA| DriftReport["Evidently Drift Report"]
-        Airflow -.->|Trigger Retraining DAG| Jenkins["Bare-Metal Jenkins<br/>(NVIDIA RTX 5070 Ti)"]
+        Loki --> Grafana
+        ProdFastAPI -.->|Async Embeddings| PG["PostgreSQL 16"]
+        PG --> AirflowDrift["Airflow Hourly Drift Monitor"]
+        AirflowDrift -->|Evidently PCA| DriftReport["Evidently Drift Report"]
+        AirflowDrift -.->|"Sustained Drift Alert"| AirflowRetrain["Airflow model_retraining DAG"]
     end
 
     subgraph ActiveLearning ["Active Learning & Retraining Loop"]
-        FastAPI -->|"Flag Ambiguous / OOD"| LabelStudio["Label Studio<br/>(Expert Taxonomist Triage)"]
-        LabelStudio -->|"Verified JSON Export"| AirflowRetrain["Airflow model_retraining DAG<br/>(merge_human_feedback)"]
-        AirflowRetrain -.->|"Trigger GPU Job"| Jenkins["Bare-Metal Jenkins<br/>(NVIDIA RTX 5070 Ti)"]
-    end
-
-    subgraph ObservabilityLayer ["Telemetry & Drift Engine"]
-        FastAPI -.->|Async Feature Logging| PG["PostgreSQL 16"]
-        FastAPI -.->|Request Latencies & Set Sizes| Prom["Prometheus TSDB"]
-        Prom --> Grafana["Grafana Cockpit (6 Panels)"]
-        PG --> AirflowDrift["Airflow Hourly Drift Monitor"]
-        AirflowDrift -->|Evidently 0.7 PCA| DriftReport["Evidently Drift Report"]
-        AirflowDrift -.->|"Sustained Drift Alert"| AirflowRetrain
+        ProdFastAPI -->|"Flag Ambiguous / OOD"| LabelStudio["Label Studio<br/>(Expert Taxonomist Triage)"]
+        LabelStudio -->|"Verified Annotations"| AirflowRetrain
+        AirflowRetrain -.->|"Trigger Headless GPU Job"| Jenkins["Bare-Metal Jenkins<br/>(NVIDIA RTX 5070 Ti)"]
     end
 
     subgraph InternalStorage ["Cluster Storage & Registry"]
-        FastAPI -.-> MLflow["MLflow 3.16.0 Registry"]
+        ProdFastAPI -.-> MLflow["MLflow 3.16.0 Registry"]
         MLflow -.-> S3["Local SeaweedFS S3 Store"]
         Jenkins -->|"dvc push (local)"| S3
     end
@@ -235,7 +234,7 @@ flowchart LR
         Jenkins -->|"dvc push -r origin"| DagsHubDVC["DagsHub DVC Remote<br/>(s3://dvc)"]
         GHA["GitHub Actions CI"] -->|"dvc pull (DAGSHUB_TOKEN)"| DagsHubDVC
         Dev["Developer Workstation"] -->|"dvc push / pull"| DagsHubDVC
-        FastAPI -.->|"Mirror / Public View"| DagsHubMLflow["DagsHub MLflow 2.x<br/>(Public Dashboard)"]
+        ProdFastAPI -.->|"Public Mirror"| DagsHubMLflow["DagsHub MLflow 2.x<br/>(Public Dashboard)"]
     end
 
     classDef core fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
@@ -243,9 +242,9 @@ flowchart LR
     classDef obs fill:#0f172a,stroke:#f59e0b,stroke-width:1px,color:#e2e8f0;
     classDef store fill:#1e1b4b,stroke:#8b5cf6,stroke-width:2px,color:#f8fafc;
     classDef cloud fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc;
-    class Traefik,FastAPI,Dashboard core;
+    class Traefik,StagingFastAPI,ProdFastAPI,Dashboard,Redis core;
     class LabelStudio,AirflowRetrain,Jenkins loop;
-    class PG,Prom,Grafana,AirflowDrift,DriftReport obs;
+    class Promtail,Loki,PG,Prom,Grafana,AirflowDrift,DriftReport obs;
     class MLflow,S3 store;
     class GHA,Dev,DagsHubDVC,DagsHubMLflow cloud;
 ```
@@ -306,16 +305,37 @@ TaxonVision couples automated out-of-distribution (OOD) routing and conformal tr
 
 ## Quickstart Guide
 
-### Option A: Complete Microservice Stack (Docker Compose)
+### Option A: Kubernetes Cluster Deployment (K3s on `hive-mind`)
 
-Deploy the complete multi-service stack with a single command (requires Docker with Compose v2):
+The production infrastructure deploys via K3s across isolated staging and production namespaces with multi-tier Traefik Ingress:
+
+| Service / Workbench | Environment | Endpoint URL | Description |
+| :--- | :--- | :--- | :--- |
+| **Staging Cockpit** | Staging (`develop`) | [http://192.168.178.30:30085](http://192.168.178.30:30085) | Dedicated NodePort `30085` / `staging.taxon.benjamin-foerster.eu` (single-replica CPU serving). |
+| **Production Cockpit** | Production (`main`) | [http://192.168.178.30:30080](http://192.168.178.30:30080) | Dedicated NodePort `30080` / `taxon.benjamin-foerster.eu` (dual-replica time-sliced GPU serving). |
+| **Grafana Cockpit** | Observability | [http://localhost:3000](http://localhost:3000) | Operational dashboards, p95 latency histograms, and Loki log visualisations (`admin`/`admin`). |
+| **Prometheus TSDB** | Monitoring | [http://localhost:9090](http://localhost:9090) | NodePort `30090` metrics scraper and alert rule evaluation engine. |
+| **Loki Log Engine** | Observability | [http://localhost:3100](http://localhost:3100) | Structured JSON log stream storage shipped via Promtail daemon. |
+| **MLflow Registry** | Model Governance | [http://localhost:5000](http://localhost:5000) | Self-hosted MLflow 3.16.0 experiment tracking and `@Production` model alias store. |
+| **SeaweedFS Object Store** | S3 Cluster Storage | [http://localhost:9333](http://localhost:9333) | S3-compatible filer endpoint on `:8333` staging embedding tensors without cloud egress. |
+
+To verify cluster deployments locally:
+
+```bash
+# Validate live Kubernetes pods and ingress routes
+bash scripts/ci/verify_deployment.sh
+```
+
+### Option B: Local Microservice Stack (Docker Compose)
+
+Deploy the complete multi-service stack on any container host with Docker Compose v2:
 
 ```bash
 # Clone the repository
 git clone https://github.com/foersben/taxon-vision-mlops.git
 cd taxon-vision-mlops
 
-# Launch production stack (Traefik, FastAPI, MLflow, PostgreSQL, SeaweedFS, Prometheus, Grafana)
+# Launch production stack (Traefik, FastAPI, MLflow, PostgreSQL, SeaweedFS, Prometheus, Grafana, Loki)
 just up
 
 # Or launch in development mode with live code and volume bind-mounts
@@ -338,7 +358,7 @@ just logs
 just down
 ```
 
-### Option B: Native Workstation Setup (Pixi & Just)
+### Option C: Native Workstation Setup (Pixi & Just)
 
 All local development relies strictly on the isolated Pixi package manager and Just automation runner.
 
@@ -413,7 +433,7 @@ taxon-vision-mlops/
 ├── src/taxon_vision/           # Production source code
 │   ├── active_learning/        # Priority triage queues and annotation feedback
 │   ├── data/                   # S3 streaming, iNaturalist client, license compliance filter
-│   ├── inference/              # Zero-allocation ONNX engine, quantizer, Grad-CAM
+│   ├── inference/              # Zero-allocation ONNX engine, quantizer, forward-only CAM
 │   ├── models/                 # DINOv3 backbone factory, Class-Balanced loss, head trainer
 │   ├── monitoring/             # Prometheus telemetry, Wasserstein-1 and MMD² drift engine
 │   ├── pipelines/              # 8 canonical DVC pipeline stage entrypoints
