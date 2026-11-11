@@ -320,7 +320,7 @@ spec:
             kubectl rollout restart deployment/taxon-vision-serving -n ${TARGET_NS}
 
             # Verify deployment health
-            kubectl rollout status deployment/taxon-vision-serving -n ${TARGET_NS} --timeout=120s
+            kubectl rollout status deployment/taxon-vision-serving -n ${TARGET_NS} --timeout=300s
             bash scripts/ci/verify_deployment.sh ${TARGET_NS}
             echo ">>> Deployment successfully verified for ${TARGET_ENV}."
           '''
