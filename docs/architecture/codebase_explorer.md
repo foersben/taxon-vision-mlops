@@ -36,7 +36,7 @@ When modifying specific subsystems, read only the source files in your active do
 | :--- | :--- | :--- | :--- |
 | **Config & Types** | `config/{loader,schemas}.py`, `params.yaml`, `config/default_config.yaml` | `tests/unit/test_config.py` | `@orchestrator` |
 | **Data & S3** | `data/{s3_streamer,inat_client,license_filter}.py` | `tests/unit/test_data_components.py` | `@mlops-data-engineer` |
-| **Pipelines** | `pipelines/{ingest,audit_license,extract_features,train,export_onnx,calibrate,evaluate}.py` | `tests/unit/test_pipelines.py` | `@mlops-data-engineer` |
+| **Pipelines** | `pipelines/{ingest,audit_license,extract_features,data_drift,calibrate_drift,train,export_onnx,calibrate,evaluate}.py` | `tests/unit/test_pipelines.py` | `@mlops-data-engineer` |
 | **Models & Loss** | `models/{factory,head,loss}.py` | `tests/unit/test_models_components.py` | `@model-engineer` |
 | **Training & HPO** | `models/training/{runner,loops,embeddings,tuning,tracking,checkpoint,types}.py` | `tests/unit/test_tuning.py`, `tests/unit/test_tracking.py` | `@model-engineer` |
 | **ONNX & Inference** | `inference/{onnx_exporter,onnx_engine,quantizer,cam,calibration,cli}.py` | `tests/unit/test_onnx_exporter.py`, `tests/unit/test_quantizer.py` | `@inference-optimizer` |
@@ -66,7 +66,7 @@ pixi run -e ci-dev pytest tests/unit/test_data_components.py -q -o "addopts="
 
 ## 4. Comprehensive Quality Gate Protocol
 
-Execute the mandatory quality gates across all 66 source files prior to creating a commit:
+Execute the mandatory quality gates across all 74 source files (61 non-init modules) prior to creating a commit:
 
 ```bash
 # 1. Strict Ruff formatting and linting

@@ -103,6 +103,58 @@ def _resolve_custom_override(custom_path_str: str | None, base_path: Path) -> di
     return _load_yaml_dict(custom_path)
 
 
+def _extract_model_env_overrides() -> dict[str, Any]:
+    overrides: dict[str, Any] = {}
+    env_untrained = os.getenv("TAXON_ALLOW_UNTRAINED_FALLBACK")
+    if env_untrained is not None:
+        overrides["allow_untrained_fallback"] = env_untrained.strip().lower() in ("true", "1", "yes")
+
+    env_storage = os.getenv("TAXON_FLAGGED_STORAGE_DIR")
+    if env_storage is not None:
+        overrides["flagged_storage_dir"] = env_storage
+
+    env_intra = os.getenv("TAXON_MODEL__ONNX_INTRA_OP_THREADS") or os.getenv("ORT_INTRA_OP_NUM_THREADS")
+    if env_intra is not None:
+        try:
+            overrides["onnx_intra_op_threads"] = int(env_intra)
+        except ValueError:
+            pass
+    return overrides
+
+
+def _extract_service_env_overrides() -> dict[str, Any]:
+    env_redis = (
+        os.getenv("TAXON_SERVICE__REDIS_URL") or os.getenv("TAXON_SERVICE_REDIS_URL") or os.getenv("TAXON_REDIS_URL")
+    )
+    return {"redis_url": env_redis} if env_redis is not None else {}
+
+
+def _extract_optuna_mlflow_overrides() -> dict[str, dict[str, Any]]:
+    res: dict[str, dict[str, Any]] = {}
+    env_optuna = os.getenv("TAXON_OPTUNA_STORAGE_URI")
+    if env_optuna is not None:
+        res["optuna"] = {"optuna_storage_uri": env_optuna}
+
+    env_mlflow = os.getenv("TAXON_MLFLOW_TRACKING_URI") or os.getenv("MLFLOW_TRACKING_URI")
+    if env_mlflow is not None:
+        res["mlflow"] = {"tracking_uri": env_mlflow}
+    return res
+
+
+def _extract_telemetry_env_overrides() -> dict[str, Any]:
+    overrides: dict[str, Any] = {}
+    env_uri = os.getenv("TAXON_TELEMETRY_DATABASE_URL") or os.getenv("TAXON_TELEMETRY__DATABASE_URL")
+    if env_uri is not None:
+        overrides["database_url"] = env_uri
+
+    env_fallback = os.getenv("TAXON_TELEMETRY_ALLOW_IN_MEMORY_FALLBACK") or os.getenv(
+        "TAXON_TELEMETRY__ALLOW_IN_MEMORY_FALLBACK"
+    )
+    if env_fallback is not None:
+        overrides["allow_in_memory_fallback"] = env_fallback.strip().lower() in ("true", "1", "yes")
+    return overrides
+
+
 def _apply_direct_env_overrides(config_data: dict[str, Any]) -> dict[str, Any]:
     """Apply targeted unnested environment variable overrides for test isolation and Optuna storage.
 
@@ -110,7 +162,7 @@ def _apply_direct_env_overrides(config_data: dict[str, Any]) -> dict[str, Any]:
         Enables seamless runtime configuration of test modes, MLflow tracking, and database URIs without nested delimiters.
 
     How:
-        Checks for TAXON_ALLOW_UNTRAINED_FALLBACK, TAXON_FLAGGED_STORAGE_DIR, TAXON_OPTUNA_STORAGE_URI, TAXON_MLFLOW_TRACKING_URI, MLFLOW_TRACKING_URI, and TAXON_TELEMETRY_ALLOW_IN_MEMORY_FALLBACK injecting them into the merged dictionary.
+        Extracts sectional environment overrides for model, service, optuna, mlflow, and telemetry sub-dictionaries, deep-merging them into the unified config container.
 
     Args:
         config_data: Merged configuration dictionary.
@@ -118,64 +170,20 @@ def _apply_direct_env_overrides(config_data: dict[str, Any]) -> dict[str, Any]:
     Returns:
         Updated configuration dictionary with direct environment overrides applied.
     """
-    model_overrides: dict[str, Any] = {}
-    env_untrained = os.getenv("TAXON_ALLOW_UNTRAINED_FALLBACK")
-    if env_untrained is not None:
-        model_overrides["allow_untrained_fallback"] = env_untrained.strip().lower() in ("true", "1", "yes")
+    model_ovr = _extract_model_env_overrides()
+    if model_ovr:
+        config_data = _deep_merge(config_data, {"model": model_ovr})
 
-    env_storage = os.getenv("TAXON_FLAGGED_STORAGE_DIR")
-    if env_storage is not None:
-        model_overrides["flagged_storage_dir"] = env_storage
+    service_ovr = _extract_service_env_overrides()
+    if service_ovr:
+        config_data = _deep_merge(config_data, {"service": service_ovr})
 
-    env_intra = os.getenv("TAXON_MODEL__ONNX_INTRA_OP_THREADS") or os.getenv("ORT_INTRA_OP_NUM_THREADS")
-    if env_intra is not None:
-        try:
-            model_overrides["onnx_intra_op_threads"] = int(env_intra)
-        except ValueError:
-            pass
+    for section, ovr in _extract_optuna_mlflow_overrides().items():
+        config_data = _deep_merge(config_data, {section: ovr})
 
-    if model_overrides:
-        config_data = _deep_merge(config_data, {"model": model_overrides})
-
-    service_overrides: dict[str, Any] = {}
-    env_redis = (
-        os.getenv("TAXON_SERVICE__REDIS_URL") or os.getenv("TAXON_SERVICE_REDIS_URL") or os.getenv("TAXON_REDIS_URL")
-    )
-    if env_redis is not None:
-        service_overrides["redis_url"] = env_redis
-
-    if service_overrides:
-        config_data = _deep_merge(config_data, {"service": service_overrides})
-
-    optuna_overrides: dict[str, Any] = {}
-    env_optuna_uri = os.getenv("TAXON_OPTUNA_STORAGE_URI")
-    if env_optuna_uri is not None:
-        optuna_overrides["optuna_storage_uri"] = env_optuna_uri
-
-    if optuna_overrides:
-        config_data = _deep_merge(config_data, {"optuna": optuna_overrides})
-
-    mlflow_overrides: dict[str, Any] = {}
-    env_mlflow_uri = os.getenv("TAXON_MLFLOW_TRACKING_URI") or os.getenv("MLFLOW_TRACKING_URI")
-    if env_mlflow_uri is not None:
-        mlflow_overrides["tracking_uri"] = env_mlflow_uri
-
-    if mlflow_overrides:
-        config_data = _deep_merge(config_data, {"mlflow": mlflow_overrides})
-
-    telemetry_overrides: dict[str, Any] = {}
-    env_telemetry_uri = os.getenv("TAXON_TELEMETRY_DATABASE_URL") or os.getenv("TAXON_TELEMETRY__DATABASE_URL")
-    if env_telemetry_uri is not None:
-        telemetry_overrides["database_url"] = env_telemetry_uri
-
-    env_fallback = os.getenv("TAXON_TELEMETRY_ALLOW_IN_MEMORY_FALLBACK") or os.getenv(
-        "TAXON_TELEMETRY__ALLOW_IN_MEMORY_FALLBACK"
-    )
-    if env_fallback is not None:
-        telemetry_overrides["allow_in_memory_fallback"] = env_fallback.strip().lower() in ("true", "1", "yes")
-
-    if telemetry_overrides:
-        config_data = _deep_merge(config_data, {"telemetry": telemetry_overrides})
+    telemetry_ovr = _extract_telemetry_env_overrides()
+    if telemetry_ovr:
+        config_data = _deep_merge(config_data, {"telemetry": telemetry_ovr})
 
     return config_data
 
