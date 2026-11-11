@@ -17,6 +17,12 @@ from taxon_vision.config.schemas import Settings
 def _load_yaml_dict(path: Path) -> dict[str, Any]:
     """Safely load and parse YAML configuration dictionary from disk.
 
+    Why:
+        Centralises safe YAML deserialisation across pipeline parameter files, calibration tables, and service configuration files with deterministic error suppression.
+
+    How:
+        Verifies filesystem existence and employs PyYAML safe loader to produce an in-memory dictionary representation, returning an empty dictionary on missing files or non-dictionary payloads.
+
     Args:
         path: Filesystem path to the YAML configuration file.
 
@@ -32,6 +38,12 @@ def _load_yaml_dict(path: Path) -> dict[str, Any]:
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """Recursively merge override dictionary into base dictionary.
+
+    Why:
+        Enables multi-tiered configuration layering where environment variables, DVC parameters, and user overrides selectively mutate deeply nested settings without clobbering sibling configuration keys.
+
+    How:
+        Performs depth-first dictionary recursion, recursively combining matching sub-dictionaries while overwriting terminal scalar or sequence values in a shallow-copied container.
 
     Args:
         base: Base dictionary.
@@ -51,6 +63,12 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
 
 def _load_conformal_override(path: Path) -> dict[str, Any]:
     """Parse calibration parameters from conformal_config.yaml if present.
+
+    Why:
+        Preserves alignment between offline Stage 6 calibration outputs and runtime inference serving, preventing split-brain discrepancies where the service defaults to uncalibrated non-conformity quantiles.
+
+    How:
+        Reads calibration parameters from the specified path, translates legacy and alias keys into canonical schema identifiers, and wraps the resulting dictionary under the top-level conformal key.
 
     Args:
         path: Path to conformal_config.yaml.
@@ -88,6 +106,12 @@ def _load_conformal_override(path: Path) -> dict[str, Any]:
 def _resolve_custom_override(custom_path_str: str | None, base_path: Path) -> dict[str, Any]:
     """Load configuration overrides from custom user path or environment variable.
 
+    Why:
+        Allows ad-hoc experiments, staging overlays, and alternative backbone evaluations to inject distinct parameter files without modifying default configuration files tracked by version control.
+
+    How:
+        Validates whether the custom path string exists, ensures it does not circularly point to the base configuration file, and parses it via the YAML loader.
+
     Args:
         custom_path_str: Optional path string from argument or env var.
         base_path: Resolved canonical default configuration path.
@@ -104,6 +128,17 @@ def _resolve_custom_override(custom_path_str: str | None, base_path: Path) -> di
 
 
 def _extract_model_env_overrides() -> dict[str, Any]:
+    """Extract model subsystem configuration overrides from process environment variables.
+
+    Why:
+        Containerised execution environments and integration test harnesses require dynamic control over untrained model fallback modes, persistent storage directories, and ONNX Runtime intra-op thread pools without mutating configuration files on disk.
+
+    How:
+        Inspects TAXON_ALLOW_UNTRAINED_FALLBACK, TAXON_FLAGGED_STORAGE_DIR, and TAXON_MODEL__ONNX_INTRA_OP_THREADS, normalising boolean flags and integer thread counts into a typed sub-dictionary.
+
+    Returns:
+        Mapping of model configuration keys to parsed environment override values.
+    """
     overrides: dict[str, Any] = {}
     env_untrained = os.getenv("TAXON_ALLOW_UNTRAINED_FALLBACK")
     if env_untrained is not None:
@@ -123,6 +158,17 @@ def _extract_model_env_overrides() -> dict[str, Any]:
 
 
 def _extract_service_env_overrides() -> dict[str, Any]:
+    """Extract web microservice and caching configuration overrides from environment variables.
+
+    Why:
+        Distributed serving pods in Kubernetes clusters connect to shared ephemeral cache instances (Redis) to decouple multipart file uploads from asynchronous Class Activation Map (CAM) explanation routes across replica pods.
+
+    How:
+        Evaluates TAXON_SERVICE__REDIS_URL, TAXON_SERVICE_REDIS_URL, and legacy TAXON_REDIS_URL, returning a service override dictionary containing the resolved Redis connection URL if declared.
+
+    Returns:
+        Mapping containing service configuration overrides, or an empty dictionary if no variables are set.
+    """
     env_redis = (
         os.getenv("TAXON_SERVICE__REDIS_URL") or os.getenv("TAXON_SERVICE_REDIS_URL") or os.getenv("TAXON_REDIS_URL")
     )
@@ -130,6 +176,17 @@ def _extract_service_env_overrides() -> dict[str, Any]:
 
 
 def _extract_optuna_mlflow_overrides() -> dict[str, dict[str, Any]]:
+    """Extract experiment tracking and hyperparameter optimisation storage targets from environment variables.
+
+    Why:
+        Decouples local developer workstation SQLite storage targets from central cluster PostgreSQL databases and MLflow tracking servers without requiring manual parameter file editing across execution contexts.
+
+    How:
+        Reads TAXON_OPTUNA_STORAGE_URI and TAXON_MLFLOW_TRACKING_URI, constructing discrete sectional override mappings for deep merging into root configuration dictionaries.
+
+    Returns:
+        Nested dictionary containing optuna and mlflow sectional overrides.
+    """
     res: dict[str, dict[str, Any]] = {}
     env_optuna = os.getenv("TAXON_OPTUNA_STORAGE_URI")
     if env_optuna is not None:
@@ -142,6 +199,17 @@ def _extract_optuna_mlflow_overrides() -> dict[str, dict[str, Any]]:
 
 
 def _extract_telemetry_env_overrides() -> dict[str, Any]:
+    """Extract production telemetry database connection strings and fallback toggles from environment variables.
+
+    Why:
+        Enables runtime switching between local in-memory telemetry buffers and persistent PostgreSQL relational storage backends while guaranteeing test isolation without disk side-effects.
+
+    How:
+        Evaluates TAXON_TELEMETRY_DATABASE_URL and TAXON_TELEMETRY_ALLOW_IN_MEMORY_FALLBACK, parsing truthy boolean strings and constructing the telemetry override sub-dictionary.
+
+    Returns:
+        Mapping containing telemetry configuration keys and parsed override values.
+    """
     overrides: dict[str, Any] = {}
     env_uri = os.getenv("TAXON_TELEMETRY_DATABASE_URL") or os.getenv("TAXON_TELEMETRY__DATABASE_URL")
     if env_uri is not None:
@@ -191,8 +259,14 @@ def _apply_direct_env_overrides(config_data: dict[str, Any]) -> dict[str, Any]:
 def _resolve_workspace_root() -> Path:
     """Resolve the active workspace root directory across source checkouts and packaged installs.
 
+    Why:
+        Preserves deterministic path resolution across editable developer workspaces, containerised execution paths, and wheel installations without hardcoding host filesystem assumptions.
+
+    How:
+        Tests environment overrides (TAXON_WORKSPACE_ROOT, TAXON_CONFIG_ROOT), then checks the package parent directory hierarchy and the active current working directory for config/default_config.yaml.
+
     Returns:
-        Directory containing `config/default_config.yaml`.
+        Canonical directory containing the active config/default_config.yaml.
     """
     env_root = os.getenv("TAXON_WORKSPACE_ROOT") or os.getenv("TAXON_CONFIG_ROOT")
     if env_root:
@@ -216,6 +290,12 @@ def _resolve_workspace_root() -> Path:
 def get_params_path() -> Path:
     """Resolve the canonical params.yaml path, checking workspace root first then config/.
 
+    Why:
+        DVC pipeline definitions place params.yaml at the repository root, while container deployments may mount it under config/ or the application working directory.
+
+    How:
+        Probes the resolved workspace root for params.yaml, falling back to config/params.yaml if absent.
+
     Returns:
         Canonical path to params.yaml.
     """
@@ -231,14 +311,14 @@ def get_settings(config_path: str | Path | None = None) -> Settings:
     """Retrieve and cache the validated global application configuration settings.
 
     Why:
-        Centralizes configuration resolution across YAML defaults, DVC pipeline parameters, conformal calibration artefacts, and runtime environment variables into a single type-safe, immutable Pydantic hierarchy, avoiding repeated disk I/O via LRU caching.
+        Centralises configuration resolution across YAML defaults, DVC pipeline parameters, conformal calibration artefacts, and runtime environment variables into a single type-safe, immutable Pydantic hierarchy, avoiding repeated disk I/O via LRU caching.
 
     How:
-        1. Resolves workspace root and loads base defaults from `config/default_config.yaml`.
-        2. Deep-merges DVC hyperparameter overrides from `params.yaml`.
-        3. Overlays calibrated conformal thresholds from `config/conformal_config.yaml`.
-        4. Applies optional custom file overrides (`config_path` or `TAXON_CONFIG_PATH`) and `TAXON_` env variables.
-        5. Validates and constructs the `Settings` Pydantic root model.
+        1. Resolves workspace root and loads base defaults from config/default_config.yaml.
+        2. Deep-merges DVC hyperparameter overrides from params.yaml.
+        3. Overlays calibrated conformal thresholds from config/conformal_config.yaml.
+        4. Applies optional custom file overrides (config_path or TAXON_CONFIG_PATH) and TAXON_ env variables.
+        5. Validates and constructs the Settings Pydantic root model.
 
     Args:
         config_path: Optional filesystem path to YAML configuration overrides.
@@ -282,5 +362,12 @@ def get_settings(config_path: str | Path | None = None) -> Settings:
 
 
 def reset_settings() -> None:
-    """Clear the cached settings instance to force re-reading configuration files and environment."""
+    """Clear the cached settings instance to force re-reading configuration files and environment.
+
+    Why:
+        Enables clean state reset in automated unit test fixtures and runtime reloads without requiring process termination.
+
+    How:
+        Calls cache_clear() on the get_settings LRU cache wrapper.
+    """
     get_settings.cache_clear()
