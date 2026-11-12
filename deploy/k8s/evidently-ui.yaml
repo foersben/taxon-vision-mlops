@@ -53,10 +53,11 @@ metadata:
     app.kubernetes.io/name: evidently-ui
     app.kubernetes.io/part-of: taxon-vision-mlops
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app.kubernetes.io/name: evidently-ui
   ports:
     - name: http
       port: 8000
       targetPort: 8000
+      nodePort: 30082
