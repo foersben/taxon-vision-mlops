@@ -48,7 +48,7 @@ spec:
     # --------------------------------------------------------------------------
     # Production Model Serving & Operator Dashboard (Always Warm)
     # --------------------------------------------------------------------------
-    - match: Host(`taxon.benjamin-foerster.eu`) || PathPrefix(`/`)
+    - match: Host(`taxon.benjamin-foerster.eu`)
       kind: Rule
       priority: 10
       services:

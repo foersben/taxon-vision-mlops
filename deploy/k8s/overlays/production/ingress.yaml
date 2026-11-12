@@ -6,9 +6,25 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`taxon.benjamin-foerster.eu`) || PathPrefix(`/`)
+    - match: Host(`taxon.benjamin-foerster.eu`)
       kind: Rule
       priority: 10
       services:
         - name: taxon-vision-serving
           port: 8000
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: taxon-vision-production-ingress-tls
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`taxon.benjamin-foerster.eu`)
+      kind: Rule
+      priority: 10
+      services:
+        - name: taxon-vision-serving
+          port: 8000
+  tls: {}

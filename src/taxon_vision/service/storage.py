@@ -181,19 +181,13 @@ class RedisImageCache:
     """Distributed Redis-backed cache for temporary observation images.
 
     Why:
-        In multi-replica Kubernetes deployments, user uploads to `/ui/predict-htmx` land on
-        arbitrary pods. Follow-up requests (such as CAM attribution via `/api/v1/explain`) are routed
-        round-robin across pods. A centralized in-memory store prevents HTTP 422 cache misses without
-        requiring sticky sessions or local disk write amplification.
+        In multi-replica Kubernetes deployments, user uploads to `/ui/predict-htmx` land on arbitrary pods. Follow-up requests (such as CAM attribution via `/api/v1/explain`) are routed round-robin across pods. A centralized in-memory store prevents HTTP 422 cache misses without requiring sticky sessions or local disk write amplification.
 
     How:
-        Images are keyed by their SHA-256 digest with prefix `taxon:img:`. Images are stored
-        using `SETEX` with a configurable TTL. Lookups fetch bytes and refresh TTL via `EXPIRE`.
-        Connection pool handles connection reuse and timeouts.
+        Images are keyed by their SHA-256 digest with prefix `taxon:img:`. Images are stored using `SETEX` with a configurable TTL. Lookups fetch bytes and refresh TTL via `EXPIRE`. Connection pool handles connection reuse and timeouts.
 
     Complexity:
-        `store` and `get` are O(1) network roundtrips bounded by socket timeouts. Space complexity
-        in Redis is bounded by TTL and the Redis `maxmemory` eviction policy (`allkeys-lru`).
+        `store` and `get` are O(1) network roundtrips bounded by socket timeouts. Space complexity in Redis is bounded by TTL and the Redis `maxmemory` eviction policy (`allkeys-lru`).
 
     Attributes:
         ttl_seconds: Lifetime of an entry in seconds.
