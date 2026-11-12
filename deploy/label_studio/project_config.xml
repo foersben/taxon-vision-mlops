@@ -7,7 +7,7 @@
   <Image name="image" value="$image_url" zoom="true" rotateControl="true" />
 
   <!-- Photographer Attribution and License Integrity Pill -->
-  <View style="margin-top: 10px; margin-bottom: 15px; padding: 10px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+  <View style="margin-top: 10px; margin-bottom: 15px; padding: 10px; background-color: #088afc; border: 1px solid #e2e8f0; border-radius: 6px;">
     <Text name="attribution_pill" value="Attribution: $photographer_name | License: $license_code | Observation UUID: $observation_uuid" />
   </View>
 

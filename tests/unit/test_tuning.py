@@ -121,6 +121,18 @@ def test_hyperparameter_objective_trial(synthetic_split: EmbeddingSplit, monkeyp
     score = objective(trial)
     assert isinstance(score, float)
     assert 0.0 <= score <= 1.0
+    assert cfg.lr_min <= trial.params["learning_rate"] <= cfg.lr_max
+    assert cfg.weight_decay_min <= trial.params["weight_decay"] <= cfg.weight_decay_max
+    assert cfg.dropout_min <= trial.params["dropout"] <= cfg.dropout_max
+
+
+def test_calibrated_objective_penalises_high_val_loss() -> None:
+    """Verify calibration-aware objective rewards lower validation loss at identical PR-AUC."""
+    from taxon_vision.models.training.tuning import _compute_calibrated_objective_score
+
+    low_loss = _compute_calibrated_objective_score({"val_pr_auc": [0.98], "val_loss": [0.20]}, 0.05)
+    high_loss = _compute_calibrated_objective_score({"val_pr_auc": [0.98], "val_loss": [0.90]}, 0.05)
+    assert 0.0 <= high_loss.objective_score < low_loss.objective_score <= 1.0
 
 
 def test_tune_hyperparameters_fast(synthetic_split: EmbeddingSplit, monkeypatch: pytest.MonkeyPatch) -> None:

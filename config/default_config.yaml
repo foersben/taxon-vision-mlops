@@ -131,6 +131,13 @@ optuna:
   epochs: 30
   min_resource: 3
   reduction_factor: 2
+  lr_min: 0.0001
+  lr_max: 0.005
+  weight_decay_min: 0.005
+  weight_decay_max: 0.05
+  dropout_min: 0.15
+  dropout_max: 0.50
+  val_loss_penalty: 0.05
 
 telemetry:
   database_url: "postgresql+psycopg://telemetry:taxon_telemetry_pass@localhost:5432/telemetry"

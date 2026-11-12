@@ -10,6 +10,7 @@ import os
 import sqlite3
 import time
 import warnings
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -48,6 +49,46 @@ class TuningResult(NamedTuple):
 
     best_params: dict[str, Any]
     study: optuna.Study
+
+
+@dataclass(frozen=True)
+class _TrialScoreSummary:
+    """Calibration-penalised trial objective breakdown for Optuna scoring and MLflow telemetry."""
+
+    objective_score: float
+    peak_val_pr_auc: float
+    min_val_loss: float
+
+
+def _compute_calibrated_objective_score(
+    history: dict[str, list[float]],
+    val_loss_penalty: float,
+) -> _TrialScoreSummary:
+    """Compute a calibration-aware HPO score penalising high validation loss alongside Macro PR-AUC.
+
+    Why:
+        Pure rank-based Macro PR-AUC is scale-invariant to logit magnitude, allowing Bayesian search to eliminate L2 weight decay and inflate linear head norms until softmax saturates on out-of-distribution inputs. Dividing peak PR-AUC by ``1 + penalty * min_val_loss`` penalises overconfident validation misclassifications whilst remaining strictly bounded within ``[0.0, 1.0]``.
+
+    How:
+        Extracts the maximum ``val_pr_auc`` and minimum ``val_loss`` across epochs in ``history`` and returns ``_TrialScoreSummary`` carrying the penalised scalar score and raw component metrics.
+
+    Args:
+        history: Epoch metric history produced by ``train_head_on_cached_embeddings``.
+        val_loss_penalty: Non-negative damping coefficient applied to minimum validation loss.
+
+    Returns:
+        Frozen ``_TrialScoreSummary`` containing ``objective_score``, ``peak_val_pr_auc``, and ``min_val_loss``.
+    """
+    val_prs = history.get("val_pr_auc")
+    val_losses = history.get("val_loss")
+    peak_pr = float(max(val_prs)) if val_prs else 0.0
+    min_loss = float(min(val_losses)) if val_losses else 0.0
+    penalty_factor = 1.0 + max(0.0, val_loss_penalty) * max(0.0, min_loss)
+    return _TrialScoreSummary(
+        objective_score=peak_pr / penalty_factor,
+        peak_val_pr_auc=peak_pr,
+        min_val_loss=min_loss,
+    )
 
 
 class HyperparameterObjective:
@@ -95,7 +136,13 @@ class HyperparameterObjective:
         self.feature_dim = data.feature_dim
 
     def _sample_hyperparameters(self, trial: optuna.Trial) -> dict[str, Any]:
-        """Sample hyperparameters for the current Optuna trial.
+        """Sample regularised hyperparameters within configured bounds for the current Optuna trial.
+
+        Why:
+            Unbounded learning rates and weak L2 weight decay floors (`1e-6`) cause linear classification head weights to grow excessively (`||W|| >> 10`), producing saturated softmax probabilities on out-of-distribution specimens. Constraining sampling to `self.config`'s regularised domain preserves moderate logit scales.
+
+        How:
+            Queries Optuna TPE continuous/categorical samplers using bounds configured on `self.config`.
 
         Args:
             trial: Optuna trial instance.
@@ -104,9 +151,11 @@ class HyperparameterObjective:
             Dictionary containing sampled hyperparameters.
         """
         return {
-            "learning_rate": trial.suggest_float("learning_rate", 1e-4, 1e-1, log=True),
-            "weight_decay": trial.suggest_float("weight_decay", 1e-6, 1e-2, log=True),
-            "dropout": trial.suggest_float("dropout", 0.0, 0.5),
+            "learning_rate": trial.suggest_float("learning_rate", self.config.lr_min, self.config.lr_max, log=True),
+            "weight_decay": trial.suggest_float(
+                "weight_decay", self.config.weight_decay_min, self.config.weight_decay_max, log=True
+            ),
+            "dropout": trial.suggest_float("dropout", self.config.dropout_min, self.config.dropout_max),
             "cb_beta": trial.suggest_float("cb_beta", 0.99, 0.9999),
             "batch_size": trial.suggest_categorical("batch_size", [32, 64, 128]),
             "noise_std": trial.suggest_float("noise_std", 0.0, 0.05),
@@ -251,14 +300,15 @@ class HyperparameterObjective:
                     active_run = None
                 raise optuna.TrialPruned()
 
-            best_val = float(max(history["val_pr_auc"])) if history.get("val_pr_auc") else 0.0
+            score_summary = _compute_calibrated_objective_score(history, self.config.val_loss_penalty)
             if active_run:
                 try:
                     mlflow.set_tag("optuna.trial_state", "COMPLETE")
-                    mlflow.log_metric("peak_val_pr_auc", best_val)
+                    mlflow.log_metric("peak_val_pr_auc", score_summary.peak_val_pr_auc)
+                    mlflow.log_metric("min_val_loss", score_summary.min_val_loss)
                 except Exception as metric_err:
                     logger.debug("Failed to log peak_val_pr_auc metric: %s", metric_err)
-            return best_val
+            return score_summary.objective_score
 
         finally:
             if active_run is not None:

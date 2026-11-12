@@ -1,7 +1,7 @@
 {
-  "p50_latency_ms": 46.8,
-  "p95_latency_ms": 51.68,
-  "throughput_fps": 21.5,
+  "p50_latency_ms": 49.02,
+  "p95_latency_ms": 54.08,
+  "throughput_fps": 19.9,
   "latency_sla_ms": 120.0,
   "latency_sla_satisfied": true,
   "test_sample_count": 164,
@@ -13,10 +13,10 @@
   "singleton_rate": 0.9451,
   "empty_set_rate": 0.0,
   "referral_rate": 0.0,
-  "test_worst_class_ap": 0.9226,
-  "test_median_class_ap": 0.9737,
-  "fp32_to_int8_accuracy_drop": 0.0183,
-  "ece": 0.0874,
-  "q_hat": 0.6743,
+  "test_worst_class_ap": 0.9306,
+  "test_median_class_ap": 0.9782,
+  "fp32_to_int8_accuracy_drop": 0.0122,
+  "ece": 0.0889,
+  "q_hat": 0.7005,
   "alpha": 0.05
 }

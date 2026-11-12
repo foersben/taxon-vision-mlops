@@ -10,19 +10,23 @@ Why (Architectural Rationale & Trade-offs):
 
 How (Algorithmic Mechanism & Invariants):
     1. Resolves repository coordinates (`foersben/taxon-vision-mlops`) and authentication credential `DAGSHUB_TOKEN` from config/environment.
-    2. Uploads consented `{obs_id}_crop.jpg` bytes into the repository S3 bucket prefix `triage-queue/` via lazy `boto3` with SigV4 authentication.
+    2. Uploads consented `{obs_id}_crop.jpg` bytes into the repository S3 bucket prefix `triage-queue/` via AWS SigV4-signed `urllib.request` HTTP `PUT` (zero external S3 client dependencies).
     3. Ensures the target DagsHub Label Studio project exists and imports priority-ranked tasks carrying `observation_uuid`, `photographer_name`, `license_code`, `license_url`, `uncertainty_score`, and `ood_energy_score`.
     4. Exports completed annotations into `label_studio_export.json` and synchronises updated XML label configurations when new taxa expand `config/taxa_catalog.yaml`.
 """
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
 import os
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -285,10 +289,10 @@ class DagsHubLabelStudioClient:
         """Upload a consented flagged observation crop to the DagsHub S3 repository bucket.
 
         Why:
-            Presigned `s3://` URIs hosted in the DagsHub repository bucket remain accessible to both browser-based Label Studio annotators and headless Jenkins Stage 3 feature extraction workers without persisting raw imagery in Git.
+            Presigned `s3://` URIs hosted in the DagsHub repository bucket remain accessible to both browser-based Label Studio annotators and headless Jenkins Stage 3 feature extraction workers without persisting raw imagery in Git. Signing HTTP `PUT` requests directly with AWS SigV4 in Python standard library eliminates runtime `boto3` dependencies inside trimmed serving containers.
 
         How:
-            Instantiates a lazy `boto3` S3 client pointing at `self.config.s3_endpoint_url` authenticated with `self.config.token` and uploads `crop_path` with `image/jpeg` content type under `{bucket_prefix}/{observation_id}_crop.jpg`.
+            Constructs an `_S3PutRequest` targeting `self.config.s3_endpoint_url/{repo}/{bucket_prefix}/{observation_id}_crop.jpg`, signs canonical headers using HMAC-SHA256 (`AWS4-HMAC-SHA256`), and issues the `PUT` via `urllib.request.urlopen`.
 
         Args:
             observation_id: Unique UUID identifier of the observation.
@@ -298,25 +302,22 @@ class DagsHubLabelStudioClient:
             Canonical S3 URI targeting the uploaded object.
 
         Raises:
-            RuntimeError: If `self.is_configured` is False.
+            RuntimeError: If `self.is_configured` is False or the HTTP upload returns an error response.
         """
         if not self.is_configured:
             raise RuntimeError("DAGSHUB_TOKEN is required to upload triage crops to DagsHub S3.")
-        import boto3  # Lazy import preserves compatibility with minimal Airflow containers
 
         object_key = f"{self.config.bucket_prefix.strip('/')}/{observation_id}_crop.jpg"
-        s3_client = boto3.client(
-            "s3",
-            endpoint_url=self.config.s3_endpoint_url,
-            aws_access_key_id=self.config.token,
-            aws_secret_access_key=self.config.token,
-            region_name="us-east-1",
-        )
-        s3_client.upload_file(
-            Filename=str(crop_path),
-            Bucket=self.config.repo,
-            Key=object_key,
-            ExtraArgs={"ContentType": "image/jpeg"},
+        _s3_put_object(
+            _S3PutRequest(
+                endpoint_url=self.config.s3_endpoint_url,
+                bucket=self.config.repo,
+                object_key=object_key,
+                payload=crop_path.read_bytes(),
+                access_key=self.config.token,
+                secret_key=self.config.token,
+                timeout_seconds=self.config.timeout_seconds,
+            )
         )
         return f"s3://{self.config.repo}/{object_key}"
 
@@ -472,6 +473,94 @@ class DagsHubLabelStudioClient:
         )
         logger.info("Updated DagsHub Label Studio project %d label configuration from %s", project_id, xml_file)
         return True
+
+
+@dataclass(frozen=True)
+class _S3PutRequest:
+    """Typed parameter container for a pure-stdlib AWS SigV4 S3 PUT upload."""
+
+    endpoint_url: str
+    bucket: str
+    object_key: str
+    payload: bytes
+    access_key: str
+    secret_key: str
+    content_type: str = "image/jpeg"
+    region: str = "us-east-1"
+    timeout_seconds: float = 20.0
+
+
+def _hmac_sha256(key: bytes, message: str) -> bytes:
+    """Compute raw HMAC-SHA256 digest for SigV4 key derivation."""
+    return hmac.new(key, message.encode("utf-8"), hashlib.sha256).digest()
+
+
+def _derive_sigv4_signing_key(secret_key: str, date_stamp: str, region: str, service: str = "s3") -> bytes:
+    """Derive an AWS Signature Version 4 signing key from secret credentials and scope."""
+    k_date = _hmac_sha256(f"AWS4{secret_key}".encode(), date_stamp)
+    k_region = _hmac_sha256(k_date, region)
+    k_service = _hmac_sha256(k_region, service)
+    return _hmac_sha256(k_service, "aws4_request")
+
+
+def _s3_put_object(req: _S3PutRequest) -> None:
+    """Upload binary bytes to an S3-compatible path-style endpoint using stdlib AWS SigV4.
+
+    Why:
+        Trimmed runtime serving containers (`pixi -e ci`) and lightweight Airflow workers omit `boto3`. Signing path-style S3 HTTP `PUT` requests directly with `hmac` and `hashlib` keeps active-learning crop uploads self-contained with zero third-party SDK overhead.
+
+    How:
+        Normalises the canonical URI `{endpoint_path}/{bucket}/{object_key}`, computes SHA-256 payload digest and canonical `content-type;host;x-amz-content-sha256;x-amz-date` headers, signs the AWS4-HMAC-SHA256 string-to-sign, and issues an HTTP `PUT` via `urllib.request.urlopen`.
+
+    Args:
+        req: Typed `_S3PutRequest` containing endpoint URL, bucket, key, payload bytes, and credentials.
+
+    Raises:
+        RuntimeError: If the S3 gateway returns an HTTP 4xx/5xx status code.
+    """
+    parsed = urllib.parse.urlsplit(req.endpoint_url.rstrip("/"))
+    bucket_seg = urllib.parse.quote(req.bucket.strip("/"), safe="~")
+    key_seg = urllib.parse.quote(req.object_key.lstrip("/"), safe="/~")
+    canonical_uri = f"{parsed.path.rstrip('/')}/{bucket_seg}/{key_seg}"
+    target_url = f"{parsed.scheme}://{parsed.netloc}{canonical_uri}"
+
+    now = datetime.now(UTC)
+    amz_date = now.strftime("%Y%m%dT%H%M%SZ")
+    date_stamp = now.strftime("%Y%m%d")
+    payload_hash = hashlib.sha256(req.payload).hexdigest()
+
+    canonical_headers = (
+        f"content-type:{req.content_type}\n"
+        f"host:{parsed.netloc}\n"
+        f"x-amz-content-sha256:{payload_hash}\n"
+        f"x-amz-date:{amz_date}\n"
+    )
+    signed_headers = "content-type;host;x-amz-content-sha256;x-amz-date"
+    canonical_request = f"PUT\n{canonical_uri}\n\n{canonical_headers}\n{signed_headers}\n{payload_hash}"
+
+    scope = f"{date_stamp}/{req.region}/s3/aws4_request"
+    request_digest = hashlib.sha256(canonical_request.encode("utf-8")).hexdigest()
+    string_to_sign = f"AWS4-HMAC-SHA256\n{amz_date}\n{scope}\n{request_digest}"
+    signing_key = _derive_sigv4_signing_key(req.secret_key, date_stamp, req.region)
+    signature = hmac.new(signing_key, string_to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
+
+    headers = {
+        "Content-Type": req.content_type,
+        "Host": parsed.netloc,
+        "x-amz-content-sha256": payload_hash,
+        "x-amz-date": amz_date,
+        "Authorization": (
+            f"AWS4-HMAC-SHA256 Credential={req.access_key}/{scope}, "
+            f"SignedHeaders={signed_headers}, Signature={signature}"
+        ),
+    }
+    http_req = urllib.request.Request(url=target_url, data=req.payload, headers=headers, method="PUT")
+    try:
+        with urllib.request.urlopen(http_req, timeout=req.timeout_seconds):
+            return
+    except urllib.error.HTTPError as http_err:
+        body = http_err.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"DagsHub S3 PUT {target_url} failed with HTTP {http_err.code}: {body[:300]}") from http_err
 
 
 @dataclass(frozen=True)

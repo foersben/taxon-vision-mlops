@@ -168,6 +168,13 @@ def _resolve_tier_hyperparameters(
             extractor_name=extractor,
             study_name=study_name,
             reset_study=reset_study,
+            lr_min=settings.optuna.lr_min,
+            lr_max=settings.optuna.lr_max,
+            weight_decay_min=settings.optuna.weight_decay_min,
+            weight_decay_max=settings.optuna.weight_decay_max,
+            dropout_min=settings.optuna.dropout_min,
+            dropout_max=settings.optuna.dropout_max,
+            val_loss_penalty=settings.optuna.val_loss_penalty,
         )
         best_params, _ = tune_hyperparameters(data=data, num_classes=num_classes, config=tuning_cfg)
         return TrainingHyperparameters(

@@ -40,11 +40,9 @@ def test_triage_queue() -> None:
 
 
 def test_dagshub_label_studio_client_consent_guard_and_export(tmp_path, monkeypatch) -> None:
-    """Verify DagsHub Label Studio client rejects unconsented items, uploads consented crops to S3, and exports tasks."""
-    import builtins
-    import io
+    """Verify DagsHub Label Studio client rejects unconsented items, uploads consented crops via SigV4 PUT without boto3, and exports tasks."""
     import json
-    from types import SimpleNamespace
+    import urllib.request
 
     from taxon_vision.active_learning.label_studio_sync import DagsHubLabelStudioClient, DagsHubRepoConfig
 
@@ -69,28 +67,28 @@ def test_dagshub_label_studio_client_consent_guard_and_export(tmp_path, monkeypa
         encoding="utf-8",
     )
 
-    uploaded: list[tuple[str, str]] = []
+    s3_puts: list[tuple[str, str, str, bytes]] = []
     api_calls: list[tuple[str, str, object]] = []
 
-    class _FakeS3:
-        def upload_file(self, **kwargs: object) -> None:
-            uploaded.append((str(kwargs["Bucket"]), str(kwargs["Key"])))
+    class _FakeResp:
+        def __enter__(self) -> _FakeResp:
+            return self
 
-        def get_object(self, **_kwargs: object) -> dict[str, object]:
-            return {"Body": io.BytesIO(b"img-bytes")}
+        def __exit__(self, *_args: object) -> None:
+            return None
 
-    def _make_boto_client(*_args: object, **_kwargs: object) -> _FakeS3:
-        return _FakeS3()
+    def _fake_urlopen(req: urllib.request.Request, timeout: float = 0.0) -> _FakeResp:
+        s3_puts.append(
+            (
+                req.get_method(),
+                req.full_url,
+                str(req.get_header("Authorization") or ""),
+                bytes(req.data or b""),
+            )
+        )
+        return _FakeResp()
 
-    fake_boto3 = SimpleNamespace(client=_make_boto_client)
-    orig_import = builtins.__import__
-
-    def _patched_import(name: str, *args: object, **kwargs: object) -> object:
-        if name == "boto3":
-            return fake_boto3
-        return orig_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", _patched_import)
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
 
     client = DagsHubLabelStudioClient(DagsHubRepoConfig(token="pat-test", project_id=7))
 
@@ -104,7 +102,12 @@ def test_dagshub_label_studio_client_consent_guard_and_export(tmp_path, monkeypa
 
     assert client.sync_flagged_observation(unconsented_meta, crop) is False
     assert client.sync_flagged_observation(consented_meta, crop) is True
-    assert uploaded == [("taxon-vision-mlops", "triage-queue/obs-1_crop.jpg")]
+    assert len(s3_puts) == 1
+    method, url, auth, data = s3_puts[0]
+    assert method == "PUT"
+    assert url == "https://dagshub.com/api/v1/repo-buckets/s3/foersben/taxon-vision-mlops/triage-queue/obs-1_crop.jpg"
+    assert auth.startswith("AWS4-HMAC-SHA256 Credential=pat-test/")
+    assert data == b"\xff\xd8\xff\xe0dummy"
     assert json.loads(consented_meta.read_text(encoding="utf-8"))["synced_to_label_studio"] is True
 
     export_file = tmp_path / "export.json"

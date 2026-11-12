@@ -263,6 +263,13 @@ class OptunaConfig(BaseModel):
     epochs: int = Field(default=20, gt=0)
     min_resource: int = Field(default=3, gt=0)
     reduction_factor: int = Field(default=2, gt=1)
+    lr_min: float = Field(default=1e-4, gt=0.0)
+    lr_max: float = Field(default=5e-3, gt=0.0)
+    weight_decay_min: float = Field(default=5e-3, ge=0.0)
+    weight_decay_max: float = Field(default=5e-2, gt=0.0)
+    dropout_min: float = Field(default=0.15, ge=0.0, lt=1.0)
+    dropout_max: float = Field(default=0.50, ge=0.0, lt=1.0)
+    val_loss_penalty: float = Field(default=0.05, ge=0.0)
 
 
 class TelemetryConfig(BaseModel):
