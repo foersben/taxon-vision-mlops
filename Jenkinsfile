@@ -371,11 +371,11 @@ spec:
             COMMIT_MSG=$(git log -1 --pretty=%B || true)
             GHCR_IMAGE="ghcr.io/foersben/taxon-vision-mlops"
             IMAGE_READY=false
-            if ! echo "${COMMIT_MSG}" | grep -qE '\[(skip ci|ci skip)\]'; then
+            if ! echo "${COMMIT_MSG}" | grep -qiE "skip ci|ci skip"; then
               echo ">>> Waiting for GHCR image ${GHCR_IMAGE}:sha-${SHORT_SHA} (up to 360s)..."
               WAITED=0
               while [ "${WAITED}" -lt 360 ]; do
-                GHCR_TOK=$(curl -fsSL "https://ghcr.io/token?service=ghcr.io&scope=repository:foersben/taxon-vision-mlops:pull" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p' || true)
+                GHCR_TOK=$(curl -fsSL "https://ghcr.io/token?service=ghcr.io&scope=repository:foersben/taxon-vision-mlops:pull" | grep -o '"token":"[^"]*"' | cut -d'"' -f4 || true)
                 if [ -n "${GHCR_TOK}" ]; then
                   CODE=$(curl -s -o /dev/null -w "%{http_code}" \
                     -H "Authorization: Bearer ${GHCR_TOK}" \

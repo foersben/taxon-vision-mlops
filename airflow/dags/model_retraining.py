@@ -123,7 +123,7 @@ def _resolve_jenkins_context() -> JenkinsAuthContext:
 
     env_user = os.getenv("JENKINS_USER", "").strip()
     env_token = os.getenv("JENKINS_API_TOKEN", "").strip()
-    username = env_user or ("" if conn_login.startswith("$(") else conn_login) or "admin"
+    username = env_user or ("" if conn_login.startswith("$(") else conn_login) or "benni"
     api_token = env_token or ("" if conn_password.startswith("$(") else conn_password)
     branch = urllib.parse.quote(os.getenv("TAXON_JENKINS_BRANCH", "main").strip() or "main", safe="")
     if not api_token:
