@@ -995,3 +995,104 @@ def test_promote_candidate_model_e2e_with_incumbent_demotion(monkeypatch: pytest
     mock_client.set_model_version_tag.assert_any_call("taxon_vision_classifier", "2", "gate", "promoted_all_4_gates")
     mock_client.set_model_version_tag.assert_any_call("taxon_vision_classifier", "2", "val_pr_auc", "0.9100")
     mock_client.set_model_version_tag.assert_any_call("taxon_vision_classifier", "2", "extractor", "dinov3")
+
+
+def test_mirror_run_to_dagshub_skips_when_unconfigured_or_same_target(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Skip mirroring cleanly without remote RPC when DAGSHUB_TOKEN is unset or target matches source."""
+    from taxon_vision.config import get_settings
+    from taxon_vision.models.training.tracking import mirror_run_to_dagshub
+
+    monkeypatch.delenv("DAGSHUB_TOKEN", raising=False)
+    monkeypatch.delenv("MLFLOW_TRACKING_PASSWORD", raising=False)
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://mlflow-server.taxon-vision.svc.cluster.local:5000")
+    get_settings.cache_clear()
+    try:
+        assert mirror_run_to_dagshub("run-1") is None
+
+        monkeypatch.setenv("DAGSHUB_TOKEN", "pat-123")
+        monkeypatch.setenv("MLFLOW_TRACKING_URI", "https://dagshub.com/foersben/taxon-vision-mlops.mlflow")
+        assert mirror_run_to_dagshub("run-1") == "run-1"
+    finally:
+        get_settings.cache_clear()
+
+
+def test_mirror_run_to_dagshub_replicates_metrics_params_and_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Replicate source MLflow run metadata and artifacts to public DagsHub tracking server."""
+    from types import SimpleNamespace
+
+    from taxon_vision.config import get_settings
+    from taxon_vision.models.training import tracking as tracking_mod
+
+    report_file = tmp_path / "summary.txt"
+    report_file.write_text("ok", encoding="utf-8")
+
+    monkeypatch.setenv("DAGSHUB_TOKEN", "secret-pat")
+    monkeypatch.setenv("TAXON_MLFLOW__TRACKING_URI", "http://mlflow-server.taxon-vision.svc.cluster.local:5000")
+    get_settings.cache_clear()
+
+    calls: list[tuple[str, str]] = []
+
+    class _FakeClient:
+        def __init__(self, tracking_uri: str) -> None:
+            self.tracking_uri = tracking_uri
+            calls.append(("init", tracking_uri))
+
+        def get_run(self, run_id: str) -> SimpleNamespace:
+            return SimpleNamespace(
+                info=SimpleNamespace(run_id=run_id, experiment_id="exp-1", run_name="eval-run", start_time=1000),
+                data=SimpleNamespace(
+                    params={"backbone": "dinov3"},
+                    tags={"stage": "evaluate", "mlflow.note.content": "keep"},
+                    metrics={"eval.top1_accuracy": 0.94},
+                ),
+            )
+
+        def get_experiment(self, experiment_id: str) -> SimpleNamespace:
+            return SimpleNamespace(experiment_id=experiment_id, name="taxon_vision_evaluation")
+
+        def get_metric_history(self, _run_id: str, key: str) -> list[SimpleNamespace]:
+            return [SimpleNamespace(key=key, value=0.94, timestamp=1000, step=1)]
+
+        def get_experiment_by_name(self, _name: str) -> None:
+            return None
+
+        def create_experiment(self, name: str) -> str:
+            calls.append(("create_experiment", name))
+            return "42"
+
+        def create_run(self, *, run_name: str = "", **_kwargs: object) -> SimpleNamespace:
+            calls.append(("create_run", run_name))
+            return SimpleNamespace(info=SimpleNamespace(run_id="dst-run-99"))
+
+        def log_batch(
+            self,
+            *,
+            metrics: list[object] = (),
+            params: list[object] = (),
+            tags: list[object] = (),
+            **_kwargs: object,
+        ) -> None:
+            calls.append(("log_batch", f"{len(metrics)}:{len(params)}:{len(tags)}"))
+
+        def log_artifact(self, _run_id: str, local_path: str) -> None:
+            calls.append(("log_artifact", local_path))
+
+        def set_terminated(self, run_id: str, status: str = "FINISHED") -> None:
+            calls.append(("set_terminated", f"{run_id}:{status}"))
+
+    monkeypatch.setattr(tracking_mod, "MlflowClient", _FakeClient)
+    try:
+        dst_id = tracking_mod.mirror_run_to_dagshub("src-run-1", artifact_paths=[report_file])
+        assert dst_id == "dst-run-99"
+        assert ("init", "https://dagshub.com/foersben/taxon-vision-mlops.mlflow") in calls
+        assert ("create_experiment", "taxon_vision_evaluation") in calls
+        assert ("log_batch", "0:1:0") in calls
+        assert ("log_batch", "1:0:0") in calls
+        assert ("log_batch", "0:0:4") in calls
+        assert ("log_artifact", str(report_file)) in calls
+        assert ("set_terminated", "dst-run-99:FINISHED") in calls
+    finally:
+        get_settings.cache_clear()

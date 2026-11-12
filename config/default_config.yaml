@@ -149,6 +149,8 @@ drift:
   alpha: 0.01
   config_path: "config/drift_config.yaml"
   reference_embeddings_path: "data/embeddings/cal_embeddings.pt"
+  evidently_workspace_dir: "data/evidently_workspace"
+  evidently_project_name: "TaxonVision Production Drift"
 
 evaluation:
   latency_sla_ms: 120.0

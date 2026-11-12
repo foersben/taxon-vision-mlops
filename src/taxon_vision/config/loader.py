@@ -182,20 +182,60 @@ def _extract_optuna_mlflow_overrides() -> dict[str, dict[str, Any]]:
         Decouples local developer workstation SQLite storage targets from central cluster PostgreSQL databases and MLflow tracking servers without requiring manual parameter file editing across execution contexts.
 
     How:
-        Reads TAXON_OPTUNA_STORAGE_URI and TAXON_MLFLOW_TRACKING_URI, constructing discrete sectional override mappings for deep merging into root configuration dictionaries.
+        Reads unnested and double-underscore environment variables for Optuna and MLflow tracking URIs, constructing discrete sectional override mappings for deep merging into root configuration dictionaries.
 
     Returns:
         Nested dictionary containing optuna and mlflow sectional overrides.
     """
     res: dict[str, dict[str, Any]] = {}
-    env_optuna = os.getenv("TAXON_OPTUNA_STORAGE_URI")
+    env_optuna = os.getenv("TAXON_OPTUNA__OPTUNA_STORAGE_URI") or os.getenv("TAXON_OPTUNA_STORAGE_URI")
     if env_optuna is not None:
         res["optuna"] = {"optuna_storage_uri": env_optuna}
 
-    env_mlflow = os.getenv("TAXON_MLFLOW_TRACKING_URI") or os.getenv("MLFLOW_TRACKING_URI")
+    mlflow_ovr: dict[str, Any] = {}
+    env_mlflow = (
+        os.getenv("TAXON_MLFLOW__TRACKING_URI")
+        or os.getenv("TAXON_MLFLOW_TRACKING_URI")
+        or os.getenv("MLFLOW_TRACKING_URI")
+    )
     if env_mlflow is not None:
-        res["mlflow"] = {"tracking_uri": env_mlflow}
+        mlflow_ovr["tracking_uri"] = env_mlflow
+
+    env_dagshub = os.getenv("TAXON_MLFLOW__DAGSHUB_URI") or os.getenv("TAXON_MLFLOW_DAGSHUB_URI")
+    if env_dagshub is not None:
+        mlflow_ovr["dagshub_uri"] = env_dagshub
+
+    if mlflow_ovr:
+        res["mlflow"] = mlflow_ovr
     return res
+
+
+def _extract_drift_env_overrides() -> dict[str, Any]:
+    """Extract reference embedding and Evidently workspace overrides from environment variables.
+
+    Why:
+        Kubernetes serving pods mount read-only calibrated reference tensors and persistent Evidently UI host volumes at cluster-specific paths distinct from local workstation defaults. Applying direct overrides ensures Settings(**config_data) honours container mount points rather than being masked by config/default_config.yaml.
+
+    How:
+        Reads single- and double-underscore environment variables for reference embeddings paths, Evidently workspace directories, and project names, returning a drift override sub-dictionary.
+
+    Returns:
+        Mapping containing drift configuration keys and parsed override values.
+    """
+    overrides: dict[str, Any] = {}
+    env_ref = os.getenv("TAXON_DRIFT__REFERENCE_EMBEDDINGS_PATH") or os.getenv("TAXON_DRIFT_REFERENCE_PATH")
+    if env_ref is not None:
+        overrides["reference_embeddings_path"] = env_ref
+
+    env_ws = os.getenv("TAXON_DRIFT__EVIDENTLY_WORKSPACE_DIR") or os.getenv("TAXON_EVIDENTLY_WORKSPACE_DIR")
+    if env_ws is not None:
+        overrides["evidently_workspace_dir"] = env_ws
+
+    env_proj = os.getenv("TAXON_DRIFT__EVIDENTLY_PROJECT_NAME")
+    if env_proj is not None:
+        overrides["evidently_project_name"] = env_proj
+
+    return overrides
 
 
 def _extract_telemetry_env_overrides() -> dict[str, Any]:
@@ -205,13 +245,17 @@ def _extract_telemetry_env_overrides() -> dict[str, Any]:
         Enables runtime switching between local in-memory telemetry buffers and persistent PostgreSQL relational storage backends while guaranteeing test isolation without disk side-effects.
 
     How:
-        Evaluates TAXON_TELEMETRY_DATABASE_URL and TAXON_TELEMETRY_ALLOW_IN_MEMORY_FALLBACK, parsing truthy boolean strings and constructing the telemetry override sub-dictionary.
+        Evaluates TAXON_TELEMETRY_DATABASE_URL, TAXON_TELEMETRY__DATABASE_URL, and TAXON_TELEMETRY_ALLOW_IN_MEMORY_FALLBACK, falling back to TAXON_DRIFT_DB_URI if explicitly declared.
 
     Returns:
         Mapping containing telemetry configuration keys and parsed override values.
     """
     overrides: dict[str, Any] = {}
-    env_uri = os.getenv("TAXON_TELEMETRY_DATABASE_URL") or os.getenv("TAXON_TELEMETRY__DATABASE_URL")
+    env_uri = (
+        os.getenv("TAXON_TELEMETRY_DATABASE_URL")
+        or os.getenv("TAXON_TELEMETRY__DATABASE_URL")
+        or os.getenv("TAXON_DRIFT_DB_URI")
+    )
     if env_uri is not None:
         overrides["database_url"] = env_uri
 
@@ -227,10 +271,10 @@ def _apply_direct_env_overrides(config_data: dict[str, Any]) -> dict[str, Any]:
     """Apply targeted unnested environment variable overrides for test isolation and Optuna storage.
 
     Why:
-        Enables seamless runtime configuration of test modes, MLflow tracking, and database URIs without nested delimiters.
+        Enables seamless runtime configuration of test modes, MLflow tracking, drift mounts, and database URIs without nested delimiters.
 
     How:
-        Extracts sectional environment overrides for model, service, optuna, mlflow, and telemetry sub-dictionaries, deep-merging them into the unified config container.
+        Extracts sectional environment overrides for model, service, optuna, mlflow, telemetry, and drift sub-dictionaries, deep-merging them into the unified config container.
 
     Args:
         config_data: Merged configuration dictionary.
@@ -252,6 +296,10 @@ def _apply_direct_env_overrides(config_data: dict[str, Any]) -> dict[str, Any]:
     telemetry_ovr = _extract_telemetry_env_overrides()
     if telemetry_ovr:
         config_data = _deep_merge(config_data, {"telemetry": telemetry_ovr})
+
+    drift_ovr = _extract_drift_env_overrides()
+    if drift_ovr:
+        config_data = _deep_merge(config_data, {"drift": drift_ovr})
 
     return config_data
 
@@ -344,8 +392,15 @@ def get_settings(config_path: str | Path | None = None) -> Settings:
     if params_data:
         config_data = _deep_merge(config_data, params_data)
 
-    # Layer conformal_config.yaml if present
-    conformal_override = _load_conformal_override(config_dir / "conformal_config.yaml")
+    # Layer conformal_config.yaml if present (prefer TAXON_CONFORMAL_CONFIG_PATH when staged on disk)
+    env_conformal_str = os.getenv("TAXON_CONFORMAL_CONFIG_PATH", "").strip()
+    env_conformal_path = Path(env_conformal_str) if env_conformal_str else None
+    conformal_target = (
+        env_conformal_path
+        if env_conformal_path is not None and env_conformal_path.is_file()
+        else config_dir / "conformal_config.yaml"
+    )
+    conformal_override = _load_conformal_override(conformal_target)
     if conformal_override:
         config_data = _deep_merge(config_data, conformal_override)
 

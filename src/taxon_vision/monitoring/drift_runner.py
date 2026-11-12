@@ -36,10 +36,11 @@ import pandas as pd
 import torch
 from evidently import Report
 from evidently.presets import DataDriftPreset
+from evidently.ui.workspace import Workspace
 from sklearn.decomposition import PCA
 
 from taxon_vision.config import Settings, get_settings
-from taxon_vision.models.training.tracking import mlflow_run_scope
+from taxon_vision.models.training.tracking import mirror_run_to_dagshub, mlflow_run_scope
 from taxon_vision.monitoring.drift import compute_mmd2_permutation, compute_wasserstein_drift
 from taxon_vision.service.telemetry_store import (
     DriftRunRecord,
@@ -146,23 +147,64 @@ def load_reference_embeddings(path_str: str) -> npt.NDArray[np.float32]:
     return _REFERENCE_CACHE
 
 
+def _persist_to_evidently_workspace(
+    snapshot: Any,
+    workspace_dir: Path,
+    project_name: str,
+    run_name: str | None = None,
+) -> None:
+    """Persist an evaluated Evidently snapshot into the mounted Evidently UI Workspace directory.
+
+    Why:
+        Rendering standalone HTML files isolates each drift check from historical longitudinal series rendered by the cluster Evidently UI container on port 30850. Writing the snapshot directly into the mounted workspace directory populates interactive project timelines without blocking serving workers.
+
+    How:
+        Ensures workspace_dir exists, opens or creates the workspace via Workspace.create, looks up project_name with search_project (creating the project if absent), and records the snapshot metadata via add_run(include_data=False).
+
+    Args:
+        snapshot: Evaluated Evidently Snapshot produced by Report.run().
+        workspace_dir: Target workspace directory served by evidently-service.
+        project_name: Project display name in the Evidently UI.
+        run_name: Optional human-readable snapshot timestamp label.
+    """
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    ws = Workspace.create(str(workspace_dir))
+    projects = ws.search_project(project_name)
+    project = (
+        projects[0]
+        if projects
+        else ws.create_project(
+            name=project_name,
+            description="TaxonVision hourly embedding distribution drift monitoring",
+        )
+    )
+    ws.add_run(project.id, snapshot, include_data=False, name=run_name)
+
+
 def generate_evidently_drift_report(
     reference: npt.NDArray[np.float32],
     current: npt.NDArray[np.float32],
     output_path: Path,
+    *,
+    workspace_dir: Path | None = None,
+    project_name: str = "TaxonVision Production Drift",
+    run_name: str | None = None,
 ) -> Path:
-    """Generate and save an Evidently DataDriftPreset report using PCA projection.
+    """Generate and save an Evidently DataDriftPreset report and optional workspace snapshot using PCA projection.
 
     Why:
         High-dimensional embedding tables (384 to 1280 columns) result in slow report generation and visually illegible drift matrices. Projecting vectors down to Euclidean norms plus the top 8 principal components yields an interpretable, fast tabular snapshot.
 
     How:
-        Fits an 8-component PCA model on reference vectors, projects both reference and current matrices, computes L2 vector norms, builds pandas DataFrames, runs Evidently's Report snapshot, and saves the standalone HTML file.
+        Fits an 8-component PCA model on reference vectors, projects both reference and current matrices, computes L2 vector norms, builds pandas DataFrames, runs Evidently's Report snapshot, saves the standalone HTML file, and optionally persists the snapshot to an Evidently UI Workspace.
 
     Args:
         reference: Reference embedding matrix of shape (M, D).
         current: Current observation embedding matrix of shape (N, D).
         output_path: Destination file path for the standalone HTML report.
+        workspace_dir: Optional Evidently UI workspace directory for longitudinal dashboard persistence.
+        project_name: Project name within workspace_dir when persisting runs.
+        run_name: Optional human-readable label attached to the stored workspace run.
 
     Returns:
         Destination path of the rendered HTML report.
@@ -185,6 +227,16 @@ def generate_evidently_drift_report(
     snapshot = report.run(reference_data=ref_df, current_data=curr_df)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     snapshot.save_html(str(output_path))
+    if workspace_dir is not None:
+        try:
+            _persist_to_evidently_workspace(
+                snapshot=snapshot,
+                workspace_dir=workspace_dir,
+                project_name=project_name,
+                run_name=run_name,
+            )
+        except Exception:
+            logger.exception("Failed to persist drift snapshot to Evidently workspace at %s", workspace_dir)
     return output_path
 
 
@@ -284,16 +336,24 @@ def evaluate_recent_drift(
     # 5. Composite Drift Verdict
     drift_detected = bool(w1_distance > tau_w1 or p_val < resolved_settings.drift.alpha)
 
-    # 6. Render Evidently Compact Projection Report
+    # 6. Render Evidently Compact Projection Report & Persist to Workspace
     report_file = Path("reports/drift_report.html")
+    run_label = f"drift_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
     try:
-        generate_evidently_drift_report(ref, current, report_file)
+        generate_evidently_drift_report(
+            ref,
+            current,
+            report_file,
+            workspace_dir=Path(resolved_settings.drift.evidently_workspace_dir),
+            project_name=resolved_settings.drift.evidently_project_name,
+            run_name=run_label,
+        )
         report_path_str: str | None = str(report_file)
     except Exception:
         logger.exception("Failed to render Evidently drift report")
         report_path_str = None
 
-    # 7. Log to MLflow Run Scope
+    # 7. Log to MLflow Run Scope & Mandatory DagsHub Mirror
     mlflow_run_id: str | None = None
     experiment_name = resolved_settings.mlflow.drift_experiment_name
     try:
@@ -314,6 +374,13 @@ def evaluate_recent_drift(
                     mlflow.log_artifact(report_path_str)
     except Exception:
         logger.exception("Failed to log drift evaluation metrics to MLflow")
+
+    if mlflow_run_id:
+        mirror_run_to_dagshub(
+            mlflow_run_id,
+            settings=resolved_settings,
+            artifact_paths=(Path(report_path_str),) if report_path_str else (),
+        )
 
     # 8. Record in Telemetry Store
     record = DriftRunRecord(

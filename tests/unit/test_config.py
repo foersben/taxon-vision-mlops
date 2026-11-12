@@ -123,3 +123,28 @@ def test_mlflow_tracking_uri_env_override(monkeypatch: pytest.MonkeyPatch) -> No
     settings = get_settings()
     assert settings.mlflow.tracking_uri == taxon_uri
     get_settings.cache_clear()
+
+
+def test_drift_and_telemetry_direct_env_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure flattened K8s/deployment env vars override nested YAML drift and telemetry defaults."""
+    from taxon_vision.config import get_settings
+
+    monkeypatch.setenv("TAXON_DRIFT_DB_URI", "postgresql+psycopg://tel:pw@pg:5432/telemetry")
+    monkeypatch.setenv("TAXON_DRIFT__REFERENCE_EMBEDDINGS_PATH", "/app/data/embeddings/cal_embeddings.pt")
+    monkeypatch.setenv("TAXON_DRIFT__EVIDENTLY_WORKSPACE_DIR", "/var/lib/taxon-vision/evidently")
+    monkeypatch.setenv("TAXON_DRIFT__EVIDENTLY_PROJECT_NAME", "Custom Drift")
+    monkeypatch.setenv("TAXON_TELEMETRY_ALLOW_IN_MEMORY_FALLBACK", "false")
+    monkeypatch.setenv("TAXON_OPTUNA__OPTUNA_STORAGE_URI", "postgresql+psycopg://opt:pw@pg:5432/optuna")
+    monkeypatch.setenv("TAXON_MLFLOW__TRACKING_URI", "http://mlflow-server.taxon-vision.svc.cluster.local:5000")
+    get_settings.cache_clear()
+    try:
+        settings = get_settings()
+        assert settings.telemetry.database_url == "postgresql+psycopg://tel:pw@pg:5432/telemetry"
+        assert settings.telemetry.allow_in_memory_fallback is False
+        assert settings.drift.reference_embeddings_path == "/app/data/embeddings/cal_embeddings.pt"
+        assert settings.drift.evidently_workspace_dir == "/var/lib/taxon-vision/evidently"
+        assert settings.drift.evidently_project_name == "Custom Drift"
+        assert settings.optuna.optuna_storage_uri == "postgresql+psycopg://opt:pw@pg:5432/optuna"
+        assert settings.mlflow.tracking_uri == "http://mlflow-server.taxon-vision.svc.cluster.local:5000"
+    finally:
+        get_settings.cache_clear()

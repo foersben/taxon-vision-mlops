@@ -148,6 +148,7 @@ def test_evaluate_recent_drift_in_distribution(tmp_path: Path) -> None:
     settings.drift.window_size = 50
     settings.drift.tau_w1 = 0.50
     settings.drift.alpha = 0.01
+    settings.drift.evidently_workspace_dir = str(tmp_path / "evidently_ws")
 
     rng = np.random.default_rng(42)
     ref = rng.standard_normal((60, 16)).astype(np.float32)
@@ -200,6 +201,7 @@ def test_evaluate_recent_drift_detected_under_shift(tmp_path: Path) -> None:
     settings.drift.window_size = 50
     settings.drift.tau_w1 = 0.10
     settings.drift.alpha = 0.01
+    settings.drift.evidently_workspace_dir = str(tmp_path / "evidently_ws")
 
     rng = np.random.default_rng(42)
     ref = rng.standard_normal((60, 16)).astype(np.float32)
@@ -239,11 +241,12 @@ def test_evaluate_recent_drift_detected_under_shift(tmp_path: Path) -> None:
     assert last_run.drift_detected is True
 
 
-def test_evaluate_recent_drift_extractor_filtering() -> None:
+def test_evaluate_recent_drift_extractor_filtering(tmp_path: Path) -> None:
     """Verify that extractor parameter filters live observations strictly by model family."""
     settings = get_settings().model_copy(deep=True)
     settings.drift.min_samples = 5
     settings.drift.window_size = 50
+    settings.drift.evidently_workspace_dir = str(tmp_path / "evidently_ws")
 
     rng = np.random.default_rng(42)
     store = BoundedInMemoryTelemetryStore(maxlen=100)

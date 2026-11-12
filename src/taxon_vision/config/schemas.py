@@ -289,6 +289,9 @@ class TelemetryConfig(BaseModel):
 class DriftConfig(BaseModel):
     """Configuration schema for embedding and concept drift monitoring.
 
+    Summary:
+        Defines sliding-window sample bounds, statistical test thresholds, reference embedding paths, and Evidently workspace persistence targets.
+
     Attributes:
         window_size (int): Number of recent production inference records evaluated in sliding window (default: 500).
         min_samples (int): Minimum required records in window to compute drift (default: 50).
@@ -298,6 +301,8 @@ class DriftConfig(BaseModel):
         alpha (float): Significance ceiling for MMD permutation hypothesis rejection (default: 0.01).
         config_path (str): Relative or absolute path to calibrated drift configuration YAML (default: 'config/drift_config.yaml').
         reference_embeddings_path (str): Path to baseline reference holdout embeddings (default: 'data/embeddings/cal_embeddings.pt').
+        evidently_workspace_dir (str): Filesystem path to the Evidently UI workspace directory (default: 'data/evidently_workspace').
+        evidently_project_name (str): Project name displayed inside the Evidently UI workspace (default: 'TaxonVision Production Drift').
     """
 
     window_size: int = Field(default=500, ge=10)
@@ -308,6 +313,8 @@ class DriftConfig(BaseModel):
     alpha: float = Field(default=0.01, gt=0.0, lt=1.0)
     config_path: str = Field(default="config/drift_config.yaml")
     reference_embeddings_path: str = Field(default="data/embeddings/cal_embeddings.pt")
+    evidently_workspace_dir: str = Field(default="data/evidently_workspace")
+    evidently_project_name: str = Field(default="TaxonVision Production Drift")
 
 
 class EvaluationConfig(BaseModel):

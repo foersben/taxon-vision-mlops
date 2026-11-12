@@ -44,7 +44,8 @@ from taxon_vision.models.training.promotion import (
     PromotionCriteria,
     promote_candidate_model,
 )
-from taxon_vision.models.training.tracking import resume_parent_mlflow_run
+from taxon_vision.models.training.tracking import mirror_run_to_dagshub, resume_parent_mlflow_run
+from taxon_vision.models.training.types import PromotionAlias
 from taxon_vision.models.training.visualizations import (
     HoldoutVisualizationPayload,
     log_holdout_visualizations,
@@ -577,9 +578,11 @@ def _log_holdout_audit_to_mlflow(payload: MLflowHoldoutLoggingPayload) -> None:
     Args:
         payload: Strongly-typed MLflowHoldoutLoggingPayload containing evaluation predictions, latency profiles, per-taxon table, and candidate Pareto profiles.
     """
+    parent_run_id: str | None = None
     with resume_parent_mlflow_run() as ctx:
         if ctx is None:
             return
+        parent_run_id = ctx.run_id
 
         test_ds = None
         with contextlib.suppress(Exception):
@@ -612,10 +615,12 @@ def _log_holdout_audit_to_mlflow(payload: MLflowHoldoutLoggingPayload) -> None:
         metrics = {
             "test_worst_class_ap": round(eval_res.worst_class_ap, 4),  # worst-class average precision
             "test_median_class_ap": round(eval_res.median_class_ap, 4),  # median-class average precision
+            "eval.top1_accuracy": round(eval_res.test_accuracy, 4),
             "eval.fp32_to_int8_accuracy_drop": round(eval_res.fp32_to_int8_drop, 4),  # Accuracy drop from FP32 to INT8
             "eval.empirical_test_coverage": round(
                 eval_res.empirical_coverage, 4
             ),  # Empirical coverage of the prediction sets
+            "eval.conformal_empirical_coverage": round(eval_res.empirical_coverage, 4),
             "eval.mean_prediction_set_size": round(eval_res.mean_set_size, 2),  # Mean size of the prediction sets
             "eval.singleton_rate": round(eval_res.singleton_rate, 4),  # Rate of singleton prediction sets
             "eval.empty_set_rate": round(eval_res.empty_set_rate, 4),  # Rate of empty prediction sets
@@ -638,20 +643,7 @@ def _log_holdout_audit_to_mlflow(payload: MLflowHoldoutLoggingPayload) -> None:
         with contextlib.suppress(Exception):
             mlflow.log_table(data=payload.per_taxon_df, artifact_file="reports/per_taxon_holdout_audit.json")
 
-        with contextlib.suppress(Exception):
-            artifacts: dict[str, str] = {
-                "onnx_model": str(payload.onnx_path),
-                "conformal_config": str(payload.conformal_config_path),
-            }
-            catalog_path = Path("config/taxa_catalog.yaml")
-            if catalog_path.exists():
-                artifacts["taxa_catalog"] = str(catalog_path)
-
-            mlflow.pyfunc.log_model(
-                artifact_path="pyfunc_model",
-                python_model=TaxonVisionPyFuncModel(),
-                artifacts=artifacts,
-            )
+        _log_pyfunc_and_promotion(payload, ctx)
 
         with contextlib.suppress(Exception):
             vis_payload = HoldoutVisualizationPayload(
@@ -670,8 +662,56 @@ def _log_holdout_audit_to_mlflow(payload: MLflowHoldoutLoggingPayload) -> None:
             )
             log_holdout_visualizations(vis_payload)
 
-        with contextlib.suppress(Exception):
-            _execute_stage7_promotion(payload, ctx.run_id, ctx.extractor)
+    if parent_run_id:
+        mirror_run_to_dagshub(
+            parent_run_id,
+            artifact_paths=(
+                Path("reports/train_metrics.json"),
+                Path("reports/pareto_evaluation.json"),
+                payload.conformal_config_path,
+                Path("docs/assets/pareto_results.json"),
+            ),
+        )
+
+
+def _log_pyfunc_and_promotion(payload: MLflowHoldoutLoggingPayload, ctx: Any) -> None:
+    """Log the PyFunc bundle and execute Stage 7 promotion gating inside an active MLflow run.
+
+    Why:
+        Encapsulating PyFunc packaging and Four-Gate Model Registry promotion (`_execute_stage7_promotion`) keeps `_log_holdout_audit_to_mlflow` below the Rule 00 cognitive complexity ceiling (`< 15`) whilst guaranteeing `eval.promoted`, `registry.status`, and `promotion.verdict` are always stamped onto the parent run before DagsHub mirroring.
+
+    How:
+        Logs `TaxonVisionPyFuncModel` bundling the INT8 ONNX model, calibrated `conformal_config.yaml`, and `taxa_catalog.yaml`, executes `_execute_stage7_promotion`, and records the resulting binary metric and human-readable tags.
+
+    Args:
+        payload: Structured Stage 7 holdout evaluation metrics and artefact paths.
+        ctx: Active MLflow parent run context providing `run_id` and `extractor`.
+    """
+    with contextlib.suppress(Exception):
+        artifacts: dict[str, str] = {
+            "onnx_model": str(payload.onnx_path),
+            "conformal_config": str(payload.conformal_config_path),
+        }
+        catalog_path = Path("config/taxa_catalog.yaml")
+        if catalog_path.exists():
+            artifacts["taxa_catalog"] = str(catalog_path)
+
+        mlflow.pyfunc.log_model(
+            artifact_path="pyfunc_model",
+            python_model=TaxonVisionPyFuncModel(),
+            artifacts=artifacts,
+        )
+
+    promoted = False
+    try:
+        promoted = _execute_stage7_promotion(payload, ctx.run_id, ctx.extractor)
+    except Exception:
+        logger.exception("Stage 7 promotion gate execution failed")
+    status_label = "Production" if promoted else "Rejected"
+    with contextlib.suppress(Exception):
+        mlflow.log_metric("eval.promoted", 1.0 if promoted else 0.0)
+        mlflow.set_tag("registry.status", status_label)
+        mlflow.set_tag("promotion.verdict", status_label)
 
 
 def _load_reference_calibration_embeddings(cal_path: Path) -> np.ndarray | None:
@@ -733,7 +773,7 @@ def _resolve_model_version(client: Any, model_name: str, run_id: str, artifact_p
         return None
 
 
-def _execute_stage7_promotion(payload: MLflowHoldoutLoggingPayload, run_id: str, extractor: str | None) -> None:
+def _execute_stage7_promotion(payload: MLflowHoldoutLoggingPayload, run_id: str, extractor: str | None) -> bool:
     """Evaluate candidate against Four-Gate Model Promotion Architecture and update MLflow registry.
 
     Why:
@@ -744,12 +784,15 @@ def _execute_stage7_promotion(payload: MLflowHoldoutLoggingPayload, run_id: str,
         2. Probes live telemetry store for recent inference embeddings and evaluates multivariate MMD squared permutation testing against calibration baselines if sample count meets threshold.
         3. Assembles strongly typed PromotionCriteria container from holdout metrics and system settings.
         4. Resolves registered model versions for both the PyTorch classifier head and INT8 ONNX graph.
-        5. Calls promote_candidate_model to update MLflow Model Registry aliases and provenance tags.
+        5. Calls promote_candidate_model to update MLflow Model Registry aliases and provenance tags, returning True when Production promotion is achieved.
 
     Args:
         payload: Holdout evaluation payload containing evaluation metrics and latency profile.
         run_id: Active parent MLflow experiment run ID.
         extractor: Vision foundation model backbone identifier.
+
+    Returns:
+        True if any candidate model version achieved PromotionAlias.PRODUCTION, False otherwise.
     """
     settings = get_settings()
     prom_cfg = settings.promotion
@@ -799,6 +842,7 @@ def _execute_stage7_promotion(payload: MLflowHoldoutLoggingPayload, run_id: str,
     )
 
     client = mlflow.tracking.MlflowClient()
+    promoted = False
 
     head_ver = _resolve_model_version(client, settings.mlflow.model_registry_name, run_id, "taxon_vision_classifier")
     if head_ver:
@@ -809,7 +853,8 @@ def _execute_stage7_promotion(payload: MLflowHoldoutLoggingPayload, run_id: str,
             extractor=extractor,
             run_id=run_id,
         )
-        promote_candidate_model(target_head, criteria)
+        head_verdict = promote_candidate_model(target_head, criteria)
+        promoted = promoted or (head_verdict.alias == PromotionAlias.PRODUCTION)
 
     onnx_ver = _resolve_model_version(client, settings.mlflow.onnx_registry_name, run_id, "onnx_model")
     if onnx_ver:
@@ -820,7 +865,10 @@ def _execute_stage7_promotion(payload: MLflowHoldoutLoggingPayload, run_id: str,
             extractor=extractor,
             run_id=run_id,
         )
-        promote_candidate_model(target_onnx, criteria)
+        onnx_verdict = promote_candidate_model(target_onnx, criteria)
+        promoted = promoted or (onnx_verdict.alias == PromotionAlias.PRODUCTION)
+
+    return promoted
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:

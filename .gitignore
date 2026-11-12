@@ -76,6 +76,7 @@ data/raw/
 data/processed/
 data/sample/
 data/flagged_observations/
+data/evidently_workspace/
 models/checkpoints/*
 *.onnx
 *.pth
