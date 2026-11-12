@@ -81,7 +81,7 @@ spec:
     AWS_SECRET_ACCESS_KEY = credentials('dagshub-token')
     MLFLOW_TRACKING_USERNAME = 'foersben'
     MLFLOW_TRACKING_PASSWORD = credentials('dagshub-token')
-    MLFLOW_TRACKING_URI = 'http://mlflow-server.taxon-vision.svc.cluster.local:5000'
+    MLFLOW_TRACKING_URI = 'https://dagshub.com/foersben/taxon-vision-mlops.mlflow'
     PYTHONUNBUFFERED = '1'
     OMP_NUM_THREADS = '4'
     MKL_NUM_THREADS = '4'

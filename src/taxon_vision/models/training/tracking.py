@@ -180,6 +180,24 @@ def _inject_lineage_tags() -> None:
         logger.debug("Could not resolve git lineage tags: %s", git_err)
 
 
+def _ensure_dagshub_auth(uri: str) -> bool:
+    """Populate MLflow Basic Auth environment credentials for DagsHub tracking URIs when a token is available.
+
+    Args:
+        uri: Candidate MLflow tracking URI.
+
+    Returns:
+        True if a non-empty DagsHub token is configured, False otherwise.
+    """
+    dagshub_token = os.getenv("DAGSHUB_TOKEN") or os.getenv("MLFLOW_TRACKING_PASSWORD")
+    if not dagshub_token:
+        return False
+    if "dagshub.com" in uri:
+        os.environ.setdefault("MLFLOW_TRACKING_USERNAME", "foersben")
+        os.environ.setdefault("MLFLOW_TRACKING_PASSWORD", dagshub_token)
+    return True
+
+
 def _resolve_reachable_tracking_uri(settings: Settings | None = None) -> str:
     """Resolve the reachable MLflow tracking URI across explicit, network, and offline tiers.
 
@@ -190,9 +208,10 @@ def _resolve_reachable_tracking_uri(settings: Settings | None = None) -> str:
         Hardcoded remote URIs or silent tracking dropouts compromise experiment reproducibility. While production CI runs and cluster pods communicate directly with a dedicated MLflow 3.x tracking server, offline developer workstations or air-gapped environments must continue tracking experiments without dropping runs or polluting stdout with network timeout tracebacks.
 
     How:
-        1. Tier 1: Checks for an explicit MLFLOW_TRACKING_URI environment variable and returns it immediately if present.
-        2. Tier 2: If the configured tracking URI begins with 'http://' or 'https://', performs a rapid HTTP health check against the server's /health endpoint bounded by health_check_timeout_seconds.
-        3. Tier 3: If Tier 2 fails or is unreachable, ensures local directories exist for SQLite storage (data/mlflow/artifacts) and returns the fallback SQLite URI whilst logging an operational warning.
+        1. Tier 1: Checks for an explicit MLFLOW_TRACKING_URI environment variable, injects DagsHub auth credentials if applicable, and returns it immediately.
+        2. Tier 2: If configured_uri targets DagsHub, returns it directly when credentials exist (skipping /health probe); otherwise probes /health on HTTP/S URIs bounded by health_check_timeout_seconds.
+        3. Tier 2.5: Falls back to cfg.mlflow.dagshub_uri when DagsHub credentials are present.
+        4. Tier 3: Ensures local directories exist for SQLite storage (data/mlflow/artifacts) and returns the fallback SQLite URI whilst logging an operational warning.
 
     Args:
         settings: Application settings instance. If None, resolved via get_settings().
@@ -202,12 +221,16 @@ def _resolve_reachable_tracking_uri(settings: Settings | None = None) -> str:
     """
     env_uri = os.getenv("MLFLOW_TRACKING_URI")
     if env_uri:
+        _ensure_dagshub_auth(env_uri)
         return env_uri
 
     cfg = settings or get_settings()
     configured_uri = cfg.mlflow.tracking_uri
 
-    if configured_uri.startswith(("http://", "https://")):
+    if "dagshub.com" in configured_uri:
+        if _ensure_dagshub_auth(configured_uri):
+            return configured_uri
+    elif configured_uri.startswith(("http://", "https://")):
         health_url = f"{configured_uri.rstrip('/')}/health"
         timeout = cfg.mlflow.health_check_timeout_seconds
         try:
@@ -219,10 +242,7 @@ def _resolve_reachable_tracking_uri(settings: Settings | None = None) -> str:
             logger.debug("MLflow tracking health probe failed for %s: %s", health_url, probe_err)
 
     # Tier 2.5: Target remote DagsHub MLflow mirror if credentials exist
-    dagshub_token = os.getenv("DAGSHUB_TOKEN") or os.getenv("MLFLOW_TRACKING_PASSWORD")
-    if cfg.mlflow.dagshub_uri and dagshub_token:
-        os.environ.setdefault("MLFLOW_TRACKING_USERNAME", "foersben")
-        os.environ.setdefault("MLFLOW_TRACKING_PASSWORD", dagshub_token)
+    if cfg.mlflow.dagshub_uri and _ensure_dagshub_auth(cfg.mlflow.dagshub_uri):
         return cfg.mlflow.dagshub_uri
 
     # Tier 3: Fallback to local SQLite backend

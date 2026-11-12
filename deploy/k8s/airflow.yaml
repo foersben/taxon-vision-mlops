@@ -17,7 +17,7 @@ data:
   AIRFLOW__CORE__MIN_FILE_PROCESS_INTERVAL: "60"
   AIRFLOW__CORE__EXECUTION_API_SERVER_URL: "http://airflow-apiserver.taxon-vision.svc.cluster.local:8080/execution/"
   TAXON_JENKINS_BRANCH: "main"
-  MLFLOW_TRACKING_URI: "http://mlflow-server.taxon-vision.svc.cluster.local:5000"
+  MLFLOW_TRACKING_URI: "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
   PYTHONPATH: "/opt/airflow/src"
 ---
 apiVersion: apps/v1

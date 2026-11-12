@@ -27,7 +27,11 @@ from taxon_vision.config import get_settings
 from taxon_vision.models.loss import ClassBalancedLoss
 from taxon_vision.models.training.dataset import get_dvc_dataset_hash
 from taxon_vision.models.training.embeddings import train_head_on_cached_embeddings
-from taxon_vision.models.training.tracking import _inject_lineage_tags
+from taxon_vision.models.training.tracking import (
+    _ensure_dagshub_auth,
+    _inject_lineage_tags,
+    _resolve_reachable_tracking_uri,
+)
 from taxon_vision.models.training.types import EmbeddingSplit, HeadTrainingConfig, TuningConfig
 from taxon_vision.models.training.visualizations import log_optuna_diagnostic_plots
 
@@ -317,7 +321,7 @@ class HyperparameterObjective:
 
 
 def _setup_mlflow(cfg: TuningConfig) -> bool:
-    """Configure MLflow for hyperparameter tuning.
+    """Configure MLflow for hyperparameter tuning via reachable DagsHub or fallback URI resolution.
 
     Args:
         cfg: Tuning configuration.
@@ -328,11 +332,21 @@ def _setup_mlflow(cfg: TuningConfig) -> bool:
     if mlflow.active_run() is not None:
         return True
 
-    mlflow_cfg = get_settings().mlflow
-    resolved_uri = (
-        cfg.tracking_uri if cfg.tracking_uri is not None else os.getenv("MLFLOW_TRACKING_URI", mlflow_cfg.tracking_uri)
-    )
+    settings = get_settings()
+    mlflow_cfg = settings.mlflow
     resolved_experiment = cfg.experiment_name or mlflow_cfg.experiment_name
+
+    if cfg.tracking_uri is not None:
+        resolved_uri = cfg.tracking_uri
+        if not resolved_uri:
+            return False
+        _ensure_dagshub_auth(resolved_uri)
+    else:
+        env_uri = os.getenv("MLFLOW_TRACKING_URI")
+        has_token = bool(os.getenv("DAGSHUB_TOKEN") or os.getenv("MLFLOW_TRACKING_PASSWORD"))
+        if env_uri == "" and not mlflow_cfg.tracking_uri and not has_token:
+            return False
+        resolved_uri = _resolve_reachable_tracking_uri(settings)
 
     if not resolved_uri:
         return False
@@ -592,9 +606,17 @@ def tune_hyperparameters(
     )
 
     # Ensure child runs are always grouped under a Parent Run node in MLflow 3 UI
-    if mlflow_available and mlflow.active_run() is None:
+    started_study_parent = mlflow_available and mlflow.active_run() is None
+    if started_study_parent:
         with mlflow.start_run(run_name=f"optuna_study_{study_name}"):
             study.optimize(objective, n_trials=cfg.n_trials)
+            with contextlib.suppress(Exception):
+                mlflow.log_params(study.best_params)
+                _apply_git_lineage_tags()
+                dvc_hash = get_dvc_dataset_hash()
+                if dvc_hash:
+                    mlflow.log_param("dvc_dataset_hash", dvc_hash)
+            _log_best_run(study.best_params, study.best_value, mlflow_available, study=study)
     else:
         study.optimize(objective, n_trials=cfg.n_trials)
 
@@ -609,5 +631,6 @@ def tune_hyperparameters(
     _persist_best_params(study, cfg.extractor_name, Path(checkpoint_dir))
     _export_trials_history(study, Path(reports_dir))
 
-    _log_best_run(best_params, study.best_value, mlflow_available, study=study)
+    if not started_study_parent:
+        _log_best_run(best_params, study.best_value, mlflow_available, study=study)
     return TuningResult(best_params=best_params, study=study)

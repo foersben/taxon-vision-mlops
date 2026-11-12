@@ -94,7 +94,7 @@ ingestion:
   per_page: 200
 
 mlflow:
-  tracking_uri: "http://127.0.0.1:5000"
+  tracking_uri: "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
   fallback_sqlite_uri: "sqlite:///data/mlflow/mlflow.db"
   dagshub_uri: "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
   experiment_name: "taxon-vision-head-training"

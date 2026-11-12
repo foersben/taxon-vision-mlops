@@ -163,7 +163,7 @@ class MLflowConfig(BaseModel):
         health_check_timeout_seconds: Timeout in seconds when probing tracking_uri health.
     """
 
-    tracking_uri: str = "http://127.0.0.1:5000"
+    tracking_uri: str = "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
     fallback_sqlite_uri: str = "sqlite:///data/mlflow/mlflow.db"
     dagshub_uri: str = "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
     experiment_name: str = "taxon-vision-head-training"
