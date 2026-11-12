@@ -140,6 +140,8 @@ verify-contracts:
 	@if command -v kubectl >/dev/null 2>&1; then \
 		echo ">>> 3. Validating Kubernetes manifests with kubectl..."; \
 		kubectl apply -f deploy/k8s/ --dry-run=client; \
+		kubectl apply -k deploy/k8s/overlays/production --dry-run=client; \
+		kubectl apply -k deploy/k8s/overlays/staging --dry-run=client; \
 	else \
 		echo ">>> 3. kubectl not found on workstation (skipping client-side K8s manifest validation)."; \
 	fi
@@ -365,6 +367,8 @@ sync-airflow-k8s namespace="taxon-vision":
 	kubectl create configmap airflow-dags "${dag_args[@]}" -n {{namespace}} --dry-run=client -o yaml | kubectl apply -f -
 	kubectl create configmap airflow-taxon-deps \
 		--from-file=feedback.py=src/taxon_vision/active_learning/feedback.py \
+		--from-file=label_studio_sync.py=src/taxon_vision/active_learning/label_studio_sync.py \
+		--from-file=triage_queue.py=src/taxon_vision/active_learning/triage_queue.py \
 		--from-file=taxa_catalog.yaml=config/taxa_catalog.yaml \
 		-n {{namespace}} --dry-run=client -o yaml | kubectl apply -f -
 

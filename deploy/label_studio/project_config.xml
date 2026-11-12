@@ -25,5 +25,17 @@
     <Choice value="Amanita muscaria (Fly Agaric)" alias="48715" />
     <Choice value="Boletus edulis (King Bolete)" alias="48701" />
     <Choice value="Out of Distribution (Non-Target / Novel Organism)" alias="ood" />
+    <Choice value="Novel Target Taxon (Expand Catalogue)" alias="novel_taxon" />
   </Choices>
+
+  <!-- Conditional Metadata Inputs for Catalogue Expansion (Outcome B) -->
+  <View visibleWhen="choice-selected" whenTagName="taxon_choice" whenChoiceValue="Novel Target Taxon (Expand Catalogue)" style="margin-top: 12px; padding: 12px; border: 1px solid #cbd5e1; border-radius: 6px;">
+    <Header value="Novel Taxon Registration Metadata" size="5" />
+    <Text name="novel_taxon_help" value="Provide verified DarwinCore and iNaturalist identifiers to admit this species into the active catalogue and trigger dataset backfill." />
+    <TextArea name="novel_inat_taxon_id" toName="image" maxSubmissions="1" rows="1" placeholder="iNaturalist Taxon ID (integer, e.g. 52129)" />
+    <TextArea name="novel_scientific_name" toName="image" maxSubmissions="1" rows="1" placeholder="Scientific Name (e.g. Vanessa cardui)" />
+    <TextArea name="novel_common_name" toName="image" maxSubmissions="1" rows="1" placeholder="Common Name (e.g. Painted Lady)" />
+    <TextArea name="novel_kingdom" toName="image" maxSubmissions="1" rows="1" placeholder="Kingdom (e.g. Animalia, Plantae, Fungi)" />
+    <TextArea name="novel_class" toName="image" maxSubmissions="1" rows="1" placeholder="Taxonomic Class (e.g. Insecta, Aves)" />
+  </View>
 </View>

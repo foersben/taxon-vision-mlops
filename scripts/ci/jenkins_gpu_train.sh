@@ -127,6 +127,19 @@ if changed:
     p.write_text(yaml.safe_dump(data, sort_keys=False))
 '
 
+# Commit pending Outcome B catalogue expansions staged by Airflow before applying params/ingestion
+CATALOG_EXPANDED=false
+if [ -s "/var/lib/taxon-vision/manifests/catalog_expansions.yaml" ] && grep -q "inat_taxon_id:" "/var/lib/taxon-vision/manifests/catalog_expansions.yaml"; then
+  echo ">>> Applying pending Outcome B catalogue expansions from /var/lib/taxon-vision/manifests/catalog_expansions.yaml..."
+  pixi run --frozen -e dev python -m taxon_vision.active_learning.feedback \
+    --apply-expansions /var/lib/taxon-vision/manifests/catalog_expansions.yaml \
+    --catalog-path config/taxa_catalog.yaml \
+    --params-path params.yaml \
+    --label-studio-config-path deploy/label_studio/project_config.xml
+  CATALOG_EXPANDED=true
+  export INGEST_DATA=true
+fi
+
 # Check if live ingestion from iNaturalist is requested
 if [ "${INGEST_DATA:-false}" = "true" ]; then
   echo ">>> INGEST_DATA is true: Unfreezing ingestion stage and fetching fresh data..."
@@ -142,29 +155,50 @@ if [ "${INGEST_DATA:-false}" = "true" ]; then
   trap - ERR
 else
   echo ">>> Using existing cached raw_manifest.parquet (ingestion stage remains frozen)."
+  pixi run --frozen -e dev dvc commit -f ingestion >/dev/null 2>&1 || true
 fi
 
 pixi run --frozen -e dev dvc repro
+
+# Synchronise updated Label Studio XML config after Outcome B catalogue expansion
+if [ "${CATALOG_EXPANDED}" = "true" ] && [ -n "${DAGSHUB_TOKEN:-}" ]; then
+  echo ">>> Synchronising expanded Label Studio XML configuration to DagsHub..."
+  pixi run --frozen -e dev python -c "from taxon_vision.active_learning.label_studio_sync import DagsHubLabelStudioClient; DagsHubLabelStudioClient().push_project_label_config('deploy/label_studio/project_config.xml')" || echo "Warning: DagsHub Label Studio XML push skipped."
+fi
 
 # Persist generated features to host volume cache
 if [ -d "/var/lib/taxon-vision/embeddings" ] && [ -f "data/embeddings/train_embeddings.pt" ]; then
   cp -f data/embeddings/*.pt /var/lib/taxon-vision/embeddings/ 2>/dev/null || true
 fi
 
-# Persist reference features to host volume cache
-if [ -d "/var/lib/taxon-vision/reference" ] && [ -f "data/reference/reference_train_embeddings.pt" ]; then
-  cp -f data/reference/*.pt /var/lib/taxon-vision/reference/ 2>/dev/null || true
+# Persist reference features and calibrated baseline tensor atomically to host volume cache
+if [ -d "/var/lib/taxon-vision/reference" ]; then
+  if [ -f "data/reference/reference_train_embeddings.pt" ]; then
+    cp -f data/reference/*.pt /var/lib/taxon-vision/reference/ 2>/dev/null || true
+  fi
+  if [ -f "data/embeddings/cal_embeddings.pt" ]; then
+    cp -f "data/embeddings/cal_embeddings.pt" "/var/lib/taxon-vision/reference/.cal_embeddings.pt.tmp"
+    chmod a+r "/var/lib/taxon-vision/reference/.cal_embeddings.pt.tmp"
+    mv -f "/var/lib/taxon-vision/reference/.cal_embeddings.pt.tmp" "/var/lib/taxon-vision/reference/cal_embeddings.pt"
+  fi
 fi
 
-# Persist generated manifests to host volume cache
+# Persist generated manifests atomically to host volume cache
 if [ -d "/var/lib/taxon-vision/manifests" ] && [ -f "data/manifests/raw_manifest.parquet" ]; then
-  cp -f data/manifests/*.parquet /var/lib/taxon-vision/manifests/ 2>/dev/null || true
+  for manfile in data/manifests/*.parquet; do
+    [ -f "$manfile" ] || continue
+    fname=$(basename "$manfile")
+    cp -f "$manfile" "/var/lib/taxon-vision/manifests/.${fname}.tmp"
+    chmod a+r "/var/lib/taxon-vision/manifests/.${fname}.tmp"
+    mv -f "/var/lib/taxon-vision/manifests/.${fname}.tmp" "/var/lib/taxon-vision/manifests/${fname}"
+  done
 fi
 
-# Persist generated checkpoints to host volume cache
+# Persist generated checkpoints and co-versioned runtime configs to host volume cache
 if [ -d "/var/lib/taxon-vision/checkpoints" ] && [ -f "models/checkpoints/head.pt" ]; then
-  echo ">>> Atomically staging checkpoints to host volume /var/lib/taxon-vision/checkpoints/..."
-  for ckpt in models/checkpoints/*; do
+  echo ">>> Atomically staging checkpoints and co-versioned configs to /var/lib/taxon-vision/checkpoints/..."
+  for ckpt in models/checkpoints/* config/taxa_catalog.yaml config/conformal_config.yaml; do
+    [ -f "$ckpt" ] || continue
     fname=$(basename "$ckpt")
     cp -f "$ckpt" "/var/lib/taxon-vision/checkpoints/.${fname}.tmp"
     chmod a+r "/var/lib/taxon-vision/checkpoints/.${fname}.tmp"
@@ -182,9 +216,9 @@ fi
 echo ">>> Pushing all Epistemic Diamond artifacts to DagsHub (origin)..."
 pixi run --frozen -e dev dvc push -r origin
 
-# Stage and commit updated DVC lockfile and evaluation reports to Git
+# Stage and commit updated DVC lockfile, expanded taxonomy catalogues, and evaluation reports to Git
 echo ">>> Committing updated pipeline lockfile and evaluation reports to Git..."
-git add params.yaml dvc.lock config/conformal_config.yaml docs/assets/pareto_results.json reports/*.json
+git add params.yaml dvc.lock config/conformal_config.yaml config/taxa_catalog.yaml deploy/label_studio/project_config.xml docs/assets/pareto_results.json reports/*.json 2>/dev/null || git add params.yaml dvc.lock config/conformal_config.yaml config/taxa_catalog.yaml deploy/label_studio/project_config.xml docs/assets/pareto_results.json
 if ! git diff --staged --quiet; then
   git commit -m "chore(pipeline): update dvc.lock and evaluation reports [skip ci]" || echo "Git commit skipped."
   git push origin HEAD:"${BRANCH_NAME:-develop}" || echo "Git push skipped."

@@ -12,14 +12,17 @@ import time
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from functools import lru_cache
+from functools import lru_cache, partial
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
+import anyio
 import numpy as np
 import numpy.typing as npt
 import redis
 
+from taxon_vision.active_learning.query import margin_sampling
+from taxon_vision.active_learning.triage_queue import TriageItem, TriageQueue
 from taxon_vision.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -349,15 +352,148 @@ def get_image_cache() -> ImageCacheProtocol:
     )
 
 
+_OPEN_LICENSE_URLS: dict[str, str] = {
+    "cc0": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "cc-by": "https://creativecommons.org/licenses/by/4.0/",
+    "cc-by-nc": "https://creativecommons.org/licenses/by-nc/4.0/",
+}
+
+_TRIAGE_QUEUE = TriageQueue()
+
+
+def get_triage_queue() -> TriageQueue:
+    """Return the process-wide priority review queue ranking flagged observations by margin uncertainty.
+
+    Why:
+        Provides an in-memory O(log N) binary max-heap over flagged observations so active-learning consumers can inspect or dequeue highest-uncertainty specimens deterministically.
+
+    How:
+        Returns the module-level TriageQueue singleton populated during `persist_flagged_observation`.
+
+    Returns:
+        Active TriageQueue instance.
+    """
+    return _TRIAGE_QUEUE
+
+
+@dataclass(frozen=True)
+class ContributorConsent:
+    """Explicit open-license opt-in and attribution metadata supplied by a citizen-science contributor.
+
+    Why:
+        Replaces loose boolean/string tuples at the FastAPI API/HTML submission boundary with an explicit domain value object so Rule 05 licensing invariants are checked uniformly.
+
+    How:
+        Constructed by `/predict` and `/views/predict` handlers from multipart form inputs and evaluated via `is_valid_contributor_consent()`.
+
+    Attributes:
+        contribute_open_license: Whether the user explicitly checked the open-license donation box.
+        photographer_name: Attributable contributor credit (minimum 3 characters when opted in).
+        license_code: Chosen Creative Commons license (`cc0`, `cc-by`, or `cc-by-nc`).
+        license_url: Canonical license deed URL resolved automatically if omitted.
+    """
+
+    contribute_open_license: bool = False
+    photographer_name: str = ""
+    license_code: str = ""
+    license_url: str = ""
+
+
 @dataclass(frozen=True)
 class FlaggedObservationPayload:
-    """Consolidated payload for an observation flagged during inference."""
+    """Consolidated payload for an observation flagged during inference.
+
+    Why:
+        Prevents parameter arity creep (`> 4` positional args under Rule 08) across storage and background triage queueing call sites.
+
+    How:
+        Bundles the UUID, prediction dictionary, optional embedding vector, raw image bytes, target directory, and contributor open-license consent.
+
+    Attributes:
+        observation_id: Unique prediction UUID.
+        prediction_result: Serialised inference prediction payload.
+        embedding: Optional L2-normalised feature embedding vector.
+        image_bytes: Optional raw uploaded image crop bytes.
+        storage_dir: Optional filesystem staging directory override.
+        consent: Optional open-license opt-in consent object.
+    """
 
     observation_id: str
     prediction_result: dict[str, Any]
     embedding: npt.NDArray[np.float32] | None = None
     image_bytes: bytes | None = None
     storage_dir: Path | str | None = None
+    consent: ContributorConsent | None = None
+
+
+def is_valid_contributor_consent(consent: ContributorConsent | None) -> bool:
+    """Return True when contributor explicitly opted into an allowed Creative Commons license with attribution.
+
+    Why:
+        Enforces Rule 05 Open License Compliance at the serving boundary: citizen-science uploads without affirmative Creative Commons licensing (`CC0`, `CC-BY`, `CC-BY-NC`) and non-trivial photographer attribution (`>= 3` characters) must never enter external annotation buckets or training manifests.
+
+    How:
+        Verifies `contribute_open_license` is True, normalises `license_code` to lowercase hyphenated form against `_OPEN_LICENSE_URLS`, and checks trimmed `photographer_name` length.
+
+    Args:
+        consent: Optional ContributorConsent submitted with the prediction request.
+
+    Returns:
+        True if open-license and attribution requirements are satisfied, otherwise False.
+    """
+    if consent is None or not consent.contribute_open_license:
+        return False
+    license_norm = consent.license_code.strip().lower().replace("_", "-")
+    return license_norm in _OPEN_LICENSE_URLS and len(consent.photographer_name.strip()) >= 3
+
+
+def _compute_margin_uncertainty(probabilities: list[float]) -> float:
+    """Compute bounded `[0, 1]` active-learning margin sampling priority score from class probabilities.
+
+    Why:
+        Ranking flagged captures inside `TriageQueue` requires a monotonic uncertainty score (`1.0 - (p_1 - p_2)`) so near-tie classifications reach human taxonomists ahead of trivial cases.
+
+    How:
+        Delegates multi-class probability vectors to `margin_sampling()`, handles degenerate single-class probabilities via `1.0 - p_0`, and returns `0.0` when probabilities are empty.
+
+    Args:
+        probabilities: Softmax class probability distribution for the observation.
+
+    Returns:
+        Margin uncertainty scalar bounded in `[0.0, 1.0]`.
+    """
+    if len(probabilities) >= 2:
+        prob_arr = np.asarray(probabilities, dtype=np.float32).reshape(1, -1)
+        return float(margin_sampling(prob_arr)[0])
+    if len(probabilities) == 1:
+        return float(max(0.0, 1.0 - float(probabilities[0])))
+    return 0.0
+
+
+def _resolve_consent_record(consent: ContributorConsent | None) -> dict[str, Any]:
+    """Build explicit licensing and attribution fields only when affirmative open-license consent passes validation.
+
+    Why:
+        Prevents accidental persistence of unverified photographer strings or disallowed licenses (`all-rights-reserved`) inside `{obs_id}_meta.json`.
+
+    How:
+        Evaluates `is_valid_contributor_consent(consent)`; returns `{"contribute_open_license": False}` on failure or normalised uppercase Creative Commons metadata and attribution on success.
+
+    Args:
+        consent: Optional `ContributorConsent` provided on upload.
+
+    Returns:
+        Dictionary fragment merged into the observation's `_meta.json` record.
+    """
+    if not is_valid_contributor_consent(consent) or consent is None:
+        return {"contribute_open_license": False}
+    license_norm = consent.license_code.strip().lower().replace("_", "-")
+    return {
+        "contribute_open_license": True,
+        "license_code": license_norm.upper(),
+        "photographer_name": consent.photographer_name.strip(),
+        "license_url": consent.license_url.strip() or _OPEN_LICENSE_URLS[license_norm],
+    }
 
 
 def persist_flagged_observation(
@@ -367,15 +503,16 @@ def persist_flagged_observation(
     storage_dir: Path | str | None = None,
     *,
     image_bytes: bytes | None = None,
+    consent: ContributorConsent | None = None,
 ) -> Path:
     """Atomically persist metadata, image crop, and embeddings for observations flagged during inference.
 
     Why:
-        Observations identified as Out-of-Distribution (OOD) or exhibiting high conformal ambiguity require human expert review and provide the highest information gain for active learning retrain loops. Staging the tabular decision metadata, the dense visual feature embedding, and the raw visual image crop allows subsequent ingestion services (e.g. SeaweedFS, LanceDB, or DagsHub Label Studio triage queues) to consume high-priority edge cases without recomputing vision foundation forward passes.
+        Observations identified as Out-of-Distribution (OOD) or exhibiting high conformal ambiguity require human expert review and provide the highest information gain for active learning retrain loops. Staging the tabular decision metadata, dense visual feature embedding, margin uncertainty score, open-license opt-in consent, and raw visual image crop allows downstream active-learning workers (DagsHub Label Studio sync and dataset curation) to prioritise and ingest high-value edge cases whilst preserving strict copyright compliance.
 
     How:
         1. Resolves destination storage directory from arguments or application configuration.
-        2. Compiles a consolidated record containing prediction metrics and timestamp.
+        2. Computes margin-sampling uncertainty via `margin_sampling()` and validates optional contributor open-license metadata.
         3. If an embedding vector is provided, serializes it to disk as an optimized `.npy` file.
         4. If raw image bytes are provided, saves the observation image crop as `{observation_id}_crop.jpg`.
         5. Serializes the metadata record as an individual JSON artifact and appends a line to `manifest.jsonl`.
@@ -389,6 +526,7 @@ def persist_flagged_observation(
         embedding: Optional dense feature representation vector of shape (D,).
         storage_dir: Optional filesystem path override for the staging directory.
         image_bytes: Optional binary payload of the raw uploaded image crop.
+        consent: Optional ContributorConsent specifying affirmative Creative Commons opt-in and attribution.
 
     Returns:
         Path to the written metadata JSON artifact.
@@ -422,6 +560,8 @@ def persist_flagged_observation(
         "common_name": str(prediction_result.get("common_name", "")),
         "confidence": float(prediction_result.get("confidence", 0.0)),
     }
+    probabilities = [float(p) for p in prediction_result.get("probabilities", [])]
+    uncertainty_score = _compute_margin_uncertainty(probabilities)
 
     record: dict[str, Any] = {
         "observation_id": observation_id,
@@ -431,9 +571,12 @@ def persist_flagged_observation(
         "requires_human_review": bool(prediction_result.get("requires_human_review", False)),
         "conformal_set": list(prediction_result.get("conformal_set", [])),
         "top_prediction": top_pred,
-        "probabilities": list(prediction_result.get("probabilities", [])),
+        "probabilities": probabilities,
+        "uncertainty_score": round(uncertainty_score, 6),
         "embedding_path": embedding_rel_path,
         "image_path": image_rel_path,
+        "synced_to_label_studio": False,
+        **_resolve_consent_record(consent),
     }
 
     meta_path.write_text(json.dumps(record, indent=2), encoding="utf-8")
@@ -442,5 +585,84 @@ def persist_flagged_observation(
     with manifest_path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record) + "\n")
 
+    _TRIAGE_QUEUE.push(
+        TriageItem(
+            observation_id=observation_id,
+            uncertainty_score=round(uncertainty_score, 6),
+            conformal_set_size=len(record["conformal_set"]),
+            image_url=image_rel_path or "",
+        )
+    )
+
     logger.info("Persisted flagged observation %s (crop=%s) to %s", observation_id, bool(image_bytes), target_dir)
+    return meta_path
+
+
+def queue_consented_triage_sync(
+    background_tasks: Any,
+    observation_id: str,
+    meta_path: Path,
+    consent: ContributorConsent | None,
+) -> bool:
+    """Schedule non-blocking DagsHub Label Studio sync when valid open-license consent exists.
+
+    Why:
+        Decouples external S3 and Label Studio REST uploads from the synchronous `/predict` execution path while ensuring unconsented captures remain strictly local.
+
+    How:
+        Checks `is_valid_contributor_consent(consent)` and local crop existence before registering `background_sync_flagged_observation` on the FastAPI `BackgroundTasks` queue.
+
+    Args:
+        background_tasks: FastAPI BackgroundTasks container or None.
+        observation_id: Unique observation UUID string.
+        meta_path: Path to the persisted `{observation_id}_meta.json` file.
+        consent: Optional ContributorConsent provided by the uploader.
+
+    Returns:
+        True when a background synchronisation task was scheduled, False otherwise.
+    """
+    if background_tasks is None or not is_valid_contributor_consent(consent):
+        return False
+    crop_path = meta_path.parent / f"{observation_id}_crop.jpg"
+    if not crop_path.is_file():
+        return False
+    from taxon_vision.active_learning.label_studio_sync import background_sync_flagged_observation
+
+    background_tasks.add_task(background_sync_flagged_observation, meta_path, crop_path)
+    return True
+
+
+async def handle_flagged_prediction_if_needed(
+    payload: FlaggedObservationPayload,
+    background_tasks: Any = None,
+) -> Path | None:
+    """Persist flagged OOD or ambiguous captures asynchronously and schedule consented Label Studio upload.
+
+    Why:
+        Consolidates the asynchronous threadpool disk offload and conditional DagsHub Label Studio background queueing shared by REST `/predict` and HTMX `/ui/predict-htmx` routes, protecting the event loop under Rule 08.
+
+    How:
+        Verifies whether `is_ood` or `requires_human_review` is set, offloads `persist_flagged_observation` to a worker thread via `anyio.to_thread.run_sync`, and invokes `queue_consented_triage_sync`.
+
+    Args:
+        payload: FlaggedObservationPayload containing prediction results, image bytes, and optional consent.
+        background_tasks: Optional FastAPI BackgroundTasks instance for non-blocking remote sync.
+
+    Returns:
+        Path to the written metadata JSON file when flagged, or None when no review was required.
+    """
+    if not (payload.prediction_result.get("is_ood") or payload.prediction_result.get("requires_human_review")):
+        return None
+    meta_path = await anyio.to_thread.run_sync(
+        partial(
+            persist_flagged_observation,
+            payload.observation_id,
+            payload.prediction_result,
+            payload.embedding,
+            payload.storage_dir,
+            image_bytes=payload.image_bytes,
+            consent=payload.consent,
+        )
+    )
+    queue_consented_triage_sync(background_tasks, payload.observation_id, meta_path, payload.consent)
     return meta_path

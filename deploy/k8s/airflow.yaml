@@ -16,6 +16,8 @@ data:
   AIRFLOW__CORE__LOAD_EXAMPLES: "false"
   AIRFLOW__CORE__MIN_FILE_PROCESS_INTERVAL: "60"
   AIRFLOW__CORE__EXECUTION_API_SERVER_URL: "http://airflow-apiserver.taxon-vision.svc.cluster.local:8080/execution/"
+  TAXON_JENKINS_BRANCH: "main"
+  MLFLOW_TRACKING_URI: "http://mlflow-server.taxon-vision.svc.cluster.local:5000"
   PYTHONPATH: "/opt/airflow/src"
 ---
 apiVersion: apps/v1
@@ -182,6 +184,14 @@ spec:
         - name: airflow-taxon-deps
           mountPath: /opt/airflow/src/taxon_vision/active_learning/feedback.py
           subPath: feedback.py
+          readOnly: true
+        - name: airflow-taxon-deps
+          mountPath: /opt/airflow/src/taxon_vision/active_learning/label_studio_sync.py
+          subPath: label_studio_sync.py
+          readOnly: true
+        - name: airflow-taxon-deps
+          mountPath: /opt/airflow/src/taxon_vision/active_learning/triage_queue.py
+          subPath: triage_queue.py
           readOnly: true
         - name: airflow-taxon-deps
           mountPath: /opt/airflow/config/taxa_catalog.yaml
@@ -375,15 +385,27 @@ spec:
             secretKeyRef:
               name: taxon-vision-secrets
               key: INTERNAL_API_TOKEN
+        - name: JENKINS_USER
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: JENKINS_USER
+              optional: true
         - name: JENKINS_API_TOKEN
           valueFrom:
             secretKeyRef:
               name: airflow-secrets
               key: JENKINS_API_TOKEN
+        - name: DAGSHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: DAGSHUB_TOKEN
+              optional: true
         - name: AIRFLOW_CONN_TAXON_APP
           value: '{"conn_type": "http", "host": "http://taxon-vision-serving.taxon-vision.svc.cluster.local:8000", "password": "$(TAXON_INTERNAL_API_TOKEN)"}'
         - name: AIRFLOW_CONN_JENKINS
-          value: '{"conn_type": "http", "host": "http://192.168.178.30:8080", "login": "admin", "password": "$(JENKINS_API_TOKEN)"}'
+          value: '{"conn_type": "http", "host": "http://192.168.178.30:8080", "login": "$(JENKINS_USER)", "password": "$(JENKINS_API_TOKEN)"}'
         volumeMounts:
         - name: airflow-dags
           mountPath: /opt/airflow/dags
@@ -391,6 +413,14 @@ spec:
         - name: airflow-taxon-deps
           mountPath: /opt/airflow/src/taxon_vision/active_learning/feedback.py
           subPath: feedback.py
+          readOnly: true
+        - name: airflow-taxon-deps
+          mountPath: /opt/airflow/src/taxon_vision/active_learning/label_studio_sync.py
+          subPath: label_studio_sync.py
+          readOnly: true
+        - name: airflow-taxon-deps
+          mountPath: /opt/airflow/src/taxon_vision/active_learning/triage_queue.py
+          subPath: triage_queue.py
           readOnly: true
         - name: airflow-taxon-deps
           mountPath: /opt/airflow/config/taxa_catalog.yaml
@@ -448,15 +478,27 @@ spec:
             secretKeyRef:
               name: taxon-vision-secrets
               key: INTERNAL_API_TOKEN
+        - name: JENKINS_USER
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: JENKINS_USER
+              optional: true
         - name: JENKINS_API_TOKEN
           valueFrom:
             secretKeyRef:
               name: airflow-secrets
               key: JENKINS_API_TOKEN
+        - name: DAGSHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: DAGSHUB_TOKEN
+              optional: true
         - name: AIRFLOW_CONN_TAXON_APP
           value: '{"conn_type": "http", "host": "http://taxon-vision-serving.taxon-vision.svc.cluster.local:8000", "password": "$(TAXON_INTERNAL_API_TOKEN)"}'
         - name: AIRFLOW_CONN_JENKINS
-          value: '{"conn_type": "http", "host": "http://192.168.178.30:8080", "login": "admin", "password": "$(JENKINS_API_TOKEN)"}'
+          value: '{"conn_type": "http", "host": "http://192.168.178.30:8080", "login": "$(JENKINS_USER)", "password": "$(JENKINS_API_TOKEN)"}'
         volumeMounts:
         - name: airflow-dags
           mountPath: /opt/airflow/dags
@@ -464,6 +506,14 @@ spec:
         - name: airflow-taxon-deps
           mountPath: /opt/airflow/src/taxon_vision/active_learning/feedback.py
           subPath: feedback.py
+          readOnly: true
+        - name: airflow-taxon-deps
+          mountPath: /opt/airflow/src/taxon_vision/active_learning/label_studio_sync.py
+          subPath: label_studio_sync.py
+          readOnly: true
+        - name: airflow-taxon-deps
+          mountPath: /opt/airflow/src/taxon_vision/active_learning/triage_queue.py
+          subPath: triage_queue.py
           readOnly: true
         - name: airflow-taxon-deps
           mountPath: /opt/airflow/config/taxa_catalog.yaml
