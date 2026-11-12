@@ -3,19 +3,13 @@
 """Hourly prediction drift monitor DAG for automated distribution shift evaluation.
 
 Summary:
-    Orchestrates scheduled hourly evaluations of incoming prediction telemetry against
-    the canonical baseline embedding manifold, automatically triggering retraining on detected drift.
+    Orchestrates scheduled hourly evaluations of incoming prediction telemetry against the canonical baseline embedding manifold, automatically triggering retraining on detected drift.
 
 Why:
-    Continuous inference in open ecological environments experiences seasonal, illumination,
-    and sensor degradation shifts. To ensure statistical exchangeability required for conformal
-    prediction coverage guarantees (1 - alpha), live prediction vectors must be evaluated
-    periodically via two-tier hypothesis tests (Wasserstein-1 and RBF MMD²).
+    Continuous inference in open ecological environments experiences seasonal, illumination, and sensor degradation shifts. To ensure statistical exchangeability required for conformal prediction coverage guarantees (1 - alpha), live prediction vectors must be evaluated periodically via two-tier hypothesis tests (Wasserstein-1 and RBF MMD²).
 
 How:
-    Dispatches an authenticated HTTP POST request to the internal `/api/v1/drift/evaluate` endpoint
-    via `HttpHook(http_conn_id="taxon_app")`. Evaluates the returned JSON payload with a short-circuit
-    operator; if `drift_detected` is True, dispatches `TriggerDagRunOperator` to start `model_retraining`.
+    Dispatches an authenticated HTTP POST request to the internal `/api/v1/drift/evaluate` endpoint via `HttpHook(http_conn_id="taxon_app")`. Evaluates the returned JSON payload with a short-circuit operator; if `drift_detected` is True, dispatches `TriggerDagRunOperator` to start `model_retraining`.
 """
 
 from __future__ import annotations

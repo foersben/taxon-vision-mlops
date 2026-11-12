@@ -68,16 +68,33 @@ def test_dagshub_label_studio_client_consent_guard_and_export(tmp_path, monkeypa
     )
 
     s3_puts: list[tuple[str, str, str, bytes]] = []
+    graphql_queries: list[str] = []
     api_calls: list[tuple[str, str, object]] = []
 
     class _FakeResp:
+        def __init__(self, body: bytes = b"") -> None:
+            self._body = body
+
         def __enter__(self) -> _FakeResp:
             return self
 
         def __exit__(self, *_args: object) -> None:
             return None
 
+        def read(self) -> bytes:
+            return self._body
+
     def _fake_urlopen(req: urllib.request.Request, timeout: float = 0.0) -> _FakeResp:
+        if req.full_url.endswith("/data-engine/graphql"):
+            payload = json.loads(bytes(req.data or b"{}").decode("utf-8"))
+            query = str(payload.get("query", ""))
+            graphql_queries.append(query)
+            if "datasource {" in query:
+                return _FakeResp(json.dumps({"data": {"datasource": [{"id": 9690, "name": "triage-queue"}]}}).encode())
+            return _FakeResp(
+                json.dumps({"data": {"scanDatasource": {"id": 9690, "preprocessingStatus": "IN_PROGRESS"}}}).encode()
+            )
+
         s3_puts.append(
             (
                 req.get_method(),
@@ -96,6 +113,8 @@ def test_dagshub_label_studio_client_consent_guard_and_export(tmp_path, monkeypa
         api_calls.append((method, path, payload))
         if path.endswith("/export?exportType=JSON"):
             return [{"id": 1, "annotations": [{"result": []}]}, {"id": 2, "annotations": []}]
+        if path == "projects/":
+            return {"id": 12}
         return {}
 
     monkeypatch.setattr(client, "_api_request", _fake_api)
@@ -108,7 +127,18 @@ def test_dagshub_label_studio_client_consent_guard_and_export(tmp_path, monkeypa
     assert url == "https://dagshub.com/api/v1/repo-buckets/s3/foersben/taxon-vision-mlops/triage-queue/obs-1_crop.jpg"
     assert auth.startswith("AWS4-HMAC-SHA256 Credential=pat-test/")
     assert data == b"\xff\xd8\xff\xe0dummy"
+    assert any("scanDatasource(id: 9690" in q for q in graphql_queries)
     assert json.loads(consented_meta.read_text(encoding="utf-8"))["synced_to_label_studio"] is True
+
+    # Verify fresh project creation disables S3 query presigning (DagsHub S3 rejects presign=True with 401).
+    bootstrap_client = DagsHubLabelStudioClient(DagsHubRepoConfig(token="pat-test"))
+    monkeypatch.setattr(bootstrap_client, "_api_request", _fake_api)
+    assert bootstrap_client.resolve_or_create_project_id() == 12
+    s3_storage_calls = [c for c in api_calls if c[0] == "POST" and c[1] == "storages/s3"]
+    assert len(s3_storage_calls) == 1
+    storage_payload = s3_storage_calls[0][2]
+    assert isinstance(storage_payload, dict)
+    assert storage_payload["presign"] is False
 
     export_file = tmp_path / "export.json"
     count = client.export_completed_annotations(export_file)

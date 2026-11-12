@@ -252,13 +252,13 @@ class DagsHubLabelStudioClient:
         return pid
 
     def _ensure_s3_source_storage(self, project_id: int) -> None:
-        """Register the DagsHub S3 repository bucket as a presigned source storage for Label Studio.
+        """Register the DagsHub S3 repository bucket as a backend-proxied source storage for Label Studio.
 
         Why:
-            Repository buckets require SigV4 presigned URLs so browser-based taxonomists in Label Studio can render `s3://taxon-vision-mlops/triage-queue/...` images without making private buckets public.
+            DagsHub's `/api/v1/repo-buckets/s3/` gateway rejects AWS SigV4 query-string presigned URLs with HTTP 401 Unauthorized, whereas setting `presign=False` causes Label Studio's backend to stream `s3://taxon-vision-mlops/triage-queue/...` objects using SigV4 `Authorization` headers through `/tasks/{id}/resolve/` without making private buckets public.
 
         How:
-            Issues `POST storages/s3` configured with DagsHub's S3 endpoint, repository name, `triage-queue/` prefix, and `presign=True`, logging a warning if the endpoint rejects duplicate registration.
+            Issues `POST storages/s3` configured with DagsHub's S3 endpoint, repository name, `triage-queue/` prefix, and `presign=False`, logging a warning if the endpoint rejects duplicate registration.
 
         Args:
             project_id: Target DagsHub Label Studio numeric project identifier.
@@ -276,7 +276,7 @@ class DagsHubLabelStudioClient:
                     "s3_endpoint": self.config.s3_endpoint_url,
                     "aws_access_key_id": self.config.token,
                     "aws_secret_access_key": self.config.token,
-                    "presign": True,
+                    "presign": False,
                     "recursive_scan": True,
                 },
             )
@@ -284,6 +284,59 @@ class DagsHubLabelStudioClient:
             logger.warning(
                 "Could not auto-configure Label Studio S3 source storage for project %d: %s", project_id, err
             )
+
+    def _data_engine_graphql(self, query: str) -> dict[str, Any]:
+        """Execute an authenticated GraphQL request against DagsHub Data Engine.
+
+        Why:
+            Keeps Data Engine datasource indexing coupled cleanly inside standard-library HTTPS calls so newly uploaded S3 triage crops appear in DagsHub Datasources without requiring manual UI scans or extra SDK packages.
+
+        How:
+            Sends a UTF-8 JSON GraphQL payload to `/api/v1/repos/{owner}/{repo}/data-engine/graphql` with `Authorization: Bearer` headers and returns the parsed JSON body.
+
+        Args:
+            query: GraphQL query or mutation string.
+
+        Returns:
+            Parsed GraphQL response dictionary.
+        """
+        endpoint = f"https://dagshub.com/api/v1/repos/{self.config.owner}/{self.config.repo}/data-engine/graphql"
+        req = urllib.request.Request(
+            url=endpoint,
+            data=json.dumps({"query": query}).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.config.token}",
+                "Content-Type": "application/json",
+                "User-Agent": "TaxonVision-ActiveLearning/1.0",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=self.config.timeout_seconds) as resp:
+            raw = resp.read().decode("utf-8")
+            parsed: dict[str, Any] = json.loads(raw) if raw.strip() else {}
+            return parsed
+
+    def _refresh_matching_datasource(self) -> None:
+        """Trigger an asynchronous Data Engine bucket scan for the matching triage datasource.
+
+        Why:
+            Objects written directly via DagsHub's S3 gateway do not appear inside Data Engine datasource views until a bucket rescan runs. Triggering `scanDatasource` best-effort keeps DagsHub's Datasets UI synchronised with Label Studio tasks.
+
+        How:
+            Queries matching datasources named after `self.config.bucket_prefix` and invokes `scanDatasource` with `FORCE_REGENERATE_AUTO_SCAN_VALUES`, degrading softly with a warning if GraphQL is unreachable.
+        """
+        target_name = self.config.bucket_prefix.strip("/")
+        try:
+            listing = self._data_engine_graphql("{ datasource { id name } }")
+            sources = listing.get("data", {}).get("datasource") or []
+            for src in sources:
+                if isinstance(src, dict) and str(src.get("name", "")).strip() == target_name:
+                    ds_id = int(src["id"])
+                    self._data_engine_graphql(
+                        f"mutation {{ scanDatasource(id: {ds_id}, options: [FORCE_REGENERATE_AUTO_SCAN_VALUES]) {{ id preprocessingStatus }} }}"
+                    )
+        except Exception as err:
+            logger.debug("Skipping Data Engine datasource refresh for %s: %s", target_name, err)
 
     def upload_crop_to_bucket(self, observation_id: str, crop_path: Path) -> str:
         """Upload a consented flagged observation crop to the DagsHub S3 repository bucket.
@@ -378,6 +431,7 @@ class DagsHubLabelStudioClient:
             }
         ]
         self._api_request("POST", f"projects/{project_id}/import", payload=task_payload)
+        self._refresh_matching_datasource()
 
         record["synced_to_label_studio"] = True
         record["image_url"] = s3_uri
