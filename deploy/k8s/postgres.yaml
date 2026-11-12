@@ -64,7 +64,7 @@ spec:
           - "-c"
           - "shared_buffers=128MB"
           - "-c"
-          - "max_connections=40"
+          - "max_connections=120"
           - "-c"
           - "work_mem=4MB"
         env:
