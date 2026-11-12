@@ -30,11 +30,198 @@ data:
     apiVersion: 1
     datasources:
       - name: Prometheus
+        uid: Prometheus
         type: prometheus
         access: proxy
         url: http://prometheus:9090
         isDefault: true
         editable: false
+      - name: Loki
+        uid: Loki
+        type: loki
+        access: proxy
+        url: http://loki.taxon-vision.svc.cluster.local:3100
+        editable: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-alerting
+  namespace: taxon-vision
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/part-of: taxon-vision-mlops
+data:
+  rules.yaml: |
+    apiVersion: 1
+    contactPoints:
+      - orgId: 1
+        name: default-channel
+        receivers:
+          - uid: default-receiver
+            type: email
+            settings:
+              addresses: "webmaster@benjamin-foerster.eu"
+
+      - orgId: 1
+        name: retrain-webhook
+        receivers:
+          - uid: retrain-webhook-receiver
+            type: webhook
+            settings:
+              url: "http://taxon-vision-serving.taxon-vision.svc.cluster.local:8000/api/v1/retrain/webhook"
+              httpMethod: "POST"
+              authorization_credentials: "$__env{GF_RETRAIN_WEBHOOK_SECRET}"
+              authorization_scheme: "Bearer"
+
+    policies:
+      - orgId: 1
+        receiver: default-channel
+        group_by:
+          - alertname
+        group_wait: 10s
+        group_interval: 1m
+        repeat_interval: 6h
+        routes:
+          - receiver: retrain-webhook
+            matchers:
+              - action = retrain
+            repeat_interval: 6h
+
+    groups:
+      - orgId: 1
+        name: TaxonVision_Operational_Alerts
+        folder: TaxonVision
+        interval: 1m
+        rules:
+          - uid: prediction_latency_p95_high
+            title: PredictionLatencyP95High
+            condition: C
+            data:
+              - refId: A
+                datasourceUid: Prometheus
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                model:
+                  expr: "1000 * histogram_quantile(0.95, sum by (le) (rate(taxon_inference_latency_seconds_bucket[5m])))"
+                  instant: true
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  type: threshold
+                  expression: A
+                  conditions:
+                    - evaluator:
+                        type: gt
+                        params: [120]
+                      query:
+                        params: [A]
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Inference p95 latency exceeded 120ms budget"
+              description: "Steady-state p95 inference latency is currently {{ $value }} ms."
+            noDataState: OK
+            execErrState: Error
+
+          - uid: prediction_error_ratio_high
+            title: PredictionErrorRatioHigh
+            condition: C
+            data:
+              - refId: A
+                datasourceUid: Prometheus
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                model:
+                  expr: "sum(rate(taxon_predictions_total{status=~\"error|unavailable\"}[5m])) / clamp_min(sum(rate(taxon_predictions_total[5m])), 1e-9)"
+                  instant: true
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  type: threshold
+                  expression: A
+                  conditions:
+                    - evaluator:
+                        type: gt
+                        params: [0.05]
+                      query:
+                        params: [A]
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Prediction error ratio exceeded 5%"
+              description: "Error ratio is currently {{ $value | humanizePercentage }}."
+            noDataState: OK
+            execErrState: Error
+
+          - uid: embedding_drift_detected
+            title: EmbeddingDriftDetected
+            condition: C
+            data:
+              - refId: A
+                datasourceUid: Prometheus
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                model:
+                  expr: "taxon_drift_detected"
+                  instant: true
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  type: threshold
+                  expression: A
+                  conditions:
+                    - evaluator:
+                        type: gt
+                        params: [0.5]
+                      query:
+                        params: [A]
+            for: 0s
+            labels:
+              severity: critical
+              action: retrain
+            annotations:
+              summary: "Embedding distribution drift detected in live traffic"
+              description: "Hypothesis testing confirmed significant drift from canonical baseline. Triggering model retraining relay."
+            noDataState: OK
+            execErrState: Error
+
+          - uid: drift_monitor_stale
+            title: DriftMonitorStale
+            condition: C
+            data:
+              - refId: A
+                datasourceUid: Prometheus
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                model:
+                  expr: "time() - taxon_drift_last_run_timestamp_seconds"
+                  instant: true
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  type: threshold
+                  expression: A
+                  conditions:
+                    - evaluator:
+                        type: gt
+                        params: [7200]
+                      query:
+                        params: [A]
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Drift monitor has not executed within 2 hours"
+              description: "Last drift run was {{ $value }} seconds ago. Check Airflow scheduler health."
+            noDataState: OK
+            execErrState: Error
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -155,6 +342,12 @@ spec:
             secretKeyRef:
               name: monitoring-secrets
               key: GF_SECURITY_ADMIN_PASSWORD
+        - name: GF_RETRAIN_WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: monitoring-secrets
+              key: GF_RETRAIN_WEBHOOK_SECRET
+              optional: true
         - name: GF_USERS_ALLOW_SIGN_UP
           value: "false"
         resources:
@@ -174,6 +367,9 @@ spec:
           subPath: dashboards.yaml
         - name: dashboard-definitions
           mountPath: /etc/grafana/provisioning/dashboards/json
+        - name: alerting-rules
+          mountPath: /etc/grafana/provisioning/alerting/rules.yaml
+          subPath: rules.yaml
       volumes:
       - name: grafana-storage
         hostPath:
@@ -188,6 +384,9 @@ spec:
       - name: dashboard-definitions
         configMap:
           name: grafana-dashboards-json
+      - name: alerting-rules
+        configMap:
+          name: grafana-alerting
 ---
 apiVersion: v1
 kind: Service

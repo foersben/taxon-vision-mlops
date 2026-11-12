@@ -12,7 +12,7 @@ sources:
   - id: openwiki-source-c53db74dca0bf49162c87f32
     resource: repo://config/taxa_catalog.yaml
   - id: openwiki-source-67ce6221cdcbd3b0ca969d34
-    resource: repo://deploy/k8s/api-deployment.yaml
+    resource: repo://deploy/k8s/base/api-deployment.yaml
   - id: openwiki-source-b9df81af2f7f5ce78210bf26
     resource: repo://deploy/k8s/jenkins-agent-rbac.yaml
   - id: openwiki-source-948b3861f8fd9364bb8fd9eb

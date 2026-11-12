@@ -130,6 +130,10 @@ if [[ "${INIT_ENV}" == "true" ]]; then
     if [[ -z "${EXISTING_JENKINS}" ]]; then
         EXISTING_JENKINS=$(lookup_keepass_optional "service" "jenkins")
     fi
+    EXISTING_DAGSHUB=$(lookup_keepass_optional "service" "dagshub")
+    if [[ -z "${EXISTING_DAGSHUB}" ]]; then
+        EXISTING_DAGSHUB=$(lookup_keepass_optional "Title" "DagsHub")
+    fi
 
     (
         umask 077
@@ -157,7 +161,9 @@ AIRFLOW__CORE__FERNET_KEY=$(gen_fernet_key)
 AIRFLOW__API_AUTH__JWT_SECRET=$(gen_hex 32)
 AIRFLOW_API_USER=admin
 AIRFLOW_ADMIN_PASSWORD=$(gen_hex 24)
+JENKINS_USER=admin
 JENKINS_API_TOKEN=${EXISTING_JENKINS:-REPLACE_WITH_JENKINS_ADMIN_API_TOKEN}
+DAGSHUB_TOKEN=${EXISTING_DAGSHUB:-REPLACE_WITH_DAGSHUB_PAT_TOKEN}
 
 # FastAPI Internal Bearer & Grafana Retrain Webhook Secrets
 INTERNAL_API_TOKEN=$(gen_hex 32)
@@ -168,7 +174,7 @@ EOF
     echo "Generated restricted credential file '${ENV_FILE}' (mode 0600)."
     echo "Next steps:"
     echo "  1. Archive these generated credentials in KeePassXC."
-    echo "  2. If JENKINS_API_TOKEN still shows REPLACE_WITH_*, set your real Jenkins API token."
+    echo "  2. If JENKINS_API_TOKEN or DAGSHUB_TOKEN still show REPLACE_WITH_*, set your real tokens and verify JENKINS_USER."
     echo "  3. Add SEAWEEDFS_ACCESS_KEY_ID / SEAWEEDFS_SECRET_ACCESS_KEY as Jenkins credential 'seaweedfs-s3-credentials'."
     exit 0
 fi
@@ -191,7 +197,9 @@ if [[ "${MOCK_MODE}" == "true" ]]; then
     AIRFLOW_JWT_SECRET="PLACEHOLDER_MOCK_JWT_$(gen_hex 8)"
     AIRFLOW_API_USER="admin"
     AIRFLOW_ADMIN_PASSWORD="PLACEHOLDER_MOCK_AF_ADMIN_$(gen_hex 6)"
+    JENKINS_USER="admin"
     JENKINS_API_TOKEN="PLACEHOLDER_MOCK_JENKINS_$(gen_hex 6)"
+    DAGSHUB_TOKEN="PLACEHOLDER_MOCK_DAGSHUB_$(gen_hex 6)"
     INTERNAL_API_TOKEN="PLACEHOLDER_MOCK_INTERNAL_$(gen_hex 8)"
     RETRAIN_WEBHOOK_SECRET="PLACEHOLDER_MOCK_WEBHOOK_$(gen_hex 8)"
 else
@@ -231,7 +239,15 @@ else
     AIRFLOW_JWT_SECRET="${SECRETS[AIRFLOW__API_AUTH__JWT_SECRET]:-${SECRETS[AIRFLOW__API__AUTH_JWT_SECRET]:-${SECRETS[AIRFLOW_JWT_SECRET]:-}}}"
     AIRFLOW_API_USER="${SECRETS[AIRFLOW_API_USER]:-admin}"
     AIRFLOW_ADMIN_PASSWORD="${SECRETS[AIRFLOW_ADMIN_PASSWORD]:-}"
+    JENKINS_USER="${SECRETS[JENKINS_USER]:-admin}"
     JENKINS_API_TOKEN="${SECRETS[JENKINS_API_TOKEN]:-}"
+    DAGSHUB_TOKEN="${SECRETS[DAGSHUB_TOKEN]:-${DAGSHUB_TOKEN:-}}"
+    if [[ -z "${DAGSHUB_TOKEN}" ]]; then
+        DAGSHUB_TOKEN=$(lookup_keepass_optional "service" "dagshub")
+    fi
+    if [[ -z "${DAGSHUB_TOKEN}" && "${DRY_RUN}" != "true" ]] && command -v kubectl >/dev/null 2>&1; then
+        DAGSHUB_TOKEN=$(kubectl get secret dagshub-credentials -n taxon-vision -o jsonpath='{.data.DAGSHUB_TOKEN}' 2>/dev/null | base64 -d 2>/dev/null || true)
+    fi
     INTERNAL_API_TOKEN="${SECRETS[TAXON_INTERNAL_API_TOKEN]:-${SECRETS[INTERNAL_API_TOKEN]:-}}"
     RETRAIN_WEBHOOK_SECRET="${SECRETS[TAXON_RETRAIN_WEBHOOK_SECRET]:-${SECRETS[RETRAIN_WEBHOOK_SECRET]:-}}"
 
@@ -265,6 +281,7 @@ REQUIRED_VARS=(
     JENKINS_API_TOKEN
     INTERNAL_API_TOKEN
     RETRAIN_WEBHOOK_SECRET
+    JENKINS_USER
 )
 
 for var_name in "${REQUIRED_VARS[@]}"; do
@@ -278,6 +295,14 @@ for var_name in "${REQUIRED_VARS[@]}"; do
         exit 1
     fi
 done
+
+if [[ "${DRY_RUN}" != "true" && "${DAGSHUB_TOKEN:-}" =~ ^(REPLACE_WITH_|CHANGE_ME_|PLACEHOLDER_) ]]; then
+    echo "Error: Secret 'DAGSHUB_TOKEN' still holds an unreplaced placeholder value." >&2
+    exit 1
+fi
+if [[ -z "${DAGSHUB_TOKEN:-}" ]]; then
+    echo "Note: DAGSHUB_TOKEN is empty; DagsHub Label Studio sync and MLflow mirroring remain inactive until configured." >&2
+fi
 
 render_s3_json() {
     local access_key="$1"
@@ -310,8 +335,8 @@ mask_val() {
 
 emit_infra_secrets_yaml() {
     local ns="taxon-vision"
-    local pg_pw tel_pw opt_pw af_pw mlf_pw s3_ak s3_sk gf_usr gf_pw
-    local mlf_uri opt_dash_uri af_fernet af_jwt af_uri af_admin jnk_tok s3_json_indented
+    local pg_pw tel_pw opt_pw af_pw mlf_pw s3_ak s3_sk gf_usr gf_pw gf_webhook
+    local mlf_uri opt_dash_uri af_fernet af_jwt af_uri af_admin jnk_usr jnk_tok dh_tok s3_json_indented
 
     pg_pw="$(mask_val "${POSTGRES_PASSWORD}")"
     tel_pw="$(mask_val "${TELEMETRY_DB_PASSWORD}")"
@@ -322,13 +347,19 @@ emit_infra_secrets_yaml() {
     s3_sk="$(mask_val "${SEAWEEDFS_SECRET_ACCESS_KEY}")"
     gf_usr="$(mask_val "${GF_SECURITY_ADMIN_USER}")"
     gf_pw="$(mask_val "${GF_SECURITY_ADMIN_PASSWORD}")"
+    gf_webhook="$(mask_val "${RETRAIN_WEBHOOK_SECRET}")"
     mlf_uri="$(mask_val "${MLFLOW_BACKEND_URI}")"
     opt_dash_uri="$(mask_val "${OPTUNA_DASHBOARD_STORAGE_URI}")"
     af_fernet="$(mask_val "${AIRFLOW_FERNET_KEY}")"
     af_jwt="$(mask_val "${AIRFLOW_JWT_SECRET}")"
     af_uri="$(mask_val "${AIRFLOW_DB_URI}")"
     af_admin="$(mask_val "${AIRFLOW_ADMIN_PASSWORD}")"
+    jnk_usr="$(mask_val "${JENKINS_USER}")"
     jnk_tok="$(mask_val "${JENKINS_API_TOKEN}")"
+    dh_tok=""
+    if [[ -n "${DAGSHUB_TOKEN:-}" ]]; then
+        dh_tok="$(mask_val "${DAGSHUB_TOKEN}")"
+    fi
     s3_json_indented="$(render_s3_json "${s3_ak}" "${s3_sk}" | sed 's/^/    /')"
 
     cat <<EOF
@@ -372,6 +403,7 @@ type: Opaque
 stringData:
   GF_SECURITY_ADMIN_USER: "${gf_usr}"
   GF_SECURITY_ADMIN_PASSWORD: "${gf_pw}"
+  GF_RETRAIN_WEBHOOK_SECRET: "${gf_webhook}"
 ---
 apiVersion: v1
 kind: Secret
@@ -408,19 +440,25 @@ stringData:
   AIRFLOW__API_AUTH__JWT_SECRET: "${af_jwt}"
   AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "${af_uri}"
   AIRFLOW_ADMIN_PASSWORD: "${af_admin}"
+  JENKINS_USER: "${jnk_usr}"
   JENKINS_API_TOKEN: "${jnk_tok}"
+  DAGSHUB_TOKEN: "${dh_tok}"
 EOF
 }
 
 emit_app_secret_yaml() {
     local ns="$1"
-    local opt_uri tel_uri tok webhook af_usr af_pw
+    local opt_uri tel_uri tok webhook af_usr af_pw dh_tok
     opt_uri="$(mask_val "${OPTUNA_STORAGE_URI}")"
     tel_uri="$(mask_val "${TELEMETRY_DATABASE_URL}")"
     tok="$(mask_val "${INTERNAL_API_TOKEN}")"
     webhook="$(mask_val "${RETRAIN_WEBHOOK_SECRET}")"
     af_usr="$(mask_val "${AIRFLOW_API_USER}")"
     af_pw="$(mask_val "${AIRFLOW_ADMIN_PASSWORD}")"
+    dh_tok=""
+    if [[ -n "${DAGSHUB_TOKEN:-}" ]]; then
+        dh_tok="$(mask_val "${DAGSHUB_TOKEN}")"
+    fi
 
     cat <<EOF
 apiVersion: v1
@@ -438,6 +476,7 @@ stringData:
   RETRAIN_WEBHOOK_SECRET: "${webhook}"
   AIRFLOW_API_USER: "${af_usr}"
   AIRFLOW_API_PASSWORD: "${af_pw}"
+  DAGSHUB_TOKEN: "${dh_tok}"
 EOF
 }
 

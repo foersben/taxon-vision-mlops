@@ -20,6 +20,21 @@ spec:
         runAsNonRoot: true
         runAsUser: 10001
         runAsGroup: 10001
+      initContainers:
+      - name: init-permissions
+        image: busybox:1.36
+        securityContext:
+          runAsNonRoot: false
+          runAsUser: 0
+        command:
+        - sh
+        - -c
+        - mkdir -p /app/data/flagged_observations /var/lib/taxon-vision/evidently && chown -R 10001:10001 /app/data/flagged_observations /var/lib/taxon-vision/evidently
+        volumeMounts:
+        - name: flagged-observations-volume
+          mountPath: /app/data/flagged_observations
+        - name: evidently-workspace-volume
+          mountPath: /var/lib/taxon-vision/evidently
       containers:
       - name: api-service
         image: ghcr.io/foersben/taxon-vision-mlops
@@ -50,6 +65,8 @@ spec:
               key: OPTUNA_STORAGE_URI
         - name: TAXON_AIRFLOW_URL
           value: "http://airflow-apiserver.taxon-vision.svc.cluster.local:8080"
+        - name: MLFLOW_TRACKING_URI
+          value: "http://mlflow-server.taxon-vision.svc.cluster.local:5000"
         - name: TAXON_AIRFLOW_USER
           valueFrom:
             secretKeyRef:
@@ -62,6 +79,16 @@ spec:
               key: AIRFLOW_API_PASSWORD
         - name: TAXON_ALLOW_UNTRAINED_FALLBACK
           value: "false"
+        - name: TAXON_STRUCTURED_STDOUT
+          value: "true"
+        - name: TAXON_DRIFT__REFERENCE_EMBEDDINGS_PATH
+          value: "/app/data/embeddings/cal_embeddings.pt"
+        - name: TAXON_DRIFT__EVIDENTLY_WORKSPACE_DIR
+          value: "/var/lib/taxon-vision/evidently"
+        - name: TAXON_TAXA_CATALOG_PATH
+          value: "/app/models/checkpoints/taxa_catalog.yaml"
+        - name: TAXON_CONFORMAL_CONFIG_PATH
+          value: "/app/models/checkpoints/conformal_config.yaml"
         - name: TAXON_TELEMETRY__DATABASE_URL
           valueFrom:
             secretKeyRef:
@@ -77,6 +104,12 @@ spec:
             secretKeyRef:
               name: taxon-vision-secrets
               key: RETRAIN_WEBHOOK_SECRET
+        - name: DAGSHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: taxon-vision-secrets
+              key: DAGSHUB_TOKEN
+              optional: true
         resources:
           requests:
             cpu: "200m"
@@ -88,8 +121,13 @@ spec:
         - name: checkpoints-volume
           mountPath: /app/models/checkpoints
           readOnly: true
+        - name: reference-volume
+          mountPath: /app/data/embeddings
+          readOnly: true
         - name: flagged-observations-volume
           mountPath: /app/data/flagged_observations
+        - name: evidently-workspace-volume
+          mountPath: /var/lib/taxon-vision/evidently
         livenessProbe:
           httpGet:
             path: /health
@@ -111,9 +149,17 @@ spec:
         hostPath:
           path: /var/lib/taxon-vision/checkpoints
           type: DirectoryOrCreate
+      - name: reference-volume
+        hostPath:
+          path: /var/lib/taxon-vision/reference
+          type: DirectoryOrCreate
       - name: flagged-observations-volume
         hostPath:
           path: /var/lib/taxon-vision/flagged_observations
+          type: DirectoryOrCreate
+      - name: evidently-workspace-volume
+        hostPath:
+          path: /var/lib/taxon-vision/evidently
           type: DirectoryOrCreate
 ---
 apiVersion: v1
@@ -124,11 +170,12 @@ metadata:
     app.kubernetes.io/name: taxon-vision-serving
     app.kubernetes.io/part-of: taxon-vision-mlops
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app.kubernetes.io/name: taxon-vision-serving
   ports:
   - name: http
     port: 8000
     targetPort: 8000
+    nodePort: 30080
     protocol: TCP

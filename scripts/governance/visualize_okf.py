@@ -72,7 +72,7 @@ DOC_FILE_COVERAGE: dict[str, list[str]] = {
         "src/taxon_vision/service/routes/health.py",
     ],
     "docs/operations/deployment_runbook.md": [
-        "deploy/k8s/api-deployment.yaml",
+        "deploy/k8s/base/api-deployment.yaml",
         "deploy/k8s/nvidia-time-slicing-config.yaml",
         "scripts/ci/verify_deployment.sh",
     ],

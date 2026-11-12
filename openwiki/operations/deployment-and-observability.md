@@ -16,7 +16,7 @@ sources:
   - id: openwiki-source-1a0d8a98db0ff747dfbee636
     resource: repo://deploy/docker/Dockerfile
   - id: openwiki-source-67ce6221cdcbd3b0ca969d34
-    resource: repo://deploy/k8s/api-deployment.yaml
+    resource: repo://deploy/k8s/base/api-deployment.yaml
   - id: openwiki-source-b9df81af2f7f5ce78210bf26
     resource: repo://deploy/k8s/jenkins-agent-rbac.yaml
   - id: openwiki-source-948b3861f8fd9364bb8fd9eb
