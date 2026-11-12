@@ -713,6 +713,8 @@ def test_resolve_reachable_tracking_uri_fallback_sqlite(tmp_path: Path, monkeypa
 
     monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
     monkeypatch.delenv("TAXON_MLFLOW_TRACKING_URI", raising=False)
+    monkeypatch.delenv("DAGSHUB_TOKEN", raising=False)
+    monkeypatch.delenv("MLFLOW_TRACKING_PASSWORD", raising=False)
     settings = get_settings()
     monkeypatch.setattr(settings.mlflow, "tracking_uri", "http://127.0.0.1:5000")
     monkeypatch.setattr(urllib.request, "urlopen", MagicMock(side_effect=OSError("Connection refused")))
@@ -723,6 +725,28 @@ def test_resolve_reachable_tracking_uri_fallback_sqlite(tmp_path: Path, monkeypa
     resolved = _resolve_reachable_tracking_uri(settings)
     assert resolved == custom_fallback
     assert (tmp_path / "artifacts").exists()
+
+
+def test_resolve_reachable_tracking_uri_dagshub_tier(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify unreachable primary server routes to DagsHub when credentials are present."""
+    import urllib.request
+
+    from taxon_vision.config import get_settings
+
+    monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
+    monkeypatch.delenv("TAXON_MLFLOW_TRACKING_URI", raising=False)
+    monkeypatch.setenv("DAGSHUB_TOKEN", "mock-dagshub-pat-token")
+    settings = get_settings()
+    monkeypatch.setattr(settings.mlflow, "tracking_uri", "http://127.0.0.1:5000")
+    monkeypatch.setattr(
+        settings.mlflow,
+        "dagshub_uri",
+        "https://dagshub.com/foersben/taxon-vision-mlops.mlflow",
+    )
+    monkeypatch.setattr(urllib.request, "urlopen", MagicMock(side_effect=OSError("Connection refused")))
+
+    resolved = _resolve_reachable_tracking_uri(settings)
+    assert resolved == "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
 
 
 def test_mlflow_run_scope_custom_experiment_name(monkeypatch: pytest.MonkeyPatch) -> None:
