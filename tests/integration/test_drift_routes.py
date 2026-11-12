@@ -62,6 +62,13 @@ def test_get_latest_drift_populated(isolate_telemetry_store: BoundedInMemoryTele
     assert data["mlflow_run_id"] == "run_12345"
 
 
+def test_evaluate_drift_unconfigured_token_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify POST /api/v1/drift/evaluate fails closed (HTTP 503) when token secret is unset."""
+    monkeypatch.delenv("TAXON_INTERNAL_API_TOKEN", raising=False)
+    resp = client.post("/api/v1/drift/evaluate")
+    assert resp.status_code == 503
+
+
 def test_evaluate_drift_unauthorized(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify POST /api/v1/drift/evaluate rejects missing or invalid bearer tokens."""
     monkeypatch.setenv("TAXON_INTERNAL_API_TOKEN", "secret-test-token")

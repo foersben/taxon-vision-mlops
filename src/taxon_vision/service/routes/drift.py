@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import hmac
 import logging
 import os
 from typing import Annotated
@@ -21,33 +22,65 @@ router = APIRouter(prefix="/api/v1/drift", tags=["Drift Monitoring"])
 security = HTTPBearer(auto_error=False)
 
 
+def verify_bearer_env_secret(
+    credentials: HTTPAuthorizationCredentials | None,
+    env_var: str,
+    unauthorized_detail: str,
+) -> None:
+    """Validate incoming HTTP Bearer credentials against a configured environment secret using constant-time comparison.
+
+    Why:
+        Centralises fail-closed Bearer token verification across protected operational routes, preventing timing side-channels and ensuring unconfigured production deployments reject requests explicitly instead of falling back to permissive or static dev tokens.
+
+    How:
+        Reads the expected secret from ``env_var``, raises HTTP 503 if unset or empty, and performs a timing-safe ``hmac.compare_digest`` check yielding HTTP 401 on missing or mismatched credentials.
+
+    Args:
+        credentials: Parsed HTTP Bearer credentials extracted by FastAPI Security.
+        env_var: Name of the environment variable supplying the expected shared secret.
+        unauthorized_detail: Detail message emitted with HTTP 401 Unauthorized responses.
+
+    Raises:
+        HTTPException: 503 when ``env_var`` is unconfigured, or 401 when credentials are missing or invalid.
+    """
+    expected_secret = os.getenv(env_var, "").strip()
+    if not expected_secret:
+        logger.error("Protected endpoint denied request because %s is not configured.", env_var)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Authentication secret '{env_var}' is not configured on this server.",
+        )
+
+    if credentials is None or not hmac.compare_digest(credentials.credentials, expected_secret):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=unauthorized_detail,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
 def verify_internal_token(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Security(security)],
 ) -> None:
-    """Validate internal bearer token for protected drift evaluation endpoints.
+    """Validate internal bearer token for protected operational endpoints.
 
     Why:
-        Prevent unauthenticated external callers from triggering CPU-intensive MMD² permutation cycles or generating unsolicited MLflow runs.
+        Prevent unauthenticated external callers from triggering CPU/GPU-intensive training runs or MMD² permutation cycles.
 
     How:
-        Compares incoming bearer token against TAXON_INTERNAL_API_TOKEN environment variable. If the variable is unset (local dev/test), permits the request whilst logging a debug notice.
+        Delegates fail-closed constant-time verification to ``verify_bearer_env_secret`` using ``TAXON_INTERNAL_API_TOKEN``.
 
     Args:
         credentials: Authorization credentials extracted from HTTP headers.
 
     Raises:
-        HTTPException: If the token is missing or does not match the configured secret.
+        HTTPException: If ``TAXON_INTERNAL_API_TOKEN`` is unset (503) or the bearer token is missing or invalid (401).
     """
-    expected_token = os.getenv("TAXON_INTERNAL_API_TOKEN")
-    if not expected_token:
-        return
-
-    if credentials is None or credentials.credentials != expected_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing internal authorization token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    verify_bearer_env_secret(
+        credentials,
+        "TAXON_INTERNAL_API_TOKEN",
+        "Invalid or missing internal authorization token",
+    )
 
 
 @router.post(

@@ -51,7 +51,7 @@ except ImportError:
 def prediction_drift_monitor() -> None:
     """Hourly DAG orchestrating statistical drift evaluation and retraining dispatch."""
 
-    @task
+    @task(multiple_outputs=False)
     def evaluate_live_drift() -> dict[str, Any]:
         """Trigger on-demand drift evaluation via the internal microservice endpoint.
 

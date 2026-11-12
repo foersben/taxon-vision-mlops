@@ -214,6 +214,13 @@ def _resolve_reachable_tracking_uri(settings: Settings | None = None) -> str:
         except Exception as probe_err:
             logger.debug("MLflow tracking health probe failed for %s: %s", health_url, probe_err)
 
+    # Tier 2.5: Target remote DagsHub MLflow mirror if credentials exist
+    dagshub_token = os.getenv("DAGSHUB_TOKEN") or os.getenv("MLFLOW_TRACKING_PASSWORD")
+    if cfg.mlflow.dagshub_uri and dagshub_token:
+        os.environ.setdefault("MLFLOW_TRACKING_USERNAME", "foersben")
+        os.environ.setdefault("MLFLOW_TRACKING_PASSWORD", dagshub_token)
+        return cfg.mlflow.dagshub_uri
+
     # Tier 3: Fallback to local SQLite backend
     fallback_uri = cfg.mlflow.fallback_sqlite_uri
     db_path_str = fallback_uri.replace("sqlite:///", "")

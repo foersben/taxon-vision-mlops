@@ -8,6 +8,7 @@ spec:
   routes:
     - match: Host(`taxon.benjamin-foerster.eu`) || PathPrefix(`/`)
       kind: Rule
+      priority: 10
       services:
         - name: taxon-vision-serving
           port: 8000

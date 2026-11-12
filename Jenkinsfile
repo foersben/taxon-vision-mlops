@@ -81,6 +81,7 @@ spec:
     AWS_SECRET_ACCESS_KEY = credentials('dagshub-token')
     MLFLOW_TRACKING_USERNAME = 'foersben'
     MLFLOW_TRACKING_PASSWORD = credentials('dagshub-token')
+    MLFLOW_TRACKING_URI = 'https://dagshub.com/foersben/taxon-vision-mlops.mlflow'
     PYTHONUNBUFFERED = '1'
     OMP_NUM_THREADS = '4'
     MKL_NUM_THREADS = '4'
@@ -231,19 +232,21 @@ spec:
       steps {
         checkout scm
         container('ml-runner') {
-          sh '''
-            # Enable ingestion on scheduled monthly runs or taxa catalog modifications
-            if echo "$BUILD_CAUSE" | grep -q "TIMER" || [ "$INGEST_DATA" = "true" ]; then
-              export INGEST_DATA=true
-            fi
+          withCredentials([usernamePassword(credentialsId: 'seaweedfs-s3-credentials', usernameVariable: 'SEAWEEDFS_ACCESS_KEY_ID', passwordVariable: 'SEAWEEDFS_SECRET_ACCESS_KEY')]) {
+            sh '''
+              # Enable ingestion on scheduled monthly runs or taxa catalog modifications
+              if echo "$BUILD_CAUSE" | grep -q "TIMER" || [ "$INGEST_DATA" = "true" ]; then
+                export INGEST_DATA=true
+              fi
 
-            if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -q "config/taxa_catalog.yaml"; then
-              echo ">>> config/taxa_catalog.yaml was modified; forcing INGEST_DATA=true"
-              export INGEST_DATA=true
-            fi
+              if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -q "config/taxa_catalog.yaml"; then
+                echo ">>> config/taxa_catalog.yaml was modified; forcing INGEST_DATA=true"
+                export INGEST_DATA=true
+              fi
 
-            bash scripts/ci/jenkins_gpu_train.sh
-          '''
+              bash scripts/ci/jenkins_gpu_train.sh
+            '''
+          }
         }
       }
     }
@@ -258,25 +261,32 @@ spec:
       }
       steps {
         container('ml-runner') {
-          sh '''
-            export PATH="/root/.pixi/bin:$PATH"
-            echo ">>> Executing zero-downtime rolling deployment to Kubernetes cluster..."
-            kubectl version --client
+          withCredentials([usernamePassword(credentialsId: 'seaweedfs-s3-credentials', usernameVariable: 'SEAWEEDFS_ACCESS_KEY_ID', passwordVariable: 'SEAWEEDFS_SECRET_ACCESS_KEY')]) {
+            sh '''
+              export PATH="/root/.pixi/bin:$PATH"
+              cleanup_dvc_local() {
+                pixi run --frozen -e ci-dev dvc config --local --unset remote.local-seaweedfs.access_key_id >/dev/null 2>&1 || true
+                pixi run --frozen -e ci-dev dvc config --local --unset remote.local-seaweedfs.secret_access_key >/dev/null 2>&1 || true
+              }
+              trap cleanup_dvc_local EXIT
 
-            # Hydrate model checkpoints from DVC (prefer in-cluster SeaweedFS cache, fallback to DagsHub origin)
-            echo ">>> Hydrating model checkpoints from DVC remotes..."
-            PULLED=false
-            if kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
-              pixi run --frozen -e ci-dev dvc config --local remote.local-seaweedfs.access_key_id taxonadmin
-              pixi run --frozen -e ci-dev dvc config --local remote.local-seaweedfs.secret_access_key taxonadmin
-              echo ">>> Attempting checkpoint pull from in-cluster SeaweedFS (local-seaweedfs)..."
-              if pixi run --frozen -e ci-dev dvc pull --force -r local-seaweedfs \
-                  models/checkpoints/head.pt \
-                  models/checkpoints/model_int8.onnx; then
-                PULLED=true
-                echo ">>> Checkpoints successfully hydrated from local-seaweedfs."
+              echo ">>> Executing zero-downtime rolling deployment to Kubernetes cluster..."
+              kubectl version --client
+
+              # Hydrate model checkpoints from DVC (prefer in-cluster SeaweedFS cache, fallback to DagsHub origin)
+              echo ">>> Hydrating model checkpoints from DVC remotes..."
+              PULLED=false
+              if kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1 && [ -n "${SEAWEEDFS_ACCESS_KEY_ID:-}" ] && [ -n "${SEAWEEDFS_SECRET_ACCESS_KEY:-}" ]; then
+                pixi run --frozen -e ci-dev dvc config --local remote.local-seaweedfs.access_key_id "${SEAWEEDFS_ACCESS_KEY_ID}"
+                pixi run --frozen -e ci-dev dvc config --local remote.local-seaweedfs.secret_access_key "${SEAWEEDFS_SECRET_ACCESS_KEY}"
+                echo ">>> Attempting checkpoint pull from in-cluster SeaweedFS (local-seaweedfs)..."
+                if pixi run --frozen -e ci-dev dvc pull --force -r local-seaweedfs \
+                    models/checkpoints/head.pt \
+                    models/checkpoints/model_int8.onnx; then
+                  PULLED=true
+                  echo ">>> Checkpoints successfully hydrated from local-seaweedfs."
+                fi
               fi
-            fi
 
             if [ "$PULLED" != "true" ]; then
               echo ">>> Pulling checkpoints from DagsHub archive (origin)..."
@@ -300,9 +310,29 @@ spec:
               done
             fi
 
-            # Apply shared backing services
+            # Synchronise Airflow 3 DAGs & helper dependencies into ConfigMaps before applying Airflow
+            set --
+            for f in airflow/dags/*.py; do
+              [ -f "$f" ] && set -- "$@" "--from-file=$f"
+            done
+            kubectl create configmap airflow-dags "$@" -n taxon-vision --dry-run=client -o yaml | kubectl apply -f -
+            kubectl create configmap airflow-taxon-deps \
+              --from-file=feedback.py=src/taxon_vision/active_learning/feedback.py \
+              --from-file=taxa_catalog.yaml=config/taxa_catalog.yaml \
+              -n taxon-vision --dry-run=client -o yaml | kubectl apply -f -
+
+            # Apply shared backing services and dashboards
             kubectl apply -f deploy/k8s/postgres.yaml
             kubectl apply -f deploy/k8s/monitoring-prometheus-grafana.yaml
+            kubectl apply -f deploy/k8s/grafana-dashboards.yaml
+            kubectl apply -f deploy/k8s/mlops-storage-and-optuna.yaml
+            kubectl apply -f deploy/k8s/evidently-ui.yaml
+            kubectl apply -f deploy/k8s/airflow.yaml
+            kubectl apply -f deploy/k8s/traefik-ingress.yaml
+
+            kubectl rollout restart deployment/airflow-apiserver deployment/airflow-scheduler -n taxon-vision
+            kubectl rollout status deployment/airflow-apiserver -n taxon-vision --timeout=180s
+            kubectl rollout status deployment/airflow-scheduler -n taxon-vision --timeout=180s
 
             # Determine target overlay from Git branch
             if [ "${BRANCH_NAME}" = "main" ]; then
@@ -323,7 +353,8 @@ spec:
             kubectl rollout status deployment/taxon-vision-serving -n ${TARGET_NS} --timeout=300s
             bash scripts/ci/verify_deployment.sh ${TARGET_NS}
             echo ">>> Deployment successfully verified for ${TARGET_ENV}."
-          '''
+            '''
+          }
         }
       }
     }

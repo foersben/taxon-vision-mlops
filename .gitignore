@@ -110,3 +110,6 @@ docs/.archive/
 # OpenWiki ephemeral runtime state
 openwiki/.run.json
 .openwiki/
+
+# Kubernetes local secrets
+deploy/k8s/secrets.yaml

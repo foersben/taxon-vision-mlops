@@ -14,9 +14,21 @@ git config --global --add safe.directory "*"
 echo ">>> Setting up GPU training pipeline..."
 pixi install --frozen -e dev
 
-# Configure local SeaweedFS credentials for DVC cache
-pixi run --frozen -e dev dvc config --local remote.local-seaweedfs.access_key_id taxonadmin
-pixi run --frozen -e dev dvc config --local remote.local-seaweedfs.secret_access_key taxonadmin
+cleanup_dvc_local() {
+  pixi run --frozen -e dev dvc config --local --unset remote.local-seaweedfs.access_key_id >/dev/null 2>&1 || true
+  pixi run --frozen -e dev dvc config --local --unset remote.local-seaweedfs.secret_access_key >/dev/null 2>&1 || true
+}
+trap cleanup_dvc_local EXIT
+
+# Configure local SeaweedFS credentials for DVC cache when injected by Jenkins
+USE_LOCAL_SEAWEEDFS=false
+if [ -n "${SEAWEEDFS_ACCESS_KEY_ID:-}" ] && [ -n "${SEAWEEDFS_SECRET_ACCESS_KEY:-}" ]; then
+  pixi run --frozen -e dev dvc config --local remote.local-seaweedfs.access_key_id "${SEAWEEDFS_ACCESS_KEY_ID}"
+  pixi run --frozen -e dev dvc config --local remote.local-seaweedfs.secret_access_key "${SEAWEEDFS_SECRET_ACCESS_KEY}"
+  USE_LOCAL_SEAWEEDFS=true
+else
+  echo ">>> Warning: SEAWEEDFS_ACCESS_KEY_ID/SECRET_ACCESS_KEY unset; skipping in-cluster SeaweedFS DVC sync."
+fi
 
 # 1. Prime cached features, manifests, and checkpoints from host volume tier if available
 mkdir -p data/embeddings data/manifests data/reference models/checkpoints
@@ -62,7 +74,7 @@ done
 if [ ${#MISSING_ARTIFACTS[@]} -gt 0 ]; then
   echo ">>> Missing artifacts in workspace: ${MISSING_ARTIFACTS[*]}"
   PULLED=false
-  if kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
+  if [ "${USE_LOCAL_SEAWEEDFS}" = "true" ] && kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
     echo ">>> Attempting hydration from in-cluster SeaweedFS (local-seaweedfs)..."
     if pixi run --frozen -e dev dvc pull -r local-seaweedfs "${MISSING_ARTIFACTS[@]}"; then
       PULLED=true
@@ -161,7 +173,7 @@ if [ -d "/var/lib/taxon-vision/checkpoints" ] && [ -f "models/checkpoints/head.p
 fi
 
 # 1. Sync to in-cluster SeaweedFS S3 (local-seaweedfs)
-if kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
+if [ "${USE_LOCAL_SEAWEEDFS}" = "true" ] && kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
   echo ">>> Synchronizing Epistemic Diamond artifacts to SeaweedFS (local-seaweedfs)..."
   pixi run --frozen -e dev dvc push -r local-seaweedfs || echo "SeaweedFS push skipped."
 fi

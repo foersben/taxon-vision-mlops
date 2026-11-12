@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/name: evidently-ui
     app.kubernetes.io/part-of: taxon-vision-mlops
 spec:
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: evidently-ui
@@ -21,7 +21,6 @@ spec:
         - name: evidently-ui
           image: docker.io/evidently/evidently-service:latest
           args:
-            - "ui"
             - "--workspace"
             - "/workspace"
             - "--port"

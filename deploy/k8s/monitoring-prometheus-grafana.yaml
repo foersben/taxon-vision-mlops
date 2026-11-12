@@ -120,7 +120,7 @@ metadata:
     app.kubernetes.io/name: grafana
     app.kubernetes.io/part-of: taxon-vision-mlops
 spec:
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: grafana
@@ -145,8 +145,16 @@ spec:
         - name: web
           containerPort: 3000
         env:
+        - name: GF_SECURITY_ADMIN_USER
+          valueFrom:
+            secretKeyRef:
+              name: monitoring-secrets
+              key: GF_SECURITY_ADMIN_USER
         - name: GF_SECURITY_ADMIN_PASSWORD
-          value: "admin"
+          valueFrom:
+            secretKeyRef:
+              name: monitoring-secrets
+              key: GF_SECURITY_ADMIN_PASSWORD
         - name: GF_USERS_ALLOW_SIGN_UP
           value: "false"
         resources:
@@ -161,6 +169,11 @@ spec:
           mountPath: /var/lib/grafana
         - name: datasources
           mountPath: /etc/grafana/provisioning/datasources
+        - name: dashboard-provider
+          mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml
+          subPath: dashboards.yaml
+        - name: dashboard-definitions
+          mountPath: /etc/grafana/provisioning/dashboards/json
       volumes:
       - name: grafana-storage
         hostPath:
@@ -169,6 +182,12 @@ spec:
       - name: datasources
         configMap:
           name: grafana-datasources
+      - name: dashboard-provider
+        configMap:
+          name: grafana-dashboards-provider
+      - name: dashboard-definitions
+        configMap:
+          name: grafana-dashboards-json
 ---
 apiVersion: v1
 kind: Service

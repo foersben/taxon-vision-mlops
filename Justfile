@@ -132,6 +132,8 @@ verify-contracts:
 	bash -n scripts/ci/jenkins_gpu_train.sh
 	bash -n scripts/ci/verify_deployment.sh
 	bash -n scripts/ci/local_ci.sh
+	bash -n scripts/deploy/provision_k8s_secrets.sh
+	bash scripts/deploy/provision_k8s_secrets.sh --dry-run --mock >/dev/null
 	@echo ">>> 2. Validating DVC DAG structure & dry-run execution plan..."
 	pixi run --frozen -e ci-dev dvc dag
 	pixi run --frozen -e ci-dev dvc repro --dry
@@ -350,6 +352,34 @@ simulate-traffic count="60":
 [group("app")]
 verify-deployment namespace="taxon-vision":
 	@bash scripts/ci/verify_deployment.sh {{namespace}}
+
+# Synchronise Airflow 3 DAGs and Python dependencies from Git into Kubernetes ConfigMaps
+[group("app")]
+sync-airflow-k8s namespace="taxon-vision":
+	#!/usr/bin/env bash
+	set -euo pipefail
+	dag_args=()
+	for f in airflow/dags/*.py; do
+		[ -f "$f" ] && dag_args+=("--from-file=$f")
+	done
+	kubectl create configmap airflow-dags "${dag_args[@]}" -n {{namespace}} --dry-run=client -o yaml | kubectl apply -f -
+	kubectl create configmap airflow-taxon-deps \
+		--from-file=feedback.py=src/taxon_vision/active_learning/feedback.py \
+		--from-file=taxa_catalog.yaml=config/taxa_catalog.yaml \
+		-n {{namespace}} --dry-run=client -o yaml | kubectl apply -f -
+
+# Deploy Airflow 3 orchestration manifests after syncing Git DAGs and helper dependencies
+[group("app")]
+deploy-airflow-k8s: sync-airflow-k8s
+	kubectl apply -f deploy/k8s/airflow.yaml
+	kubectl rollout restart deployment/airflow-apiserver deployment/airflow-scheduler -n taxon-vision
+	kubectl rollout status deployment/airflow-apiserver -n taxon-vision --timeout=180s
+	kubectl rollout status deployment/airflow-scheduler -n taxon-vision --timeout=180s
+
+# Provision encrypted Kubernetes Secrets out-of-band (Option A temporary MVP workflow)
+[group("app")]
+provision-k8s-secrets *args:
+	bash scripts/deploy/provision_k8s_secrets.sh {{args}}
 
 # ── Documentation ───────────────────────────────────────────────────────────
 

@@ -48,6 +48,20 @@ spec:
             secretKeyRef:
               name: taxon-vision-secrets
               key: OPTUNA_STORAGE_URI
+        - name: TAXON_AIRFLOW_URL
+          value: "http://airflow-apiserver.taxon-vision.svc.cluster.local:8080"
+        - name: TAXON_AIRFLOW_USER
+          valueFrom:
+            secretKeyRef:
+              name: taxon-vision-secrets
+              key: AIRFLOW_API_USER
+        - name: TAXON_AIRFLOW_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: taxon-vision-secrets
+              key: AIRFLOW_API_PASSWORD
+        - name: TAXON_ALLOW_UNTRAINED_FALLBACK
+          value: "false"
         - name: TAXON_TELEMETRY__DATABASE_URL
           valueFrom:
             secretKeyRef:

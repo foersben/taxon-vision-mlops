@@ -7,19 +7,29 @@ metadata:
     app.kubernetes.io/name: postgres
     app.kubernetes.io/part-of: taxon-vision-mlops
 data:
-  01-databases.sql: |
-    -- Initialize application roles and databases
-    CREATE ROLE telemetry LOGIN PASSWORD 'taxon_telemetry_pass';
-    CREATE ROLE optuna    LOGIN PASSWORD 'taxon_optuna_pass';
-    CREATE ROLE airflow   LOGIN PASSWORD 'taxon_airflow_pass';
+  01-databases.sh: |
+    #!/bin/sh
+    set -eu
+    psql -v ON_ERROR_STOP=1 --username "${POSTGRES_USER}" --dbname "${POSTGRES_DB}" \
+      -v telemetry_pw="${TELEMETRY_DB_PASSWORD}" \
+      -v optuna_pw="${OPTUNA_DB_PASSWORD}" \
+      -v airflow_pw="${AIRFLOW_DB_PASSWORD}" \
+      -v mlflow_pw="${MLFLOW_DB_PASSWORD}" <<'EOSQL'
+    CREATE ROLE telemetry LOGIN PASSWORD :'telemetry_pw';
+    CREATE ROLE optuna    LOGIN PASSWORD :'optuna_pw';
+    CREATE ROLE airflow   LOGIN PASSWORD :'airflow_pw';
+    CREATE ROLE mlflow    LOGIN PASSWORD :'mlflow_pw';
 
     CREATE DATABASE telemetry OWNER telemetry;
     CREATE DATABASE optuna    OWNER optuna;
     CREATE DATABASE airflow   OWNER airflow;
+    CREATE DATABASE mlflow    OWNER mlflow;
 
     GRANT ALL PRIVILEGES ON DATABASE telemetry TO telemetry;
-    GRANT ALL PRIVILEGES ON DATABASE optuna TO optuna;
-    GRANT ALL PRIVILEGES ON DATABASE airflow TO airflow;
+    GRANT ALL PRIVILEGES ON DATABASE optuna    TO optuna;
+    GRANT ALL PRIVILEGES ON DATABASE airflow   TO airflow;
+    GRANT ALL PRIVILEGES ON DATABASE mlflow    TO mlflow;
+    EOSQL
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -45,6 +55,8 @@ spec:
         runAsUser: 70
         runAsGroup: 70
         fsGroup: 70
+        appArmorProfile:
+          type: Unconfined
       containers:
       - name: postgres
         image: postgres:16-alpine
@@ -59,7 +71,30 @@ spec:
         - name: POSTGRES_USER
           value: "postgres"
         - name: POSTGRES_PASSWORD
-          value: "taxon_super_secret"
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: POSTGRES_PASSWORD
+        - name: TELEMETRY_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: TELEMETRY_DB_PASSWORD
+        - name: OPTUNA_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: OPTUNA_DB_PASSWORD
+        - name: AIRFLOW_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: AIRFLOW_DB_PASSWORD
+        - name: MLFLOW_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: MLFLOW_DB_PASSWORD
         - name: PGDATA
           value: "/var/lib/postgresql/data/pgdata"
         ports:
@@ -95,6 +130,7 @@ spec:
       - name: init-sql
         configMap:
           name: postgres-init-sql
+          defaultMode: 0755
 ---
 apiVersion: v1
 kind: Service

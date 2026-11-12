@@ -65,6 +65,20 @@ spec:
             secretKeyRef:
               name: taxon-vision-secrets
               key: RETRAIN_WEBHOOK_SECRET
+        - name: TAXON_AIRFLOW_URL
+          value: "http://airflow-apiserver.taxon-vision.svc.cluster.local:8080"
+        - name: TAXON_AIRFLOW_USER
+          valueFrom:
+            secretKeyRef:
+              name: taxon-vision-secrets
+              key: AIRFLOW_API_USER
+        - name: TAXON_AIRFLOW_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: taxon-vision-secrets
+              key: AIRFLOW_API_PASSWORD
+        - name: TAXON_ALLOW_UNTRAINED_FALLBACK
+          value: "false"
         resources:
           requests:
             cpu: "200m"
