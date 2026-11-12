@@ -20,8 +20,15 @@ cleanup_dvc_local() {
 }
 trap cleanup_dvc_local EXIT
 
-# Configure local SeaweedFS credentials for DVC cache when injected by Jenkins
+# Configure local SeaweedFS credentials for DVC cache (prefer live in-cluster Secret over static Jenkins credential)
 USE_LOCAL_SEAWEEDFS=false
+K8S_S3_KEY="$(kubectl get secret seaweedfs-s3-secret -n taxon-vision -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+K8S_S3_SECRET="$(kubectl get secret seaweedfs-s3-secret -n taxon-vision -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+if [ -n "${K8S_S3_KEY}" ] && [ -n "${K8S_S3_SECRET}" ]; then
+  SEAWEEDFS_ACCESS_KEY_ID="${K8S_S3_KEY}"
+  SEAWEEDFS_SECRET_ACCESS_KEY="${K8S_S3_SECRET}"
+fi
+
 if [ -n "${SEAWEEDFS_ACCESS_KEY_ID:-}" ] && [ -n "${SEAWEEDFS_SECRET_ACCESS_KEY:-}" ]; then
   pixi run --frozen -e dev dvc config --local remote.local-seaweedfs.access_key_id "${SEAWEEDFS_ACCESS_KEY_ID}"
   pixi run --frozen -e dev dvc config --local remote.local-seaweedfs.secret_access_key "${SEAWEEDFS_SECRET_ACCESS_KEY}"
@@ -76,7 +83,7 @@ if [ ${#MISSING_ARTIFACTS[@]} -gt 0 ]; then
   PULLED=false
   if [ "${USE_LOCAL_SEAWEEDFS}" = "true" ] && kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
     echo ">>> Attempting hydration from in-cluster SeaweedFS (local-seaweedfs)..."
-    if pixi run --frozen -e dev dvc pull -r local-seaweedfs "${MISSING_ARTIFACTS[@]}"; then
+    if env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY pixi run --frozen -e dev dvc pull -r local-seaweedfs "${MISSING_ARTIFACTS[@]}"; then
       PULLED=true
       echo ">>> Successfully hydrated missing artifacts from local-seaweedfs."
     fi
@@ -197,7 +204,7 @@ fi
 # Persist generated checkpoints and co-versioned runtime configs to host volume cache
 if [ -d "/var/lib/taxon-vision/checkpoints" ] && [ -f "models/checkpoints/head.pt" ]; then
   echo ">>> Atomically staging checkpoints and co-versioned configs to /var/lib/taxon-vision/checkpoints/..."
-  for ckpt in models/checkpoints/* config/taxa_catalog.yaml config/conformal_config.yaml; do
+  for ckpt in models/checkpoints/* config/taxa_catalog.yaml config/conformal_config.yaml dvc.lock; do
     [ -f "$ckpt" ] || continue
     fname=$(basename "$ckpt")
     cp -f "$ckpt" "/var/lib/taxon-vision/checkpoints/.${fname}.tmp"
@@ -209,7 +216,7 @@ fi
 # 1. Sync to in-cluster SeaweedFS S3 (local-seaweedfs)
 if [ "${USE_LOCAL_SEAWEEDFS}" = "true" ] && kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1; then
   echo ">>> Synchronizing Epistemic Diamond artifacts to SeaweedFS (local-seaweedfs)..."
-  pixi run --frozen -e dev dvc push -r local-seaweedfs || echo "SeaweedFS push skipped."
+  env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY pixi run --frozen -e dev dvc push -r local-seaweedfs || echo "SeaweedFS push skipped."
 fi
 
 # 2. Push all artifacts to DagsHub S3 (Tier 2 Cloud Archive)
@@ -218,6 +225,8 @@ pixi run --frozen -e dev dvc push -r origin
 
 # Stage and commit updated DVC lockfile, expanded taxonomy catalogues, and evaluation reports to Git
 echo ">>> Committing updated pipeline lockfile and evaluation reports to Git..."
+git config user.name "TaxonVision CI Bot"
+git config user.email "ci-bot@benjamin-foerster.eu"
 git add params.yaml dvc.lock config/conformal_config.yaml config/taxa_catalog.yaml deploy/label_studio/project_config.xml docs/assets/pareto_results.json reports/*.json 2>/dev/null || git add params.yaml dvc.lock config/conformal_config.yaml config/taxa_catalog.yaml deploy/label_studio/project_config.xml docs/assets/pareto_results.json
 if ! git diff --staged --quiet; then
   git commit -m "chore(pipeline): update dvc.lock and evaluation reports [skip ci]" || echo "Git commit skipped."

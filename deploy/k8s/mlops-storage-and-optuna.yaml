@@ -171,6 +171,7 @@ spec:
             --backend-store-uri "${MLFLOW_BACKEND_STORE_URI}" \
             --artifacts-destination s3://mlflow-artifacts \
             --serve-artifacts \
+            --allowed-hosts "*" \
             --host 0.0.0.0 \
             --port 5000
         env:

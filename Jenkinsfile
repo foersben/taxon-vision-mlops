@@ -279,53 +279,63 @@ spec:
               kubectl version --client
               git fetch origin "${BRANCH_NAME}" && git reset --hard "origin/${BRANCH_NAME}" || true
 
-              # Hydrate model checkpoints and calibrated reference embeddings from DVC (prefer in-cluster SeaweedFS cache, fallback to DagsHub origin)
-              echo ">>> Hydrating model checkpoints and reference embeddings from DVC remotes..."
-              PULLED=false
-              if kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1 && [ -n "${SEAWEEDFS_ACCESS_KEY_ID:-}" ] && [ -n "${SEAWEEDFS_SECRET_ACCESS_KEY:-}" ]; then
-                pixi run --frozen -e ci-dev dvc config --local remote.local-seaweedfs.access_key_id "${SEAWEEDFS_ACCESS_KEY_ID}"
-                pixi run --frozen -e ci-dev dvc config --local remote.local-seaweedfs.secret_access_key "${SEAWEEDFS_SECRET_ACCESS_KEY}"
-                echo ">>> Attempting hydration from in-cluster SeaweedFS (local-seaweedfs)..."
-                if pixi run --frozen -e ci-dev dvc pull --force -r local-seaweedfs \
+              if [ -f "/var/lib/taxon-vision/checkpoints/head.pt" ] && [ -f "/var/lib/taxon-vision/checkpoints/model_int8.onnx" ] && [ -f "/var/lib/taxon-vision/reference/cal_embeddings.pt" ]; then
+                echo ">>> Host volume /var/lib/taxon-vision/checkpoints/ already holds active checkpoints; preserving host checkpoints."
+              else
+                # Hydrate model checkpoints and calibrated reference embeddings from DVC (prefer in-cluster SeaweedFS cache, fallback to DagsHub origin)
+                echo ">>> Hydrating missing model checkpoints and reference embeddings from DVC remotes..."
+                K8S_S3_KEY="$(kubectl get secret seaweedfs-s3-secret -n taxon-vision -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+                K8S_S3_SECRET="$(kubectl get secret seaweedfs-s3-secret -n taxon-vision -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+                if [ -n "${K8S_S3_KEY}" ] && [ -n "${K8S_S3_SECRET}" ]; then
+                  SEAWEEDFS_ACCESS_KEY_ID="${K8S_S3_KEY}"
+                  SEAWEEDFS_SECRET_ACCESS_KEY="${K8S_S3_SECRET}"
+                fi
+                PULLED=false
+                if kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1 && [ -n "${SEAWEEDFS_ACCESS_KEY_ID:-}" ] && [ -n "${SEAWEEDFS_SECRET_ACCESS_KEY:-}" ]; then
+                  pixi run --frozen -e ci-dev dvc config --local remote.local-seaweedfs.access_key_id "${SEAWEEDFS_ACCESS_KEY_ID}"
+                  pixi run --frozen -e ci-dev dvc config --local remote.local-seaweedfs.secret_access_key "${SEAWEEDFS_SECRET_ACCESS_KEY}"
+                  echo ">>> Attempting hydration from in-cluster SeaweedFS (local-seaweedfs)..."
+                  if env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY pixi run --frozen -e ci-dev dvc pull --force -r local-seaweedfs \
+                      models/checkpoints/head.pt \
+                      models/checkpoints/model_int8.onnx \
+                      data/embeddings/cal_embeddings.pt; then
+                    PULLED=true
+                    echo ">>> Checkpoints and reference embeddings successfully hydrated from local-seaweedfs."
+                  fi
+                fi
+
+                if [ "$PULLED" != "true" ]; then
+                  echo ">>> Pulling checkpoints and reference embeddings from DagsHub archive (origin)..."
+                  pixi run --frozen -e ci-dev dvc pull --force -r origin \
                     models/checkpoints/head.pt \
                     models/checkpoints/model_int8.onnx \
-                    data/embeddings/cal_embeddings.pt; then
-                  PULLED=true
-                  echo ">>> Checkpoints and reference embeddings successfully hydrated from local-seaweedfs."
+                    data/embeddings/cal_embeddings.pt || \
+                  pixi run --frozen -e ci-dev dvc pull --force \
+                    models/checkpoints/head.pt \
+                    models/checkpoints/model_int8.onnx \
+                    data/embeddings/cal_embeddings.pt || \
+                  echo ">>> Warning: Remote artifacts not found in DVC; falling back to existing host volume checkpoints."
+                fi
+
+                # Synchronize checkpoints, co-versioned runtime configs, and calibrated reference embeddings atomically for non-root API pod (UID 10001)
+                if [ -d "/var/lib/taxon-vision/checkpoints" ] && [ -f "models/checkpoints/head.pt" ]; then
+                  echo ">>> Atomically staging checkpoints and co-versioned configs to host volume /var/lib/taxon-vision/checkpoints/..."
+                  for ckpt in models/checkpoints/* config/taxa_catalog.yaml config/conformal_config.yaml; do
+                      [ -f "$ckpt" ] || continue
+                      fname=$(basename "$ckpt")
+                      cp -f "$ckpt" "/var/lib/taxon-vision/checkpoints/.${fname}.tmp"
+                      chmod a+r "/var/lib/taxon-vision/checkpoints/.${fname}.tmp"
+                      mv -f "/var/lib/taxon-vision/checkpoints/.${fname}.tmp" "/var/lib/taxon-vision/checkpoints/${fname}"
+                  done
+                fi
+
+                if [ -d "/var/lib/taxon-vision/reference" ] && [ -f "data/embeddings/cal_embeddings.pt" ]; then
+                  echo ">>> Atomically staging cal_embeddings.pt to host volume /var/lib/taxon-vision/reference/..."
+                  cp -f "data/embeddings/cal_embeddings.pt" "/var/lib/taxon-vision/reference/.cal_embeddings.pt.tmp"
+                  chmod a+r "/var/lib/taxon-vision/reference/.cal_embeddings.pt.tmp"
+                  mv -f "/var/lib/taxon-vision/reference/.cal_embeddings.pt.tmp" "/var/lib/taxon-vision/reference/cal_embeddings.pt"
                 fi
               fi
-
-            if [ "$PULLED" != "true" ]; then
-              echo ">>> Pulling checkpoints and reference embeddings from DagsHub archive (origin)..."
-              pixi run --frozen -e ci-dev dvc pull --force -r origin \
-                models/checkpoints/head.pt \
-                models/checkpoints/model_int8.onnx \
-                data/embeddings/cal_embeddings.pt || \
-              pixi run --frozen -e ci-dev dvc pull --force \
-                models/checkpoints/head.pt \
-                models/checkpoints/model_int8.onnx \
-                data/embeddings/cal_embeddings.pt || \
-              echo ">>> Warning: Remote artifacts not found in DVC; falling back to existing host volume checkpoints."
-            fi
-
-            # Synchronize checkpoints, co-versioned runtime configs, and calibrated reference embeddings atomically for non-root API pod (UID 10001)
-            if [ -d "/var/lib/taxon-vision/checkpoints" ] && [ -f "models/checkpoints/head.pt" ]; then
-              echo ">>> Atomically staging checkpoints and co-versioned configs to host volume /var/lib/taxon-vision/checkpoints/..."
-              for ckpt in models/checkpoints/* config/taxa_catalog.yaml config/conformal_config.yaml; do
-                  [ -f "$ckpt" ] || continue
-                  fname=$(basename "$ckpt")
-                  cp -f "$ckpt" "/var/lib/taxon-vision/checkpoints/.${fname}.tmp"
-                  chmod a+r "/var/lib/taxon-vision/checkpoints/.${fname}.tmp"
-                  mv -f "/var/lib/taxon-vision/checkpoints/.${fname}.tmp" "/var/lib/taxon-vision/checkpoints/${fname}"
-              done
-            fi
-
-            if [ -d "/var/lib/taxon-vision/reference" ] && [ -f "data/embeddings/cal_embeddings.pt" ]; then
-              echo ">>> Atomically staging cal_embeddings.pt to host volume /var/lib/taxon-vision/reference/..."
-              cp -f "data/embeddings/cal_embeddings.pt" "/var/lib/taxon-vision/reference/.cal_embeddings.pt.tmp"
-              chmod a+r "/var/lib/taxon-vision/reference/.cal_embeddings.pt.tmp"
-              mv -f "/var/lib/taxon-vision/reference/.cal_embeddings.pt.tmp" "/var/lib/taxon-vision/reference/cal_embeddings.pt"
-            fi
 
             # Synchronise Airflow 3 DAGs & helper dependencies into ConfigMaps before applying Airflow
             set --
