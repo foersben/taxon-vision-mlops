@@ -79,6 +79,7 @@ async def predict_htmx(
     request: Request,
     file: Annotated[UploadFile, File(...)],
     background_tasks: BackgroundTasks,
+    *,
     contribute_open_license: Annotated[bool, Form()] = False,
     license_code: Annotated[str, Form()] = "",
     photographer_name: Annotated[str, Form()] = "",

@@ -165,6 +165,7 @@ def _build_live_prediction(
 async def predict_species(
     file: Annotated[UploadFile, File(...)],
     background_tasks: BackgroundTasks,
+    *,
     explain: bool = False,
     contribute_open_license: Annotated[bool, Form()] = False,
     license_code: Annotated[str, Form()] = "",

@@ -170,6 +170,7 @@ def _build_arg_parser(default_alpha: float) -> argparse.ArgumentParser:
 def _log_calibration_to_mlflow(
     summary: _CalibrationSummary,
     emb_path: Path,
+    *,
     out_path: str | None = None,
     embeddings: np.ndarray | None = None,
     labels: np.ndarray | None = None,

@@ -505,7 +505,10 @@ def run_training_pipeline(
                 input_example=sample_val,
             )
             if model_info is not None:
-                mlflow_model_id = getattr(model_info, "model_id", None)
+                try:
+                    mlflow_model_id = model_info.model_id
+                except AttributeError:
+                    mlflow_model_id = None
 
             val_dataset = logged_datasets.val if logged_datasets else None
             _log_mlflow_metrics(

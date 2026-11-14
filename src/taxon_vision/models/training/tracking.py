@@ -758,6 +758,7 @@ class MLflowTracker:
         cls,
         model: nn.Module,
         model_name: str = "taxon_vision_classifier",
+        *,
         input_dim: int | None = None,
         num_classes: int | None = None,
         signature: ModelSignature | None = None,

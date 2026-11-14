@@ -1,8 +1,8 @@
 {
-  "timestamp_utc": "2026-11-14T00:46:50Z",
-  "overall_status": "FAILED",
+  "timestamp_utc": "2026-11-14T01:15:32Z",
+  "overall_status": "PASSED",
   "gate_count": 8,
-  "passed_count": 6,
+  "passed_count": 8,
   "gates": [
     {
       "name": "Ruff Linter",
@@ -19,8 +19,8 @@
     {
       "name": "Complexipy Invariants",
       "command": "pixi run -e dev complexipy src scripts --max-complexity-allowed 15 --check-script --no-ignore",
-      "exit_code": 1,
-      "passed": false
+      "exit_code": 0,
+      "passed": true
     },
     {
       "name": "OKF v0.2 Governance",
@@ -43,8 +43,8 @@
     {
       "name": "Code Invariants Engine",
       "command": "pixi run -e dev python scripts/governance/verify_code_invariants.py",
-      "exit_code": 1,
-      "passed": false
+      "exit_code": 0,
+      "passed": true
     },
     {
       "name": "Fast Targeted Tests",
