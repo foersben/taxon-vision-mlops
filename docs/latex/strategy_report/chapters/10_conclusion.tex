@@ -35,9 +35,9 @@ Reproducible environment (Pixi, Just) & \textbf{implemented} & Lock-file driven 
 \addlinespace
 Dataset versioning \& S3 streaming & \textbf{implemented} & DVC on DagsHub S3 remote (\texttt{dvc.lock}); \texttt{s3\_streamer.py} with connection pooling, retries, and \texttt{min\_extraction\_success\_ratio} gate. \\
 \addlinespace
-Consolidated PostgreSQL 4-DB cluster & \textbf{implemented} & Single PostgreSQL~16 cluster (\texttt{postgres:16-alpine}) hosting isolated \texttt{mlflow}, \texttt{airflow}, \texttt{telemetry}, and \texttt{optuna} databases; non-CoW NVMe allocation (\texttt{chattr +C}); SQLite local fallback. \\
+Consolidated PostgreSQL 3-DB cluster & \textbf{implemented} & Single PostgreSQL~16 cluster (\texttt{postgres:16-alpine}) hosting isolated \texttt{airflow}, \texttt{telemetry}, and \texttt{optuna} databases; non-CoW NVMe allocation (\texttt{chattr +C}); Optuna SQLite WAL local fallback. \\
 \addlinespace
-MLflow 3.x LoggedModels \& 4-split Lineage & \textbf{implemented} & Self-hosted MLflow 3.16.0 proxy backed by PostgreSQL and SeaweedFS S3 (\texttt{s3://mlflow-artifacts/}); first-class \texttt{LoggedModel} (\texttt{m-...}), 4-split dataset lineage via \texttt{mlflow.data}, real tensor signatures, and cross-stage DVC run continuity via \nolinkurl{reports/train_metrics.json:mlflow_run_id}. \\
+DagsHub MLflow \& 4-split Lineage & \textbf{implemented} & DagsHub-managed MLflow (\nolinkurl{https://dagshub.com/foersben/taxon-vision-mlops.mlflow}) for \texttt{taxon-vision-head-training}, \texttt{taxon-vision-drift}, real tensor signatures, \texttt{@Production}/\texttt{@Challenger} aliases, and direct \nolinkurl{resume_parent_mlflow_run()} cross-stage continuity via \nolinkurl{reports/train_metrics.json:mlflow_run_id}. \\
 \addlinespace
 Head training \& convergence callbacks & \textbf{implemented} & Class-Balanced Loss ($\beta$), best-weight restoration, early stopping (patience 5), and LR plateau decay (patience 2) in \texttt{loops.py}. \\
 \addlinespace
@@ -53,7 +53,7 @@ Hybrid CI/CD \& K3s GPU execution & \textbf{implemented} & GitHub Actions qualit
 \addlinespace
 Test harness \& code quality gates & \textbf{implemented} & 203 \texttt{pytest} tests, zero-warning Ruff, MyPy across 70 source files, 8-gate attestation seal (\nolinkurl{attest_seal.py}), AST code invariants engine (\nolinkurl{verify_code_invariants.py}), automated hardware specification verification, 100\% cognitive complexity $\le 15$ with zero snapshot exemptions, and OKF v0.2 schema validation. \\
 \addlinespace
-Two-tier drift detection ($W_1$ \& $\text{MMD}^2$) & \textbf{implemented} & Linear-time Wasserstein-1 ($W_1$) on pre-normalised activations and full-geometry RBF $\text{MMD}^2$ with $B=1{,}000$ Monte Carlo permutations in \texttt{monitoring/drift.py}; exposed via \nolinkurl{/api/v1/drift/evaluate} and DVC Stage~3.5 (\texttt{data\_drift.py}). \\
+Two-tier drift detection ($W_1$ \& $\text{MMD}_u^2$) & \textbf{implemented} & Linear-time Wasserstein-1 ($W_1$) on pre-normalised activations and full-geometry unbiased RBF $\text{MMD}_u^2$ with $B=200$ Monte Carlo permutations in \texttt{monitoring/drift.py}; exposed via \nolinkurl{/api/v1/drift/evaluate} and DVC Stage~3.5 (\texttt{data\_drift.py}). \\
 \addlinespace
 Stage 7 Four-Gate Promotion Verdict & \textbf{implemented} & Terminal DVC evaluation gate in \texttt{pipelines/evaluate.py} asserting Macro PR-AUC superiority, INT8 degradation $\le 3\%$, conformal coverage $\ge (1-\alpha)-5\%$, and latency SLO $\le 120\,\text{ms}$ with live MMD² exchangeability ($p \ge 0.01$); generates \nolinkurl{reports/model_passport.json}. \\
 \addlinespace
@@ -63,7 +63,7 @@ Prometheus \& Grafana observability & \textbf{implemented} & FastAPI exposes \te
 \midrule
 Airflow 3 LocalExecutor orchestration & \textbf{planned} & Fully specified architecture in Chapter 4; \texttt{prediction\_drift\_monitor} DAG (@hourly) and event-driven \texttt{model\_retraining} DAG with authenticated webhook relay and Jenkins trigger. \\
 \addlinespace
-Evidently AI HTML dashboards in MLflow & \textbf{implemented} & Interactive Evidently drift reports and machine-readable metrics logged directly to MLflow experiment \texttt{taxon-vision-drift} in Stage~3.5 and drift endpoints. \\
+Evidently 0.7 Wasserstein \& MLflow logs & \textbf{implemented} & Evidently~0.7 \texttt{DataDriftPreset(\allowbreak num\_method="wasserstein", \allowbreak num\_threshold=0.1)} with precomputed \texttt{SingleValueMetric} scalar cards, UI \texttt{Workspace} persistence (NodePort~30850), and HTML artefact logging directly to DagsHub MLflow experiment \texttt{taxon-vision-drift}. \\
 \addlinespace
 BADGE active learning \& triage queue & \textbf{partial} & \texttt{compute\_badge\_embeddings} (\texttt{query.py}) and Parquet-backed \texttt{TriageQueueManager} (\texttt{triage\_queue.py}) are unit-tested, pending full integration with the live triage queue. \\
 \midrule

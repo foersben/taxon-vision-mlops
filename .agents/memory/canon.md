@@ -31,3 +31,8 @@ verified: {by: process:okf-updater, at: "2026-10-30T00:00:00Z"}
 
 * **Learning:** Synchronous disk I/O (Parquet reads, SQLite/DuckDB queries) or ONNX CPU inferences inside FastAPI `async def` routes block the main event loop, severely degrading concurrent request throughput.
 * **Invariant:** All CPU-bound computations and synchronous I/O operations inside `async def` endpoints must be offloaded via `await anyio.to_thread.run_sync(...)`.
+
+## 2026-11-14 - DagsHub-Only MLflow Tracking & Authoritative Drift Cards
+
+* **Learning:** Maintaining a self-hosted in-cluster MLflow server alongside DagsHub run mirroring introduces duplicate state, PostgreSQL schema bloat, and mirror sync failures on downstream stages. Similarly, running Evidently's column-wise PCA drift presets without exposing authoritative Tier 1/2 full-space metrics risks dashboard divergence.
+* **Invariant:** Experiment tracking routes directly to DagsHub (`https://dagshub.com/foersben/taxon-vision-mlops.mlflow`), skipping cleanly without creating `mlruns/` or local SQLite fallback stores when credentials (`DAGSHUB_TOKEN`) are absent. Evidently 0.7 reports configure `DataDriftPreset(num_method="wasserstein", num_threshold=0.1)` and prepend `SingleValueMetric` scalar cards for exact precomputed $W_1$, unbiased $\text{MMD}_u^2$, and permutation $p$-values.

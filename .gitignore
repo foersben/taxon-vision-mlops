@@ -45,6 +45,7 @@ coverage.xml
 *.sqlite
 *.sqlite3
 mlruns/
+data/mlflow/
 
 # Jupyter Notebook & Scratch
 .ipynb_checkpoints/

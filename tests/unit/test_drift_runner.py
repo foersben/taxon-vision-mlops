@@ -294,3 +294,42 @@ def test_evaluate_recent_drift_extractor_filtering(tmp_path: Path) -> None:
 
     assert verdict.status == "evaluated"
     assert verdict.window_size == 6
+
+
+def test_generate_evidently_drift_report_wasserstein_and_scalar_cards(tmp_path: Path) -> None:
+    """Verify Evidently report renders precomputed Tier 1/2 scalar cards and Wasserstein DataDriftPreset."""
+    from evidently.ui.workspace import Workspace
+
+    from taxon_vision.monitoring.drift_runner import generate_evidently_drift_report
+
+    rng = np.random.default_rng(7)
+    ref = rng.standard_normal((32, 16)).astype(np.float32)
+    curr = (rng.standard_normal((24, 16)) + 0.5).astype(np.float32)
+    report_path = tmp_path / "drift_report.html"
+    workspace_dir = tmp_path / "evidently_ws"
+
+    out_path = generate_evidently_drift_report(
+        ref,
+        curr,
+        report_path,
+        workspace_dir=workspace_dir,
+        project_name="TaxonVision Unit Drift",
+        run_name="unit_test_run",
+        w1_distance=0.1423,
+        w1_threshold=0.1,
+        mmd2=0.0312,
+        mmd2_p_value=0.005,
+        mmd2_alpha=0.01,
+    )
+
+    assert out_path == report_path
+    html = report_path.read_text(encoding="utf-8")
+    assert "Tier 1 W1 Distance" in html
+    assert "Tier 2 RBF MMD^2" in html
+    assert "Tier 2 MMD^2 Permutation p-value" in html
+    assert "Wasserstein" in html
+
+    ws = Workspace.create(str(workspace_dir))
+    projects = ws.search_project("TaxonVision Unit Drift")
+    assert len(projects) == 1
+    assert len(ws.list_runs(projects[0].id)) == 1

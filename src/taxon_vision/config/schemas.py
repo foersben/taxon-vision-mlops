@@ -150,27 +150,21 @@ class IngestionConfig(BaseModel):
 
 
 class MLflowConfig(BaseModel):
-    """Experiment tracking and MLflow 3.x model registry configuration schema.
+    """Experiment tracking and MLflow model registry configuration schema.
 
     Attributes:
-        tracking_uri: Primary MLflow 3.x tracking server URI.
-        fallback_sqlite_uri: Local SQLite backend URI when remote server is unreachable.
-        dagshub_uri: Optional remote DagsHub MLflow mirror URI.
+        tracking_uri: Primary MLflow tracking server URI (DagsHub endpoint).
         experiment_name: Target experiment grouping name for training runs.
         drift_experiment_name: Target experiment grouping name for drift evaluations.
         model_registry_name: Registered model name for PyTorch/PyFunc classifiers.
         onnx_registry_name: Registered model name for quantized INT8 ONNX graphs.
-        health_check_timeout_seconds: Timeout in seconds when probing tracking_uri health.
     """
 
     tracking_uri: str = "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
-    fallback_sqlite_uri: str = "sqlite:///data/mlflow/mlflow.db"
-    dagshub_uri: str = "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
     experiment_name: str = "taxon-vision-head-training"
     drift_experiment_name: str = "taxon-vision-drift"
     model_registry_name: str = "taxon_vision_classifier"
     onnx_registry_name: str = "taxon_vision_onnx"
-    health_check_timeout_seconds: float = Field(default=1.0, gt=0.0)
 
 
 class ConformalConfig(BaseModel):

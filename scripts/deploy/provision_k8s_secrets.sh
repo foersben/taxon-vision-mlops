@@ -146,7 +146,6 @@ POSTGRES_PASSWORD=$(gen_hex 24)
 TELEMETRY_DB_PASSWORD=$(gen_hex 24)
 OPTUNA_DB_PASSWORD=$(gen_hex 24)
 AIRFLOW_DB_PASSWORD=$(gen_hex 24)
-MLFLOW_DB_PASSWORD=$(gen_hex 24)
 
 # In-Cluster SeaweedFS S3 IAM Credentials (sync identical values to Jenkins 'seaweedfs-s3-credentials')
 SEAWEEDFS_ACCESS_KEY_ID=taxon_$(gen_hex 8)
@@ -188,7 +187,6 @@ if [[ "${MOCK_MODE}" == "true" ]]; then
     TELEMETRY_DB_PASSWORD="PLACEHOLDER_MOCK_TEL_$(gen_hex 6)"
     OPTUNA_DB_PASSWORD="PLACEHOLDER_MOCK_OPT_$(gen_hex 6)"
     AIRFLOW_DB_PASSWORD="PLACEHOLDER_MOCK_AF_$(gen_hex 6)"
-    MLFLOW_DB_PASSWORD="PLACEHOLDER_MOCK_MLF_$(gen_hex 6)"
     SEAWEEDFS_ACCESS_KEY_ID="PLACEHOLDER_MOCK_S3_KEY"
     SEAWEEDFS_SECRET_ACCESS_KEY="PLACEHOLDER_MOCK_S3_SEC_$(gen_hex 6)"
     GF_SECURITY_ADMIN_USER="admin"
@@ -230,7 +228,6 @@ else
     TELEMETRY_DB_PASSWORD="${SECRETS[TELEMETRY_DB_PASSWORD]:-}"
     OPTUNA_DB_PASSWORD="${SECRETS[OPTUNA_DB_PASSWORD]:-}"
     AIRFLOW_DB_PASSWORD="${SECRETS[AIRFLOW_DB_PASSWORD]:-}"
-    MLFLOW_DB_PASSWORD="${SECRETS[MLFLOW_DB_PASSWORD]:-}"
     SEAWEEDFS_ACCESS_KEY_ID="${SECRETS[SEAWEEDFS_ACCESS_KEY_ID]:-}"
     SEAWEEDFS_SECRET_ACCESS_KEY="${SECRETS[SEAWEEDFS_SECRET_ACCESS_KEY]:-}"
     GF_SECURITY_ADMIN_USER="${SECRETS[GF_SECURITY_ADMIN_USER]:-admin}"
@@ -255,7 +252,6 @@ else
     TELEMETRY_DATABASE_URL="${SECRETS[TAXON_TELEMETRY__DATABASE_URL]:-${SECRETS[TELEMETRY_DATABASE_URL]:-}}"
     OPTUNA_STORAGE_URI="${SECRETS[TAXON_OPTUNA_STORAGE_URI]:-${SECRETS[OPTUNA_STORAGE_URI]:-}}"
     OPTUNA_DASHBOARD_STORAGE_URI="${SECRETS[OPTUNA_DASHBOARD_STORAGE_URI]:-}"
-    MLFLOW_BACKEND_URI="${SECRETS[MLFLOW_BACKEND_URI]:-}"
     AIRFLOW_DB_URI="${SECRETS[AIRFLOW__DATABASE__SQL_ALCHEMY_CONN]:-${SECRETS[AIRFLOW_DB_URI]:-}}"
 fi
 
@@ -263,7 +259,6 @@ PG_HOST="postgres.taxon-vision.svc.cluster.local:5432"
 TELEMETRY_DATABASE_URL="${TELEMETRY_DATABASE_URL:-postgresql+psycopg://telemetry:${TELEMETRY_DB_PASSWORD}@${PG_HOST}/telemetry}"
 OPTUNA_STORAGE_URI="${OPTUNA_STORAGE_URI:-postgresql+psycopg://optuna:${OPTUNA_DB_PASSWORD}@${PG_HOST}/optuna}"
 OPTUNA_DASHBOARD_STORAGE_URI="${OPTUNA_DASHBOARD_STORAGE_URI:-postgresql+psycopg2://optuna:${OPTUNA_DB_PASSWORD}@${PG_HOST}/optuna}"
-MLFLOW_BACKEND_URI="${MLFLOW_BACKEND_URI:-postgresql+psycopg2://mlflow:${MLFLOW_DB_PASSWORD}@${PG_HOST}/mlflow}"
 AIRFLOW_DB_URI="${AIRFLOW_DB_URI:-postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@${PG_HOST}/airflow}"
 
 REQUIRED_VARS=(
@@ -271,7 +266,6 @@ REQUIRED_VARS=(
     TELEMETRY_DB_PASSWORD
     OPTUNA_DB_PASSWORD
     AIRFLOW_DB_PASSWORD
-    MLFLOW_DB_PASSWORD
     SEAWEEDFS_ACCESS_KEY_ID
     SEAWEEDFS_SECRET_ACCESS_KEY
     GF_SECURITY_ADMIN_PASSWORD
@@ -301,7 +295,7 @@ if [[ "${DRY_RUN}" != "true" && "${DAGSHUB_TOKEN:-}" =~ ^(REPLACE_WITH_|CHANGE_M
     exit 1
 fi
 if [[ -z "${DAGSHUB_TOKEN:-}" ]]; then
-    echo "Note: DAGSHUB_TOKEN is empty; DagsHub Label Studio sync and MLflow mirroring remain inactive until configured." >&2
+    echo "Note: DAGSHUB_TOKEN is empty; DagsHub Label Studio sync and MLflow experiment tracking remain inactive until configured." >&2
 fi
 
 render_s3_json() {
@@ -335,20 +329,18 @@ mask_val() {
 
 emit_infra_secrets_yaml() {
     local ns="taxon-vision"
-    local pg_pw tel_pw opt_pw af_pw mlf_pw s3_ak s3_sk gf_usr gf_pw gf_webhook
-    local mlf_uri opt_dash_uri af_fernet af_jwt af_uri af_admin jnk_usr jnk_tok dh_tok s3_json_indented
+    local pg_pw tel_pw opt_pw af_pw s3_ak s3_sk gf_usr gf_pw gf_webhook
+    local opt_dash_uri af_fernet af_jwt af_uri af_admin jnk_usr jnk_tok dh_tok s3_json_indented
 
     pg_pw="$(mask_val "${POSTGRES_PASSWORD}")"
     tel_pw="$(mask_val "${TELEMETRY_DB_PASSWORD}")"
     opt_pw="$(mask_val "${OPTUNA_DB_PASSWORD}")"
     af_pw="$(mask_val "${AIRFLOW_DB_PASSWORD}")"
-    mlf_pw="$(mask_val "${MLFLOW_DB_PASSWORD}")"
     s3_ak="$(mask_val "${SEAWEEDFS_ACCESS_KEY_ID}")"
     s3_sk="$(mask_val "${SEAWEEDFS_SECRET_ACCESS_KEY}")"
     gf_usr="$(mask_val "${GF_SECURITY_ADMIN_USER}")"
     gf_pw="$(mask_val "${GF_SECURITY_ADMIN_PASSWORD}")"
     gf_webhook="$(mask_val "${RETRAIN_WEBHOOK_SECRET}")"
-    mlf_uri="$(mask_val "${MLFLOW_BACKEND_URI}")"
     opt_dash_uri="$(mask_val "${OPTUNA_DASHBOARD_STORAGE_URI}")"
     af_fernet="$(mask_val "${AIRFLOW_FERNET_KEY}")"
     af_jwt="$(mask_val "${AIRFLOW_JWT_SECRET}")"
@@ -376,7 +368,6 @@ stringData:
   TELEMETRY_DB_PASSWORD: "${tel_pw}"
   OPTUNA_DB_PASSWORD: "${opt_pw}"
   AIRFLOW_DB_PASSWORD: "${af_pw}"
-  MLFLOW_DB_PASSWORD: "${mlf_pw}"
 ---
 apiVersion: v1
 kind: Secret
@@ -404,17 +395,6 @@ stringData:
   GF_SECURITY_ADMIN_USER: "${gf_usr}"
   GF_SECURITY_ADMIN_PASSWORD: "${gf_pw}"
   GF_RETRAIN_WEBHOOK_SECRET: "${gf_webhook}"
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: mlflow-secrets
-  namespace: ${ns}
-  labels:
-    app.kubernetes.io/part-of: taxon-vision-mlops
-type: Opaque
-stringData:
-  MLFLOW_BACKEND_URI: "${mlf_uri}"
 ---
 apiVersion: v1
 kind: Secret

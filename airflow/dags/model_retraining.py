@@ -193,16 +193,16 @@ def _jenkins_json_request(
 
 
 def _mlflow_json_request(mlflow_uri: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Query the in-cluster MLflow REST API using the Python standard library.
+    """Query the configured MLflow REST API using the Python standard library.
 
     Why:
         Airflow pods do not bundle the full `mlflow` client wheel to keep control-plane container images lean; querying the REST API directly retrieves real Four-Gate promotion metrics without expanding container dependencies.
 
     How:
-        Sends an HTTP `GET` (when `payload` is `None`) or `POST` JSON request with a 15-second socket timeout to `{mlflow_uri}/{path}` and deserialises the response body as a dictionary.
+        Sends an HTTP `GET` (when `payload` is `None`) or `POST` JSON request with a 15-second socket timeout to `{mlflow_uri}/{path}`, injects HTTP Basic Auth headers when targeting DagsHub (`DAGSHUB_TOKEN` or `MLFLOW_TRACKING_PASSWORD`), and deserialises the response body as a dictionary.
 
     Args:
-        mlflow_uri: Base tracking server URL (typically in-cluster `mlflow-server:5000`).
+        mlflow_uri: Base tracking server URL (defaulting to DagsHub MLflow).
         path: Relative MLflow REST API v2.0 endpoint path.
         payload: Optional JSON body dict switching the request method to `POST`.
 
@@ -212,6 +212,11 @@ def _mlflow_json_request(mlflow_uri: str, path: str, payload: dict[str, Any] | N
     url = f"{mlflow_uri.rstrip('/')}/{path.lstrip('/')}"
     data = json.dumps(payload).encode("utf-8") if payload is not None else None
     headers = {"Accept": "application/json"}
+    token = os.getenv("DAGSHUB_TOKEN") or os.getenv("MLFLOW_TRACKING_PASSWORD") or ""
+    if "dagshub.com" in mlflow_uri and token:
+        username = os.getenv("MLFLOW_TRACKING_USERNAME") or "foersben"
+        encoded = base64.b64encode(f"{username}:{token}".encode()).decode("ascii")
+        headers["Authorization"] = f"Basic {encoded}"
     if data is not None:
         headers["Content-Type"] = "application/json"
     req = urllib.request.Request(url=url, data=data, headers=headers, method="POST" if data is not None else "GET")
@@ -461,7 +466,7 @@ def model_retraining() -> None:
         Returns:
             Audit summary mapping Jenkins build metadata, Four-Gate promotion verdict, evaluation metrics, and active `@Production` version.
         """
-        mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow-server.taxon-vision.svc.cluster.local:5000")
+        mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", "https://dagshub.com/foersben/taxon-vision-mlops.mlflow")
         eval_metrics: dict[str, float] = {}
         eval_run_id = ""
         production_version = ""

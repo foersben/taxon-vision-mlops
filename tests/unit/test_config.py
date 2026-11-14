@@ -135,7 +135,7 @@ def test_drift_and_telemetry_direct_env_overrides(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setenv("TAXON_DRIFT__EVIDENTLY_PROJECT_NAME", "Custom Drift")
     monkeypatch.setenv("TAXON_TELEMETRY_ALLOW_IN_MEMORY_FALLBACK", "false")
     monkeypatch.setenv("TAXON_OPTUNA__OPTUNA_STORAGE_URI", "postgresql+psycopg://opt:pw@pg:5432/optuna")
-    monkeypatch.setenv("TAXON_MLFLOW__TRACKING_URI", "http://mlflow-server.taxon-vision.svc.cluster.local:5000")
+    monkeypatch.setenv("TAXON_MLFLOW__TRACKING_URI", "https://dagshub.com/foersben/taxon-vision-mlops.mlflow")
     get_settings.cache_clear()
     try:
         settings = get_settings()
@@ -145,6 +145,6 @@ def test_drift_and_telemetry_direct_env_overrides(monkeypatch: pytest.MonkeyPatc
         assert settings.drift.evidently_workspace_dir == "/var/lib/taxon-vision/evidently"
         assert settings.drift.evidently_project_name == "Custom Drift"
         assert settings.optuna.optuna_storage_uri == "postgresql+psycopg://opt:pw@pg:5432/optuna"
-        assert settings.mlflow.tracking_uri == "http://mlflow-server.taxon-vision.svc.cluster.local:5000"
+        assert settings.mlflow.tracking_uri == "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
     finally:
         get_settings.cache_clear()

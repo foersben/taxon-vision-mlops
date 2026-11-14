@@ -62,14 +62,23 @@ def test_setup_mlflow_success_and_exception(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(mlflow, "set_tracking_uri", mock_set_uri)
     monkeypatch.setattr(mlflow, "set_experiment", mock_set_exp)
 
-    cfg = TuningConfig(tracking_uri="http://localhost:5000", experiment_name="tuning_test")
+    cfg = TuningConfig(tracking_uri="https://custom-tracking.example.com", experiment_name="tuning_test")
     assert _setup_mlflow(cfg) is True
-    mock_set_uri.assert_called_once_with("http://localhost:5000")
+    mock_set_uri.assert_called_once_with("https://custom-tracking.example.com")
     mock_set_exp.assert_called_once_with("tuning_test")
 
     # When set_experiment raises, returns False safely
     mock_set_exp.side_effect = ConnectionError("Server down")
     assert _setup_mlflow(cfg) is False
+
+    # Unauthenticated DagsHub URI skips cleanly without contacting remote server
+    monkeypatch.delenv("DAGSHUB_TOKEN", raising=False)
+    monkeypatch.delenv("MLFLOW_TRACKING_PASSWORD", raising=False)
+    dagshub_cfg = TuningConfig(
+        tracking_uri="https://dagshub.com/foersben/taxon-vision-mlops.mlflow",
+        experiment_name="tuning_test",
+    )
+    assert _setup_mlflow(dagshub_cfg) is False
 
 
 def test_log_best_run(monkeypatch: pytest.MonkeyPatch) -> None:

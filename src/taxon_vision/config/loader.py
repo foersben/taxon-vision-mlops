@@ -201,10 +201,6 @@ def _extract_optuna_mlflow_overrides() -> dict[str, dict[str, Any]]:
     if env_mlflow is not None:
         mlflow_ovr["tracking_uri"] = env_mlflow
 
-    env_dagshub = os.getenv("TAXON_MLFLOW__DAGSHUB_URI") or os.getenv("TAXON_MLFLOW_DAGSHUB_URI")
-    if env_dagshub is not None:
-        mlflow_ovr["dagshub_uri"] = env_dagshub
-
     if mlflow_ovr:
         res["mlflow"] = mlflow_ovr
     return res

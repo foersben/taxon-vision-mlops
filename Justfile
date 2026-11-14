@@ -275,28 +275,6 @@ dvc-dag:
 dvc-repro:
 	pixi run --frozen -e dev dvc repro
 
-# Kill any lingering local processes holding ports 5000 or 5001
-[group("mlops")]
-mlflow-kill:
-    @fuser -k 5000/tcp 5001/tcp 2>/dev/null || true
-
-# Start local MLflow 3.x UI against the SQLite fallback database (port 5000)
-[group("mlops")]
-mlflow-ui port="5000":
-    @mkdir -p data/mlflow/artifacts
-    pixi run --frozen -e dev mlflow ui --backend-store-uri sqlite:///data/mlflow/mlflow.db --default-artifact-root ./data/mlflow/artifacts --port {{port}}
-
-# Clean the local SQLite MLflow store for a fresh offline baseline
-[group("mlops")]
-mlflow-clean-sqlite: mlflow-kill
-    rm -rf data/mlflow/mlflow.db data/mlflow/artifacts
-    @mkdir -p data/mlflow/artifacts
-
-# Start the containerised MLflow 3.x stack (PostgreSQL + SeaweedFS + MLflow Server)
-[group("mlops")]
-mlflow-up: mlflow-kill
-    docker compose up -d postgres seaweedfs mlflow-server
-
 # Run the ephemeral pipeline container in Dev mode (with bind mounts) or Prod mode
 [group("mlops")]
 pipeline-run mode="dev":
@@ -440,4 +418,4 @@ lab:
 [group("utils")]
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
-	rm -rf .cache site build dist .pytest_cache .mypy_cache .ruff_cache htmlcov .coverage .coverage.* coverage.xml reports/coverage mlflow.db mlruns .complexipy_cache
+	rm -rf .cache site build dist .pytest_cache .mypy_cache .ruff_cache htmlcov .coverage .coverage.* coverage.xml reports/coverage .complexipy_cache

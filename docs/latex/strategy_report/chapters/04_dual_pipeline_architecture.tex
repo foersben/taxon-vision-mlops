@@ -165,8 +165,8 @@ Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely be
     };
 
     \node[storeCylinder] (sqlite_wal) at (5.0, -21.0) {
-        \textbf{PostgreSQL 4-Schema}\\[-1pt]
-        {\scriptsize\color{black!70} MLflow, Airflow, Telemetry, Optuna}
+        \textbf{PostgreSQL 3-Schema}\\[-1pt]
+        {\scriptsize\color{black!70} Airflow, Telemetry, Optuna}
     };
 
     % =========================================================================
@@ -226,8 +226,8 @@ Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely be
     };
 
     \node[obsCard] (evidently) at (17.2, -16.8) {
-        \textbf{Evidently AI Engine}\\[-1pt]
-        {\scriptsize\color{black!70} Batch $\text{MMD}^2$ Promotion Gate}
+        \textbf{Evidently 0.7 Engine}\\[-1pt]
+        {\scriptsize\color{black!70} Wasserstein + $\text{MMD}_u^2$ Gate}
     };
 
     \node[regCard] (al_triage) at (17.2, -21.0) {
@@ -318,7 +318,7 @@ Forcing Pipeline 1 to re-execute a heavy neural network training sweep merely be
 
 \end{tikzpicture}
 }
-\caption{Decoupled Dual-Pipeline Architecture Flow: Pipeline 1 executes the 7-Stage Epistemic Diamond DAG with Stage 3.5 data drift auditing for neural classification head training, while Pipeline 2 manages asynchronous vector indexing in LanceDB and DuckDB 2.0.0 taxonomic mutations. Persistent telemetry, MLflow 3.x tracking, Airflow orchestration, and Bayesian trials are anchored in a consolidated 4-schema PostgreSQL cluster. Both pipelines converge at the FastAPI serving gateway (2 replicas with active Model Passport) behind Traefik v3.1 ingress and an in-cluster Redis ephemeral upload cache. Full-stack observability integrates Prometheus TSDB streaming metrics ($W_1$ drift), Loki TSDB v13 log aggregation, Grafana dual operational dashboards (10 MLOps panels, 14 Infrastructure \& Logging panels), Airflow 3 LocalExecutor drift and retraining DAGs, and closed-loop Active Learning feedback.}
+\caption{Decoupled Dual-Pipeline Architecture Flow: Pipeline 1 executes the 7-Stage Epistemic Diamond DAG with Stage 3.5 data drift auditing for neural classification head training, while Pipeline 2 manages asynchronous vector indexing in LanceDB and DuckDB 2.0.0 taxonomic mutations. In-cluster operational state (Airflow orchestration, prediction telemetry, and Bayesian trials) is anchored in a consolidated 3-schema PostgreSQL cluster, whilst MLflow experiment tracking and Model Registry governance route directly to DagsHub. Both pipelines converge at the FastAPI serving gateway (2 replicas with active Model Passport) behind Traefik v3.1 ingress and an in-cluster Redis ephemeral upload cache. Full-stack observability integrates Prometheus TSDB streaming metrics ($W_1$ drift), Evidently 0.7 Wasserstein workspace snapshots, Loki TSDB v13 log aggregation, Grafana dual operational dashboards (10 MLOps panels, 14 Infrastructure \& Logging panels), Airflow 3 LocalExecutor drift and retraining DAGs, and closed-loop Active Learning feedback.}
 \label{fig:cicd_flow}
 \end{figure*}
 
@@ -372,7 +372,7 @@ On the main branch, the CI/CD pipeline continues beyond static quality gates and
         \item \textbf{Dedicated Linear Head Graph (\nolinkurl{models/checkpoints/head_int8.onnx}):} Ingests pre-computed embedding vectors ($z \in \mathbb{R}^D$) directly and emits logits $f(z) \in \mathbb{R}^K$. This enables sub-millisecond evaluation ($t_{\text{head}} < 0.2\text{ ms}$) during active learning query loops and vector triage without invoking the heavy Vision Transformer backbone.
     \end{enumerate}
     \item \textbf{Stage 6: Split Conformal Calibration (\texttt{src/taxon\_vision/pipelines/calibrate.py}):} Evaluates the holdout calibration partition \nolinkurl{data/embeddings/cal_embeddings.pt} through \nolinkurl{model_int8.onnx}. It calculates the empirical non-conformity quantile $\hat{q}_\alpha$ and Helmholtz free energy OOD threshold $\tau_{\text{energy}}$, serialising runtime parameters to \nolinkurl{config/conformal_config.yaml} and \nolinkurl{reports/conformal_metrics.json}.
-    \item \textbf{Stage 7: Dual Holdout Evaluation \& Four-Gate Model Promotion Verdict (\texttt{src/taxon\_vision/pipelines/evaluate.py}):} Evaluates candidate backbones against the pristine holdout test partition \nolinkurl{data/embeddings/test_embeddings.pt} using \nolinkurl{model_int8.onnx} and \nolinkurl{config/conformal_config.yaml}. It mathematically audits the Four-Gate Model Promotion Verdict: (1) Macro PR-AUC superiority, (2) INT8 quantization degradation $\le 3.0\%$, (3) empirical marginal coverage bound ($\ge 1 - \alpha$), and (4) p95 CPU latency under the SLO ceiling ($\le 120\,\text{ms}$) with live traffic exchangeability ($\text{MMD}^2$ permutation $p \ge 0.01$). If all four gates pass, it promotes the model alias, writes \nolinkurl{reports/pareto_evaluation.json}, and generates the cryptographic Model Passport (\nolinkurl{reports/model_passport.json}).
+    \item \textbf{Stage 7: Dual Holdout Evaluation \& Four-Gate Model Promotion Verdict (\texttt{src/taxon\_vision/pipelines/evaluate.py}):} Evaluates candidate backbones against the pristine holdout test partition \nolinkurl{data/embeddings/test_embeddings.pt} using \nolinkurl{model_int8.onnx} and \nolinkurl{config/conformal_config.yaml}. It mathematically audits the Four-Gate Model Promotion Verdict: (1) Macro PR-AUC superiority, (2) INT8 quantization degradation $\le 3.0\%$, (3) empirical marginal coverage bound ($\ge (1 - \alpha) - 5\%$), and (4) p95 CPU latency under the pipeline evaluation ceiling ($\le 120\,\text{ms}$ per \nolinkurl{params.yaml}, whilst live HTTP \texttt{/predict} serving enforces $< 25\,\text{ms}$ p95) with live traffic exchangeability ($\text{MMD}_u^2$ permutation $p \ge 0.01$). If all four gates pass, it promotes the model alias, writes \nolinkurl{reports/pareto_evaluation.json}, and generates the cryptographic Model Passport (\nolinkurl{reports/model_passport.json}).
 \end{enumerate}
 Checkpoints, graphs, and evaluation reports are pushed to DVC remotes, and a rolling restart of the serving deployment (\texttt{imagePullPolicy: Always}) loads the fresh artefacts without interrupting service.
 

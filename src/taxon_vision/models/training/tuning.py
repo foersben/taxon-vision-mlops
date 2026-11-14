@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import contextlib
 import logging
-import os
 import sqlite3
 import time
 import warnings
@@ -321,13 +320,13 @@ class HyperparameterObjective:
 
 
 def _setup_mlflow(cfg: TuningConfig) -> bool:
-    """Configure MLflow for hyperparameter tuning via reachable DagsHub or fallback URI resolution.
+    """Configure MLflow for hyperparameter tuning via DagsHub or an explicit environment override.
 
     Args:
         cfg: Tuning configuration.
 
     Returns:
-        True if MLflow is available, False otherwise.
+        True if MLflow tracking is reachable and authenticated, False otherwise.
     """
     if mlflow.active_run() is not None:
         return True
@@ -337,15 +336,12 @@ def _setup_mlflow(cfg: TuningConfig) -> bool:
     resolved_experiment = cfg.experiment_name or mlflow_cfg.experiment_name
 
     if cfg.tracking_uri is not None:
-        resolved_uri = cfg.tracking_uri
+        resolved_uri = cfg.tracking_uri.strip()
         if not resolved_uri:
             return False
-        _ensure_dagshub_auth(resolved_uri)
-    else:
-        env_uri = os.getenv("MLFLOW_TRACKING_URI")
-        has_token = bool(os.getenv("DAGSHUB_TOKEN") or os.getenv("MLFLOW_TRACKING_PASSWORD"))
-        if env_uri == "" and not mlflow_cfg.tracking_uri and not has_token:
+        if "dagshub.com" in resolved_uri and not _ensure_dagshub_auth(resolved_uri):
             return False
+    else:
         resolved_uri = _resolve_reachable_tracking_uri(settings)
 
     if not resolved_uri:
@@ -356,7 +352,7 @@ def _setup_mlflow(cfg: TuningConfig) -> bool:
         mlflow.set_experiment(resolved_experiment)
         return True
     except Exception as exc:
-        logger.warning("MLflow tracking setup failed or remote server unreachable: %s. Continuing locally.", exc)
+        logger.warning("MLflow tracking setup failed or remote server unreachable: %s. Skipping HPO MLflow logs.", exc)
         return False
 
 
@@ -536,6 +532,38 @@ def _persist_best_params(
         return None
 
 
+def _run_optuna_study_in_mlflow(
+    study: optuna.Study,
+    objective: HyperparameterObjective,
+    study_name: str,
+) -> bool:
+    """Execute Optuna optimisation under a parent MLflow run when MLflow is active outside an existing run."""
+    started_study_parent = objective.mlflow_available and mlflow.active_run() is None
+    if not started_study_parent:
+        study.optimize(objective, n_trials=objective.config.n_trials)
+        return False
+    with mlflow.start_run(run_name=f"optuna_study_{study_name}"):
+        study.optimize(objective, n_trials=objective.config.n_trials)
+        with contextlib.suppress(Exception):
+            mlflow.log_params(study.best_params)
+            _apply_git_lineage_tags()
+            dvc_hash = get_dvc_dataset_hash()
+            if dvc_hash:
+                mlflow.log_param("dvc_dataset_hash", dvc_hash)
+        _log_best_run(study.best_params, study.best_value, objective.mlflow_available, study=study)
+    return True
+
+
+def _with_legacy_param_aliases(raw_params: dict[str, Any]) -> dict[str, Any]:
+    """Copy Optuna best_params with legacy `lr` and `beta` aliases populated alongside canonical keys."""
+    best_params = dict(raw_params)
+    if "learning_rate" in best_params and "lr" not in best_params:
+        best_params["lr"] = best_params["learning_rate"]
+    if "cb_beta" in best_params and "beta" not in best_params:
+        best_params["beta"] = best_params["cb_beta"]
+    return best_params
+
+
 def tune_hyperparameters(
     data: EmbeddingSplit,
     num_classes: int,
@@ -605,26 +633,9 @@ def tune_hyperparameters(
         mlflow_available=mlflow_available,
     )
 
-    # Ensure child runs are always grouped under a Parent Run node in MLflow 3 UI
-    started_study_parent = mlflow_available and mlflow.active_run() is None
-    if started_study_parent:
-        with mlflow.start_run(run_name=f"optuna_study_{study_name}"):
-            study.optimize(objective, n_trials=cfg.n_trials)
-            with contextlib.suppress(Exception):
-                mlflow.log_params(study.best_params)
-                _apply_git_lineage_tags()
-                dvc_hash = get_dvc_dataset_hash()
-                if dvc_hash:
-                    mlflow.log_param("dvc_dataset_hash", dvc_hash)
-            _log_best_run(study.best_params, study.best_value, mlflow_available, study=study)
-    else:
-        study.optimize(objective, n_trials=cfg.n_trials)
+    started_study_parent = _run_optuna_study_in_mlflow(study, objective, study_name)
 
-    best_params = study.best_params
-    if "learning_rate" in best_params and "lr" not in best_params:
-        best_params["lr"] = best_params["learning_rate"]
-    if "cb_beta" in best_params and "beta" not in best_params:
-        best_params["beta"] = best_params["cb_beta"]
+    best_params = _with_legacy_param_aliases(study.best_params)
 
     logger.info("Hyperparameter search complete. Best parameters: %s, Best value: %.4f", best_params, study.best_value)
 

@@ -35,12 +35,15 @@ import numpy.typing as npt
 import pandas as pd
 import torch
 from evidently import Report
+from evidently.core.datasets import Dataset
+from evidently.core.metric_types import SingleValue, SingleValueCalculation, SingleValueMetric
+from evidently.core.report import Context
 from evidently.presets import DataDriftPreset
 from evidently.ui.workspace import Workspace
 from sklearn.decomposition import PCA
 
 from taxon_vision.config import Settings, get_settings
-from taxon_vision.models.training.tracking import mirror_run_to_dagshub, mlflow_run_scope
+from taxon_vision.models.training.tracking import mlflow_run_scope
 from taxon_vision.monitoring.drift import compute_mmd2_permutation, compute_wasserstein_drift
 from taxon_vision.service.telemetry_store import (
     DriftRunRecord,
@@ -80,6 +83,79 @@ class DriftVerdict:
     n_reference: int
     mlflow_run_id: str | None
     report_path: str | None
+
+
+class PrecomputedDriftMetric(SingleValueMetric):  # type: ignore[misc]
+    """Immutable Evidently SingleValueMetric carrier for exact precomputed Tier 1 and Tier 2 drift scalars.
+
+    Summary:
+        Wraps an already evaluated scalar drift statistic (`W_1`, `MMD_u^2`, or permutation p-value) from `drift.py` as an Evidently 0.7 `SingleValueMetric` dashboard card.
+
+    Why:
+        Evidently's `DataDriftPreset` evaluates column shifts across the compact `(1 + 8)` norm plus PCA projection dataframe, whereas authoritative drift gating relies on exact L2 norms (`W_1`) and full-dimensional unbiased RBF MMD^2 permutation tests (`MMD_u^2`). Surfacing these precomputed scalars as top-level snapshot cards prevents reporting discrepancy between statistical tests and dashboard telemetry.
+
+    How:
+        Declares `metric_name` and `value` as validated Pydantic attributes consumed directly by `PrecomputedDriftCalculation`.
+    """
+
+    metric_name: str
+    value: float
+
+
+class PrecomputedDriftCalculation(SingleValueCalculation[PrecomputedDriftMetric]):  # type: ignore[misc]
+    """Evidently 0.7 calculation adapter rendering `PrecomputedDriftMetric` scalar cards.
+
+    Summary:
+        Implements Evidently's `SingleValueCalculation` protocol for `PrecomputedDriftMetric`.
+
+    Why:
+        Decouples metric identity from calculation state in Evidently 0.7 whilst maintaining strict static type guarantees without dynamic reflection.
+
+    How:
+        Returns the configured `metric_name` as display label and emits `self.result(float(self.metric.value))` inside `calculate(...)`.
+    """
+
+    def display_name(self) -> str:
+        """Return the human-readable dashboard label for this drift scalar."""
+        return self.metric.metric_name
+
+    def calculate(
+        self,
+        context: Context,
+        current_data: Dataset,
+        reference_data: Dataset | None,
+    ) -> SingleValue:
+        """Emit the precomputed scalar wrapped as an Evidently SingleValue result."""
+        _ = (context, current_data, reference_data)
+        return self.result(float(self.metric.value))
+
+
+def _build_evidently_metrics(
+    *,
+    w1_distance: float | None,
+    w1_threshold: float | None,
+    mmd2: float | None,
+    mmd2_p_value: float | None,
+    mmd2_alpha: float | None,
+) -> list[Any]:
+    """Assemble Evidently 0.7 summary scalar cards and Wasserstein-configured DataDriftPreset."""
+    metrics: list[Any] = []
+    if w1_distance is not None:
+        w1_label = (
+            f"Tier 1 W1 Distance (tau <= {w1_threshold:.4f})" if w1_threshold is not None else "Tier 1 W1 Distance"
+        )
+        metrics.append(PrecomputedDriftMetric(metric_name=w1_label, value=float(w1_distance)))
+    if mmd2 is not None:
+        metrics.append(PrecomputedDriftMetric(metric_name="Tier 2 RBF MMD^2 (Unbiased)", value=float(mmd2)))
+    if mmd2_p_value is not None:
+        p_label = (
+            f"Tier 2 MMD^2 Permutation p-value (alpha = {mmd2_alpha:.4f})"
+            if mmd2_alpha is not None
+            else "Tier 2 MMD^2 Permutation p-value"
+        )
+        metrics.append(PrecomputedDriftMetric(metric_name=p_label, value=float(mmd2_p_value)))
+    metrics.append(DataDriftPreset(num_method="wasserstein", num_threshold=0.1))
+    return metrics
 
 
 def load_embeddings_array(path: Path | str) -> npt.NDArray[np.float32]:
@@ -189,14 +265,22 @@ def generate_evidently_drift_report(
     workspace_dir: Path | None = None,
     project_name: str = "TaxonVision Production Drift",
     run_name: str | None = None,
+    w1_distance: float | None = None,
+    w1_threshold: float | None = None,
+    mmd2: float | None = None,
+    mmd2_p_value: float | None = None,
+    mmd2_alpha: float | None = None,
 ) -> Path:
     """Generate and save an Evidently DataDriftPreset report and optional workspace snapshot using PCA projection.
 
+    Summary:
+        Produces an HTML drift report and optional longitudinal Evidently workspace snapshot combining exact Tier 1/2 scalar cards with Wasserstein feature drift checks across embedding norm and PCA projections.
+
     Why:
-        High-dimensional embedding tables (384 to 1280 columns) result in slow report generation and visually illegible drift matrices. Projecting vectors down to Euclidean norms plus the top 8 principal components yields an interpretable, fast tabular snapshot.
+        High-dimensional embedding tables (384 to 1280 columns) result in slow report generation and visually illegible drift matrices. Projecting vectors down to Euclidean norms plus the top 8 principal components yields an interpretable, fast tabular snapshot, whilst configuring `DataDriftPreset(num_method="wasserstein", num_threshold=0.1)` aligns Evidently's per-column drift detection with the Tier 1 Wasserstein distance metric alongside exact precomputed full-space scalars.
 
     How:
-        Fits an 8-component PCA model on reference vectors, projects both reference and current matrices, computes L2 vector norms, builds pandas DataFrames, runs Evidently's Report snapshot, saves the standalone HTML file, and optionally persists the snapshot to an Evidently UI Workspace.
+        Fits an 8-component PCA model on reference vectors, projects both reference and current matrices, computes L2 vector norms, builds pandas DataFrames, prepends optional PrecomputedDriftMetric scalar cards before DataDriftPreset(num_method="wasserstein", num_threshold=0.1), runs Evidently's Report snapshot, saves the standalone HTML file, and optionally persists the snapshot to an Evidently UI Workspace.
 
     Args:
         reference: Reference embedding matrix of shape (M, D).
@@ -205,6 +289,11 @@ def generate_evidently_drift_report(
         workspace_dir: Optional Evidently UI workspace directory for longitudinal dashboard persistence.
         project_name: Project name within workspace_dir when persisting runs.
         run_name: Optional human-readable label attached to the stored workspace run.
+        w1_distance: Optional precomputed Tier 1 Wasserstein-1 distance on L2 norms.
+        w1_threshold: Optional calibrated Tier 1 Wasserstein-1 alert threshold tau_w1.
+        mmd2: Optional precomputed Tier 2 unbiased RBF MMD^2 statistic.
+        mmd2_p_value: Optional Monte Carlo permutation test p-value for Tier 2 MMD^2.
+        mmd2_alpha: Optional significance threshold alpha for Tier 2 permutation testing.
 
     Returns:
         Destination path of the rendered HTML report.
@@ -223,7 +312,14 @@ def generate_evidently_drift_report(
     ref_df = pd.DataFrame(np.hstack([ref_norms, ref_pca]), columns=columns)
     curr_df = pd.DataFrame(np.hstack([curr_norms, curr_pca]), columns=columns)
 
-    report = Report(metrics=[DataDriftPreset()])
+    evidently_metrics = _build_evidently_metrics(
+        w1_distance=w1_distance,
+        w1_threshold=w1_threshold,
+        mmd2=mmd2,
+        mmd2_p_value=mmd2_p_value,
+        mmd2_alpha=mmd2_alpha,
+    )
+    report = Report(metrics=evidently_metrics)
     snapshot = report.run(reference_data=ref_df, current_data=curr_df)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     snapshot.save_html(str(output_path))
@@ -347,13 +443,18 @@ def evaluate_recent_drift(
             workspace_dir=Path(resolved_settings.drift.evidently_workspace_dir),
             project_name=resolved_settings.drift.evidently_project_name,
             run_name=run_label,
+            w1_distance=w1_distance,
+            w1_threshold=tau_w1,
+            mmd2=mmd2,
+            mmd2_p_value=p_val,
+            mmd2_alpha=resolved_settings.drift.alpha,
         )
         report_path_str: str | None = str(report_file)
     except Exception:
         logger.exception("Failed to render Evidently drift report")
         report_path_str = None
 
-    # 7. Log to MLflow Run Scope & Mandatory DagsHub Mirror
+    # 7. Log Directly to Configured DagsHub MLflow Run Scope
     mlflow_run_id: str | None = None
     experiment_name = resolved_settings.mlflow.drift_experiment_name
     try:
@@ -374,13 +475,6 @@ def evaluate_recent_drift(
                     mlflow.log_artifact(report_path_str)
     except Exception:
         logger.exception("Failed to log drift evaluation metrics to MLflow")
-
-    if mlflow_run_id:
-        mirror_run_to_dagshub(
-            mlflow_run_id,
-            settings=resolved_settings,
-            artifact_paths=(Path(report_path_str),) if report_path_str else (),
-        )
 
     # 8. Record in Telemetry Store
     record = DriftRunRecord(

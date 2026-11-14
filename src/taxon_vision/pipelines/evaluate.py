@@ -44,7 +44,7 @@ from taxon_vision.models.training.promotion import (
     PromotionCriteria,
     promote_candidate_model,
 )
-from taxon_vision.models.training.tracking import mirror_run_to_dagshub, resume_parent_mlflow_run
+from taxon_vision.models.training.tracking import resume_parent_mlflow_run
 from taxon_vision.models.training.types import PromotionAlias
 from taxon_vision.models.training.visualizations import (
     HoldoutVisualizationPayload,
@@ -578,11 +578,9 @@ def _log_holdout_audit_to_mlflow(payload: MLflowHoldoutLoggingPayload) -> None:
     Args:
         payload: Strongly-typed MLflowHoldoutLoggingPayload containing evaluation predictions, latency profiles, per-taxon table, and candidate Pareto profiles.
     """
-    parent_run_id: str | None = None
     with resume_parent_mlflow_run() as ctx:
         if ctx is None:
             return
-        parent_run_id = ctx.run_id
 
         test_ds = None
         with contextlib.suppress(Exception):
@@ -636,9 +634,14 @@ def _log_holdout_audit_to_mlflow(payload: MLflowHoldoutLoggingPayload) -> None:
             try:
                 mlflow.log_metrics(metrics, model_id=ctx.model_id, dataset=test_ds)
             except Exception:
-                mlflow.log_metrics(metrics)
+                with contextlib.suppress(Exception):
+                    mlflow.log_metrics(metrics, model_id=ctx.model_id)
+        elif ctx.model_id:
+            with contextlib.suppress(Exception):
+                mlflow.log_metrics(metrics, model_id=ctx.model_id)
         else:
-            mlflow.log_metrics(metrics)
+            with contextlib.suppress(Exception):
+                mlflow.log_metrics(metrics)
 
         with contextlib.suppress(Exception):
             mlflow.log_table(data=payload.per_taxon_df, artifact_file="reports/per_taxon_holdout_audit.json")
@@ -662,23 +665,22 @@ def _log_holdout_audit_to_mlflow(payload: MLflowHoldoutLoggingPayload) -> None:
             )
             log_holdout_visualizations(vis_payload)
 
-    if parent_run_id:
-        mirror_run_to_dagshub(
-            parent_run_id,
-            artifact_paths=(
-                Path("reports/train_metrics.json"),
-                Path("reports/pareto_evaluation.json"),
-                payload.conformal_config_path,
-                Path("docs/assets/pareto_results.json"),
-            ),
-        )
+        for artefact_path in (
+            Path("reports/train_metrics.json"),
+            Path("reports/pareto_evaluation.json"),
+            payload.conformal_config_path,
+            Path("docs/assets/pareto_results.json"),
+        ):
+            if artefact_path.is_file():
+                with contextlib.suppress(Exception):
+                    mlflow.log_artifact(str(artefact_path))
 
 
 def _log_pyfunc_and_promotion(payload: MLflowHoldoutLoggingPayload, ctx: Any) -> None:
     """Log the PyFunc bundle and execute Stage 7 promotion gating inside an active MLflow run.
 
     Why:
-        Encapsulating PyFunc packaging and Four-Gate Model Registry promotion (`_execute_stage7_promotion`) keeps `_log_holdout_audit_to_mlflow` below the Rule 00 cognitive complexity ceiling (`< 15`) whilst guaranteeing `eval.promoted`, `registry.status`, and `promotion.verdict` are always stamped onto the parent run before DagsHub mirroring.
+        Encapsulating PyFunc packaging and Four-Gate Model Registry promotion (`_execute_stage7_promotion`) keeps `_log_holdout_audit_to_mlflow` below the Rule 00 cognitive complexity ceiling (`< 15`) whilst guaranteeing `eval.promoted`, `registry.status`, and `promotion.verdict` are always stamped directly onto the active parent run.
 
     How:
         Logs `TaxonVisionPyFuncModel` bundling the INT8 ONNX model, calibrated `conformal_config.yaml`, and `taxa_catalog.yaml`, executes `_execute_stage7_promotion`, and records the resulting binary metric and human-readable tags.

@@ -172,36 +172,95 @@ To preserve sensitivity to input distribution shift without introducing the comp
     W_1(\tilde{\mathcal{Z}}_{\text{base}}, \tilde{\mathcal{Z}}_{\text{prod}}) \ge \left| \frac{1}{M}\sum_{i=1}^M \|\tilde{z}_i\|_2 - \frac{1}{N}\sum_{j=1}^N \|\tilde{z}'_j\|_2 \right|.
     \label{eq:w1_lower_bound}
 \end{equation}
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+    >=Stealth,
+    panelBox/.style={draw=slate!40, rounded corners=3pt, fill=white, line width=0.6pt},
+    refDot/.style={circle, fill=mblueborder, inner sep=1.3pt},
+    shiftDot/.style={circle, fill=rose, inner sep=1.3pt}
+]
+    % Panel A: Tier 1 1D Wasserstein-1 on Pre-Normalised L2 Norms
+    \draw[panelBox] (-0.3, -0.5) rectangle (6.8, 4.4);
+    \node[anchor=north west, font=\footnotesize\bfseries, text=mblueborder] at (-0.1, 4.28) {Panel A: Tier 1 $W_1$ Norm Projection ($\mathcal{O}(N \cdot D)$)};
+
+    \draw[->, draw=slate] (0.3, 0.35) -- (6.3, 0.35) node[anchor=north east, font=\tiny] {$\|\tilde{z}\|_2$ (Pre-Normalised)};
+    \draw[->, draw=slate] (0.3, 0.35) -- (0.3, 3.35) node[anchor=south west, font=\tiny] {Density};
+
+    % Shaded Wasserstein transport region between reference and shifted norm curves
+    \fill[mblue!70, opacity=0.55] plot[smooth] coordinates {(0.7,0.35) (1.4,0.85) (2.1,2.55) (2.8,1.95) (3.4,0.75) (4.0,0.35)} -- cycle;
+    \draw[thick, mblueborder] plot[smooth] coordinates {(0.7,0.35) (1.4,0.85) (2.1,2.55) (2.8,1.95) (3.4,0.75) (4.0,0.35)};
+    \fill[rose!22, opacity=0.60] plot[smooth] coordinates {(2.4,0.35) (3.2,0.95) (4.0,2.45) (4.8,1.80) (5.4,0.75) (6.0,0.35)} -- cycle;
+    \draw[thick, rose] plot[smooth] coordinates {(2.4,0.35) (3.2,0.95) (4.0,2.45) (4.8,1.80) (5.4,0.75) (6.0,0.35)};
+
+    % Collapse marker at unit norm 1.0
+    \draw[thick, dashed, slate!75] (1.05, 0.35) -- (1.05, 3.05);
+    \node[font=\tiny, text=slate!90, align=center, fill=white, inner sep=1pt] at (1.35, 3.25) {$L_2$ unit norm:\\$|1.0 - 1.0| = 0$};
+
+    % Arrow indicating Wasserstein gap > tau_w1
+    \draw[<->, thick, morangeborder] (2.1, 2.72) -- (4.0, 2.72);
+    \node[font=\tiny\bfseries, text=morangeborder, fill=white, inner sep=1pt] at (3.05, 3.00) {$W_1 > \tau_{W_1} = 0.15$};
+
+    \node[font=\tiny, text=mblueborder] at (2.1, 0.10) {$\mathcal{D}_{\text{cal}}$};
+    \node[font=\tiny, text=rose] at (4.1, 0.10) {$\mathcal{D}_{\text{prod}}$ (shifted)};
+
+    % Panel B: Tier 2 Full-Dimensional RBF MMD_u^2 Permutation Test
+    \draw[panelBox] (7.2, -0.5) rectangle (14.4, 4.4);
+    \node[anchor=north west, font=\footnotesize\bfseries, text=teal] at (7.4, 4.28) {Panel B: Tier 2 Unbiased RBF $\text{MMD}_u^2$ ($D$-Dim Manifold)};
+
+    % Dashed equi-norm circle demonstrating radial ambiguity under rotation
+    \draw[dashed, thick, slate!55] (10.8, 1.85) circle (1.35cm);
+    \node[font=\tiny, text=slate!80, fill=white, inner sep=1pt] at (10.8, 3.42) {Constant Mean Norm ($\Delta \|\tilde{z}\|_2 \approx 0$)};
+
+    % Origin crosshair
+    \draw[thin, draw=slate!35] (9.1, 1.85) -- (12.5, 1.85);
+    \draw[thin, draw=slate!35] (10.8, 0.25) -- (10.8, 3.30);
+
+    % Reference cluster on upper-left arc
+    \foreach \x/\y in {9.65/2.45, 9.85/2.70, 9.50/2.25, 10.05/2.82, 9.92/2.38, 10.20/2.55} {
+        \node[refDot] at (\x, \y) {};
+    }
+    \draw[thick, mblueborder, dashed] (9.86, 2.52) circle (0.52cm);
+    \node[font=\tiny\bfseries, text=mblueborder] at (8.45, 2.72) {$\mathcal{D}_{\text{cal}}$};
+
+    % Rotated production cluster on lower-right arc (same radius -> blind to W1, caught by MMD_u^2)
+    \foreach \x/\y in {11.65/1.15, 11.85/0.95, 11.50/1.35, 12.02/1.18, 11.72/0.85, 11.95/1.42} {
+        \node[shiftDot] at (\x, \y) {};
+    }
+    \draw[thick, rose, dashed] (11.78, 1.15) circle (0.52cm);
+    \node[font=\tiny\bfseries, text=rose] at (13.15, 1.15) {$\mathcal{D}_{\text{prod}}$ (rotated)};
+
+    % RBF kernel separation vector
+    \draw[<->, thick, teal] (10.22, 2.18) -- (11.42, 1.48);
+    \node[font=\tiny\bfseries, text=teal, fill=white, inner sep=1pt, align=center] at (12.60, 2.40) {$\text{MMD}_u^2$: $B = 200$\\$p < \alpha = 0.01$};
+\end{tikzpicture}
+\caption{Two-Tier Covariate Drift Sensitivity: Panel~A shows Tier~1 1D Wasserstein-1 ($W_1$) separating pre-normalised norm distributions in $\mathcal{O}(N \cdot D)$ time whilst preventing unit-sphere collapse ($|1.0-1.0|=0$). Panel~B illustrates an orthogonal manifold rotation at fixed radius where radial norms coincide, resolved cleanly in full $D$-dimensional space by the unbiased RBF $\text{MMD}_u^2$ permutation test ($N_{\max}=500$, $B=200$, $\alpha=0.01$).}
+\label{fig:drift_tier_comparison}
+\end{figure}
+
 Unit normalisation is deferred exclusively to downstream cosine distance computations and nearest-neighbour graph indexing within LanceDB.
 
-\subsubsection{Evidently AI Offline Validation, Data Drift Invariants, and Four-Gate Promotion}
+\subsubsection{Evidently 0.7 Integration, Scalar Cards, and Four-Gate Promotion}
 \label{sec:evidently_drift_gate}
 
-Whilst the linear-time Wasserstein-1 scalar projection ($W_1$) protects live serving throughput, complex visual domain shifts -- such as subtle phenological variations, background vegetation changes, or localized sensor noise -- may alter the geometry of the latent representation manifold without substantially shifting the empirical mean norm. To evaluate these higher-order distribution shifts without blocking production serving requests, the architecture incorporates an offline statistical quality gate powered by Evidently AI.
+Whilst the linear-time Wasserstein-1 scalar projection ($W_1$) protects live serving throughput, complex visual domain shifts -- such as subtle phenological variations, background vegetation changes, or localised sensor noise -- may alter the geometry of the latent representation manifold without substantially shifting the empirical mean norm (Figure~\ref{fig:drift_tier_comparison}). To evaluate these higher-order distribution shifts without blocking production serving requests, the architecture combines exact statistical hypothesis tests (\nolinkurl{src/taxon_vision/monitoring/drift.py}) with Evidently~0.7 snapshot reporting (\nolinkurl{src/taxon_vision/monitoring/drift_runner.py}).
 
 The drift auditing engine operates across two decoupled regimes: an automated CI/CD stage within the DVC pipeline (Stage~3.5, \texttt{data\_drift}), and an hourly scheduled drift evaluation orchestrated by Airflow~3. The mathematical formulation and operational workflow operate as follows:
 
 \begin{enumerate}
     \item \textbf{Data Ingestion and Baseline Alignment:} The evaluator hydrates pristine reference calibration embeddings ($\mathcal{D}_{\text{cal}}$, tracked via DVC) alongside an accumulated production inference split ($\mathcal{D}_{\text{prod}}$, stored as unconstrained pre-normalised activations in PostgreSQL).
-    \item \textbf{Statistical Test Execution:} The suite evaluates non-parametric two-sample Kolmogorov-Smirnov (KS) tests across individual embedding dimensions at a significance threshold of $\alpha_{\text{drift}} = 0.05$. In parallel, it evaluates the two-sample Maximum Mean Discrepancy ($\text{MMD}^2$) over the full $D$-dimensional latent representation space using a Gaussian RBF kernel with bandwidth $\sigma$ resolved via the median heuristic:
+    \item \textbf{Exact Tier~1 and Tier~2 Statistical Execution:} Using pre-normalised $L_2$ norms, the engine computes exact 1D Wasserstein-1 distance $W_1$ against $\tau_{W_1} = 0.15$. In parallel, \nolinkurl{compute_mmd2_permutation()} evaluates the unbiased U-statistic $\text{MMD}_u^2$ in \texttt{float64} precision over the full $D$-dimensional latent manifold ($N_{\max} = 500$ samples) using a Gaussian RBF kernel with bandwidth $\sigma = \sqrt{0.5 \cdot \text{median}(D_{ij}^2)}$ selected via the off-diagonal median heuristic, paired with $B = 200$ Monte Carlo permutations against significance ceiling $\alpha = 0.01$:
     \begin{equation}
-        \text{MMD}^2(P, Q) = \frac{1}{M^2}\sum_{i=1}^M\sum_{j=1}^M k(z_i, z_j) - \frac{2}{MN}\sum_{i=1}^M\sum_{j=1}^N k(z_i, z'_j) + \frac{1}{N^2}\sum_{i=1}^N\sum_{j=1}^N k(z'_i, z'_j),
+        p = \frac{1 + \sum_{b=1}^B \mathbb{I}\left(\text{MMD}^2_{u,b} \ge \text{MMD}^2_{u,\text{obs}}\right)}{B + 1}.
     \end{equation}
-    where $k(z, z') = \exp\left(-\frac{\|z - z'\|^2}{2\sigma^2}\right)$. To calculate an exact non-parametric empirical $p$-value without asymptotic normal approximations, the engine executes $B = 1{,}000$ Monte Carlo permutations across pooled sample matrices:
-    \begin{equation}
-        p = \frac{1 + \sum_{b=1}^B \mathbb{I}\left(\text{MMD}^2_b \ge \text{MMD}^2_{\text{obs}}\right)}{B + 1}.
-    \end{equation}
-    \item \textbf{Dual Artefact Emission:} The execution run generates two distinct artefacts:
-    \begin{itemize}
-        \item \nolinkurl{reports/drift_report.html}: An interactive, visual dashboard rendering drift distributions, categorical probability shifts, and per-feature empirical cumulative distribution functions (eCDFs), archived directly to DagsHub as a permanent build artefact.
-        \item \nolinkurl{reports/drift_metrics.json}: A structured, machine-readable summary recording global drift share (the proportion of drifted feature dimensions), the scalar MMD distance, and the permutation $p$-value.
-    \end{itemize}
+    \item \textbf{Evidently 0.7 Projection Report \& Scalar Cards:} For interactive dashboard inspection via the mounted Evidently~0.7 UI \texttt{Workspace} (NodePort~30850), \nolinkurl{generate_evidently_drift_report()} fits an 8-component PCA projection alongside the L2 vector norm (\nolinkurl{columns = ["norm", "pca_0", ..., "pca_7"]}), configures \texttt{DataDriftPreset(num\_method="wasserstein", num\_threshold=0.1)}, and prepends custom \texttt{SingleValueMetric} / \texttt{SingleValueCalculation} scalar cards displaying the authoritative precomputed $W_1$, $\text{MMD}_u^2$, and permutation $p$-value directly above per-component feature drift diagnostics.
+    \item \textbf{Dual Artefact Emission \& DagsHub Logging:} Each run persists its Evidently snapshot into \nolinkurl{data/evidently_workspace}, exports \nolinkurl{reports/drift_report.html}, writes \nolinkurl{reports/drift_metrics.json}, and logs scalar metrics plus the HTML artefact directly to the DagsHub MLflow experiment \texttt{taxon-vision-drift} via \nolinkurl{mlflow_run_scope()}.
     \item \textbf{Stage 7 Four-Gate Model Promotion Verdict:} Historical pipelines promoted models at Stage~4 based solely on validation Macro PR-AUC. This represents a dangerous anti-pattern: Stage~4 cannot evaluate INT8 post-training quantisation collapse, holdout conformal coverage, empirical inference latency, or exchangeability against live traffic. Consequently, promotion authority is transferred strictly to Stage~7 (\texttt{src/taxon\_vision/pipelines/evaluate.py}). A candidate model earns the \texttt{Challenger} or \texttt{Production} alias if and only if it simultaneously satisfies all four promotion gates:
     \begin{itemize}
         \item \textbf{Gate 1 (Accuracy Superiority):} Validation Macro PR-AUC must improve upon the active production model ($\Delta \text{PR-AUC} \ge 0$).
         \item \textbf{Gate 2 (Quantisation Fidelity):} Top-1 accuracy degradation induced by INT8 Post-Training Quantisation must remain $\le 3.0\%$ relative to the unquantised FP32 PyTorch baseline.
         \item \textbf{Gate 3 (Empirical Conformal Coverage):} Empirical marginal coverage on the holdout test partition must satisfy the lower statistical bound $\ge (1 - \alpha) - 5\%$ (e.g. $\ge 90\%$ at nominal $\alpha = 0.05$).
-        \item \textbf{Gate 4 (Latency Ceiling \& Live Exchangeability):} The p95 CPU inference latency must remain strictly below the Service Level Objective ceiling ($\le 120\,\text{ms}$), and the two-sample RBF $\text{MMD}^2$ permutation test against live PostgreSQL prediction telemetry must confirm covariate exchangeability ($p \ge 0.01$).
+        \item \textbf{Gate 4 (Latency Ceiling \& Live Exchangeability):} The p95 CPU inference latency must remain strictly below the pipeline evaluation SLO ceiling ($\le 120\,\text{ms}$ per \nolinkurl{params.yaml}, complementing the $< 25\,\text{ms}$ fast-path serving SLO), and the two-sample RBF $\text{MMD}_u^2$ permutation test against live PostgreSQL prediction telemetry must confirm covariate exchangeability ($p \ge 0.01$).
     \end{itemize}
 \end{enumerate}
 

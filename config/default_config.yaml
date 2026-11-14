@@ -95,13 +95,10 @@ ingestion:
 
 mlflow:
   tracking_uri: "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
-  fallback_sqlite_uri: "sqlite:///data/mlflow/mlflow.db"
-  dagshub_uri: "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
   experiment_name: "taxon-vision-head-training"
   drift_experiment_name: "taxon-vision-drift"
   model_registry_name: "taxon_vision_classifier"
   onnx_registry_name: "taxon_vision_onnx"
-  health_check_timeout_seconds: 1.0
 
 conformal:
   alpha: 0.05

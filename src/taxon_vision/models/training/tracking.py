@@ -11,9 +11,7 @@ import json
 import logging
 import os
 import subprocess
-import time
-import urllib.request
-from collections.abc import Callable, Generator, Sequence
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,7 +21,6 @@ import mlflow
 import numpy as np
 import onnx
 import pandas as pd
-from mlflow.entities import Metric, Param, RunTag
 from mlflow.models import ModelSignature
 from mlflow.models.model import ModelInfo
 from mlflow.tracking import MlflowClient
@@ -57,7 +54,6 @@ __all__ = [
     "LoggedDatasets",
     "MLflowTracker",
     "ParentRunContext",
-    "mirror_run_to_dagshub",
     "mlflow_run_scope",
     "resume_parent_mlflow_run",
 ]
@@ -199,65 +195,66 @@ def _ensure_dagshub_auth(uri: str) -> bool:
 
 
 def _resolve_reachable_tracking_uri(settings: Settings | None = None) -> str:
-    """Resolve the reachable MLflow tracking URI across explicit, network, and offline tiers.
+    """Resolve the active MLflow tracking URI targeting DagsHub or an explicit environment override.
 
     Summary:
-        Determines the optimal MLflow tracking URI by evaluating environment overrides, probing the primary HTTP/S tracking server for reachability, and falling back to a local SQLite database when offline.
+        Determines the active MLflow tracking URI from `MLFLOW_TRACKING_URI` or `cfg.mlflow.tracking_uri` and skips cleanly without creating local SQLite databases or `mlruns` directories when credentials are absent.
 
     Why:
-        Hardcoded remote URIs or silent tracking dropouts compromise experiment reproducibility. While production CI runs and cluster pods communicate directly with a dedicated MLflow 3.x tracking server, offline developer workstations or air-gapped environments must continue tracking experiments without dropping runs or polluting stdout with network timeout tracebacks.
+        Experiment tracking is consolidated exclusively onto the managed DagsHub MLflow server (`https://dagshub.com/foersben/taxon-vision-mlops.mlflow`) to eliminate duplicated in-cluster database state and cross-server run mirroring. Unauthenticated offline environments or dry-runs must skip tracking gracefully rather than writing orphaned local SQLite artefacts.
 
     How:
-        1. Tier 1: Checks for an explicit MLFLOW_TRACKING_URI environment variable, injects DagsHub auth credentials if applicable, and returns it immediately.
-        2. Tier 2: If configured_uri targets DagsHub, returns it directly when credentials exist (skipping /health probe); otherwise probes /health on HTTP/S URIs bounded by health_check_timeout_seconds.
-        3. Tier 2.5: Falls back to cfg.mlflow.dagshub_uri when DagsHub credentials are present.
-        4. Tier 3: Ensures local directories exist for SQLite storage (data/mlflow/artifacts) and returns the fallback SQLite URI whilst logging an operational warning.
+        1. Checks `MLFLOW_TRACKING_URI` if explicitly set in the environment: an empty string disables tracking immediately; non-empty URIs inject DagsHub Basic Auth credentials when targeting `dagshub.com` and return `""` if unauthenticated.
+        2. Otherwise inspects `cfg.mlflow.tracking_uri`: validates DagsHub credentials via `_ensure_dagshub_auth` when targeting `dagshub.com`, returning the URI if authenticated or logging a debug message and returning `""` when unauthenticated.
 
     Args:
         settings: Application settings instance. If None, resolved via get_settings().
 
     Returns:
-        Reachable MLflow tracking URI string (HTTP URL or SQLite URI).
+        Configured MLflow tracking URI string, or an empty string when tracking is disabled or unauthenticated.
     """
     env_uri = os.getenv("MLFLOW_TRACKING_URI")
-    if env_uri:
-        _ensure_dagshub_auth(env_uri)
-        return env_uri
+    if env_uri is not None:
+        cleaned_env = env_uri.strip()
+        if not cleaned_env:
+            return ""
+        if "dagshub.com" in cleaned_env and not _ensure_dagshub_auth(cleaned_env):
+            return ""
+        return cleaned_env
 
     cfg = settings or get_settings()
-    configured_uri = cfg.mlflow.tracking_uri
+    configured_uri = (cfg.mlflow.tracking_uri or "").strip()
+    if not configured_uri:
+        return ""
+    if "dagshub.com" in configured_uri and not _ensure_dagshub_auth(configured_uri):
+        logger.debug("Skipping DagsHub MLflow tracking (%s): credentials unavailable.", configured_uri)
+        return ""
+    return configured_uri
 
-    if "dagshub.com" in configured_uri:
-        if _ensure_dagshub_auth(configured_uri):
-            return configured_uri
-    elif configured_uri.startswith(("http://", "https://")):
-        health_url = f"{configured_uri.rstrip('/')}/health"
-        timeout = cfg.mlflow.health_check_timeout_seconds
-        try:
-            req = urllib.request.Request(health_url, headers={"User-Agent": "TaxonVision-HealthProbe/1.0"})
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                if 200 <= resp.status < 300:
-                    return configured_uri
-        except Exception as probe_err:
-            logger.debug("MLflow tracking health probe failed for %s: %s", health_url, probe_err)
 
-    # Tier 2.5: Target remote DagsHub MLflow mirror if credentials exist
-    if cfg.mlflow.dagshub_uri and _ensure_dagshub_auth(cfg.mlflow.dagshub_uri):
-        return cfg.mlflow.dagshub_uri
-
-    # Tier 3: Fallback to local SQLite backend
-    fallback_uri = cfg.mlflow.fallback_sqlite_uri
-    db_path_str = fallback_uri.replace("sqlite:///", "")
-    db_dir = Path(db_path_str).parent if db_path_str else Path("data/mlflow")
-    artifacts_dir = db_dir / "artifacts"
-    artifacts_dir.mkdir(parents=True, exist_ok=True)
-
-    logger.warning(
-        "Primary MLflow tracking server '%s' is unreachable. Falling back to local SQLite backend '%s'.",
-        configured_uri,
-        fallback_uri,
-    )
-    return fallback_uri
+def _open_mlflow_run(
+    run_name: str,
+    params: dict[str, Any] | None,
+    nested: bool,
+    experiment_name: str | None,
+) -> Any:
+    """Resolve DagsHub tracking URI, configure experiment, start run, and log initial metadata."""
+    settings = get_settings()
+    tracking_uri = _resolve_reachable_tracking_uri(settings)
+    if not tracking_uri:
+        return None
+    mlflow.set_tracking_uri(tracking_uri)
+    target_exp = experiment_name or settings.mlflow.experiment_name
+    if target_exp:
+        mlflow.set_experiment(target_exp)
+    active_run = mlflow.start_run(run_name=run_name, nested=True) if nested else mlflow.start_run(run_name=run_name)
+    if params:
+        mlflow.log_params(params)
+    dataset_hash = get_dvc_dataset_hash()
+    if dataset_hash:
+        mlflow.log_param("dvc_dataset_hash", dataset_hash)
+    _inject_lineage_tags()
+    return active_run
 
 
 @contextmanager
@@ -298,25 +295,7 @@ def mlflow_run_scope(
     """
     active_run = None
     try:
-        settings = get_settings()
-        tracking_uri = _resolve_reachable_tracking_uri(settings)
-        if tracking_uri:
-            mlflow.set_tracking_uri(tracking_uri)
-
-        target_exp = experiment_name or settings.mlflow.experiment_name
-        if target_exp:
-            mlflow.set_experiment(target_exp)
-
-        active_run = mlflow.start_run(run_name=run_name, nested=True) if nested else mlflow.start_run(run_name=run_name)
-
-        if params:
-            mlflow.log_params(params)
-
-        dataset_hash = get_dvc_dataset_hash()
-        if dataset_hash:
-            mlflow.log_param("dvc_dataset_hash", dataset_hash)
-
-        _inject_lineage_tags()
+        active_run = _open_mlflow_run(run_name, params, nested, experiment_name)
     except Exception as err:
         logger.debug("MLflow tracking setup skipped or unavailable: %s", err)
         active_run = None
@@ -344,7 +323,7 @@ def resume_parent_mlflow_run(
 
     How:
         1. Reads reports/train_metrics.json to recover mlflow_run_id and mlflow_model_id.
-        2. Resolves the reachable tracking URI across remote HTTP and local SQLite fallback tiers.
+        2. Resolves the active DagsHub or environment-overridden tracking URI and skips cleanly when unauthenticated.
         3. Invokes mlflow.start_run(run_id=run_id) to reopen the parent run.
         4. Yields a typed ParentRunContext dataclass to the caller.
         5. Automatically closes the reopened run on block exit without altering its terminal FINISHED status.
@@ -384,12 +363,18 @@ def resume_parent_mlflow_run(
 
     settings = get_settings()
     tracking_uri = _resolve_reachable_tracking_uri(settings)
-    if tracking_uri:
-        mlflow.set_tracking_uri(tracking_uri)
+    if not tracking_uri:
+        logger.debug("MLflow tracking URI unavailable or unauthenticated; skipping run resumption.")
+        yield None
+        return
+    mlflow.set_tracking_uri(tracking_uri)
 
     active_run = None
     try:
         active_run = mlflow.start_run(run_id=ctx.run_id)
+        if ctx.model_id:
+            with contextlib.suppress(Exception):
+                mlflow.set_active_model(model_id=ctx.model_id)
         logger.info("Resumed parent MLflow run %s for stage continuity", ctx.run_id)
     except Exception as start_err:
         logger.warning("Failed to resume parent MLflow run %s: %s", ctx.run_id, start_err)
@@ -747,20 +732,25 @@ class MLflowTracker:
 
     @staticmethod
     def build_onnx_signature(num_classes: int, image_size: int = 224) -> ModelSignature:
-        """Construct explicit MLflow ModelSignature for raw image tensor -> taxonomic logits.
+        """Construct explicit MLflow ModelSignature for raw image tensor -> (logits, embeddings).
 
         Why:
-            Provides end-to-end tensor contracts for deployed ONNX Runtime graphs.
+            Provides end-to-end tensor contracts for deployed ONNX Runtime graphs. Tensor names must match the exported dual-output graph (`input`, `logits`, `embeddings`) so MLflow serving-input validation feeds the expected input name to ONNX Runtime.
 
         Args:
             num_classes: Number of target taxonomic classes.
             image_size: Spatial resolution of input images in pixels.
 
         Returns:
-            ModelSignature with input_images tensor and taxonomic_logits output TensorSpecs.
+            ModelSignature with `input` tensor and dual `logits` / `embeddings` output TensorSpecs.
         """
-        input_schema = Schema([TensorSpec(np.dtype(np.float32), (-1, 3, image_size, image_size), name="input_images")])
-        output_schema = Schema([TensorSpec(np.dtype(np.float32), (-1, num_classes), name="taxonomic_logits")])
+        input_schema = Schema([TensorSpec(np.dtype(np.float32), (-1, 3, image_size, image_size), name="input")])
+        output_schema = Schema(
+            [
+                TensorSpec(np.dtype(np.float32), (-1, num_classes), name="logits"),
+                TensorSpec(np.dtype(np.float32), (-1, -1), name="embeddings"),
+            ]
+        )
         return ModelSignature(inputs=input_schema, outputs=output_schema)
 
     @classmethod
@@ -898,251 +888,14 @@ def log_stage_metrics_to_parent_run(
         if not run_id:
             return
         settings = get_settings()
-        tracking_uri = os.getenv("MLFLOW_TRACKING_URI") or settings.mlflow.tracking_uri
-        if tracking_uri:
-            mlflow.set_tracking_uri(tracking_uri)
-        client = mlflow.tracking.MlflowClient(tracking_uri=tracking_uri)
+        tracking_uri = _resolve_reachable_tracking_uri(settings)
+        if not tracking_uri:
+            return
+        mlflow.set_tracking_uri(tracking_uri)
+        client = MlflowClient(tracking_uri=tracking_uri)
         for key, val in metrics.items():
             if isinstance(val, (int, float)) and not isinstance(val, bool):
                 metric_name = f"{prefix}{key}" if prefix else key
                 client.log_metric(run_id=run_id, key=metric_name, value=float(val))
     except Exception as err:
         logger.debug("Failed to log stage metrics to MLflow parent run %s: %s", path, err)
-
-
-def _resolve_or_create_experiment_id(client: MlflowClient, experiment_name: str) -> str:
-    """Resolve an existing MLflow experiment ID by name or create it if absent.
-
-    Why:
-        Mirroring runs to a remote DagsHub tracking server fails if the target experiment does not yet exist on DagsHub.
-
-    How:
-        Queries `client.get_experiment_by_name(experiment_name)` and invokes `client.create_experiment(experiment_name)` only when `None` is returned.
-
-    Args:
-        client: Remote `MlflowClient` bound to the destination tracking URI.
-        experiment_name: Logical experiment name mirrored from the primary server.
-
-    Returns:
-        String MLflow experiment identifier on the destination server.
-    """
-    existing = client.get_experiment_by_name(experiment_name)
-    if existing is not None:
-        return str(existing.experiment_id)
-    return str(client.create_experiment(experiment_name))
-
-
-def _collect_mirror_run_metrics(src_client: MlflowClient, src_run: Any) -> list[Metric]:
-    """Collect full metric trajectories (all training steps) from a source MLflow run.
-
-    Why:
-        `src_run.data.metrics` holds only the latest scalar per metric key, whereas mirroring full epoch curves (`val/loss`, `train/acc`) requires historical step series.
-
-    How:
-        Iterates over metric keys on `src_run`, queries `get_metric_history` per key (preserving exact step and timestamp), and falls back to the scalar summary value when history queries fail or return empty.
-
-    Args:
-        src_client: Source `MlflowClient` bound to the primary cluster server.
-        src_run: Retrieved source MLflow `Run` object.
-
-    Returns:
-        List of `mlflow.entities.Metric` entities ready for `log_batch`.
-    """
-    collected: list[Metric] = []
-    fallback_ts = int(src_run.info.start_time or time.time() * 1000)
-    run_id = str(src_run.info.run_id)
-    for key, fallback_val in src_run.data.metrics.items():
-        try:
-            history = src_client.get_metric_history(run_id, key)
-        except Exception:
-            history = []
-        if history:
-            collected.extend(
-                Metric(key=m.key, value=float(m.value), timestamp=int(m.timestamp), step=int(m.step)) for m in history
-            )
-        else:
-            collected.append(Metric(key=key, value=float(fallback_val), timestamp=fallback_ts, step=0))
-    return collected
-
-
-def _chunked_log_batch(
-    dst_client: MlflowClient,
-    dst_run_id: str,
-    params: list[Param],
-    metrics: list[Metric],
-    tags: list[RunTag],
-) -> None:
-    """Dispatch parameters, metrics, and tags to a remote MLflow server in bounded batch chunks.
-
-    Why:
-        MLflow REST endpoints enforce payload limits (100 params / tags and 1000 metrics per `log-batch` call); chunking prevents HTTP 400 payload-too-large rejections on multi-epoch training sweeps.
-
-    How:
-        Slices `params`, `tags`, and `metrics` into slices of 100 items each and dispatches sequential `dst_client.log_batch(...)` RPCs.
-
-    Args:
-        dst_client: Destination `MlflowClient` targeting DagsHub.
-        dst_run_id: Created destination MLflow run identifier.
-        params: Run hyperparameters to replicate.
-        metrics: Step-indexed metric entities to replicate.
-        tags: Non-internal lineage tags to replicate.
-    """
-    chunk_size = 100
-    for idx in range(0, len(params), chunk_size):
-        dst_client.log_batch(run_id=dst_run_id, params=params[idx : idx + chunk_size])
-    for idx in range(0, len(tags), chunk_size):
-        dst_client.log_batch(run_id=dst_run_id, tags=tags[idx : idx + chunk_size])
-    for idx in range(0, len(metrics), chunk_size):
-        dst_client.log_batch(run_id=dst_run_id, metrics=metrics[idx : idx + chunk_size])
-
-
-def _upload_mirror_artifacts(
-    dst_client: MlflowClient,
-    dst_run_id: str,
-    artifact_paths: Sequence[Path | str],
-) -> None:
-    """Upload existing local evaluation artefacts onto a mirrored remote MLflow run.
-
-    Why:
-        Makes lightweight evaluation evidence (`train_metrics.json`, `pareto_evaluation.json`, `conformal_config.yaml`, `pareto_results.json`) browsable inside the public DagsHub MLflow dashboard alongside training curves.
-
-    How:
-        Verifies filesystem existence for each path in `artifact_paths` and invokes `dst_client.log_artifact`.
-
-    Args:
-        dst_client: Destination `MlflowClient` targeting DagsHub.
-        dst_run_id: Active mirror run identifier.
-        artifact_paths: Sequence of candidate local report/config paths.
-    """
-    for raw_path in artifact_paths:
-        art_path = Path(raw_path)
-        if art_path.is_file():
-            dst_client.log_artifact(dst_run_id, str(art_path))
-
-
-@dataclass(frozen=True)
-class MirrorTarget:
-    """Resolved primary and DagsHub remote tracking coordinates for run replication.
-
-    Why:
-        Groups validated primary URI, DagsHub URI, and credential token into a frozen value object so `mirror_run_to_dagshub` cleanly skips replication when running offline or already targeting DagsHub directly.
-
-    How:
-        Constructed by `_resolve_mirror_target()` from configuration settings and `DAGSHUB_TOKEN`.
-
-    Attributes:
-        primary_uri: Reachable primary tracking server URI.
-        dagshub_uri: Configured public DagsHub MLflow HTTPS endpoint.
-        token: Non-empty authentication token set on `MLFLOW_TRACKING_PASSWORD`.
-    """
-
-    primary_uri: str
-    dagshub_uri: str
-    token: str
-
-
-def _resolve_mirror_target(
-    primary_run_id: str,
-    settings: Settings | None,
-) -> MirrorTarget | None:
-    """Resolve source tracking URI, DagsHub target URI, and authentication token.
-
-    Why:
-        Encapsulates environment fallback checks (`DAGSHUB_TOKEN`, `MLFLOW_TRACKING_PASSWORD`) and avoids infinite self-mirroring when `primary_uri` already equals `dagshub_uri`.
-
-    How:
-        Resolves the primary reachable URI via `_resolve_reachable_tracking_uri`, checks `cfg.mlflow.dagshub_uri` inequality and token presence, seeds `MLFLOW_TRACKING_USERNAME` / `MLFLOW_TRACKING_PASSWORD`, and returns `MirrorTarget` or `None`.
-
-    Args:
-        primary_run_id: Source MLflow run identifier used in diagnostic warnings.
-        settings: Optional pre-loaded `Settings` instance.
-
-    Returns:
-        `MirrorTarget` when replication should execute, or `None` if unconfigured or redundant.
-    """
-    cfg = settings or get_settings()
-    primary_uri = _resolve_reachable_tracking_uri(cfg)
-    dagshub_uri = (cfg.mlflow.dagshub_uri or "").strip()
-    if not dagshub_uri or primary_uri == dagshub_uri:
-        return None
-    token = os.getenv("DAGSHUB_TOKEN") or os.getenv("MLFLOW_TRACKING_PASSWORD")
-    if not token:
-        logger.warning(
-            "Skipping mandatory DagsHub MLflow mirror sync for run %s because DAGSHUB_TOKEN is not configured.",
-            primary_run_id,
-        )
-        return None
-    os.environ.setdefault("MLFLOW_TRACKING_USERNAME", "foersben")
-    os.environ["MLFLOW_TRACKING_PASSWORD"] = token
-    return MirrorTarget(primary_uri=primary_uri, dagshub_uri=dagshub_uri, token=token)
-
-
-def mirror_run_to_dagshub(
-    primary_run_id: str,
-    settings: Settings | None = None,
-    artifact_paths: Sequence[Path | str] = (),
-) -> str | None:
-    """Mirror a completed in-cluster MLflow run to the public DagsHub MLflow dashboard.
-
-    Why:
-        In-cluster MLflow 3.16 backed by PostgreSQL and SeaweedFS provides low-latency artefact persistence inside K3s, whilst the public DagsHub MLflow server provides external stakeholder visibility. Because MLflow's module-level tracking URI singleton is unsafe across concurrent active contexts and DagsHub MLflow 2.x rejects MLflow 3.x LoggedModel extensions, post-run replication via MlflowClient using standard REST v2 batches preserves both registries deterministically without risking primary run failures.
-
-    How:
-        1. Resolves primary tracking URI and verifies that DagsHub URI differs and DAGSHUB_TOKEN is set.
-        2. Reads the experiment name, parameters, full step-by-step metric histories, and non-internal tags from primary_run_id.
-        3. Creates a mirrored run in the corresponding DagsHub experiment tagged with the source run lineage.
-        4. Dispatches chunked batches (max 100 items per request) and uploads specified evaluation report artefacts before terminating the remote run.
-
-    Args:
-        primary_run_id: Completed MLflow run ID on the primary in-cluster tracking server.
-        settings: Optional pre-loaded Settings container; defaults to get_settings().
-        artifact_paths: Sequence of local report or configuration paths to mirror to DagsHub.
-
-    Returns:
-        Created DagsHub mirror run ID on success, primary_run_id if already logged directly to DagsHub, or None if skipped/failed.
-    """
-    if not primary_run_id:
-        return None
-    resolved = _resolve_mirror_target(primary_run_id, settings)
-    if resolved is None:
-        cfg = settings or get_settings()
-        primary_uri = _resolve_reachable_tracking_uri(cfg)
-        return primary_run_id if primary_uri == cfg.mlflow.dagshub_uri else None
-
-    primary_uri = resolved.primary_uri
-    dagshub_uri = resolved.dagshub_uri
-    dst_client = MlflowClient(tracking_uri=dagshub_uri)
-    dst_run_id: str | None = None
-    terminal_status = "FINISHED"
-    try:
-        src_client = MlflowClient(tracking_uri=primary_uri)
-        src_run = src_client.get_run(primary_run_id)
-        src_exp = src_client.get_experiment(src_run.info.experiment_id)
-        exp_name = src_exp.name if src_exp is not None else "taxon-vision-head-training"
-        dst_exp_id = _resolve_or_create_experiment_id(dst_client, exp_name)
-
-        run_name = src_run.info.run_name or src_run.data.tags.get("mlflow.runName") or f"mirror_{primary_run_id[:8]}"
-        dst_run = dst_client.create_run(experiment_id=dst_exp_id, start_time=src_run.info.start_time, run_name=run_name)
-        dst_run_id = str(dst_run.info.run_id)
-
-        params = [Param(key=k, value=str(v)) for k, v in src_run.data.params.items()]
-        tags = [RunTag(key=k, value=str(v)) for k, v in src_run.data.tags.items() if not k.startswith("mlflow.")]
-        tags.extend(
-            [
-                RunTag(key="mlflow.source.primary_run_id", value=primary_run_id),
-                RunTag(key="mlflow.source.primary_uri", value=primary_uri),
-                RunTag(key="mlflow.mirror.synced", value="true"),
-            ]
-        )
-        metrics = _collect_mirror_run_metrics(src_client, src_run)
-        _chunked_log_batch(dst_client, dst_run_id, params, metrics, tags)
-        _upload_mirror_artifacts(dst_client, dst_run_id, artifact_paths)
-        return dst_run_id
-    except Exception:
-        terminal_status = "FAILED"
-        logger.exception("Failed to mirror MLflow run %s to DagsHub (%s)", primary_run_id, dagshub_uri)
-        return None
-    finally:
-        if dst_run_id is not None:
-            with contextlib.suppress(Exception):
-                dst_client.set_terminated(dst_run_id, status=terminal_status)

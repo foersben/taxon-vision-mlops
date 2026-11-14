@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import MagicMock
@@ -495,13 +496,13 @@ def test_build_embedding_and_onnx_signatures() -> None:
     assert isinstance(onnx_sig.inputs, Schema)
     assert isinstance(onnx_sig.outputs, Schema)
     assert len(onnx_sig.inputs.inputs) == 1
-    assert onnx_sig.inputs.inputs[0].name == "input_images"
+    assert onnx_sig.inputs.inputs[0].name == "input"
     assert isinstance(onnx_sig.inputs.inputs[0], TensorSpec)
     assert onnx_sig.inputs.inputs[0].shape == (-1, 3, 224, 224)
     assert onnx_sig.inputs.inputs[0].type == np.dtype(np.float32)
 
-    assert len(onnx_sig.outputs.inputs) == 1
-    assert onnx_sig.outputs.inputs[0].name == "taxonomic_logits"
+    assert len(onnx_sig.outputs.inputs) == 2
+    assert onnx_sig.outputs.inputs[0].name == "logits"
     assert isinstance(onnx_sig.outputs.inputs[0], TensorSpec)
     assert onnx_sig.outputs.inputs[0].shape == (-1, 15)
     assert onnx_sig.outputs.inputs[0].type == np.dtype(np.float32)
@@ -570,14 +571,14 @@ def test_log_onnx_model_signature(monkeypatch: pytest.MonkeyPatch) -> None:
     # Validate input image TensorSpec
     input_spec = sig.inputs.inputs[0]
     assert isinstance(input_spec, TensorSpec)
-    assert input_spec.name == "input_images"
+    assert input_spec.name == "input"
     assert input_spec.shape == (-1, 3, 224, 224)
     assert input_spec.type == np.dtype(np.float32)
 
     # Validate output logits TensorSpec
     output_spec = sig.outputs.inputs[0]
     assert isinstance(output_spec, TensorSpec)
-    assert output_spec.name == "taxonomic_logits"
+    assert output_spec.name == "logits"
     assert output_spec.shape == (-1, 12)
     assert output_spec.type == np.dtype(np.float32)
 
@@ -677,76 +678,55 @@ def test_log_onnx_model_from_file_path(tmp_path: Path, monkeypatch: pytest.Monke
 
 
 def test_resolve_reachable_tracking_uri_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify MLFLOW_TRACKING_URI environment variable takes precedence unconditionally."""
-    monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://custom-runner:5000")
-    assert _resolve_reachable_tracking_uri() == "http://custom-runner:5000"
+    """Verify MLFLOW_TRACKING_URI environment variable overrides config and empty string disables tracking."""
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", "https://custom-runner.example.com")
+    assert _resolve_reachable_tracking_uri() == "https://custom-runner.example.com"
+
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", "")
+    assert _resolve_reachable_tracking_uri() == ""
 
 
-def test_resolve_reachable_tracking_uri_health_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify HTTP tracking URI is returned when /health responds with HTTP 200."""
-    import urllib.request
-
+def test_resolve_reachable_tracking_uri_unauthenticated_skips_without_local_artefacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify unauthenticated DagsHub config skips tracking cleanly without creating mlruns or data/mlflow."""
     from taxon_vision.config import get_settings
 
-    monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
-    monkeypatch.delenv("TAXON_MLFLOW_TRACKING_URI", raising=False)
-    settings = get_settings()
-    monkeypatch.setattr(settings.mlflow, "tracking_uri", "http://127.0.0.1:5000")
-
-    mock_resp = MagicMock()
-    mock_resp.status = 200
-    mock_resp.__enter__.return_value = mock_resp
-
-    mock_urlopen = MagicMock(return_value=mock_resp)
-    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
-
-    resolved = _resolve_reachable_tracking_uri(settings)
-    assert resolved == "http://127.0.0.1:5000"
-    mock_urlopen.assert_called_once()
-
-
-def test_resolve_reachable_tracking_uri_fallback_sqlite(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify unreachable HTTP tracking server triggers fallback to local SQLite backend."""
-    import urllib.request
-
-    from taxon_vision.config import get_settings
-
+    monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
     monkeypatch.delenv("TAXON_MLFLOW_TRACKING_URI", raising=False)
     monkeypatch.delenv("DAGSHUB_TOKEN", raising=False)
     monkeypatch.delenv("MLFLOW_TRACKING_PASSWORD", raising=False)
     settings = get_settings()
-    monkeypatch.setattr(settings.mlflow, "tracking_uri", "http://127.0.0.1:5000")
-    monkeypatch.setattr(urllib.request, "urlopen", MagicMock(side_effect=OSError("Connection refused")))
+    monkeypatch.setattr(settings.mlflow, "tracking_uri", "https://dagshub.com/foersben/taxon-vision-mlops.mlflow")
 
-    custom_fallback = f"sqlite:///{tmp_path}/mlflow_fallback.db"
-    monkeypatch.setattr(settings.mlflow, "fallback_sqlite_uri", custom_fallback)
+    assert _resolve_reachable_tracking_uri(settings) == ""
+    assert not (tmp_path / "mlruns").exists()
+    assert not (tmp_path / "data" / "mlflow").exists()
 
-    resolved = _resolve_reachable_tracking_uri(settings)
-    assert resolved == custom_fallback
-    assert (tmp_path / "artifacts").exists()
+    with mlflow_run_scope("unauthenticated_dry_run") as active_run:
+        assert active_run is None
+    assert not (tmp_path / "mlruns").exists()
+    assert not (tmp_path / "data" / "mlflow").exists()
 
 
-def test_resolve_reachable_tracking_uri_dagshub_tier(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify unreachable primary server routes to DagsHub when credentials are present."""
-    import urllib.request
-
+def test_resolve_reachable_tracking_uri_dagshub_authenticated(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify configured DagsHub tracking URI resolves directly when DAGSHUB_TOKEN is present."""
     from taxon_vision.config import get_settings
 
     monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
     monkeypatch.delenv("TAXON_MLFLOW_TRACKING_URI", raising=False)
+    monkeypatch.delenv("MLFLOW_TRACKING_USERNAME", raising=False)
+    monkeypatch.delenv("MLFLOW_TRACKING_PASSWORD", raising=False)
     monkeypatch.setenv("DAGSHUB_TOKEN", "mock-dagshub-pat-token")
     settings = get_settings()
-    monkeypatch.setattr(settings.mlflow, "tracking_uri", "http://127.0.0.1:5000")
-    monkeypatch.setattr(
-        settings.mlflow,
-        "dagshub_uri",
-        "https://dagshub.com/foersben/taxon-vision-mlops.mlflow",
-    )
-    monkeypatch.setattr(urllib.request, "urlopen", MagicMock(side_effect=OSError("Connection refused")))
+    monkeypatch.setattr(settings.mlflow, "tracking_uri", "https://dagshub.com/foersben/taxon-vision-mlops.mlflow")
 
     resolved = _resolve_reachable_tracking_uri(settings)
     assert resolved == "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
+    assert os.environ["MLFLOW_TRACKING_USERNAME"] == "foersben"
+    assert os.environ["MLFLOW_TRACKING_PASSWORD"] == "mock-dagshub-pat-token"
 
 
 def test_mlflow_run_scope_custom_experiment_name(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -785,7 +765,7 @@ def test_resume_parent_mlflow_run_success(tmp_path: Path, monkeypatch: pytest.Mo
     monkeypatch.setattr(mlflow, "end_run", mock_end_run)
     monkeypatch.setattr(
         "taxon_vision.models.training.tracking._resolve_reachable_tracking_uri",
-        lambda _settings=None: "http://mlflow-server:5000",
+        lambda _settings=None: "https://dagshub.com/foersben/taxon-vision-mlops.mlflow",
     )
 
     with resume_parent_mlflow_run(metrics_file) as ctx:
@@ -833,7 +813,7 @@ def test_resume_parent_mlflow_run_connection_error(tmp_path: Path, monkeypatch: 
     )
     monkeypatch.setattr(
         "taxon_vision.models.training.tracking._resolve_reachable_tracking_uri",
-        lambda _settings=None: "http://down:5000",
+        lambda _settings=None: "https://dagshub.com/foersben/taxon-vision-mlops.mlflow",
     )
 
     with resume_parent_mlflow_run(metrics_file) as ctx:
@@ -1019,104 +999,3 @@ def test_promote_candidate_model_e2e_with_incumbent_demotion(monkeypatch: pytest
     mock_client.set_model_version_tag.assert_any_call("taxon_vision_classifier", "2", "gate", "promoted_all_4_gates")
     mock_client.set_model_version_tag.assert_any_call("taxon_vision_classifier", "2", "val_pr_auc", "0.9100")
     mock_client.set_model_version_tag.assert_any_call("taxon_vision_classifier", "2", "extractor", "dinov3")
-
-
-def test_mirror_run_to_dagshub_skips_when_unconfigured_or_same_target(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Skip mirroring cleanly without remote RPC when DAGSHUB_TOKEN is unset or target matches source."""
-    from taxon_vision.config import get_settings
-    from taxon_vision.models.training.tracking import mirror_run_to_dagshub
-
-    monkeypatch.delenv("DAGSHUB_TOKEN", raising=False)
-    monkeypatch.delenv("MLFLOW_TRACKING_PASSWORD", raising=False)
-    monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://mlflow-server.taxon-vision.svc.cluster.local:5000")
-    get_settings.cache_clear()
-    try:
-        assert mirror_run_to_dagshub("run-1") is None
-
-        monkeypatch.setenv("DAGSHUB_TOKEN", "pat-123")
-        monkeypatch.setenv("MLFLOW_TRACKING_URI", "https://dagshub.com/foersben/taxon-vision-mlops.mlflow")
-        assert mirror_run_to_dagshub("run-1") == "run-1"
-    finally:
-        get_settings.cache_clear()
-
-
-def test_mirror_run_to_dagshub_replicates_metrics_params_and_artifacts(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Replicate source MLflow run metadata and artifacts to public DagsHub tracking server."""
-    from types import SimpleNamespace
-
-    from taxon_vision.config import get_settings
-    from taxon_vision.models.training import tracking as tracking_mod
-
-    report_file = tmp_path / "summary.txt"
-    report_file.write_text("ok", encoding="utf-8")
-
-    monkeypatch.setenv("DAGSHUB_TOKEN", "secret-pat")
-    monkeypatch.setenv("TAXON_MLFLOW__TRACKING_URI", "http://mlflow-server.taxon-vision.svc.cluster.local:5000")
-    get_settings.cache_clear()
-
-    calls: list[tuple[str, str]] = []
-
-    class _FakeClient:
-        def __init__(self, tracking_uri: str) -> None:
-            self.tracking_uri = tracking_uri
-            calls.append(("init", tracking_uri))
-
-        def get_run(self, run_id: str) -> SimpleNamespace:
-            return SimpleNamespace(
-                info=SimpleNamespace(run_id=run_id, experiment_id="exp-1", run_name="eval-run", start_time=1000),
-                data=SimpleNamespace(
-                    params={"backbone": "dinov3"},
-                    tags={"stage": "evaluate", "mlflow.note.content": "keep"},
-                    metrics={"eval.top1_accuracy": 0.94},
-                ),
-            )
-
-        def get_experiment(self, experiment_id: str) -> SimpleNamespace:
-            return SimpleNamespace(experiment_id=experiment_id, name="taxon_vision_evaluation")
-
-        def get_metric_history(self, _run_id: str, key: str) -> list[SimpleNamespace]:
-            return [SimpleNamespace(key=key, value=0.94, timestamp=1000, step=1)]
-
-        def get_experiment_by_name(self, _name: str) -> None:
-            return None
-
-        def create_experiment(self, name: str) -> str:
-            calls.append(("create_experiment", name))
-            return "42"
-
-        def create_run(self, *, run_name: str = "", **_kwargs: object) -> SimpleNamespace:
-            calls.append(("create_run", run_name))
-            return SimpleNamespace(info=SimpleNamespace(run_id="dst-run-99"))
-
-        def log_batch(
-            self,
-            *,
-            metrics: list[object] = (),
-            params: list[object] = (),
-            tags: list[object] = (),
-            **_kwargs: object,
-        ) -> None:
-            calls.append(("log_batch", f"{len(metrics)}:{len(params)}:{len(tags)}"))
-
-        def log_artifact(self, _run_id: str, local_path: str) -> None:
-            calls.append(("log_artifact", local_path))
-
-        def set_terminated(self, run_id: str, status: str = "FINISHED") -> None:
-            calls.append(("set_terminated", f"{run_id}:{status}"))
-
-    monkeypatch.setattr(tracking_mod, "MlflowClient", _FakeClient)
-    try:
-        dst_id = tracking_mod.mirror_run_to_dagshub("src-run-1", artifact_paths=[report_file])
-        assert dst_id == "dst-run-99"
-        assert ("init", "https://dagshub.com/foersben/taxon-vision-mlops.mlflow") in calls
-        assert ("create_experiment", "taxon_vision_evaluation") in calls
-        assert ("log_batch", "0:1:0") in calls
-        assert ("log_batch", "1:0:0") in calls
-        assert ("log_batch", "0:0:4") in calls
-        assert ("log_artifact", str(report_file)) in calls
-        assert ("set_terminated", "dst-run-99:FINISHED") in calls
-    finally:
-        get_settings.cache_clear()
