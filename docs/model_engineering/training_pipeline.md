@@ -22,7 +22,7 @@ sources:
 
 # Classification Head Training Pipeline
 
-The training module ([`src/taxon_vision/models/training/`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training)) orchestrates linear and cosine classification head optimisation over **pre-cached foundation model embeddings**, records 5-dataset lineage and epoch trajectories in MLflow 3.16.0, and propagates its parent run context (`reports/train_metrics.json`) across downstream DVC stages (`export`, `calibrate`, `eval`) for the [Four-Gate Model Promotion](model_promotion_gates.md) audit.
+The training module ([`src/taxon_vision/models/training/`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training)) orchestrates linear and cosine classification head optimisation over **pre-cached foundation model embeddings**, records 5-dataset lineage and epoch trajectories in DagsHub MLflow 3.x, and propagates its parent run context (`reports/train_metrics.json`) across downstream DVC stages (`export`, `calibrate`, `eval`) for the [Four-Gate Model Promotion](model_promotion_gates.md) audit.
 
 ---
 
@@ -38,7 +38,7 @@ The training module ([`src/taxon_vision/models/training/`](file:///home/benni/Do
 
 * **Multi-Head Hierarchical Taxonomic Loss:** Rather than relying solely on a flat classification head over terminal leaf species, the architecture supports projecting embeddings across taxonomic ranks (Class, Order, Family, Genus, Species) so that coarse-grained taxonomic misclassifications are penalised more heavily than sibling-species confusion.
 * **Macro PR-AUC Optimization & Four-Gate Promotion:** Within Stage 4 (`train`), early stopping and Optuna TPE/ASHA pruning optimise **Validation Macro PR-AUC**, which is invariant to decision thresholds and sensitive to minority-class precision. Authoritative registry promotion (`@Production` vs `@Challenger` vs `@Archived`) is subsequently decided in Stage 7 (`eval`) across all four governance gates (predictive viability + INT8 fidelity, conformal coverage, p95 latency, and live MMD² calibration exchangeability).
-* **Self-Hosted MLflow 3.16.0 & DagsHub Interlock:** Primary experiment tracking runs against the self-hosted `mlflow-server` container backed by PostgreSQL 16 (`mlflow` database) and SeaweedFS S3 (`s3://mlflow-artifacts`), with automatic 3-tier fallback to local SQLite (`sqlite:///data/mlflow/mlflow.db`) during offline development and offsite DVC checkpoint synchronisation to DagsHub S3 (`s3://dvc`).
+* **DagsHub-Only MLflow 3.x Interlock:** All experiment tracking and model governance (`taxon-vision-head-training` & `taxon-vision-drift`) consolidate exclusively onto managed DagsHub MLflow (`https://dagshub.com/foersben/taxon-vision-mlops.mlflow`). When `DAGSHUB_TOKEN` is absent in air-gapped developer sandboxes or unit tests, `_resolve_reachable_tracking_uri()` returns an empty string so pipelines skip tracking cleanly without writing local SQLite databases or `mlruns/` directories, while DVC checkpoints synchronise to DagsHub S3 (`s3://dvc`).
 * **Git-Free DVC Versioning:** Dataset content hashes (`dvc_dataset_hash`) are extracted by parsing `dvc.lock` directly in [`dataset.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/dataset.py), ensuring deterministic lineage even inside minimal container build contexts.
 
 ---
@@ -66,7 +66,7 @@ Following Rule 08 (Structural Sibling Topology), the training subsystem in `src/
 
 The MLflow run lifecycle is strictly managed via two `@contextmanager` primitives in [`tracking.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/tracking.py) (detailed in [MLflow 3.x Experiment Tracking, Lineage & PyFunc Registry](mlflow_tracking_and_registry.md)):
 
-1. **`mlflow_run_scope()` (Stage 4 Creation):** Resolves the tracking URI via 3-tier health probing, opens the parent run, logs all five dataset splits (`inaturalist_open_manifest` + `train`, `val`, `cal`, `test` tensors), registers the PyTorch `LoggedModel` (`m-...`), and guarantees that any unhandled exception marks the run as `FAILED` before re-raising.
+1. **`mlflow_run_scope()` (Stage 4 Creation):** Resolves the DagsHub tracking URI via `_resolve_reachable_tracking_uri()` (skipping cleanly when unauthenticated offline), opens the parent run, logs all five dataset splits (`inaturalist_open_manifest` + `train`, `val`, `cal`, `test` tensors), registers the PyTorch `LoggedModel` (`m-...`), and guarantees that any unhandled exception marks the run as `FAILED` before re-raising.
 2. **`resume_parent_mlflow_run()` (Stages 5, 6, 7 Continuity):** Reads `mlflow_run_id` and `mlflow_model_id` from `reports/train_metrics.json` so that standalone DVC subprocesses (`export_onnx`, `calibrate`, `evaluate`) re-enter the exact same parent MLflow run rather than scattering fragmented runs across the tracker.
 
 ```mermaid
@@ -135,13 +135,18 @@ flowchart TD
 
 ## 6. Optuna Bayesian Hyperparameter Optimisation
 
-Optuna explores the hyperparameter space using the Tree-structured Parzen Estimator (`TPESampler`) paired with Asynchronous Successive Halving (`SuccessiveHalvingPruner`):
+Optuna explores the hyperparameter space using the Tree-structured Parzen Estimator (`TPESampler`) paired with Asynchronous Successive Halving (`SuccessiveHalvingPruner`), grouping nested child runs (`trial_000..N`) under a dedicated `optuna_study_{study_name}` parent run in DagsHub MLflow:
 
-* **Search Space Formulation:**
-    * **Learning Rate ($\eta$):** Log-uniform over $[10^{-4}, 10^{-1}]$.
-    * **Weight Decay ($\lambda$):** Log-uniform over $[10^{-6}, 10^{-2}]$.
-    * **Dropout Rate ($p$):** Uniform over $[0.0, 0.5]$.
+* **Regularised Search Space Formulation (`config/default_config.yaml`):**
+    * **Learning Rate ($\eta$):** Log-uniform over $[10^{-4}, 5 \times 10^{-3}]$.
+    * **Weight Decay ($\lambda$):** Log-uniform over $[5 \times 10^{-3}, 5 \times 10^{-2}]$ (preventing unregularised logit norm explosion $\|\mathbf{W}\| \gg 10$).
+    * **Dropout Rate ($p$):** Uniform over $[0.15, 0.50]$.
     * **Class-Balanced Loss $\beta$:** Uniform over $[0.99, 0.9999]$.
+    * **Batch Size & Gaussian Input Noise ($\sigma_{\text{noise}}$):** Categorical $\{32, 64, 128\}$ and uniform $[0.0, 0.05]$.
+* **Calibration-Damped Objective (`_compute_calibrated_objective_score`):** Pure rank-based Macro PR-AUC is scale-invariant to logit magnitude, which would let unconstrained HPO collapse weight decay and saturate softmax outputs on out-of-distribution inputs. Therefore, each trial maximises a damped score bounded in $[0, 1]$ with $\lambda_{\text{loss}} = 0.05$ (`val_loss_penalty`):
+
+    $$y = \frac{\max_e \text{PR-AUC}_{\text{val}}(e)}{1 + \lambda_{\text{loss}} \min_e \mathcal{L}_{\text{val}}(e)}$$
+
 * **Relational Persistence:** In Docker Compose and K3s deployments, `TAXON_OPTUNA_STORAGE_URI` points to the consolidated PostgreSQL 16 `optuna` database (`postgresql+psycopg2://optuna:...@postgres:5432/optuna`), visualised live via the Optuna Dashboard on port `8080` (NodePort `30081`). In offline local runs, storage falls back to `sqlite:///data/optuna/optuna_studies.db`.
 * **CLI Trigger:**
 
@@ -152,20 +157,22 @@ pixi run -e dev python -m taxon_vision.pipelines.train --tune --n-trials 15
 ```mermaid
 sequenceDiagram
     autonumber
+    participant Study as _run_optuna_study_in_mlflow
     participant Objective as HyperparameterObjective.__call__
     participant Emb as train_head_on_cached_embeddings
     participant Metrics as evaluate_head
     participant Optuna as optuna.Trial (ASHA Pruner)
-    participant MLflow as MLflow Nested Run
+    participant MLflow as DagsHub MLflow (optuna_study_{study_name})
 
+    Study->>MLflow: start_run(run_name="optuna_study_{study_name}")
     Objective->>Objective: _sample_hyperparameters(trial)
-    Objective->>MLflow: start_run(nested=True, run_name="trial_N")
+    Objective->>MLflow: start_run(run_name="trial_000..N", nested=True)
     Objective->>Emb: train_head_on_cached_embeddings(head, data, optimizer, criterion, config)
 
     loop epoch in range(epochs_per_trial)
         Emb->>Emb: mini-batch forward + backward
         Emb->>Metrics: evaluate_head(val_embeddings, val_labels)
-        Metrics-->>Emb: HeadEvaluationResult (val_f1, val_pr_auc)
+        Metrics-->>Emb: HeadEvaluationResult (val_loss, val_f1, val_pr_auc)
         Emb->>Optuna: pruner_callback(epoch, val_pr_auc)
         Optuna->>Optuna: trial.report(val_pr_auc, step=epoch)
         Optuna-->>Emb: should_prune? True / False
@@ -175,9 +182,10 @@ sequenceDiagram
     end
 
     Emb-->>Objective: history dict
-    Objective->>MLflow: log_metrics(val_pr_auc, val_f1, ...)
+    Objective->>Objective: _compute_calibrated_objective_score(history, val_loss_penalty=0.05)
+    Objective->>MLflow: log_metrics(peak_val_pr_auc, min_val_loss, objective_score, ...)
     Objective->>MLflow: end_run()
-    Objective-->>Optuna: return max(history["val_pr_auc"])
+    Objective-->>Optuna: return objective_score
 ```
 
 ---

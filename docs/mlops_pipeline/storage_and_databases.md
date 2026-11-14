@@ -35,8 +35,8 @@ flowchart TD
     subgraph S3Interlock["Three-Tier S3 Object Storage Interlock"]
         direction LR
         S3Upstream["Tier 3: Upstream Open Data<br/>s3://inaturalist-open-data<br/>(Static JPEGs: 100M+ Photos)"]
-        S3Edge["Tier 1: In-Cluster NVMe S3<br/>http://seaweedfs:8333<br/>(dvc-cache & mlflow-artifacts)"]
-        S3Cloud["Tier 2: Cloud Sync Remote<br/>s3://dvc (DagsHub)<br/>(Immutable Checkpoints & Locks)"]
+        S3Edge["Tier 1: In-Cluster NVMe S3<br/>http://seaweedfs:8333<br/>(taxon-dvc-cache & triage-queue)"]
+        S3Cloud["Tier 2: Cloud Sync Remote<br/>s3://dvc & MLflow (DagsHub)<br/>(Checkpoints, Locks & Registry)"]
     end
 
     subgraph ColumnarEngine["In-Memory Zero-Copy Columnar Engine"]
@@ -57,7 +57,6 @@ flowchart TD
     subgraph RelationalCluster["Consolidated PostgreSQL 16 Relational Cluster (:5432)"]
         direction LR
         PGTelemetry[("DB: telemetry<br/>(predictions & drift_runs)")]
-        PGMLflow[("DB: mlflow<br/>(Runs, LoggedModels, Registry)")]
         PGOptuna[("DB: optuna<br/>(TPE & ASHA HPO Trials)")]
         PGAirflow[("DB: airflow<br/>(DAG Schedules & Task State)")]
     end
@@ -88,11 +87,11 @@ The platform maps every data asset across eleven specialised storage tiers, gove
 | **Apache Parquet + Polars + Arrow** | Local Filesystem & Host RAM | Observation manifests (`raw_manifest.parquet`, `dataset_manifest.parquet`, `human_feedback.parquet`) | Snappy-compressed columnar reads, Arrow IPC zero-copy memory transfers | Immutable per DVC stage hash; regenerated upon pipeline re-execution or feedback ingestion. |
 | **PyTorch `.pt` Split Tensors** | Local NVMe & SeaweedFS S3 | Extracted foundation embeddings (`{train,val,cal,test}_embeddings.pt`, `reference_train_embeddings.pt`) | Sequential batch slicing, contiguous float32 tensor loads (`torch.load(..., weights_only=True)`) | Cached locally and in SeaweedFS; invalidated when backbone model or dataset manifest changes. |
 | **DuckDB In-Process OLAP** | Ephemeral Process Memory | Taxon catalogue joins, licence filtering, analytical metadata queries | Direct SQL queries over Arrow tables without daemon overhead (pinned to 2.0.0 LTS) | Ephemeral; lives strictly within the Python pipeline process runtime. |
-| **PostgreSQL 16 (`telemetry` DB)** | Consolidated Relational Pod (`postgres:5432`) | Live prediction audit records (`predictions`) and two-tier drift history (`drift_runs`) | Asynchronous `BackgroundTasks` inserts and sliding-window `REAL[]` vector reads via `psycopg_pool` | Persistent transactional audit trail; indexed by `created_at DESC` for $\mathcal{O}(\log N)$ window retrieval. |
-| **PostgreSQL 16 (`mlflow` DB)** | Consolidated Relational Pod (`postgres:5432`) | MLflow 3.16.0 experiment runs, `LoggedModel` entities, dataset lineage, and `@Production` / `@Challenger` registry aliases | SQLAlchemy ACID transactions managed by the `mlflow-server` container (`:5000`) | Persistent across training lifecycles; offline CLI execution falls back to `sqlite:///data/mlflow/mlflow.db`. |
+| **PostgreSQL 16 (`telemetry` DB)** | Consolidated Relational Pod (`postgres:5432`) | Live prediction audit records (`predictions`) and two-tier drift history (`drift_runs`) | Asynchronous `BackgroundTasks` inserts and sliding-window `REAL[]` vector reads via `psycopg_pool` (`max_connections=120`) | Persistent transactional audit trail; indexed by `created_at DESC` for $\mathcal{O}(\log N)$ window retrieval. |
+| **DagsHub MLflow 3.x Tracking & Registry** | Managed Cloud Service (`https://dagshub.com/...mlflow`) | Experiment runs (`taxon-vision-head-training`, `taxon-vision-drift`), `LoggedModel` entities, 5-dataset lineage, `@Production` aliases, diagnostic plots & PyFunc bundles | HTTPS REST API authenticated via `DAGSHUB_TOKEN` Basic Auth; skips cleanly offline without local SQLite fallback | Single source of truth across staging and production without self-hosted MLflow DBs. |
 | **PostgreSQL 16 (`optuna` DB)** | Consolidated Relational Pod (`postgres:5432`) | Bayesian TPE hyperparameter trial histories and ASHA pruning milestones | SQLAlchemy relational transactions via `TAXON_OPTUNA_STORAGE_URI` | Persistent across HPO sweeps; offline local runs fall back to `sqlite:///data/optuna/optuna_studies.db`. |
 | **PostgreSQL 16 (`airflow` DB)** | Consolidated Relational Pod (`postgres:5432`) | Airflow 3.0 DAG schedules, task instance states, and XCom metadata | SQLAlchemy connection pool from `airflow-scheduler` and `airflow-apiserver` (`:8090`) | Persistent orchestration state; initialised idempotently by `airflow-init`. |
-| **SeaweedFS In-Cluster S3** | Local Cluster Daemon (`:8333`) | DVC tensor cache (`s3://taxon-dvc-cache`), human triage feedback (`s3://triage-queue`), and MLflow artefacts (`s3://mlflow-artifacts` - plots, Evidently HTML, `pyfunc_model`) | High-throughput S3 API over cluster loopback (`strategy.type: Recreate`) | Local NVMe object store providing $< 2\,\text{ms}$ loopback read latency with zero cloud egress cost. |
+| **SeaweedFS In-Cluster S3** | Local Cluster Daemon (`:8333`) | DVC tensor cache (`s3://taxon-dvc-cache`) and human triage feedback (`s3://triage-queue`) | High-throughput S3 API over cluster loopback (`strategy.type: Recreate`) | Local NVMe object store providing $< 2\,\text{ms}$ loopback read latency with zero cloud egress cost. |
 | **Redis Ephemeral Upload Cache** | In-Cluster Ephemeral Pod (`redis-ephemeral:6379`) | Raw specimen image uploads (`taxon:img:{sha256}`) for on-demand Grad-CAM attribution | Connection-pooled RESP protocol, non-blocking AnyIO threadpool offload | 15-minute rolling TTL (`SETEX 900`), `maxmemory 64mb` with `allkeys-lru` eviction policy. |
 | **Grafana Loki TSDB** | Local Cluster Daemon (`:3100`) | Aggregated container logs (FastAPI JSON records, Airflow DAG worker logs, Traefik access records) | Promtail log shipping, LogQL stream expressions over HTTP | 168-hour (7-day) rolling retention on non-CoW host NVMe storage (`/var/lib/taxon-vision/loki`). |
 | **DagsHub S3 DVC Remote** | Cloud Object Store (`s3://dvc` / `origin`) | Canonical checkpoints (`head.pt`, `model_int8.onnx`), DVC locks | Remote S3 API authenticated via ephemeral KeePassXC `secret-tool` injection | Content-addressed cloud archive; updated upon verified pipeline releases. |
@@ -105,20 +104,18 @@ The platform maps every data asset across eleven specialised storage tiers, gove
 
 ### 3.1 Single-Engine Multi-Database Topology
 
-Running four distinct database engines on a single bare-metal node would waste gigabytes of system RAM on duplicated buffer pools and background worker processes. Instead, TaxonVision-MLOps provisions a single **PostgreSQL 16 (`postgres:16-alpine`)** instance ([`deploy/k8s/postgres.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/postgres.yaml) and [`docker-compose.yml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/docker-compose.yml)) capped at a modest 512 MB memory envelope. Upon first container bootstrap, [`deploy/postgres/init/01-databases.sql`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/postgres/init/01-databases.sql) executes automatically to provision four strictly isolated logical databases and dedicated least-privilege login roles:
+Running three distinct relational database servers on a single bare-metal node would waste gigabytes of system RAM on duplicated buffer pools and background worker processes. Instead, TaxonVision-MLOps provisions a single **PostgreSQL 16 (`postgres:16-alpine`)** instance ([`deploy/k8s/postgres.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/postgres.yaml) and [`docker-compose.yml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/docker-compose.yml)) configured with `max_connections=120` within a modest 512 MB memory envelope. Upon first container bootstrap, [`deploy/postgres/init/01-databases.sql`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/postgres/init/01-databases.sql) executes automatically to provision three strictly isolated logical databases and dedicated least-privilege login roles:
 
 ```sql
 -- 1. Create Dedicated Service Roles
 CREATE ROLE telemetry LOGIN PASSWORD 'taxon_telemetry_pass';
 CREATE ROLE optuna    LOGIN PASSWORD 'taxon_optuna_pass';
 CREATE ROLE airflow   LOGIN PASSWORD 'taxon_airflow_pass';
-CREATE ROLE mlflow    LOGIN PASSWORD 'taxon_mlflow_pass';
 
 -- 2. Provision Isolated Logical Databases
 CREATE DATABASE telemetry OWNER telemetry;
 CREATE DATABASE optuna    OWNER optuna;
 CREATE DATABASE airflow   OWNER airflow;
-CREATE DATABASE mlflow    OWNER mlflow;
 ```
 
 On the bare-metal host (`hive-mind`), the PostgreSQL data directory (`/var/lib/taxon-vision/postgres`) resides on a BTRFS subvolume initialised with the non-Copy-on-Write attribute (`chattr +C`), preventing physical NVMe block fragmentation during continuous write-ahead log (WAL) checkpoints. In Kubernetes, the database is exposed under the cluster-internal fully-qualified domain name (FQDN) `postgres.taxon-vision.svc.cluster.local:5432`, allowing both production pods in `taxon-vision` and staging pods in `taxon-vision-staging` to connect to the unified relational store seamlessly across namespace boundaries.
@@ -174,7 +171,7 @@ To guarantee that relational database I/O never inflates the $< 25\,\text{ms}$ p
 
 ---
 
-## 4. The Three-Tier S3 Interlock & MLflow Artefact Proxy
+## 4. The Three-Tier S3 Interlock & DagsHub Artefact Store
 
 Large-scale computer vision workflows frequently suffer from severe network bottlenecks when downloading raw imagery or synchronising multi-gigabyte feature representations. TaxonVision-MLOps resolves this using the **Three-Tier S3 Interlock**:
 
@@ -189,7 +186,7 @@ Large-scale computer vision workflows frequently suffer from severe network bott
 * High-performance SeaweedFS object store running inside the local Kubernetes cluster (`namespace: taxon-vision`) and local Docker Compose network, backed directly by host NVMe storage.
 * Hosts two dedicated S3 buckets:
     * `s3://taxon-dvc-cache`: Functions as an accelerated NVMe read mirror ($< 2\,\text{ms}$ loopback latency) for intermediate feature tensors (`{train,val,cal,test}_embeddings.pt`) and manifests during cluster GPU feature extraction and Optuna HPO sweeps.
-    * `s3://mlflow-artifacts`: Stores heavy MLflow 3.16.0 artefacts - including serialized `TaxonVisionPyFuncModel` bundles (`pyfunc_model`), 6 holdout diagnostic visualisations (`visualizations/*.png`), per-taxon holdout audit tables (`per_taxon_holdout_audit.json`), and standalone Evidently PCA drift reports (`drift_report.html`). Because the `mlflow-server` container is launched with `--serve-artifacts` and `--artifacts-destination s3://mlflow-artifacts`, pipeline workers upload artefacts via the standard MLflow HTTP proxy on port `5000` without needing direct S3 credentials on the client side.
+    * `s3://triage-queue`: Stages consented human active-learning crops under CC0 / CC-BY / CC-BY-NC prior to Label Studio triage and feedback merging. (Heavy MLflow diagnostic plots, Evidently workspace reports, and `TaxonVisionPyFuncModel` bundles are pushed directly to the managed **DagsHub MLflow** artefact store over HTTPS rather than proxying through an in-cluster MLflow server.)
 * **Storage Lock Collision Prevention:** The SeaweedFS volume daemon manages embedded LevelDB metadata stores on bare-metal `hostPath` mounts. Because LevelDB enforces strict single-writer file locks (`LOCK: Resource temporarily unavailable`), standard Kubernetes `RollingUpdate` deployments would cause new pods to crash while terminating pods still hold the file lock. Consequently, the deployment manifest ([`deploy/k8s/mlops-storage-and-optuna.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/mlops-storage-and-optuna.yaml)) mandates `strategy.type: Recreate`, ensuring old pods fully release volume locks before replacement pods mount the storage bus.
 
 ### Tier 2: Cloud Sync Remote (DagsHub `s3://dvc` / `origin`)

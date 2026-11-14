@@ -126,13 +126,14 @@ TAXON_SKIP_SYNC=1 ./scripts/ci/local_ci.sh quality
 
 ### `scripts/ci/smoke_test_mlflow.sh`
 
-Validation utility verifying that the in-cluster or local MLflow tracking server is live, operational, and responsive over HTTP before running pipeline feature extraction or model registration.
+Validation utility verifying dual-plane MLflow PyFunc packaging and live inference responsiveness across local or CI runtimes:
 
-* Probes `http://mlflow-server:5000/health` with retry bounds.
-* Verifies S3 artifact connectivity against SeaweedFS (`http://seaweedfs:8333`).
+* Instantiates [`TaxonVisionPyFuncModel`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/inference/mlflow_model.py) in-process via `pixi run -e dev python` to verify `load_context` and `predict` hooks without requiring a running tracking daemon.
+* Probes FastAPI `${FASTAPI_URL}/health/ready` and `POST /api/v1/predict` (default `http://localhost:8000`) when active.
+* Probes on-demand `mlflow models serve` `${MLFLOW_SERVE_URL}/invocations` (default `http://localhost:5001`) with a `dataframe_split` base64 image payload when active.
 
 ```bash
-# Verify MLflow tracking server availability
+# Verify MLflow PyFunc contract and active serving planes
 bash scripts/ci/smoke_test_mlflow.sh
 ```
 

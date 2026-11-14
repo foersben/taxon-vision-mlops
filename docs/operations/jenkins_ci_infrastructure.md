@@ -312,8 +312,8 @@ The manifest declares eight Kubernetes objects designed to isolate runtime compu
     * Isolates the production web serving layer and model inference containers (`taxon-vision-api`) from CI/CD runners and cluster system daemons.
 
 * **7. Role (`jenkins-deployer-role`): Continuous Delivery Privileges**
-    * Grants permissions to create, update, patch, and watch `deployments` (apps API group), `services`, `pods`, `pods/log`, `events`, `configmaps`, `secrets`, `persistentvolumeclaims` (core API group), and `ingressroutes`, `traefikservices`, `middlewares` (`traefik.io` API group) strictly inside `taxon-vision`.
-    * Enables declarative deployment of serving pods, storage volumes, Traefik canary ingress routes, and monitoring stacks (Prometheus and Grafana) without requiring cluster-wide admin rights or brittle host-level automation.
+    * Grants namespace-scoped permissions to create, delete, get, list, patch, update, and watch `deployments`, `daemonsets`, and `statefulsets` (`apps` API group), alongside `services`, `pods`, `pods/log`, `events`, `configmaps`, `secrets`, `persistentvolumeclaims` (core API group), and `ingressroutes`, `traefikservices`, `middlewares` (`traefik.io` API group) inside `taxon-vision` (and matching scoped privileges in `taxon-vision-staging`).
+    * Enables declarative deployment of serving pods, storage volumes, Traefik ingress routes, and monitoring stacks (Prometheus and Grafana) without requiring cluster-wide admin rights or brittle host-level automation.
 
 * **8. RoleBinding (`jenkins-deployer-binding`): Cross-Namespace Deployment Authorization**
     * Maps the `jenkins-agent` identity in `jenkins-ci` to `jenkins-deployer-role` in `taxon-vision`.

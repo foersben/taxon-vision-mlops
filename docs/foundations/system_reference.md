@@ -125,7 +125,7 @@ The TaxonVision platform relies on specialized, purpose-built storage technologi
 | **Redis Ephemeral Cache** | In-Cluster Pod (`redis-ephemeral:6379`) | Raw specimen image uploads for CAM | In-memory key-value cache with 15-minute rolling TTL (`SETEX 900`) and 64 MB LRU ceiling, eliminating multi-pod serving split-brain. |
 | **DagsHub DVC S3** | `s3://dvc` (`origin`) | Content-Addressed Hash | Cryptographically hashed DVC remote repository storing canonical cloud mirror for all pipeline artefacts (~25 MB total). |
 | **MLflow Model Registry** | DagsHub Hosted (`https://dagshub.com/foersben/taxon-vision-mlops.mlflow`) | Artefacts + Schema Metadata | Managed remote tracking server storing training curves, drift runs (`taxon-vision-drift`), model signatures, and `@Production` / `@Challenger` registry aliases; unauthenticated runs skip cleanly without local SQLite fallback. |
-| **Prometheus / Evidently 0.7** | `/metrics` endpoint & UI Workspace (`NodePort 30850`) | Time-Series Metrics & Snapshots | Real-time monitoring of p95 latency SLOs, prediction set cardinality, Wasserstein `DataDriftPreset` snapshots, and precomputed $W_1$ / $\text{MMD}_u^2$ scalar cards. |
+| **Prometheus / Evidently 0.7** | `/metrics` endpoint & UI Workspace (`NodePort 30082`) | Time-Series Metrics & Snapshots | Real-time monitoring of p95 latency SLOs, prediction set cardinality, Wasserstein `DataDriftPreset` snapshots, and precomputed $W_1$ / $\text{MMD}_u^2$ scalar cards. |
 
 ## 3. Exhaustive System Parameter Reference
 

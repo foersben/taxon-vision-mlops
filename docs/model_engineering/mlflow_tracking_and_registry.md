@@ -4,16 +4,16 @@ title: MLflow 3.x Experiment Tracking, Lineage & PyFunc Registry
 status: stable
 stale_after: "2027-01-01T00:00:00Z"
 version: 1.0
-description: Self-hosted MLflow 3.16.0 tracking server, 3-tier URI resolution, cross-stage DVC run resumption, 5-dataset lineage, holdout visualisations, and TaxonVisionPyFuncModel packaging.
-tags: [mlflow, tracking, registry, lineage, pyfunc, visualizations, dvc, evaluation]
+description: DagsHub-only MLflow 3.x experiment tracking, fail-closed offline URI resolution, cross-stage DVC run resumption, 5-dataset lineage, holdout visualisations, and TaxonVisionPyFuncModel packaging.
+tags: [mlflow, dagshub, tracking, registry, lineage, pyfunc, visualizations, dvc, evaluation]
 generated: {by: "process:docs-librarian", at: "2026-11-08T17:20:00Z"}
-verified: {by: "process:docs-librarian", at: "2026-11-08T17:20:00Z"}
+verified: {by: "process:docs-librarian", at: "2026-11-14T13:00:00Z"}
 sources:
   - resource: "src/taxon_vision/models/training/tracking.py"
   - resource: "src/taxon_vision/models/training/visualizations.py"
   - resource: "src/taxon_vision/inference/mlflow_model.py"
   - resource: "src/taxon_vision/pipelines/evaluate.py"
-  - resource: "deploy/k8s/mlops-storage-and-optuna.yaml"
+  - resource: "config/default_config.yaml"
 ---
 
 # MLflow 3.x Experiment Tracking, Lineage & PyFunc Registry
@@ -26,18 +26,19 @@ For a newcomer to MLOps, an experiment tracker such as MLflow is often introduce
 2. **Missing Cryptographic Dataset Lineage:** Logging a scalar metric (`val_pr_auc = 0.996`) is meaningless if an auditor cannot determine *which exact rows* of `dataset_manifest.parquet` and *which exact split tensors* produced that score. Without binding `mlflow.data` dataset digests directly to the run and the `LoggedModel` entity (`m-...`), active learning feedback merges cannot be traced to downstream model versions.
 3. **Un-Calibrated Raw Checkpoint Packaging:** Registering a raw PyTorch `nn.Module` or bare `.onnx` file in the Model Registry omits the epistemic safety layer. A raw ONNX graph outputs uncalibrated float32 logits (`[batch, 10]`); it knows nothing of binomial scientific names (`Danaus plexippus`), Split Conformal prediction sets $C(X)$, or negative Helmholtz free energy Out-of-Distribution (OOD) rejection thresholds ($\tau_{\text{OOD}}$).
 
-To resolve all three challenges, TaxonVision-MLOps implements an end-to-end **MLflow 3.16.0 Tracking & Registry Architecture** featuring cross-stage run resumption (`resume_parent_mlflow_run`), five-dataset cryptographic lineage binding, automated holdout visualisations (`visualizations.py`), and a self-contained `TaxonVisionPyFuncModel` wrapper (`mlflow_model.py`).
+To resolve all three challenges, TaxonVision-MLOps implements an end-to-end **DagsHub-Managed MLflow 3.x Tracking & Registry Architecture** featuring cross-stage run resumption (`resume_parent_mlflow_run`), five-dataset cryptographic lineage binding, automated holdout visualisations (`visualizations.py`), and a self-contained `TaxonVisionPyFuncModel` wrapper (`mlflow_model.py`).
 
 ```mermaid
 flowchart TD
-    subgraph Infra["Self-Hosted MLflow 3.16.0 Infrastructure"]
-        direction LR
-        MLServer["mlflow-server (:5000 / NodePort :30500)<br/>(--serve-artifacts proxy)"]
-        PG[("PostgreSQL 16 (mlflow DB)<br/>Runs, LoggedModels & Aliases")]
-        SW[("SeaweedFS S3 (:8333)<br/>s3://mlflow-artifacts")]
-        SQLite[("Local SQLite Fallback<br/>sqlite:///data/mlflow/mlflow.db")]
-        MLServer -->|Backend Store| PG
-        MLServer -->|Artefact Proxy| SW
+    subgraph Infra["Managed DagsHub MLflow 3.x Backend"]
+        direction TB
+        DagsHubMLflow["DagsHub MLflow Tracking & Model Registry<br/>https://dagshub.com/foersben/taxon-vision-mlops.mlflow"]
+        ExpTrain["Experiment: taxon-vision-head-training<br/>Runs, 5-Dataset Lineage, LoggedModels & Aliases"]
+        ExpDrift["Experiment: taxon-vision-drift<br/>Production W1 + MMD^2 & Evidently Telemetry"]
+        DagsHubS3[("DagsHub Artefact Store<br/>PyFunc Bundles, Plots & Reports")]
+        DagsHubMLflow --> ExpTrain
+        DagsHubMLflow --> ExpDrift
+        DagsHubMLflow --> DagsHubS3
     end
 
     subgraph DVCContinuity["Cross-Stage DVC Run Continuity (Single Unified Run)"]
@@ -54,28 +55,27 @@ flowchart TD
         JSON -->|Re-opens Run| S7
     end
 
-    DVCContinuity -->|3-Tier URI Resolution| MLServer
-    DVCContinuity -.->|Tier 3 Offline Fallback| SQLite
+    DVCContinuity -->|HTTPS + Basic Auth (DAGSHUB_TOKEN)| DagsHubMLflow
+    DVCContinuity -.->|Unauthenticated Offline| Skip["Clean Skip (No Local SQLite / mlruns)"]
 ```
 
 ---
 
-## 2. Self-Hosted MLflow 3.16.0 Server & Three-Tier URI Resolution
+## 2. DagsHub-Only MLflow 3.x Tracking & Offline Skip Governance
 
-### 2.1 Containerised Server & SeaweedFS Artefact Proxy
+### 2.1 Hosted DagsHub Backend (Zero In-Cluster MLflow Server)
 
-In both local Docker Compose ([`docker-compose.yml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/docker-compose.yml)) and bare-metal Kubernetes ([`deploy/k8s/mlops-storage-and-optuna.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/mlops-storage-and-optuna.yaml)), TaxonVision-MLOps runs a dedicated **`mlflow-server` (`ghcr.io/mlflow/mlflow:v3.16.0`)** container:
+Rather than maintaining a self-hosted `mlflow-server` container, an extra PostgreSQL `mlflow` database, and cross-server run replication, TaxonVision-MLOps consolidates all experiment tracking and Model Registry aliases exclusively onto **DagsHub MLflow** (`https://dagshub.com/foersben/taxon-vision-mlops.mlflow`):
 
-* **Relational Backend Store (`--backend-store-uri`):** Connects to the `mlflow` database on the consolidated PostgreSQL 16 instance (`postgresql+psycopg2://mlflow:...@postgres:5432/mlflow`), persisting runs, metrics, parameters, `LoggedModel` entities, and Model Registry aliases with full ACID concurrency.
-* **Proxied S3 Artefact Destination (`--serve-artifacts` & `--artifacts-destination s3://mlflow-artifacts`):** Rather than requiring every client pod or developer script to hold S3 credentials, the `mlflow-server` daemon acts as an authenticated artefact proxy in front of the in-cluster SeaweedFS S3 bucket (`http://seaweedfs:8333`). Clients upload figures, HTML reports, and model bundles directly to the MLflow HTTP server on port `5000` (exposed on K3s NodePort `30500`), and the server streams the binary payloads into SeaweedFS over the internal cluster network.
+* **Managed Metadata & Artefact Store:** Runs, metrics, parameters, 5-dataset lineage tables, `LoggedModel` entities, Model Registry aliases (`@Production`, `@Challenger`, `@Archived`), diagnostic PNG visualisations, and `TaxonVisionPyFuncModel` bundles persist directly to DagsHub over HTTPS using `DAGSHUB_TOKEN` authentication.
+* **Domain-Segregated Experiments:** Training, export, calibration, and holdout evaluation stages log to `taxon-vision-head-training` (and Optuna HPO studies group `trial_000..N` under `optuna_study_{study_name}`), whereas online Airflow drift monitoring logs to `taxon-vision-drift`.
 
-### 2.2 Three-Tier Reachable URI Resolution (`_resolve_reachable_tracking_uri`)
+### 2.2 Fail-Closed Reachable URI Resolution (`_resolve_reachable_tracking_uri`)
 
-While CI pipelines and cluster pods communicate with `http://mlflow-server:5000`, offline unit tests and air-gapped developer workstations must execute pipeline stages without crashing or hanging on network timeouts. The resolver [`_resolve_reachable_tracking_uri()`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/tracking.py#L179-L230) in [`src/taxon_vision/models/training/tracking.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/tracking.py) enforces a deterministic three-tier cascade:
+While Jenkins GPU pods and authenticated developer shells push directly to DagsHub, air-gapped CI unit tests and unauthenticated sandboxes must execute pipeline stages without stalling on network timeouts or mutating the working tree with local SQLite databases or `mlruns/` directories. The resolver [`_resolve_reachable_tracking_uri()`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/tracking.py#L197-L233) in [`src/taxon_vision/models/training/tracking.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/tracking.py) enforces a deterministic resolution cascade:
 
-1. **Tier 1 (Explicit Environment Override):** If `MLFLOW_TRACKING_URI` is set in the process environment, it is returned immediately.
-2. **Tier 2 (Bounded HTTP Health Probe):** If `settings.mlflow.tracking_uri` (`http://127.0.0.1:5000` by default) starts with `http://` or `https://`, the resolver dispatches an HTTP `GET` request to `<tracking_uri>/health` bounded by `health_check_timeout_seconds = 1.0`. If the server responds with HTTP `2xx` within 1 second, the remote tracking URI is selected.
-3. **Tier 3 (Zero-Drop SQLite Offline Fallback):** If the health probe times out or refuses connection, the resolver automatically provisions `data/mlflow/artifacts/`, logs a structured warning, and falls back to `settings.mlflow.fallback_sqlite_uri` (`sqlite:///data/mlflow/mlflow.db`). No experiment run is ever lost due to a stopped Docker container.
+1. **Explicit Environment Override (`MLFLOW_TRACKING_URI`):** If `MLFLOW_TRACKING_URI` is set and empty, tracking is disabled immediately (`""`). If non-empty and targeting `dagshub.com`, [`_ensure_dagshub_auth()`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/tracking.py#L170-L195) injects `MLFLOW_TRACKING_USERNAME` and `MLFLOW_TRACKING_PASSWORD` from `DAGSHUB_TOKEN` (returning `""` if credentials are absent).
+2. **Configured Default (`settings.mlflow.tracking_uri`):** Defaults to `https://dagshub.com/foersben/taxon-vision-mlops.mlflow`. When `DAGSHUB_TOKEN` (or existing MLflow Basic Auth variables) is present, tracking connects cleanly; when absent, `_resolve_reachable_tracking_uri()` logs a debug message and returns `""`, causing MLflow context managers to yield `None` gracefully without writing local `mlflow.db` or `mlruns/` files.
 
 ---
 
@@ -83,10 +83,10 @@ While CI pipelines and cluster pods communicate with `http://mlflow-server:5000`
 
 ### 3.1 Deterministic Context Management (`mlflow_run_scope`)
 
-In compliance with Rule 08 (RAII Lifecycle Management), manual boolean state flags (`is_active: bool`) are prohibited. Every experiment run is scoped via the `@contextmanager` [`mlflow_run_scope()`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/tracking.py#L232-L303):
+In compliance with Rule 08 (RAII Lifecycle Management), manual boolean state flags (`is_active: bool`) are prohibited. Every experiment run is scoped via the `@contextmanager` [`mlflow_run_scope()`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/tracking.py#L254-L345):
 
-* On entry, it resolves the reachable tracking URI, sets the target experiment (`taxon-vision-head-training` or `taxon-vision-drift`), starts the run, logs the DVC dataset lock hash (`dvc_dataset_hash`), and calls [`_inject_lineage_tags()`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/tracking.py#L153-L177) to attach `git.commit_sha`, `git.branch`, `ci.jenkins_build_tag`, and `ci.github_run_id`.
-* If an unhandled exception occurs inside the `with` block, the context manager marks the run as `FAILED` via `mlflow.end_run(status="FAILED")` before re-raising the exception, preventing orphaned `RUNNING` zombie runs in the database.
+* On entry, it resolves the active tracking URI via `_resolve_reachable_tracking_uri()`, sets the target experiment (`taxon-vision-head-training` or `taxon-vision-drift`), starts the run, logs the DVC dataset lock hash (`dvc_dataset_hash`), and calls [`_inject_lineage_tags()`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/tracking.py#L140-L169) to attach `git.commit_sha`, `git.branch`, `ci.jenkins_build_tag`, and `ci.github_run_id`.
+* If an unhandled exception occurs inside the `with` block, the context manager marks the run as `FAILED` via `mlflow.end_run(status="FAILED")` before re-raising the exception, preventing orphaned `RUNNING` zombie runs in the DagsHub tracker.
 * On normal exit, it attaches any execution log file artefact and closes the run as `FINISHED`.
 
 ### 3.2 Cross-Stage Run Resumption (`resume_parent_mlflow_run`)
