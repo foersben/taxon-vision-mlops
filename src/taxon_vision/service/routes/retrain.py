@@ -14,7 +14,6 @@ How:
 
 from __future__ import annotations
 
-import hmac
 import logging
 import os
 import threading
@@ -26,6 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from taxon_vision.monitoring.telemetry import RETRAIN_TRIGGERS_TOTAL
+from taxon_vision.service.routes.drift import verify_bearer_env_secret
 from taxon_vision.service.schemas import GrafanaWebhookPayload, RetrainWebhookResponse
 
 logger = logging.getLogger(__name__)
@@ -46,27 +46,25 @@ def reset_retrain_cooldown() -> None:
 def verify_retrain_token(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Security(security)],
 ) -> None:
-    """Validate incoming Bearer token using constant-time string comparison.
+    """Validate incoming Bearer token using fail-closed constant-time string comparison.
 
     Why:
-        Prevent timing-attack side channels whilst ensuring only authorized Grafana Alertmanager instances can trigger retraining workflows.
+        Prevent timing-attack side channels and reject requests cleanly when TAXON_RETRAIN_WEBHOOK_SECRET is unconfigured, avoiding fallback to weak default tokens.
 
     How:
-        Extracts credentials from the HTTP Authorization header and compares them against TAXON_RETRAIN_WEBHOOK_SECRET via hmac.compare_digest.
+        Delegates constant-time comparison and fail-closed verification against TAXON_RETRAIN_WEBHOOK_SECRET to verify_bearer_env_secret.
 
     Args:
         credentials: Authorization header credentials.
 
     Raises:
-        HTTPException: If credentials are missing or token does not match the configured secret.
+        HTTPException: 503 if TAXON_RETRAIN_WEBHOOK_SECRET is unset, or 401 if bearer credentials are missing or invalid.
     """
-    expected_secret = os.getenv("TAXON_RETRAIN_WEBHOOK_SECRET", "dev-secret-token")
-    if credentials is None or not hmac.compare_digest(credentials.credentials, expected_secret):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing retrain webhook authorization token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    verify_bearer_env_secret(
+        credentials,
+        "TAXON_RETRAIN_WEBHOOK_SECRET",
+        "Invalid or missing retrain webhook authorization token",
+    )
 
 
 def extract_firing_retrain_alert(payload: GrafanaWebhookPayload) -> str | None:
@@ -131,14 +129,129 @@ def acquire_retrain_cooldown(cooldown_seconds: float) -> CooldownAcquisitionResu
         return CooldownAcquisitionResult(acquired=True, remaining_seconds=0.0)
 
 
+def _extract_dag_run_id(resp: httpx.Response) -> str:
+    """Extract a normalised DAG run identifier from an Airflow REST response.
+
+    Why:
+        Centralises response payload parsing so v2 FastAPI and legacy v1 endpoints return a consistent identifier without duplicating dictionary lookups.
+
+    How:
+        Parses JSON safely and prefers ``dag_run_id``, falling back to ``id`` or the literal ``"dispatched"`` sentinel when omitted.
+
+    Args:
+        resp: Successful HTTP response returned by the Airflow DAG run endpoint.
+
+    Returns:
+        Normalised DAG run identifier string.
+    """
+    data = resp.json()
+    return str(data.get("dag_run_id") or data.get("id") or "dispatched")
+
+
+async def _fetch_airflow_jwt(
+    client: httpx.AsyncClient,
+    airflow_url: str,
+    auth: tuple[str, str],
+) -> str | None:
+    """Authenticate against the Airflow 3 token endpoint to obtain a Bearer JWT.
+
+    Why:
+        Airflow 3 FastAPI routes require OAuth2 Bearer tokens minted by ``POST /auth/token`` rather than HTTP Basic authentication; returning ``None`` on 404/405 allows controlled fallback to legacy Airflow 2 deployments whilst failing fast on invalid credentials.
+
+    How:
+        Dispatches JSON credentials via ``LoginBody`` schema, extracts ``access_token`` from ``200``/``201`` responses, returns ``None`` only when ``/auth/token`` is absent, and raises ``HTTPException`` (502) on authentication errors.
+
+    Args:
+        client: Reusable asynchronous HTTPX client session.
+        airflow_url: Base URL of the Airflow API server without trailing slash.
+        auth: Username and password tuple for token exchange.
+
+    Returns:
+        Signed JWT access token string, or ``None`` if the endpoint is unavailable (404/405).
+
+    Raises:
+        HTTPException: If credentials are rejected or the token payload omits ``access_token``.
+    """
+    token_endpoint = f"{airflow_url}/auth/token"
+    resp = await client.post(token_endpoint, json={"username": auth[0], "password": auth[1]})
+    if resp.status_code in (status.HTTP_200_OK, status.HTTP_201_CREATED):
+        token = resp.json().get("access_token")
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Airflow /auth/token response omitted access_token",
+            )
+        return str(token)
+
+    if resp.status_code in (status.HTTP_404_NOT_FOUND, status.HTTP_405_METHOD_NOT_ALLOWED):
+        return None
+
+    logger.error("Airflow /auth/token failed with status %d: %s", resp.status_code, resp.text)
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail=f"Airflow authentication returned status code {resp.status_code}",
+    )
+
+
+async def _dispatch_airflow_run(
+    client: httpx.AsyncClient,
+    airflow_url: str,
+    auth: tuple[str, str],
+    conf_payload: dict[str, str],
+) -> str:
+    """Submit a DAG run trigger payload to Airflow 3 v2 or legacy v1 REST APIs.
+
+    Why:
+        Airflow 3 ``TriggerDAGRunPostBody`` enforces an explicit ``logical_date`` key and Bearer JWT header, whereas legacy instances accept Basic authentication on ``/api/v1`` without ``logical_date``.
+
+    How:
+        Exchanges credentials for a Bearer JWT via ``_fetch_airflow_jwt``, dispatches to ``/api/v2/dags/model_retraining/dagRuns`` with ``logical_date: None`` (or falls back to ``/api/v1`` if no token endpoint exists), and extracts the run identifier via a single response check.
+
+    Args:
+        client: Reusable asynchronous HTTPX client session.
+        airflow_url: Base URL of the Airflow API server without trailing slash.
+        auth: Username and password tuple for Airflow authentication.
+        conf_payload: Trigger provenance metadata passed under the DAG run ``conf`` key.
+
+    Returns:
+        Dispatched DAG run identifier.
+
+    Raises:
+        HTTPException: If Airflow returns a non-success HTTP status code.
+    """
+    dag_id = "model_retraining"
+    token = await _fetch_airflow_jwt(client, airflow_url, auth)
+    if token is not None:
+        resp = await client.post(
+            f"{airflow_url}/api/v2/dags/{dag_id}/dagRuns",
+            json={"logical_date": None, "conf": conf_payload},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    else:
+        resp = await client.post(
+            f"{airflow_url}/api/v1/dags/{dag_id}/dagRuns",
+            json={"conf": conf_payload},
+            auth=auth,
+        )
+
+    if resp.status_code in (status.HTTP_200_OK, status.HTTP_201_CREATED):
+        return _extract_dag_run_id(resp)
+
+    logger.error("Airflow API returned unexpected status %d: %s", resp.status_code, resp.text)
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail=f"Airflow API server returned status code {resp.status_code}",
+    )
+
+
 async def dispatch_airflow_retraining(alert_name: str) -> str:
     """Dispatch DAG run execution request to the Airflow 3 REST API.
 
     Why:
-        Triggers the containerized retraining pipeline asynchronously without blocking the FastAPI event loop.
+        Triggers the containerised retraining pipeline asynchronously without blocking the FastAPI event loop whilst authenticating against Airflow 3's JWT security model.
 
     How:
-        Dispatches HTTP POST request with alert payload configuration to Airflow's REST API endpoint, with fallback to legacy endpoint and offline simulation support.
+        Resolves connection parameters from environment variables, short-circuits cleanly if simulation mode is enabled, exchanges credentials for a Bearer token, and posts to the ``model_retraining`` DAG runs endpoint with legacy v1 fallback and fail-fast HTTP 502 error propagation.
 
     Args:
         alert_name: Name of the triggering Grafana alert.
@@ -147,39 +260,27 @@ async def dispatch_airflow_retraining(alert_name: str) -> str:
         Dispatched DAG run identifier.
 
     Raises:
-        HTTPException: If Airflow API server is unreachable or returns an error response.
+        HTTPException: If Airflow API server is unreachable, rejects authentication, or returns an error response.
     """
-    airflow_url = os.getenv("TAXON_AIRFLOW_URL", "http://airflow-apiserver:8080").rstrip("/")
-    airflow_user = os.getenv("TAXON_AIRFLOW_USER", "admin")
-    airflow_pass = os.getenv("TAXON_AIRFLOW_PASSWORD", "admin")
-    dag_id = "model_retraining"
-
     if os.getenv("TAXON_AIRFLOW_SIMULATION", "false").lower() in ("true", "1"):
         simulated_id = f"simulated-run-{int(time.time())}"
         logger.info("Airflow simulation mode active; recorded simulated run %s", simulated_id)
         return simulated_id
 
-    endpoint = f"{airflow_url}/api/v2/dags/{dag_id}/dagRuns"
-    payload = {"conf": {"trigger_source": "grafana", "alert": alert_name}}
+    airflow_url = os.getenv("TAXON_AIRFLOW_URL", "http://airflow-apiserver:8080").rstrip("/")
+    airflow_user = os.getenv("TAXON_AIRFLOW_USER", "").strip()
+    airflow_pass = os.getenv("TAXON_AIRFLOW_PASSWORD", "").strip()
+    if not airflow_user or not airflow_pass:
+        logger.error("Airflow API credentials (TAXON_AIRFLOW_USER / TAXON_AIRFLOW_PASSWORD) are not configured.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Airflow orchestration credentials are not configured.",
+        )
+    conf_payload = {"trigger_source": "grafana", "alert": alert_name}
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(endpoint, json=payload, auth=(airflow_user, airflow_pass))
-            if resp.status_code in (status.HTTP_200_OK, status.HTTP_201_CREATED):
-                data = resp.json()
-                return str(data.get("dag_run_id") or data.get("id") or "dispatched")
-
-            v1_endpoint = f"{airflow_url}/api/v1/dags/{dag_id}/dagRuns"
-            resp_v1 = await client.post(v1_endpoint, json=payload, auth=(airflow_user, airflow_pass))
-            if resp_v1.status_code in (status.HTTP_200_OK, status.HTTP_201_CREATED):
-                data_v1 = resp_v1.json()
-                return str(data_v1.get("dag_run_id") or data_v1.get("id") or "dispatched")
-
-            logger.error("Airflow API returned unexpected status %d: %s", resp.status_code, resp.text)
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Airflow API server returned status code {resp.status_code}",
-            )
+            return await _dispatch_airflow_run(client, airflow_url, (airflow_user, airflow_pass), conf_payload)
     except httpx.RequestError as exc:
         logger.exception("Failed to connect to Airflow API server at %s", airflow_url)
         raise HTTPException(

@@ -6,11 +6,10 @@ import io
 import logging
 import time
 import uuid
-from functools import partial
 from typing import Annotated, Any
 
 import anyio
-from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile, status
 from PIL import Image
 
 from taxon_vision.config import ConformalConfig, get_settings
@@ -24,7 +23,11 @@ from taxon_vision.service.inference import (
     run_prediction,
 )
 from taxon_vision.service.schemas import ConformalRoutingTier, PredictionResponse, TaxonPrediction
-from taxon_vision.service.storage import persist_flagged_observation
+from taxon_vision.service.storage import (
+    ContributorConsent,
+    FlaggedObservationPayload,
+    handle_flagged_prediction_if_needed,
+)
 from taxon_vision.service.telemetry_store import PredictionRecord, get_telemetry_store
 
 logger = logging.getLogger(__name__)
@@ -162,7 +165,11 @@ def _build_live_prediction(
 async def predict_species(
     file: Annotated[UploadFile, File(...)],
     background_tasks: BackgroundTasks,
+    *,
     explain: bool = False,
+    contribute_open_license: Annotated[bool, Form()] = False,
+    license_code: Annotated[str, Form()] = "",
+    photographer_name: Annotated[str, Form()] = "",
 ) -> PredictionResponse:
     """Classify species from an uploaded image with conformal uncertainty guarantees.
 
@@ -187,6 +194,9 @@ async def predict_species(
         file: Multipart uploaded image file.
         background_tasks: FastAPI background task coordinator for non-blocking I/O dispatch.
         explain: Optional boolean flag to request forward-only CAM saliency visualization.
+        contribute_open_license: Affirmative opt-in permitting triage crop and metadata export to DagsHub Label Studio.
+        license_code: Open Creative Commons license code (`CC0`, `CC-BY`, or `CC-BY-NC`) accompanying consented uploads.
+        photographer_name: Attribution credit string recorded alongside consented citizen-science captures.
 
     Returns:
         Structured prediction response containing top candidates, conformal sets, and triage flags.
@@ -222,14 +232,20 @@ async def predict_species(
         obs_id = str(uuid.uuid4())
         if pred.get("is_ood") or pred.get("requires_human_review"):
             REFERRAL_RATE.inc()
-            await anyio.to_thread.run_sync(
-                partial(
-                    persist_flagged_observation,
-                    obs_id,
-                    pred,
-                    pred.get("embedding"),
+            consent = ContributorConsent(
+                contribute_open_license=contribute_open_license,
+                photographer_name=photographer_name,
+                license_code=license_code,
+            )
+            await handle_flagged_prediction_if_needed(
+                FlaggedObservationPayload(
+                    observation_id=obs_id,
+                    prediction_result=pred,
+                    embedding=pred.get("embedding"),
                     image_bytes=content,
-                )
+                    consent=consent,
+                ),
+                background_tasks=background_tasks,
             )
 
         cam_base64: str | None = None

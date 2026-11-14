@@ -131,18 +131,25 @@ When either $W_1 > \tau_{W_1}$ or $p < \alpha = 0.01$, `evaluate_recent_drift()`
 
 ### 3.3 Evidently 0.7+ 8-D PCA Snapshot Report (`generate_evidently_drift_report`)
 
-During every evaluation cycle (both in Stage 3.5 `data_drift.py` and online `drift_runner.py`), [`generate_evidently_drift_report()`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/monitoring/drift_runner.py#L149-L189) fits an 8-component PCA on the reference embeddings, constructs a compact 9-column DataFrame (`["norm", "pca_0", ..., "pca_7"]`), and renders a standalone HTML report via Evidently 0.7's `Report` and `DataDriftPreset`:
+During every evaluation cycle (both in Stage 3.5 `data_drift.py` and online `drift_runner.py`), [`generate_evidently_drift_report()`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/monitoring/drift_runner.py) fits an 8-component PCA on the reference embeddings, constructs a compact 9-column DataFrame (`["norm", "pca_0", ..., "pca_7"]`), injects precomputed Tier 1/Tier 2 scalar telemetry via `PrecomputedDriftMetric`, renders a standalone HTML report (`DataDriftPreset(num_method="wasserstein", num_threshold=0.1)`), and records longitudinal runs in the Evidently UI `Workspace` (served on `NodePort 30082`):
 
 ```python
 from evidently import Report
 from evidently.presets import DataDriftPreset
+from evidently.ui.workspace import Workspace
 from sklearn.decomposition import PCA
 
 pca = PCA(n_components=min(8, reference.shape[1], reference.shape[0]), random_state=42)
 ref_pca = pca.fit_transform(reference)
 curr_pca = pca.transform(current)
 
-report = Report(metrics=[DataDriftPreset()])
+report = Report(
+    metrics=[
+        PrecomputedDriftMetric(metric_name="tier1_wasserstein_norm_w1", value=float(w1_distance)),
+        PrecomputedDriftMetric(metric_name="tier2_mmd2_p_value", value=float(mmd2_p_value)),
+        DataDriftPreset(num_method="wasserstein", num_threshold=0.1),
+    ]
+)
 snapshot = report.run(reference_data=ref_df, current_data=curr_df)
 snapshot.save_html(str(output_path))
 ```

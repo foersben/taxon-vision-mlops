@@ -133,6 +133,44 @@ def _export_dedicated_head(
         logger.warning("Could not export dedicated classification head ONNX graph: %s", exc)
 
 
+def _log_export_to_parent_run(
+    target_artifact: Path,
+    num_classes: int,
+    image_dim: int,
+    quantize_int8: bool,
+) -> None:
+    """Attach the exported ONNX model and size/quantisation metrics to the resumed parent MLflow run.
+
+    Why:
+        The parent run owns several LoggedModels (head and ONNX). Without an explicit model binding, MLflow 3.x duplicates each metric per associated model within one `log_batch` request, which DagsHub rejects with `BAD_REQUEST`. Binding metrics to the parent `model_id` and isolating the call keeps a tracking failure from aborting the DVC export stage.
+
+    Args:
+        target_artifact: Path to the exported (optionally INT8 quantised) ONNX model file.
+        num_classes: Number of target taxonomic classes.
+        image_dim: Spatial image dimension in pixels.
+        quantize_int8: Whether INT8 quantisation was applied.
+    """
+    file_size_mb = target_artifact.stat().st_size / (1024 * 1024) if target_artifact.exists() else 0.0
+    with resume_parent_mlflow_run() as ctx:
+        if ctx is None:
+            return
+        MLflowTracker.log_onnx_model(
+            onnx_model=target_artifact,
+            artifact_path="onnx_model",
+            num_classes=num_classes,
+            image_size=image_dim,
+            registered_model_name="taxon_vision_onnx",
+        )
+        export_metrics = {
+            "export.onnx_model_size_mb": round(file_size_mb, 2),
+            "export.quantized_int8": 1.0 if quantize_int8 else 0.0,
+        }
+        try:
+            mlflow.log_metrics(export_metrics, model_id=ctx.model_id)
+        except Exception as metric_err:
+            logger.warning("Failed to log ONNX export metrics to MLflow: %s", metric_err)
+
+
 def export_onnx_cli(argv: list[str] | None = None) -> int:
     """CLI entrypoint for Stage 5: ONNX Model Export & Quantization.
 
@@ -176,24 +214,7 @@ def export_onnx_cli(argv: list[str] | None = None) -> int:
             target_artifact = _quantize_exported_graph(output_file, args, settings)
 
         _export_dedicated_head(classifier, target_artifact, args.quantize_int8)
-
-        file_size_mb = target_artifact.stat().st_size / (1024 * 1024) if target_artifact.exists() else 0.0
-
-        with resume_parent_mlflow_run() as ctx:
-            if ctx is not None:
-                MLflowTracker.log_onnx_model(
-                    onnx_model=target_artifact,
-                    artifact_path="onnx_model",
-                    num_classes=classifier.num_classes,
-                    image_size=image_dim,
-                    registered_model_name="taxon_vision_onnx",
-                )
-                mlflow.log_metrics(
-                    {
-                        "export.onnx_model_size_mb": round(file_size_mb, 2),
-                        "export.quantized_int8": 1.0 if args.quantize_int8 else 0.0,
-                    }
-                )
+        _log_export_to_parent_run(target_artifact, classifier.num_classes, image_dim, args.quantize_int8)
 
         return _finalize_export_artifacts(target_artifact, args.output, args.quantize_int8)
 

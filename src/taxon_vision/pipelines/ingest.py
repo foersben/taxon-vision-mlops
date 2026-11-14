@@ -62,6 +62,49 @@ async def ingest_taxon_metadata(
     return manifest_records
 
 
+def _load_preserved_human_records(manifest_path: Path, fetched_uuids: set[str]) -> list[dict[str, Any]]:
+    """Retain human-verified active learning records when regenerating `raw_manifest.parquet`.
+
+    Why:
+        Outcome B taxonomy expansions unfreeze DVC Stage 1 (`ingestion`) to fetch iNaturalist samples for newly added taxa. Rewriting `raw_manifest.parquet` purely from iNaturalist API results would discard previously merged Label Studio citizen-science observations and their S3 crop links.
+
+    How:
+        Inspects `manifest_path` if present on disk, identifies human-labelled rows (`label_studio_*` UUID prefix, `/repo-buckets/s3/`, or `s3://` URIs) absent from `fetched_uuids`, normalises schema attribution columns, and returns them for union preservation.
+
+    Args:
+        manifest_path: Existing `raw_manifest.parquet` path prior to API overwrite.
+        fetched_uuids: Set of iNaturalist `observation_uuid` strings fetched in the current run.
+
+    Returns:
+        List of verified human-annotated record dictionaries to append alongside newly scraped API records.
+    """
+    if not manifest_path.is_file():
+        return []
+    existing_df = pl.read_parquet(manifest_path)
+    preserved: list[dict[str, Any]] = []
+    for row in existing_df.to_dicts():
+        obs_uuid = str(row.get("observation_uuid", ""))
+        image_url = str(row.get("image_url", ""))
+        is_human = (
+            obs_uuid.startswith("label_studio_") or "/repo-buckets/s3/" in image_url or image_url.startswith("s3://")
+        )
+        if is_human and obs_uuid not in fetched_uuids:
+            photographer = str(row.get("photographer_name") or row.get("attribution") or "").strip()
+            preserved.append(
+                {
+                    "observation_uuid": obs_uuid,
+                    "taxon_id": int(row["taxon_id"]),
+                    "image_url": image_url,
+                    "photographer_name": photographer,
+                    "attribution": str(row.get("attribution") or photographer),
+                    "license_code": str(row.get("license_code", "")),
+                    "license_url": str(row.get("license_url", "")),
+                    "is_open_dataset_verified": bool(row.get("is_open_dataset_verified", True)),
+                }
+            )
+    return preserved
+
+
 async def run_ingestion(
     taxa: list[int] | None = None,
     per_page: int | None = None,
@@ -92,6 +135,12 @@ async def run_ingestion(
         records = await ingest_taxon_metadata(taxon_id, inat, fetch_per_page)
         all_records.extend(records)
         logger.info("Ingested %d raw metadata records for taxon %d.", len(records), taxon_id)
+
+    fetched_uuids = {str(rec.get("observation_uuid", "")) for rec in all_records}
+    preserved_human = _load_preserved_human_records(target_out, fetched_uuids)
+    if preserved_human:
+        all_records.extend(preserved_human)
+        logger.info("Preserved %d human-verified active learning records from %s", len(preserved_human), target_out)
 
     target_out.parent.mkdir(parents=True, exist_ok=True)
     df = pl.DataFrame(all_records)

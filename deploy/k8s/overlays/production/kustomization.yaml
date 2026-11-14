@@ -9,6 +9,7 @@ resources:
 
 patches:
   - path: patch-replicas.yaml
+  - path: patch-service.yaml
 
 images:
   - name: ghcr.io/foersben/taxon-vision-mlops

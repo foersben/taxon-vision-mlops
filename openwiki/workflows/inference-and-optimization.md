@@ -3,9 +3,6 @@ type: workflow
 title: Inference Optimization & ONNX Runtime
 description: Architectural specification for PyTorch to ONNX graph export with dual outputs, operator-aware static and dynamic INT8 post-training quantization, zero-allocation ONNX Runtime execution with PyTorch fallback, and Pareto backbone benchmarking.
 tags: [onnx, onnx-runtime, quantization, ptq, int8, pareto-benchmarking, bioclip, dinov3, mobilenetv4, inference]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-11-08T17:07:25.915Z
 sources:
   - id: openwiki-source-d2314fb7d2c604322ed1f16e
     resource: repo://src/taxon_vision/inference/calibration.py

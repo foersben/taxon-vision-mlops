@@ -20,7 +20,7 @@ contactPoints:
         settings:
           url: "http://app:8000/api/v1/retrain/webhook"
           httpMethod: "POST"
-          authorization_credentials: "${TAXON_RETRAIN_WEBHOOK_SECRET:-dev-secret-token}"
+          authorization_credentials: "$__env{GF_RETRAIN_WEBHOOK_SECRET}"
           authorization_scheme: "Bearer"
 
 # ==============================================================================

@@ -32,7 +32,7 @@ EXPOSE 8000
 ENV PORT=8000 \
   HOST=0.0.0.0 \
   PYTHONUNBUFFERED=1 \
-  TAXON_ALLOW_UNTRAINED_FALLBACK=true
+  TAXON_ALLOW_UNTRAINED_FALLBACK=false
 
 # Healthcheck hitting the readiness probe (validating model warmup & cache)
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \

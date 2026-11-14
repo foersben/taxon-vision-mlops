@@ -49,11 +49,11 @@
 %%  Left: DagsHub (-4.7) | Right: CI/CD (+4.7), width = 6.9cm
 %% ======================================================================
 \node[hubbox={6.9cm}] (dagshub) at (-4.7, 12.4) {%
-    \textbf{\footnotesize\color{mblueborder} DagsHub, SeaweedFS \& PostgreSQL Hub}\\[0.8mm]
+    \textbf{\footnotesize\color{mblueborder} DagsHub MLflow, SeaweedFS \& PostgreSQL Hub}\\[0.8mm]
     \rule{\linewidth}{0.4pt}\\[0.6mm]
-    \textbullet\ \textbf{Data Version Control (DVC):} Remote storage, Parquet manifests\\
+    \textbullet\ \textbf{Tracking \& Registry:} DagsHub MLflow (\texttt{@Production}/\texttt{@Challenger})\\
     \textbullet\ \textbf{In-Cluster Object \& Cache:} SeaweedFS (Local S3) \& Redis (Uploads)\\
-    \textbullet\ \textbf{Tracking \& Registry:} MLflow 3.x LoggedModels \& PostgreSQL
+    \textbullet\ \textbf{Operational DBs:} PostgreSQL (\texttt{airflow}, \texttt{telemetry}, \texttt{optuna})
 };
 
 \node[hubbox={6.9cm}] (cicd) at (4.7, 12.4) {%

@@ -176,7 +176,7 @@ sh "bash scripts/ci/verify_deployment.sh ${targetNamespace}"
 
 ### 5.1 Weighted 80/20 Canary Traffic Splitting in Production (Active)
 
-When promoting a major architectural upgrade (such as transitioning the frozen vision trunk from `dinov3_vits14` to `bioclip-2` or deploying a newly promoted `@Challenger` model from MLflow), binary cutover can be preceded by live traffic splitting using [`deploy/k8s/canary-ab-service.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/canary-ab-service.yaml) and [`deploy/k8s/traefik-ingress.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/traefik-ingress.yaml):
+When promoting a major architectural upgrade (such as transitioning the frozen vision trunk from `dinov3_vits14` to `bioclip-2` or deploying a newly promoted `@Challenger` model from DagsHub MLflow), binary cutover can be preceded by live traffic splitting using [`deploy/k8s/canary-ab-service.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/canary-ab-service.yaml) and [`deploy/k8s/overlays/production/ingress.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/overlays/production/ingress.yaml):
 
 1. Deploy the challenger pod (`taxon-vision-serving-challenger`) alongside the incumbent baseline (`taxon-vision-serving`) in `namespace: taxon-vision`.
 2. Traefik's `TraefikService` (`taxon-vision-ab-service`) routes **80% of live requests to the stable baseline** and **20% to the challenger**.

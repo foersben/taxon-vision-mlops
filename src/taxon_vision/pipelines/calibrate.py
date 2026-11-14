@@ -170,6 +170,7 @@ def _build_arg_parser(default_alpha: float) -> argparse.ArgumentParser:
 def _log_calibration_to_mlflow(
     summary: _CalibrationSummary,
     emb_path: Path,
+    *,
     out_path: str | None = None,
     embeddings: np.ndarray | None = None,
     labels: np.ndarray | None = None,
@@ -192,14 +193,17 @@ def _log_calibration_to_mlflow(
                 cal_ds = mlflow.data.from_numpy(embeddings, targets=labels, name="cal_embeddings")  # type: ignore[attr-defined]
                 mlflow.log_input(cal_ds, context="calibration")
 
-        mlflow.log_metrics(
-            {
-                "conformal.q_hat": summary.q_hat,
-                "conformal.empirical_calibration_coverage": summary.empirical_coverage,
-                "conformal.tau_ood": summary.tau_ood if summary.tau_ood is not None else 0.0,
-                "conformal.num_calibration_samples": summary.sample_size,
-            }
-        )
+        cal_metrics = {
+            "conformal.q_hat": summary.q_hat,
+            "conformal.empirical_calibration_coverage": summary.empirical_coverage,
+            "conformal.tau_ood": summary.tau_ood if summary.tau_ood is not None else 0.0,
+            "conformal.num_calibration_samples": summary.sample_size,
+        }
+        with contextlib.suppress(Exception):
+            if ctx.model_id:
+                mlflow.log_metrics(cal_metrics, model_id=ctx.model_id)
+            else:
+                mlflow.log_metrics(cal_metrics)
 
         if out_path and Path(out_path).exists():
             mlflow.log_artifact(str(out_path), artifact_path="calibration")

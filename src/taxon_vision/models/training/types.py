@@ -302,6 +302,13 @@ class TuningConfig:
     reset_study: bool = False
     min_resource: int = 3
     reduction_factor: int = 2
+    lr_min: float = 1e-4
+    lr_max: float = 5e-3
+    weight_decay_min: float = 5e-3
+    weight_decay_max: float = 5e-2
+    dropout_min: float = 0.15
+    dropout_max: float = 0.50
+    val_loss_penalty: float = 0.05
 
 
 @dataclass(frozen=True)

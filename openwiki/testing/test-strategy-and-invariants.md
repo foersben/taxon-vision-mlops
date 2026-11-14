@@ -3,9 +3,6 @@ type: testing
 title: Testing Strategy & Quality Invariants
 description: Architectural test pyramid, mathematical split-conformal coverage invariants, pure Pixi dependency isolation, hardware invariant governance, pre-commit quality gates, and OKF v0.2 validation engine.
 tags: [testing, invariants, conformal-prediction, pixi, okf, ruff, mypy, complexipy, quality-gates, jenkins, hardware-invariants]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-11-08T17:07:25.915Z
 sources:
   - id: openwiki-source-164e2da859b5277df81c7d94
     resource: repo://.github/workflows/ci.yml

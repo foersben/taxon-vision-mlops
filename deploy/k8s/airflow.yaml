@@ -1,0 +1,562 @@
+# ==============================================================================
+# Apache Airflow 3 Orchestration Stack (LocalExecutor on In-Cluster PostgreSQL)
+# ==============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: airflow-config
+  namespace: taxon-vision
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/part-of: taxon-vision-mlops
+data:
+  AIRFLOW__CORE__EXECUTOR: "LocalExecutor"
+  AIRFLOW__CORE__AUTH_MANAGER: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
+  AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+  AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+  AIRFLOW__CORE__MIN_FILE_PROCESS_INTERVAL: "60"
+  AIRFLOW__CORE__EXECUTION_API_SERVER_URL: "http://airflow-apiserver.taxon-vision.svc.cluster.local:8080/execution/"
+  TAXON_JENKINS_BRANCH: "main"
+  MLFLOW_TRACKING_URI: "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
+  PYTHONPATH: "/opt/airflow/src"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-apiserver
+  namespace: taxon-vision
+  labels:
+    app.kubernetes.io/name: airflow-apiserver
+    app.kubernetes.io/part-of: taxon-vision-mlops
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: airflow-apiserver
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: airflow-apiserver
+        app.kubernetes.io/part-of: taxon-vision-mlops
+    spec:
+      securityContext:
+        runAsUser: 50000
+        runAsGroup: 0
+        fsGroup: 0
+        appArmorProfile:
+          type: Unconfined
+      initContainers:
+      - name: fix-log-permissions
+        image: apache/airflow:3.0.0-python3.12
+        securityContext:
+          runAsNonRoot: false
+          runAsUser: 0
+          runAsGroup: 0
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            mkdir -p /opt/airflow/logs && chown -R 50000:0 /opt/airflow/logs && chmod 775 /opt/airflow/logs
+        volumeMounts:
+        - name: airflow-logs
+          mountPath: /opt/airflow/logs
+      - name: sync-dags
+        image: apache/airflow:3.0.0-python3.12
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 50000
+          runAsGroup: 0
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            rm -f /opt/airflow/dags/*.py && cp -L /mnt/airflow-dags/*.py /opt/airflow/dags/
+        volumeMounts:
+        - name: airflow-dags-cm
+          mountPath: /mnt/airflow-dags
+          readOnly: true
+        - name: airflow-dags
+          mountPath: /opt/airflow/dags
+      - name: airflow-db-init
+        image: apache/airflow:3.0.0-python3.12
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 50000
+          runAsGroup: 0
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            until airflow db check; do
+              echo "Waiting for PostgreSQL airflow database..."
+              sleep 3
+            done
+            airflow db migrate &&
+            airflow fab-db migrate &&
+            (airflow users create \
+              --username admin \
+              --firstname Admin \
+              --lastname Taxon \
+              --role Admin \
+              --email admin@taxon-vision.org \
+              --password "${AIRFLOW_ADMIN_PASSWORD}" || true) &&
+            airflow users reset-password \
+              --username admin \
+              --password "${AIRFLOW_ADMIN_PASSWORD}"
+        envFrom:
+        - configMapRef:
+            name: airflow-config
+        env:
+        - name: AIRFLOW_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW_ADMIN_PASSWORD
+        - name: AIRFLOW__CORE__FERNET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__CORE__FERNET_KEY
+        - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+        - name: AIRFLOW__API_AUTH__JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__API_AUTH__JWT_SECRET
+        - name: AIRFLOW__API__SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__API_AUTH__JWT_SECRET
+        - name: AIRFLOW__WEBSERVER__SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__API_AUTH__JWT_SECRET
+        volumeMounts:
+        - name: airflow-logs
+          mountPath: /opt/airflow/logs
+      containers:
+      - name: airflow-apiserver
+        image: apache/airflow:3.0.0-python3.12
+        args: ["api-server"]
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: airflow-config
+        env:
+        - name: AIRFLOW__CORE__FERNET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__CORE__FERNET_KEY
+        - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+        - name: AIRFLOW__API_AUTH__JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__API_AUTH__JWT_SECRET
+        - name: AIRFLOW__API__SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__API_AUTH__JWT_SECRET
+        - name: AIRFLOW__WEBSERVER__SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__API_AUTH__JWT_SECRET
+        volumeMounts:
+        - name: airflow-dags
+          mountPath: /opt/airflow/dags
+          readOnly: true
+        - name: airflow-taxon-deps
+          mountPath: /opt/airflow/src/taxon_vision/active_learning/feedback.py
+          subPath: feedback.py
+          readOnly: true
+        - name: airflow-taxon-deps
+          mountPath: /opt/airflow/src/taxon_vision/active_learning/label_studio_sync.py
+          subPath: label_studio_sync.py
+          readOnly: true
+        - name: airflow-taxon-deps
+          mountPath: /opt/airflow/src/taxon_vision/active_learning/triage_queue.py
+          subPath: triage_queue.py
+          readOnly: true
+        - name: airflow-taxon-deps
+          mountPath: /opt/airflow/config/taxa_catalog.yaml
+          subPath: taxa_catalog.yaml
+          readOnly: true
+        - name: airflow-logs
+          mountPath: /opt/airflow/logs
+        readinessProbe:
+          httpGet:
+            path: /api/v2/monitor/health
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /api/v2/monitor/health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 5
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "1"
+            memory: "1Gi"
+      volumes:
+      - name: airflow-dags-cm
+        configMap:
+          name: airflow-dags
+      - name: airflow-dags
+        emptyDir: {}
+      - name: airflow-taxon-deps
+        configMap:
+          name: airflow-taxon-deps
+      - name: airflow-logs
+        hostPath:
+          path: /var/lib/taxon-vision/airflow-logs
+          type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: airflow-apiserver
+  namespace: taxon-vision
+  labels:
+    app.kubernetes.io/name: airflow-apiserver
+    app.kubernetes.io/part-of: taxon-vision-mlops
+spec:
+  type: NodePort
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    nodePort: 30095
+  selector:
+    app.kubernetes.io/name: airflow-apiserver
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-scheduler
+  namespace: taxon-vision
+  labels:
+    app.kubernetes.io/name: airflow-scheduler
+    app.kubernetes.io/part-of: taxon-vision-mlops
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: airflow-scheduler
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: airflow-scheduler
+        app.kubernetes.io/part-of: taxon-vision-mlops
+    spec:
+      securityContext:
+        runAsUser: 50000
+        runAsGroup: 0
+        fsGroup: 0
+        appArmorProfile:
+          type: Unconfined
+      initContainers:
+      - name: fix-log-permissions
+        image: apache/airflow:3.0.0-python3.12
+        securityContext:
+          runAsNonRoot: false
+          runAsUser: 0
+          runAsGroup: 0
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            mkdir -p /opt/airflow/logs && chown -R 50000:0 /opt/airflow/logs && chmod 775 /opt/airflow/logs
+        volumeMounts:
+        - name: airflow-logs
+          mountPath: /opt/airflow/logs
+      - name: sync-dags
+        image: apache/airflow:3.0.0-python3.12
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 50000
+          runAsGroup: 0
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            rm -f /opt/airflow/dags/*.py && cp -L /mnt/airflow-dags/*.py /opt/airflow/dags/
+        volumeMounts:
+        - name: airflow-dags-cm
+          mountPath: /mnt/airflow-dags
+          readOnly: true
+        - name: airflow-dags
+          mountPath: /opt/airflow/dags
+      - name: wait-for-db-migrations
+        image: apache/airflow:3.0.0-python3.12
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 50000
+          runAsGroup: 0
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            until airflow db check; do
+              echo "Waiting for PostgreSQL airflow database..."
+              sleep 3
+            done
+            airflow db check-migrations --migration-wait-timeout=180
+        envFrom:
+        - configMapRef:
+            name: airflow-config
+        env:
+        - name: AIRFLOW__CORE__FERNET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__CORE__FERNET_KEY
+        - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+        - name: AIRFLOW__API_AUTH__JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__API_AUTH__JWT_SECRET
+        volumeMounts:
+        - name: airflow-logs
+          mountPath: /opt/airflow/logs
+      containers:
+      - name: scheduler
+        image: apache/airflow:3.0.0-python3.12
+        args: ["scheduler"]
+        ports:
+        - name: logs
+          containerPort: 8793
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: airflow-config
+        env:
+        - name: AIRFLOW__CORE__FERNET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__CORE__FERNET_KEY
+        - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+        - name: AIRFLOW__API_AUTH__JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__API_AUTH__JWT_SECRET
+        - name: AIRFLOW__API__SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__API_AUTH__JWT_SECRET
+        - name: TAXON_INTERNAL_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: taxon-vision-secrets
+              key: INTERNAL_API_TOKEN
+        - name: JENKINS_USER
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: JENKINS_USER
+              optional: true
+        - name: JENKINS_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: JENKINS_API_TOKEN
+        - name: DAGSHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: DAGSHUB_TOKEN
+              optional: true
+        - name: AIRFLOW_CONN_TAXON_APP
+          value: '{"conn_type": "http", "host": "http://taxon-vision-serving.taxon-vision.svc.cluster.local:8000", "password": "$(TAXON_INTERNAL_API_TOKEN)"}'
+        - name: AIRFLOW_CONN_JENKINS
+          value: '{"conn_type": "http", "host": "http://192.168.178.30:8080", "login": "$(JENKINS_USER)", "password": "$(JENKINS_API_TOKEN)"}'
+        volumeMounts:
+        - name: airflow-dags
+          mountPath: /opt/airflow/dags
+          readOnly: true
+        - name: airflow-taxon-deps
+          mountPath: /opt/airflow/src/taxon_vision/active_learning/feedback.py
+          subPath: feedback.py
+          readOnly: true
+        - name: airflow-taxon-deps
+          mountPath: /opt/airflow/src/taxon_vision/active_learning/label_studio_sync.py
+          subPath: label_studio_sync.py
+          readOnly: true
+        - name: airflow-taxon-deps
+          mountPath: /opt/airflow/src/taxon_vision/active_learning/triage_queue.py
+          subPath: triage_queue.py
+          readOnly: true
+        - name: airflow-taxon-deps
+          mountPath: /opt/airflow/config/taxa_catalog.yaml
+          subPath: taxa_catalog.yaml
+          readOnly: true
+        - name: manifests-volume
+          mountPath: /opt/airflow/data/manifests
+        - name: flagged-observations-volume
+          mountPath: /opt/airflow/data/flagged_observations
+        - name: airflow-logs
+          mountPath: /opt/airflow/logs
+        livenessProbe:
+          exec:
+            command: ["airflow", "jobs", "check", "--job-type", "SchedulerJob", "--local"]
+          initialDelaySeconds: 45
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "1"
+            memory: "1Gi"
+      - name: dag-processor
+        image: apache/airflow:3.0.0-python3.12
+        args: ["dag-processor"]
+        envFrom:
+        - configMapRef:
+            name: airflow-config
+        env:
+        - name: AIRFLOW__CORE__FERNET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__CORE__FERNET_KEY
+        - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+        - name: AIRFLOW__API_AUTH__JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__API_AUTH__JWT_SECRET
+        - name: AIRFLOW__API__SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__API_AUTH__JWT_SECRET
+        - name: TAXON_INTERNAL_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: taxon-vision-secrets
+              key: INTERNAL_API_TOKEN
+        - name: JENKINS_USER
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: JENKINS_USER
+              optional: true
+        - name: JENKINS_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: JENKINS_API_TOKEN
+        - name: DAGSHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: DAGSHUB_TOKEN
+              optional: true
+        - name: AIRFLOW_CONN_TAXON_APP
+          value: '{"conn_type": "http", "host": "http://taxon-vision-serving.taxon-vision.svc.cluster.local:8000", "password": "$(TAXON_INTERNAL_API_TOKEN)"}'
+        - name: AIRFLOW_CONN_JENKINS
+          value: '{"conn_type": "http", "host": "http://192.168.178.30:8080", "login": "$(JENKINS_USER)", "password": "$(JENKINS_API_TOKEN)"}'
+        volumeMounts:
+        - name: airflow-dags
+          mountPath: /opt/airflow/dags
+          readOnly: true
+        - name: airflow-taxon-deps
+          mountPath: /opt/airflow/src/taxon_vision/active_learning/feedback.py
+          subPath: feedback.py
+          readOnly: true
+        - name: airflow-taxon-deps
+          mountPath: /opt/airflow/src/taxon_vision/active_learning/label_studio_sync.py
+          subPath: label_studio_sync.py
+          readOnly: true
+        - name: airflow-taxon-deps
+          mountPath: /opt/airflow/src/taxon_vision/active_learning/triage_queue.py
+          subPath: triage_queue.py
+          readOnly: true
+        - name: airflow-taxon-deps
+          mountPath: /opt/airflow/config/taxa_catalog.yaml
+          subPath: taxa_catalog.yaml
+          readOnly: true
+        - name: manifests-volume
+          mountPath: /opt/airflow/data/manifests
+        - name: flagged-observations-volume
+          mountPath: /opt/airflow/data/flagged_observations
+        - name: airflow-logs
+          mountPath: /opt/airflow/logs
+        livenessProbe:
+          exec:
+            command: ["airflow", "jobs", "check", "--job-type", "DagProcessorJob", "--local"]
+          initialDelaySeconds: 45
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+      volumes:
+      - name: airflow-dags-cm
+        configMap:
+          name: airflow-dags
+      - name: airflow-dags
+        emptyDir: {}
+      - name: airflow-taxon-deps
+        configMap:
+          name: airflow-taxon-deps
+      - name: manifests-volume
+        hostPath:
+          path: /var/lib/taxon-vision/manifests
+          type: DirectoryOrCreate
+      - name: flagged-observations-volume
+        hostPath:
+          path: /var/lib/taxon-vision/flagged_observations
+          type: DirectoryOrCreate
+      - name: airflow-logs
+        hostPath:
+          path: /var/lib/taxon-vision/airflow-logs
+          type: DirectoryOrCreate

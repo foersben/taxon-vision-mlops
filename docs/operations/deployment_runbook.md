@@ -105,10 +105,11 @@ The deployment infrastructure separates Day-0 cluster prerequisites from Day-2 c
     * Applied once by cluster administrators using `kubectl apply`:
         * [deploy/k8s/jenkins-agent-rbac.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/jenkins-agent-rbac.yaml): Provisions `jenkins-ci` and `taxon-vision` namespaces, machine ServiceAccount `jenkins-agent`, and RBAC bindings for deployments, services, pods, configmaps, secrets, persistentvolumeclaims, and Traefik CRDs.
         * [deploy/k8s/nvidia-time-slicing-config.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/nvidia-time-slicing-config.yaml): Partitions the physical RTX 5070 Ti into 4 virtual GPU slices in `kube-system`.
-        * [deploy/k8s/postgres.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/postgres.yaml): Provisions the consolidated PostgreSQL 16 (`postgres:16-alpine`) relational instance (`NodePort 30432`) hosting isolated `telemetry`, `optuna`, `airflow`, and `mlflow` databases on BTRFS non-CoW storage (`/var/lib/taxon-vision/postgres`).
-        * [deploy/k8s/mlops-storage-and-optuna.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/mlops-storage-and-optuna.yaml): Provisions the in-cluster SeaweedFS object store (ports 8333 S3, 8888 Filer, 9333 Master, 8080 Volume; auto-initializing buckets `taxon-dvc-cache`, `triage-queue`, and `mlflow-artifacts`), the MLflow v3.16.0 tracking server (`NodePort 30500`), and the Optuna dashboard (`NodePort 30081`).
+        * [deploy/k8s/postgres.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/postgres.yaml): Provisions the consolidated PostgreSQL 16 (`postgres:16-alpine`) relational instance (`NodePort 30432`, `max_connections=120`) hosting isolated `telemetry`, `optuna`, and `airflow` databases on BTRFS non-CoW storage (`/var/lib/taxon-vision/postgres`).
+        * [deploy/k8s/mlops-storage-and-optuna.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/mlops-storage-and-optuna.yaml): Provisions the in-cluster SeaweedFS object store (ports 8333 S3, 8888 Filer, 9333 Master, 8080 Volume; auto-initialising buckets `taxon-dvc-cache` and `triage-queue`) and the Optuna dashboard (`NodePort 30081`).
+        * [deploy/k8s/evidently-ui.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/evidently-ui.yaml): Provisions the Evidently 0.7 drift workspace UI (`NodePort 30082`, backed by `/var/lib/taxon-vision/evidently`).
         * [deploy/k8s/monitoring-prometheus-grafana.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/monitoring-prometheus-grafana.yaml): Provisions in-cluster Prometheus TSDB (`NodePort 30090`) and Grafana visualizer (`NodePort 30300`) with BTRFS NOCOW persistent storage.
-        * [deploy/k8s/traefik-ingress.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/traefik-ingress.yaml): Provisions Traefik v3.1 `IngressRoute` and 80/20 weighted `TraefikService` for canary deployment.
+        * [`deploy/k8s/overlays/staging/ingress.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/overlays/staging/ingress.yaml) & [`deploy/k8s/overlays/production/ingress.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/overlays/production/ingress.yaml): Provisions branch-specific Traefik v3.1 `IngressRoute` pairs splitting HTTP (`web`) and HTTPS (`websecure`) entryPoints without a wildcard catch-all, plus on-demand [`deploy/k8s/canary-ab-service.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/canary-ab-service.yaml) for weighted A/B routing.
         * [deploy/k8s/redis-ephemeral.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/redis-ephemeral.yaml): Provisions in-cluster Redis ephemeral image cache (64 MB memory ceiling, LRU eviction) resolving multi-pod split-brain for visual attribution CAM queries.
         * [deploy/k8s/sablier-scaler.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/sablier-scaler.yaml) & [deploy/k8s/traefik-sablier-config.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/traefik-sablier-config.yaml): Deploys the Sablier scale-to-zero daemon and Traefik middleware plugin, idling dashboard pods after 15 minutes of inactivity and reviving them on demand.
     * Storing these manifests in Git provides Infrastructure as Code (IaC) without requiring repetitive manual execution.
@@ -243,7 +244,7 @@ The in-cluster SeaweedFS service (`chrislusf/seaweedfs:latest`) manages the high
 
 ### PostgreSQL, MLflow & Optuna Telemetry Administration
 
-Relational telemetry, MLflow experiment tracking, and Optuna hyperparameter search studies are consolidated into the in-cluster PostgreSQL 16 instance ([`deploy/k8s/postgres.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/postgres.yaml)):
+Relational telemetry, Airflow scheduler metadata, and Optuna hyperparameter search studies are consolidated into the in-cluster PostgreSQL 16 instance ([`deploy/k8s/postgres.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/postgres.yaml)), while experiment tracking and Model Registry governance run exclusively against managed DagsHub MLflow:
 
 * **PostgreSQL Cluster Health Verification (`NodePort 30432`):**
 
@@ -251,7 +252,8 @@ Relational telemetry, MLflow experiment tracking, and Optuna hyperparameter sear
     kubectl exec -n taxon-vision deploy/postgres -- pg_isready -U postgres
     ```
 
-* **MLflow v3.16.0 Tracking Server (`NodePort 30500`):** Accessible on the local network at `http://192.168.178.30:30500/`, storing relational metadata in PostgreSQL (`mlflow` database) and proxying artefacts to SeaweedFS (`s3://mlflow-artifacts`).
+* **DagsHub Managed MLflow 3.x Tracking & Registry:** Hosted at `https://dagshub.com/foersben/taxon-vision-mlops.mlflow` (`taxon-vision-head-training` & `taxon-vision-drift`), authenticated via `DAGSHUB_TOKEN` Basic Auth without running an in-cluster MLflow server.
+* **Evidently 0.7 Drift UI (`NodePort 30082`):** Accessible at `http://192.168.178.30:30082/`, serving interactive longitudinal PCA/Wasserstein/MMD^2 panels from `/var/lib/taxon-vision/evidently` ([`deploy/k8s/evidently-ui.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/evidently-ui.yaml)).
 * **Optuna Dashboard (`NodePort 30081`):** Configured in [`deploy/k8s/mlops-storage-and-optuna.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/mlops-storage-and-optuna.yaml) to connect to `postgresql+psycopg2://optuna:...@postgres.taxon-vision.svc.cluster.local:5432/optuna`. Kept at `replicas: 0` when idle to conserve memory and scaled on demand via `kubectl scale deployment/optuna-dashboard -n taxon-vision --replicas=1`.
 
 ---
@@ -278,10 +280,10 @@ curl -s http://192.168.178.30:30080/health
 
 ### Traefik A/B Canary Traffic Management
 
-The Traefik ingress controller on `hive-mind` manages weighted traffic distribution between the baseline production model and challenger models via [`deploy/k8s/traefik-ingress.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/traefik-ingress.yaml):
+The Traefik ingress controller on `hive-mind` manages branch-scoped ingress via [`deploy/k8s/overlays/production/ingress.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/overlays/production/ingress.yaml) (splitting `web` and `websecure` `IngressRoute`s) and optional weighted canary traffic distribution via [`deploy/k8s/canary-ab-service.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/canary-ab-service.yaml):
 
 * **Baseline 80/20 Distribution:** Default configuration sends $80\%$ of traffic to `taxon-vision-serving:8000` and $20\%$ to `taxon-vision-serving-challenger:8000`.
-* **Canary Promotion Step 1 (50/50 Split):** Once the challenger model processes initial inference requests with zero runtime exceptions, increase confidence by adjusting weights in `deploy/k8s/traefik-ingress.yaml`:
+* **Canary Promotion Step 1 (50/50 Split):** Once the challenger model processes initial inference requests with zero runtime exceptions, increase confidence by adjusting weights in `deploy/k8s/canary-ab-service.yaml`:
 
     ```yaml
     spec:
@@ -298,7 +300,7 @@ The Traefik ingress controller on `hive-mind` manages weighted traffic distribut
     Apply the update without pod restarts:
 
     ```bash
-    kubectl apply -f deploy/k8s/traefik-ingress.yaml
+    kubectl apply -f deploy/k8s/canary-ab-service.yaml
     ```
 
 * **Canary Promotion Step 2 (Full Cutover 100/0):** If Prometheus metrics confirm the challenger meets the latency SLO (p95 $\le 15.0\text{ ms}$ on GPU / $\le 120.0\text{ ms}$ CPU SLA gate, `50.38 ms` empirical CPU INT8) and conformal error guarantees ($1 - \alpha \ge 0.90$), update the primary deployment image tag to the challenger release and reset weights to 100/0.

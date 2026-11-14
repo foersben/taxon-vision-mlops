@@ -139,6 +139,7 @@ def _resolve_drift_thresholds(
 
 def _log_data_drift_mlflow(
     config: DataDriftPipelineConfig,
+    *,
     w1_distance: float,
     mmd2: float,
     mmd2_p_value: float,

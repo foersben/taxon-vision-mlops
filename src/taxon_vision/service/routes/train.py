@@ -9,15 +9,16 @@ from functools import partial
 from pathlib import Path
 
 import anyio
-from fastapi import APIRouter, BackgroundTasks, status
+from fastapi import APIRouter, BackgroundTasks, Depends, status
 from filelock import FileLock
 
 from taxon_vision.config import get_settings
 from taxon_vision.models.training.runner import run_training_pipeline
 from taxon_vision.models.training.types import TrainingPipelineResult
+from taxon_vision.service.routes.drift import verify_internal_token
 from taxon_vision.service.schemas import TrainingRequest, TrainingResponse
 
-router = APIRouter(tags=["Training"])
+router = APIRouter(tags=["Training"], dependencies=[Depends(verify_internal_token)])
 _LOCK_PATH = Path(tempfile.gettempdir()) / "taxon_vision_training.lock"
 _TRAINING_FILE_LOCK = FileLock(str(_LOCK_PATH))
 

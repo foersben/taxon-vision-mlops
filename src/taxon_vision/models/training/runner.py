@@ -168,6 +168,13 @@ def _resolve_tier_hyperparameters(
             extractor_name=extractor,
             study_name=study_name,
             reset_study=reset_study,
+            lr_min=settings.optuna.lr_min,
+            lr_max=settings.optuna.lr_max,
+            weight_decay_min=settings.optuna.weight_decay_min,
+            weight_decay_max=settings.optuna.weight_decay_max,
+            dropout_min=settings.optuna.dropout_min,
+            dropout_max=settings.optuna.dropout_max,
+            val_loss_penalty=settings.optuna.val_loss_penalty,
         )
         best_params, _ = tune_hyperparameters(data=data, num_classes=num_classes, config=tuning_cfg)
         return TrainingHyperparameters(
@@ -498,7 +505,10 @@ def run_training_pipeline(
                 input_example=sample_val,
             )
             if model_info is not None:
-                mlflow_model_id = getattr(model_info, "model_id", None)
+                try:
+                    mlflow_model_id = model_info.model_id
+                except AttributeError:
+                    mlflow_model_id = None
 
             val_dataset = logged_datasets.val if logged_datasets else None
             _log_mlflow_metrics(

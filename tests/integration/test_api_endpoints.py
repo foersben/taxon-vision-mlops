@@ -95,8 +95,9 @@ def test_top_level_predict_endpoint() -> None:
     assert "conformal_prediction_set" in data
 
 
-def test_training_endpoint_sync() -> None:
+def test_training_endpoint_sync(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify synchronous model training endpoint returns completed job summary."""
+    monkeypatch.setenv("TAXON_INTERNAL_API_TOKEN", "test-internal-token")
     payload = {
         "extractor": "mobilenetv4_conv_small",
         "epochs": 2,
@@ -104,7 +105,11 @@ def test_training_endpoint_sync() -> None:
         "learning_rate": 0.001,
         "background": False,
     }
-    resp = client.post("/training", json=payload)
+    resp = client.post(
+        "/training",
+        headers={"Authorization": "Bearer test-internal-token"},
+        json=payload,
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "completed"
@@ -114,21 +119,49 @@ def test_training_endpoint_sync() -> None:
     assert data["final_val_accuracy"] is not None
 
 
-def test_train_alias_endpoint() -> None:
+def test_train_alias_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify legacy /train alias triggers training pipeline correctly."""
-    resp = client.post("/train", json={"epochs": 1})
+    monkeypatch.setenv("TAXON_INTERNAL_API_TOKEN", "test-internal-token")
+    resp = client.post(
+        "/train",
+        headers={"Authorization": "Bearer test-internal-token"},
+        json={"epochs": 1},
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "completed"
     assert data["epochs_trained"] == 1
 
 
-def test_training_endpoint_background() -> None:
+def test_training_endpoint_background(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify asynchronous training endpoint dispatches background task."""
-    resp = client.post("/training", json={"epochs": 1, "background": True})
+    monkeypatch.setenv("TAXON_INTERNAL_API_TOKEN", "test-internal-token")
+    resp = client.post(
+        "/training",
+        headers={"Authorization": "Bearer test-internal-token"},
+        json={"epochs": 1, "background": True},
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "started"
+
+
+def test_training_endpoint_requires_auth(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify training routes fail closed when token is unset (503) or invalid (401)."""
+    monkeypatch.delenv("TAXON_INTERNAL_API_TOKEN", raising=False)
+    resp_unconfigured = client.post("/train", json={"epochs": 1})
+    assert resp_unconfigured.status_code == 503
+
+    monkeypatch.setenv("TAXON_INTERNAL_API_TOKEN", "test-internal-token")
+    resp_missing = client.post("/training", json={"epochs": 1})
+    assert resp_missing.status_code == 401
+
+    resp_wrong = client.post(
+        "/api/v1/train",
+        headers={"Authorization": "Bearer wrong-token"},
+        json={"epochs": 1},
+    )
+    assert resp_wrong.status_code == 401
 
 
 def test_real_image_prediction_if_sample_exists() -> None:

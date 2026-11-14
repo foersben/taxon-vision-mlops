@@ -3,9 +3,6 @@ type: architecture
 title: Domain Entities & Taxonomy Perimeter
 description: Taxonomic hierarchy, DarwinCore occurrence schemas, open-source licensing rules, metadata contracts, and biological domain entities.
 tags: [domain, taxonomy, darwincore, licensing, attribution, taxa-perimeter, catalog, spdx, audit]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-11-08T17:07:25.915Z
 sources:
   - id: openwiki-source-c53db74dca0bf49162c87f32
     resource: repo://config/taxa_catalog.yaml

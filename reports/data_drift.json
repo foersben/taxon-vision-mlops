@@ -7,7 +7,7 @@
   "n_reference": 1182,
   "n_current": 1153,
   "feature_dim": 384,
-  "mlflow_run_id": "f1f6d0e124be4dfb8e76fc59d0354bb3",
+  "mlflow_run_id": "7766b7a3f8d848b29e4f771e87f33646",
   "report_path": "reports/data_drift_report.html",
-  "evaluated_at": "2026-11-06T20:57:59.819731+00:00"
+  "evaluated_at": "2026-11-12T14:37:41.974430+00:00"
 }

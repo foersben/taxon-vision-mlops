@@ -1199,7 +1199,7 @@
           <div class="kpi-card">
             <span class="kpi-label">Multi-Tier Latency SLO</span>
             <span class="kpi-val" style="color: var(--accent-cyan)"
-              >50.4 ms CPU</span
+              >54.1 ms CPU</span
             >
             <span class="kpi-sub">&le; 120ms CPU SLA Gate (&le; 15ms GPU Target)</span>
           </div>
@@ -1208,7 +1208,7 @@
             <span class="kpi-val" style="color: var(--accent-purple)"
               >DINOv3-ViT-S/16</span
             >
-            <span class="kpi-sub">92.1% Accuracy (Holdout Empirical)</span>
+            <span class="kpi-sub">91.5% Accuracy (Holdout Empirical)</span>
           </div>
           <div class="kpi-card">
             <span class="kpi-label">Recommended Edge Backbone</span>
@@ -1220,10 +1220,10 @@
           <div class="kpi-card">
             <span class="kpi-label">Epistemic Coverage Target</span>
             <span class="kpi-val" style="color: var(--accent-amber)"
-              >96.8% Cal / 91.5% Test</span
+              >96.8% Cal / 93.3% Test</span
             >
             <span class="kpi-sub"
-              >Split Conformal Calibration (&alpha; = 0.05, q&#770; = 0.6337)</span
+              >Split Conformal Calibration (&alpha; = 0.05, q&#770; = 0.7005)</span
             >
           </div>
         </div>
@@ -1235,7 +1235,7 @@
               Empirical evaluation from
               <code>docs/assets/pareto_results.json</code> via
               <code>python -m taxon_vision.pipelines.evaluate</code>.
-              DINOv3 reflects active empirical holdout evaluation (92.07% INT8 test accuracy and 50.38 ms CPU INT8 p95 latency in <code>reports/pareto_evaluation.json</code>); candidate backbones represent symbolic literature projections under identical GPU latency budgets.
+              DINOv3 reflects active empirical holdout evaluation (91.46% INT8 test accuracy and 54.08 ms CPU INT8 p95 latency in <code>reports/pareto_evaluation.json</code>); candidate backbones represent symbolic literature projections under identical GPU latency budgets.
             </p>
           </div>
           <div class="chart-controls">
@@ -1493,8 +1493,8 @@
           extractor: "dinov3_vits14",
           displayName: "DINOv3-ViT-S/16 [Empirical]",
           architecture: "Dense Self-Supervised ViT",
-          canonical_baseline: "Dense Morphology Probe (92.07% INT8 Test Acc, 50.38 ms CPU p95, reports/pareto_evaluation.json)",
-          accuracy_score: 92.1,
+          canonical_baseline: "Dense Morphology Probe (91.46% INT8 Test Acc, 54.08 ms CPU p95, reports/pareto_evaluation.json)",
+          accuracy_score: 91.5,
           parameters_m: 22.0,
           p50_latency_ms: 9.5,
           p95_latency_ms: 13.5,
@@ -1719,7 +1719,7 @@
               formula:
                 "s_i = 1 - p_i, \\quad C(x) = \\{ i : s_i \\le \\hat{q} \\}",
               config:
-                "Config: config/conformal_config.yaml (alpha=0.05, q_hat=0.6337, tau_ood=-2.4029)",
+                "Config: config/conformal_config.yaml (alpha=0.05, q_hat=0.7005, tau_ood=-2.3094)",
             },
           },
           {
@@ -1764,14 +1764,14 @@
             data: {
               id: "human_triage",
               label: "Human Triage Queue\ntriage_queue.py",
-              subtitle: "In-Memory Max-Heap (Component Verified; Unwired)",
+              subtitle: "In-Memory Max-Heap & Disk/DagsHub Sync",
               layer: "uncertainty",
               col: 1,
               row: 5.5,
               role: "@active-learning-engineer",
               path: "src/taxon_vision/active_learning/triage_queue.py",
               description:
-                "Component-verified in-memory binary max-heap (TriageQueue via heapq) for prioritizing uncertain observations. Note: /api/v1/predict currently persists flagged specimens to .npy + manifest.jsonl via service/storage.py; live heap wiring is pending.",
+                "Binary max-heap (TriageQueue) wired into service/storage.py: persists flagged specimens (.npy + manifest.jsonl), enqueues priority triage items via get_triage_queue(), and dispatches consented crops to DagsHub S3 & Label Studio.",
               invariants:
                 "Zero unverified auto-assignments on ambiguous specimens.",
               config:
@@ -1833,18 +1833,18 @@
           {
             data: {
               id: "drift_detector",
-              label: "Embedding Drift Monitor\ndrift.py",
-              subtitle: "1D Wasserstein-1 Norm Drift (Component Verified; Unwired)",
+              label: "Embedding Drift Monitor\ndrift.py & drift_runner.py",
+              subtitle: "Two-Tier W1 + MMD^2 & Evidently UI (NodePort 30082)",
               layer: "telemetry",
               col: 2,
               row: 4.6,
               role: "@observability-engineer",
-              path: "src/taxon_vision/monitoring/drift.py",
+              path: "src/taxon_vision/monitoring/drift_runner.py",
               description:
-                "Computes O(N*D) 1D Wasserstein-1 Earth Mover's Distance over L2 embedding norms. Standalone unit-tested in test_monitoring.py; pending live rolling-window invocation in /api/v1/predict.",
+                "Computes O(N*D) 1D Wasserstein-1 Earth Mover's Distance over L2 norms and multivariate RBF MMD^2 permutation tests via evaluate_recent_drift() over TelemetryStore windows, persisting HTML reports and Evidently workspace snapshots (NodePort 30082).",
               invariants:
                 "Detects seasonal and geographic domain shift before accuracy degrades.",
-              config: "Module: src/taxon_vision/monitoring/drift.py",
+              config: "Modules: src/taxon_vision/monitoring/{drift,drift_runner}.py",
             },
           },
           {
@@ -1884,15 +1884,15 @@
           {
             data: {
               id: "active_learning",
-              label: "Active Learning Query\nquery.py (margin_sampling)",
-              subtitle: "Margin Uncertainty Scorer (Component Verified; Unwired)",
+              label: "Active Learning & Label Studio\nquery.py & label_studio_sync.py",
+              subtitle: "Margin Scorer & DagsHub Label Studio Sync",
               layer: "pipeline",
               col: 3,
               row: 0,
               role: "@active-learning-engineer",
-              path: "src/taxon_vision/active_learning/query.py",
+              path: "src/taxon_vision/active_learning/label_studio_sync.py",
               description:
-                "Component-verified margin_sampling (1 - (p_top1 - p_top2)) unit-tested in test_active_learning.py. Pending async worker wiring; BADGE gradient acquisition is a Phase 2.5 specification.",
+                "Computes margin_sampling uncertainty (1 - (p_top1 - p_top2)) during persist_flagged_observation() and asynchronously uploads consented crops + attribution metadata to DagsHub S3 (`triage-queue/`) and Label Studio via DagsHubLabelStudioClient; BADGE remains a Phase 2.5 extension.",
               invariants: "Maximizes accuracy gain per annotated specimen.",
               formula:
                 "\\text{Score}(x) = 1.0 - (\\hat{\\pi}_{(1)}(x) - \\hat{\\pi}_{(2)}(x))",
@@ -2005,15 +2005,15 @@
           {
             data: {
               id: "mlflow_tracker",
-              label: "MLflow Tracking & Registry\ntraining/tracking.py",
-              subtitle: "Lineage, Metrics & Artifacts",
+              label: "DagsHub MLflow 3.x Registry\ntraining/tracking.py",
+              subtitle: "Lineage, Parent-Run Resumption & Artifacts",
               layer: "pipeline",
               col: 3,
               row: 7,
               role: "@mlops-data-engineer",
               path: "src/taxon_vision/models/training/tracking.py",
               description:
-                "Logs hyperparameters, macro PR-AUC, conformal q_hat cutoffs, DVC hashes, and registers promoted model checkpoints.",
+                "Logs hyperparameters, macro PR-AUC, conformal q_hat cutoffs, DVC hashes, and @Production checkpoints to DagsHub MLflow 3.x; resume_parent_mlflow_run() attaches Stage 5-7 artefacts back to the Stage 4 parent run.",
               invariants:
                 "Full provenance from git SHA + DVC lock to model artifact.",
               config: "Module: src/taxon_vision/models/training/tracking.py",
@@ -2065,7 +2065,7 @@
               role: "@qa-automator",
               path: "src/taxon_vision/pipelines/evaluate.py",
               description:
-                "Evaluates Top-1 accuracy (92.07%), empirical conformal coverage (91.46% test / 96.77% cal), worst-class AP (92.55%), and validates p95 latency (50.38 ms CPU INT8) against the 120.0 ms Stage 7 SLA gate.",
+                "Evaluates Top-1 accuracy (91.46%), empirical conformal coverage (93.29% test / 96.77% cal), worst-class AP (93.06%), and validates p95 latency (54.08 ms CPU INT8) against the 120.0 ms Stage 7 SLA gate.",
               invariants:
                 "Guarantees finite-sample coverage >= (1 - alpha) - 0.05 and p95 latency <= 120.0ms on CPU/CI test holdout (<= 15.0ms GPU target).",
               config: "Pipeline: src/taxon_vision/pipelines/evaluate.py",
@@ -2162,8 +2162,6 @@
               source: "conformal_bounds",
               target: "human_triage",
               label: "|C|=0 or |C|>3",
-              dashed: true,
-              status: "unwired",
             },
           },
           {
@@ -2172,8 +2170,6 @@
               source: "ood_detector",
               target: "human_triage",
               label: "OOD flag",
-              dashed: true,
-              status: "unwired",
             },
           },
 
@@ -2199,9 +2195,7 @@
               id: "e13",
               source: "service_inference",
               target: "drift_detector",
-              label: "Embeddings",
-              dashed: true,
-              status: "unwired",
+              label: "TelemetryStore embeddings",
             },
           },
           {
@@ -2209,9 +2203,7 @@
               id: "e14",
               source: "human_triage",
               target: "metric_referral",
-              label: "Queue depth",
-              dashed: true,
-              status: "unwired",
+              label: "REFERRAL_RATE.inc()",
             },
           },
           {
@@ -2259,9 +2251,7 @@
               id: "e20",
               source: "drift_detector",
               target: "grafana_dashboard",
-              label: "Shift alert",
-              dashed: true,
-              status: "unwired",
+              label: "Shift alert & Evidently UI",
             },
           },
 
@@ -2271,9 +2261,7 @@
               id: "e21",
               source: "human_triage",
               target: "active_learning",
-              label: "Unlabeled pool",
-              dashed: true,
-              status: "unwired",
+              label: "Margin score + DagsHub S3",
             },
           },
           {
@@ -2281,9 +2269,8 @@
               id: "e22",
               source: "active_learning",
               target: "dvc_ingestion",
-              label: "Curated labels",
+              label: "Label Studio feedback",
               dashed: true,
-              status: "unwired",
             },
           },
           {

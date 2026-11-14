@@ -90,7 +90,11 @@ class LicenseFilter:
         if cls.is_static_domain_prohibited(image_url, verified):
             return None
 
-        photographer = str(raw.get("attribution", "")).strip() or "Unknown Contributor"
+        photographer = (
+            str(raw.get("attribution") or "").strip()
+            or str(raw.get("photographer_name") or "").strip()
+            or "Unknown Contributor"
+        )
         return AttributionRecord(
             photographer_name=photographer,
             license_code=OpenLicense(license_str),

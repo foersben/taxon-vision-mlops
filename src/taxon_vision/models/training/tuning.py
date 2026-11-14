@@ -6,10 +6,10 @@ from __future__ import annotations
 
 import contextlib
 import logging
-import os
 import sqlite3
 import time
 import warnings
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -26,7 +26,11 @@ from taxon_vision.config import get_settings
 from taxon_vision.models.loss import ClassBalancedLoss
 from taxon_vision.models.training.dataset import get_dvc_dataset_hash
 from taxon_vision.models.training.embeddings import train_head_on_cached_embeddings
-from taxon_vision.models.training.tracking import _inject_lineage_tags
+from taxon_vision.models.training.tracking import (
+    _ensure_dagshub_auth,
+    _inject_lineage_tags,
+    _resolve_reachable_tracking_uri,
+)
 from taxon_vision.models.training.types import EmbeddingSplit, HeadTrainingConfig, TuningConfig
 from taxon_vision.models.training.visualizations import log_optuna_diagnostic_plots
 
@@ -48,6 +52,46 @@ class TuningResult(NamedTuple):
 
     best_params: dict[str, Any]
     study: optuna.Study
+
+
+@dataclass(frozen=True)
+class _TrialScoreSummary:
+    """Calibration-penalised trial objective breakdown for Optuna scoring and MLflow telemetry."""
+
+    objective_score: float
+    peak_val_pr_auc: float
+    min_val_loss: float
+
+
+def _compute_calibrated_objective_score(
+    history: dict[str, list[float]],
+    val_loss_penalty: float,
+) -> _TrialScoreSummary:
+    """Compute a calibration-aware HPO score penalising high validation loss alongside Macro PR-AUC.
+
+    Why:
+        Pure rank-based Macro PR-AUC is scale-invariant to logit magnitude, allowing Bayesian search to eliminate L2 weight decay and inflate linear head norms until softmax saturates on out-of-distribution inputs. Dividing peak PR-AUC by ``1 + penalty * min_val_loss`` penalises overconfident validation misclassifications whilst remaining strictly bounded within ``[0.0, 1.0]``.
+
+    How:
+        Extracts the maximum ``val_pr_auc`` and minimum ``val_loss`` across epochs in ``history`` and returns ``_TrialScoreSummary`` carrying the penalised scalar score and raw component metrics.
+
+    Args:
+        history: Epoch metric history produced by ``train_head_on_cached_embeddings``.
+        val_loss_penalty: Non-negative damping coefficient applied to minimum validation loss.
+
+    Returns:
+        Frozen ``_TrialScoreSummary`` containing ``objective_score``, ``peak_val_pr_auc``, and ``min_val_loss``.
+    """
+    val_prs = history.get("val_pr_auc")
+    val_losses = history.get("val_loss")
+    peak_pr = float(max(val_prs)) if val_prs else 0.0
+    min_loss = float(min(val_losses)) if val_losses else 0.0
+    penalty_factor = 1.0 + max(0.0, val_loss_penalty) * max(0.0, min_loss)
+    return _TrialScoreSummary(
+        objective_score=peak_pr / penalty_factor,
+        peak_val_pr_auc=peak_pr,
+        min_val_loss=min_loss,
+    )
 
 
 class HyperparameterObjective:
@@ -95,7 +139,13 @@ class HyperparameterObjective:
         self.feature_dim = data.feature_dim
 
     def _sample_hyperparameters(self, trial: optuna.Trial) -> dict[str, Any]:
-        """Sample hyperparameters for the current Optuna trial.
+        """Sample regularised hyperparameters within configured bounds for the current Optuna trial.
+
+        Why:
+            Unbounded learning rates and weak L2 weight decay floors (`1e-6`) cause linear classification head weights to grow excessively (`||W|| >> 10`), producing saturated softmax probabilities on out-of-distribution specimens. Constraining sampling to `self.config`'s regularised domain preserves moderate logit scales.
+
+        How:
+            Queries Optuna TPE continuous/categorical samplers using bounds configured on `self.config`.
 
         Args:
             trial: Optuna trial instance.
@@ -104,9 +154,11 @@ class HyperparameterObjective:
             Dictionary containing sampled hyperparameters.
         """
         return {
-            "learning_rate": trial.suggest_float("learning_rate", 1e-4, 1e-1, log=True),
-            "weight_decay": trial.suggest_float("weight_decay", 1e-6, 1e-2, log=True),
-            "dropout": trial.suggest_float("dropout", 0.0, 0.5),
+            "learning_rate": trial.suggest_float("learning_rate", self.config.lr_min, self.config.lr_max, log=True),
+            "weight_decay": trial.suggest_float(
+                "weight_decay", self.config.weight_decay_min, self.config.weight_decay_max, log=True
+            ),
+            "dropout": trial.suggest_float("dropout", self.config.dropout_min, self.config.dropout_max),
             "cb_beta": trial.suggest_float("cb_beta", 0.99, 0.9999),
             "batch_size": trial.suggest_categorical("batch_size", [32, 64, 128]),
             "noise_std": trial.suggest_float("noise_std", 0.0, 0.05),
@@ -251,14 +303,15 @@ class HyperparameterObjective:
                     active_run = None
                 raise optuna.TrialPruned()
 
-            best_val = float(max(history["val_pr_auc"])) if history.get("val_pr_auc") else 0.0
+            score_summary = _compute_calibrated_objective_score(history, self.config.val_loss_penalty)
             if active_run:
                 try:
                     mlflow.set_tag("optuna.trial_state", "COMPLETE")
-                    mlflow.log_metric("peak_val_pr_auc", best_val)
+                    mlflow.log_metric("peak_val_pr_auc", score_summary.peak_val_pr_auc)
+                    mlflow.log_metric("min_val_loss", score_summary.min_val_loss)
                 except Exception as metric_err:
                     logger.debug("Failed to log peak_val_pr_auc metric: %s", metric_err)
-            return best_val
+            return score_summary.objective_score
 
         finally:
             if active_run is not None:
@@ -267,22 +320,29 @@ class HyperparameterObjective:
 
 
 def _setup_mlflow(cfg: TuningConfig) -> bool:
-    """Configure MLflow for hyperparameter tuning.
+    """Configure MLflow for hyperparameter tuning via DagsHub or an explicit environment override.
 
     Args:
         cfg: Tuning configuration.
 
     Returns:
-        True if MLflow is available, False otherwise.
+        True if MLflow tracking is reachable and authenticated, False otherwise.
     """
     if mlflow.active_run() is not None:
         return True
 
-    mlflow_cfg = get_settings().mlflow
-    resolved_uri = (
-        cfg.tracking_uri if cfg.tracking_uri is not None else os.getenv("MLFLOW_TRACKING_URI", mlflow_cfg.tracking_uri)
-    )
+    settings = get_settings()
+    mlflow_cfg = settings.mlflow
     resolved_experiment = cfg.experiment_name or mlflow_cfg.experiment_name
+
+    if cfg.tracking_uri is not None:
+        resolved_uri = cfg.tracking_uri.strip()
+        if not resolved_uri:
+            return False
+        if "dagshub.com" in resolved_uri and not _ensure_dagshub_auth(resolved_uri):
+            return False
+    else:
+        resolved_uri = _resolve_reachable_tracking_uri(settings)
 
     if not resolved_uri:
         return False
@@ -292,7 +352,7 @@ def _setup_mlflow(cfg: TuningConfig) -> bool:
         mlflow.set_experiment(resolved_experiment)
         return True
     except Exception as exc:
-        logger.warning("MLflow tracking setup failed or remote server unreachable: %s. Continuing locally.", exc)
+        logger.warning("MLflow tracking setup failed or remote server unreachable: %s. Skipping HPO MLflow logs.", exc)
         return False
 
 
@@ -472,6 +532,38 @@ def _persist_best_params(
         return None
 
 
+def _run_optuna_study_in_mlflow(
+    study: optuna.Study,
+    objective: HyperparameterObjective,
+    study_name: str,
+) -> bool:
+    """Execute Optuna optimisation under a parent MLflow run when MLflow is active outside an existing run."""
+    started_study_parent = objective.mlflow_available and mlflow.active_run() is None
+    if not started_study_parent:
+        study.optimize(objective, n_trials=objective.config.n_trials)
+        return False
+    with mlflow.start_run(run_name=f"optuna_study_{study_name}"):
+        study.optimize(objective, n_trials=objective.config.n_trials)
+        with contextlib.suppress(Exception):
+            mlflow.log_params(study.best_params)
+            _apply_git_lineage_tags()
+            dvc_hash = get_dvc_dataset_hash()
+            if dvc_hash:
+                mlflow.log_param("dvc_dataset_hash", dvc_hash)
+        _log_best_run(study.best_params, study.best_value, objective.mlflow_available, study=study)
+    return True
+
+
+def _with_legacy_param_aliases(raw_params: dict[str, Any]) -> dict[str, Any]:
+    """Copy Optuna best_params with legacy `lr` and `beta` aliases populated alongside canonical keys."""
+    best_params = dict(raw_params)
+    if "learning_rate" in best_params and "lr" not in best_params:
+        best_params["lr"] = best_params["learning_rate"]
+    if "cb_beta" in best_params and "beta" not in best_params:
+        best_params["beta"] = best_params["cb_beta"]
+    return best_params
+
+
 def tune_hyperparameters(
     data: EmbeddingSplit,
     num_classes: int,
@@ -541,23 +633,15 @@ def tune_hyperparameters(
         mlflow_available=mlflow_available,
     )
 
-    # Ensure child runs are always grouped under a Parent Run node in MLflow 3 UI
-    if mlflow_available and mlflow.active_run() is None:
-        with mlflow.start_run(run_name=f"optuna_study_{study_name}"):
-            study.optimize(objective, n_trials=cfg.n_trials)
-    else:
-        study.optimize(objective, n_trials=cfg.n_trials)
+    started_study_parent = _run_optuna_study_in_mlflow(study, objective, study_name)
 
-    best_params = study.best_params
-    if "learning_rate" in best_params and "lr" not in best_params:
-        best_params["lr"] = best_params["learning_rate"]
-    if "cb_beta" in best_params and "beta" not in best_params:
-        best_params["beta"] = best_params["cb_beta"]
+    best_params = _with_legacy_param_aliases(study.best_params)
 
     logger.info("Hyperparameter search complete. Best parameters: %s, Best value: %.4f", best_params, study.best_value)
 
     _persist_best_params(study, cfg.extractor_name, Path(checkpoint_dir))
     _export_trials_history(study, Path(reports_dir))
 
-    _log_best_run(best_params, study.best_value, mlflow_available, study=study)
+    if not started_study_parent:
+        _log_best_run(best_params, study.best_value, mlflow_available, study=study)
     return TuningResult(best_params=best_params, study=study)

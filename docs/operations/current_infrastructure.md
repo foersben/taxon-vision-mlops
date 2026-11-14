@@ -142,9 +142,9 @@ The output confirms 4 allocatable `nvidia.com/gpu` virtual units on the `hive-mi
 The live API and server-rendered operator dashboard are publicly accessible at `https://taxon.benjamin-foerster.eu/`. Edge traffic terminates on Cloudflare and routes through an outbound-initiated Cloudflare Tunnel (`cloudflared`) directly into the cluster:
 
 * **Zero Public Inbound Ports:** The host firewall blocks all incoming WAN connections; edge traffic reaches the host exclusively via the authenticated Cloudflare Tunnel.
-* **Traefik v3.1 IngressRoute & A/B Canary Routing:** Deployed via [`deploy/k8s/traefik-ingress.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/traefik-ingress.yaml), incoming requests are evaluated by custom resources in the `traefik.io/v1alpha1` API group:
-    * `IngressRoute` (`taxon-vision-ingress`): Matches host `taxon.benjamin-foerster.eu` and routes to `taxon-vision-serving:8000`.
-    * `TraefikService` (`taxon-vision-ab-service`): Weighted Canary / A/B routing distributing live inference traffic:
+* **Traefik v3.1 IngressRoute Overlays & Optional Canary Routing:** Deployed via [`deploy/k8s/overlays/production/ingress.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/overlays/production/ingress.yaml) and [`deploy/k8s/overlays/staging/ingress.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/overlays/staging/ingress.yaml), incoming requests are evaluated by custom resources in the `traefik.io/v1alpha1` API group without a shared wildcard catch-all:
+    * `IngressRoute` pairs (`*-ingress` on `web` and `*-ingress-tls` on `websecure`): Match hosts `taxon.benjamin-foerster.eu` (production) and `staging.taxon.benjamin-foerster.eu` (staging), routing directly to `taxon-vision-serving:8000`.
+    * `TraefikService` (`taxon-vision-ab-service`, on-demand via [`deploy/k8s/canary-ab-service.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/canary-ab-service.yaml)): Weighted Canary / A/B routing when enabled:
         * Production baseline (`taxon-vision-serving:8000`): Weight $80$ ($80\%$ of inbound requests).
         * Challenger model (`taxon-vision-serving-challenger:8000`): Weight $20$ ($20\%$ of inbound requests).
 * **Zero-Downtime Weight Shifting:** Traffic split weights are updated in-place via declarative YAML changes without restarting application pods or dropping in-flight HTTP connections.
@@ -309,19 +309,19 @@ Rather than relying on legacy MinIO or remote-only S3 endpoints, the cluster hos
     ```bash
     wget -q -O - --post-data="" "http://127.0.0.1:8888/buckets/taxon-dvc-cache/?op=mkdir"
     wget -q -O - --post-data="" "http://127.0.0.1:8888/buckets/triage-queue/?op=mkdir"
-    wget -q -O - --post-data="" "http://127.0.0.1:8888/buckets/mlflow-artifacts/?op=mkdir"
     ```
 
 * **Persistent Host Tier & NOCOW Subvolumes:** SeaweedFS persists data to `/var/lib/taxon-vision/seaweedfs` on the host NVMe drive, mounted onto a dedicated BTRFS subvolume configured with the `NOCOW` (`chattr +C`) attribute to eliminate filesystem block fragmentation.
 
 ---
 
-## Consolidated Relational & Tracking Plane: PostgreSQL 16, MLflow 3.x & Optuna
+## Consolidated Relational & Tracking Plane: PostgreSQL 16, Optuna & DagsHub MLflow
 
-Rather than operating separate SQLite files or multiple database containers, the cluster consolidates relational state into a single tuned **PostgreSQL 16** deployment (`postgres:16-alpine` in [`deploy/k8s/postgres.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/postgres.yaml)) alongside the **MLflow v3.16.0** tracking server and **Optuna Dashboard** ([`deploy/k8s/mlops-storage-and-optuna.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/mlops-storage-and-optuna.yaml)):
+Rather than operating separate SQLite files or multiple database containers, the cluster consolidates relational state into a single tuned **PostgreSQL 16** deployment (`postgres:16-alpine` in [`deploy/k8s/postgres.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/postgres.yaml)) alongside the **Optuna Dashboard** ([`deploy/k8s/mlops-storage-and-optuna.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/mlops-storage-and-optuna.yaml)) and **Evidently 0.7 Drift UI** ([`deploy/k8s/evidently-ui.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/evidently-ui.yaml)), whilst experiment tracking runs exclusively on **DagsHub MLflow**:
 
-* **Consolidated PostgreSQL 16 Cluster (`NodePort 30432`):** Tuned for a compact memory footprint (`shared_buffers=128MB`, `max_connections=40`, `work_mem=4MB`) on `/var/lib/taxon-vision/postgres` (BTRFS `chattr +C` non-CoW) running under non-root security context (`runAsUser: 70`, `runAsGroup: 70`, `fsGroup: 70`) with dedicated `startupProbe` protection for automated WAL crash recovery. An initialisation ConfigMap (`postgres-init-sql`) provisions isolated roles and databases for `telemetry` (FastAPI prediction & drift records), `optuna` (Bayesian HPO studies), `airflow` (Airflow 3 scheduler state), and `mlflow` (experiment runs, `LoggedModel` lineage, and Model Registry aliases).
-* **MLflow v3.16.0 Tracking & Registry Server (`NodePort 30500`):** Runs with `--backend-store-uri postgresql+psycopg2://mlflow:...@postgres.taxon-vision.svc.cluster.local:5432/mlflow` and `--artifacts-destination s3://mlflow-artifacts --serve-artifacts`, proxying binary plots and `TaxonVisionPyFuncModel` bundles directly into SeaweedFS.
+* **Consolidated PostgreSQL 16 Cluster (`NodePort 30432`):** Tuned for a compact memory footprint (`shared_buffers=128MB`, `max_connections=120`, `work_mem=4MB`) on `/var/lib/taxon-vision/postgres` (BTRFS `chattr +C` non-CoW) running under non-root security context (`runAsUser: 70`, `runAsGroup: 70`, `fsGroup: 70`) with dedicated `startupProbe` protection for automated WAL crash recovery. An initialisation ConfigMap (`postgres-init-sql`) provisions three isolated roles and databases for `telemetry` (FastAPI prediction & drift records), `optuna` (Bayesian HPO studies), and `airflow` (Airflow 3 scheduler state).
+* **DagsHub Managed MLflow 3.x (`https://dagshub.com/foersben/taxon-vision-mlops.mlflow`):** Hosts experiment tracking (`taxon-vision-head-training` & `taxon-vision-drift`), 5-dataset lineage tables, `LoggedModel` entities, `@Production` registry aliases, diagnostic plots, and `TaxonVisionPyFuncModel` bundles over HTTPS (`DAGSHUB_TOKEN`), eliminating self-hosted MLflow database and artefact proxy maintenance.
+* **Evidently 0.7 Drift UI (`NodePort 30082`):** Serves longitudinal 9-column PCA/Wasserstein/MMD^2 drift workspaces persisted to `/var/lib/taxon-vision/evidently` (configured via `DRIFT_EVIDENTLY_WORKSPACE_DIR`).
 * **Optuna Dashboard (`NodePort 30081`):** Connects directly to the `optuna` PostgreSQL database (`postgresql+psycopg2://optuna:...@postgres.taxon-vision.svc.cluster.local:5432/optuna`), eliminating SQLite file-locking contention during concurrent GPU trials. Kept at `replicas: 0` when idle and scaled on demand during HPO inspection.
 
 ---
@@ -347,16 +347,18 @@ The system implements a production two-layer CI/CD architecture:
 To guarantee operational autonomy without external telemetry egress or SaaS dependencies, the cluster hosts an in-cluster observability stack in `namespace: taxon-vision`, deployed via [`deploy/k8s/monitoring-prometheus-grafana.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/monitoring-prometheus-grafana.yaml):
 
 * **Service Endpoints & NodePort Registry:**
-    * **Port `30080`:** FastAPI inference service & operator dashboard (`taxon-vision-serving:8000`).
+    * **Port `30080`:** Production FastAPI inference service & operator dashboard (`taxon-vision-serving:8000`).
     * **Port `30081`:** Optuna Bayesian hyperparameter search visualizer (`optuna-dashboard:8080`, scaled to 0 when idle).
+    * **Port `30082`:** Evidently 0.7 Drift UI (`evidently-ui:8000`) serving interactive longitudinal workspaces from `/var/lib/taxon-vision/evidently`.
+    * **Port `30085`:** Staging FastAPI inference service & operator dashboard (`taxon-vision-staging` CPU pod).
     * **Port `30090`:** Prometheus TSDB web UI and API (`prometheus:9090`), scraping targets every 15 seconds.
+    * **Port `30095`:** Apache Airflow 3 API server & web UI (`airflow-apiserver:8090`).
     * **Port `30300`:** Grafana visualizer (`grafana:3000`), authenticated with auto-provisioned Prometheus and Loki datasources, dual dashboards (10-panel Production Overview + 14-panel Infrastructure & Hardware Invariants), and Alertmanager webhook relay rules.
-    * **Port `30432`:** Consolidated PostgreSQL 16 relational database (`postgres:5432`) hosting `telemetry`, `optuna`, `airflow`, and `mlflow`.
-    * **Port `30500`:** MLflow v3.16.0 tracking and model registry server (`mlflow-server:5000`).
+    * **Port `30432`:** Consolidated PostgreSQL 16 relational database (`postgres:5432`) hosting `telemetry`, `optuna`, and `airflow`.
     * **Port `3100`:** Grafana Loki single-binary log engine (`config/loki.yaml`) with TSDB indexing and 168h retention.
     * **Internal Port `9080`:** Promtail log shipper (`config/promtail.yaml`) parsing FastAPI JSON logs, Airflow DAG/task execution traces, and Traefik access streams.
     * **Internal Port `6379`:** In-cluster Redis ephemeral upload cache (`redis-ephemeral:6379`), providing 64 MB bounded LRU memory for multipart specimen uploads and on-demand CAM attribution across replicas.
-    * **Internal Port `8333`:** SeaweedFS S3-compatible object gateway (`seaweedfs:8333`) hosting `taxon-dvc-cache`, `triage-queue`, and `mlflow-artifacts`.
+    * **Internal Port `8333`:** SeaweedFS S3-compatible object gateway (`seaweedfs:8333`) hosting `taxon-dvc-cache` and `triage-queue`.
 * **Storage Persistence & BTRFS NOCOW Allocation:** Prometheus, Grafana, and Loki persist time-series indices, dashboard state, and chunk files to `/var/lib/taxon-vision/prometheus`, `/var/lib/taxon-vision/grafana`, and `/var/lib/taxon-vision/loki` on the NVMe drive. Subvolumes are marked with the `NOCOW` (`chattr +C`) attribute to eliminate filesystem block fragmentation from frequent write appends.
 * **Linux Process Isolation & Root initContainers:** Unprivileged containers (Prometheus UID `65534`, Grafana UID `472`) are paired with root `initContainers` (`docker.io/busybox:latest`) that enforce correct ownership (`chown -R 65534:65534 /prometheus`, `chown -R 472:472 /var/lib/grafana`) and mode `775` before the main processes spawn, preventing `permission denied` startup crashes on hostPath volumes.
 * **Declarative Datasource Auto-Provisioning:** Grafana boots with pre-configured datasource ConfigMaps targeting `http://prometheus:9090` and `http://loki:3100` internally, enabling immediate out-of-the-box metric and log exploration without manual UI setup.
@@ -400,7 +402,7 @@ Continuous CI/CD execution can accumulate stale ReplicaSets and completed/failed
 To monitor ecological representation drift across non-stationary visual environments and automate model retraining, the platform implements a two-tier drift detection engine ([`src/taxon_vision/monitoring/drift.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/monitoring/drift.py) and [`src/taxon_vision/monitoring/drift_runner.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/monitoring/drift_runner.py)) coordinated by **Apache Airflow 3** (detailed in [Representation Drift Detection & Telemetry](drift_detection_and_telemetry.md) and [Apache Airflow 3 Orchestration](airflow_orchestration.md)):
 
 * **Tier 1 (1D Wasserstein-1 Distance on Pre-Normalised Embedding Norms):** Evaluates the Kantorovich-Rubinstein distance $W_1(P_{\text{ref}}, P_{\text{curr}})$ across $L_2$ embedding norms in $< 1\text{ ms}$ on CPU (`taxon_embedding_drift_w1`), catching optical degradation and exposure shifts.
-* **Tier 2 (Multivariate RKHS RBF $\text{MMD}_u^2$ Permutation Test & Evidently 0.7 PCA Snapshot):** Evaluates the unbiased squared Maximum Mean Discrepancy over 384-D embeddings with median-heuristic bandwidth $\gamma$ and $B=200$ Gram-matrix permutations (`taxon_embedding_drift_mmd2`, `taxon_embedding_drift_mmd_pvalue`), accompanied by an 8-D PCA `DataDriftPreset` HTML report (`reports/drift_latest.html`).
+* **Tier 2 (Multivariate RKHS RBF $\text{MMD}_u^2$ Permutation Test & Evidently 0.7 Workspace):** Evaluates the unbiased squared Maximum Mean Discrepancy over 384-D embeddings with median-heuristic bandwidth $\gamma$ and $B=200$ Gram-matrix permutations (`taxon_embedding_drift_mmd2`, `taxon_embedding_drift_mmd_pvalue`), accompanied by a 9-column PCA `DataDriftPreset(num_method="wasserstein", num_threshold=0.1)` + `PrecomputedDriftMetric` report saved both as standalone HTML (`reports/drift_report.html` / `reports/data_drift_report.html`) and inside the Evidently UI `Workspace` (`NodePort 30082`).
 * **Closed-Loop Retraining Relay:** Hourly drift evaluations are triggered by the Airflow `prediction_drift_monitor` DAG (`POST /api/v1/drift/evaluate`). When drift alerts fire in Grafana, Alertmanager invokes `POST /api/v1/retrain/webhook`, which authenticates and triggers the Airflow `model_retraining` DAG to merge human feedback, dispatch the Jenkins GPU pipeline, and audit the Four-Gate Promotion outcome.
 
 ---
@@ -418,13 +420,11 @@ The bare-metal K3s architecture is designed for deterministic execution on on-pr
 
 ## Local Development Stack
 
-For local multi-service orchestration and debugging, a canonical [`docker-compose.yml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/docker-compose.yml) is provided in the repository root. It orchestrates the complete 11-container topology using committed non-sensitive test defaults (see [Security Architecture & Credentials Governance](security_and_credentials.md)):
+For local multi-service orchestration and debugging, a canonical [`docker-compose.yml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/docker-compose.yml) is provided in the repository root. It orchestrates the containerised service stack using committed non-sensitive test defaults (see [Security Architecture & Credentials Governance](security_and_credentials.md)):
 
-* **PostgreSQL 16** (port `5432`) - Consolidated relational store hosting `telemetry`, `optuna`, `airflow`, and `mlflow` databases.
-* **SeaweedFS** (ports `8333` / `9333` / `8888`) - S3-compatible local object store auto-initialising `taxon-dvc-cache`, `triage-queue`, and `mlflow-artifacts` buckets.
-* **MLflow v3.16.0** (port `5000`) - Experiment tracking and Model Registry server backed by PostgreSQL and SeaweedFS `--serve-artifacts`.
+* **PostgreSQL 16** (port `5432`) - Consolidated relational store hosting `telemetry`, `optuna`, and `airflow` databases (`max_connections=120`).
+* **SeaweedFS** (ports `8333` / `9333` / `8888`) - S3-compatible local object store auto-initialising `taxon-dvc-cache` and `triage-queue` buckets.
 * **Apache Airflow 3.0.0 (`LocalExecutor`)** (port `8085`) - 4-container orchestration stack (`airflow-init`, `airflow-apiserver`, `airflow-scheduler`, `airflow-dag-processor`) running `prediction_drift_monitor` and `model_retraining`.
-* **Redis 7** (port `6379`) - Bounded 64 MB ephemeral upload and CAM state cache.
 * **Optuna Dashboard** (port `8080`) - Interactive Bayesian hyperparameter search visualizer.
 * **Prometheus** (port `9090`) - Scrapes `/metrics` endpoints (`config/prometheus.yaml`).
 * **Grafana** (port `3000`) - Auto-provisioned with Prometheus and Loki datasources, dual dashboards (Production Overview + Infrastructure & Hardware Invariants), and Alertmanager webhook rules (credentials: `admin` / `admin`).
@@ -437,8 +437,4 @@ Start the full local stack with:
 docker compose up -d
 ```
 
-Alternatively, for lightweight local development without Docker, start a local MLflow tracking server directly via Pixi:
-
-```bash
-pixi run -e dev mlflow
-```
+For experiment tracking, export `DAGSHUB_TOKEN` in your shell so pipelines log directly to `https://dagshub.com/foersben/taxon-vision-mlops.mlflow` (or omit it for clean offline test skipping without local SQLite residue).

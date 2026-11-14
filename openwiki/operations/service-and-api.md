@@ -3,9 +3,6 @@ type: service
 title: API Service & Web Interface
 description: FastAPI ASGI service architecture, OpenAPI prediction and explanation routes, Jinja2/HTMX operator cockpit, active model passport governance, and telemetry relays.
 tags: [fastapi, asgi, rest-api, htmx, jinja2, inference, conformal-prediction, ood-detection, passport, drift, retrain]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-11-08T17:07:25.915Z
 sources:
   - id: openwiki-source-d195e7451779d6a531c995ff
     resource: repo://src/taxon_vision/service/api.py

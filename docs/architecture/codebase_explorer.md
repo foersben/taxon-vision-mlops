@@ -66,7 +66,7 @@ pixi run -e ci-dev pytest tests/unit/test_data_components.py -q -o "addopts="
 
 ## 4. Comprehensive Quality Gate Protocol
 
-Execute the mandatory quality gates across all 74 source files (61 non-init modules) prior to creating a commit:
+Execute the mandatory quality gates across all 75 source files (62 non-init modules) prior to creating a commit:
 
 ```bash
 # 1. Strict Ruff formatting and linting

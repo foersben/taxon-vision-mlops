@@ -3,19 +3,13 @@
 """Offline visualizer for Apache Airflow DAG topologies.
 
 Summary:
-    Parses Airflow DAG source files using Python's abstract syntax tree (AST) to render
-    clean, zero-dependency terminal tree diagrams without requiring active container runtimes.
+    Parses Airflow DAG source files using Python's abstract syntax tree (AST) to render clean, zero-dependency terminal tree diagrams without requiring active container runtimes.
 
 Why:
-    Running live Airflow CLI commands (`airflow tasks list ... --tree`) requires active
-    scheduler containers and PostgreSQL connections. During fast iterative development,
-    developers and CI runners require an instant, zero-residue inspection tool that runs
-    in milliseconds without starting background containers or consuming memory.
+    Running live Airflow CLI commands (`airflow tasks list ... --tree`) requires active scheduler containers and PostgreSQL connections. During fast iterative development, developers and CI runners require an instant, zero-residue inspection tool that runs in milliseconds without starting background containers or consuming memory.
 
 How:
-    Extracts AST function definitions, TaskFlow decorators, parameters, and downstream
-    operator dependencies from `airflow/dags/*.py`, formatting them into structured ASCII
-    box-and-branch diagrams matching `dvc dag` ergonomics.
+    Extracts AST function definitions, TaskFlow decorators, parameters, and downstream operator dependencies from `airflow/dags/*.py`, formatting them into structured ASCII box-and-branch diagrams matching `dvc dag` ergonomics.
 """
 
 from __future__ import annotations
@@ -50,6 +44,23 @@ class DagTopology:
     nodes: list[DagTaskNode] = field(default_factory=list)
 
 
+def _apply_dag_kwarg(kw: ast.keyword, dag_meta: DagTopology) -> None:
+    """Apply a single @dag keyword argument onto the topology metadata."""
+    if kw.arg == "tags" and isinstance(kw.value, ast.List):
+        dag_meta.tags = [str(el.value) for el in kw.value.elts if isinstance(el, ast.Constant)]
+        return
+    if not isinstance(kw.value, ast.Constant):
+        return
+    if kw.arg == "dag_id":
+        dag_meta.dag_id = str(kw.value.value)
+    elif kw.arg == "schedule":
+        dag_meta.schedule = str(kw.value.value)
+    elif kw.arg == "catchup":
+        dag_meta.catchup = bool(kw.value.value)
+    elif kw.arg == "max_active_runs" and isinstance(kw.value.value, (int, str)):
+        dag_meta.max_active_runs = int(kw.value.value)
+
+
 def _extract_dag_metadata(decorator: ast.Call, dag_meta: DagTopology) -> None:
     """Extract keyword arguments from the @dag decorator call.
 
@@ -58,17 +69,7 @@ def _extract_dag_metadata(decorator: ast.Call, dag_meta: DagTopology) -> None:
         dag_meta: Mutable DagTopology instance to populate.
     """
     for kw in decorator.keywords:
-        if kw.arg == "dag_id" and isinstance(kw.value, ast.Constant):
-            dag_meta.dag_id = str(kw.value.value)
-        elif kw.arg == "schedule" and isinstance(kw.value, ast.Constant):
-            dag_meta.schedule = str(kw.value.value)
-        elif kw.arg == "catchup" and isinstance(kw.value, ast.Constant):
-            dag_meta.catchup = bool(kw.value.value)
-        elif kw.arg == "max_active_runs" and isinstance(kw.value, ast.Constant):
-            if isinstance(kw.value.value, (int, str)):
-                dag_meta.max_active_runs = int(kw.value.value)
-        elif kw.arg == "tags" and isinstance(kw.value, ast.List):
-            dag_meta.tags = [str(el.value) for el in kw.value.elts if isinstance(el, ast.Constant)]
+        _apply_dag_kwarg(kw, dag_meta)
 
 
 def _determine_node_kind(node: ast.FunctionDef) -> tuple[str, str]:
@@ -91,6 +92,43 @@ def _determine_node_kind(node: ast.FunctionDef) -> tuple[str, str]:
     return kind, desc
 
 
+def _find_dag_function(tree: ast.Module) -> tuple[ast.FunctionDef, ast.Call] | None:
+    """Locate the first top-level function decorated with @dag(...)."""
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        for dec in node.decorator_list:
+            if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Name) and dec.func.id == "dag":
+                return node, dec
+    return None
+
+
+def _extract_operator_nodes(subnode: ast.Assign) -> list[DagTaskNode]:
+    """Extract Airflow Operator instantiations from an assignment statement."""
+    if not (isinstance(subnode.value, ast.Call) and isinstance(subnode.value.func, ast.Name)):
+        return []
+    call_id = subnode.value.func.id
+    if "Operator" not in call_id:
+        return []
+    return [
+        DagTaskNode(name=target.id, kind="Operator", description=f"Instantiates {call_id}")
+        for target in subnode.targets
+        if isinstance(target, ast.Name)
+    ]
+
+
+def _extract_dag_nodes(node: ast.FunctionDef) -> list[DagTaskNode]:
+    """Extract nested task functions and operator assignments from a @dag body."""
+    nodes: list[DagTaskNode] = []
+    for subnode in node.body:
+        if isinstance(subnode, ast.FunctionDef):
+            kind, desc = _determine_node_kind(subnode)
+            nodes.append(DagTaskNode(name=subnode.name, kind=kind, description=desc))
+        elif isinstance(subnode, ast.Assign):
+            nodes.extend(_extract_operator_nodes(subnode))
+    return nodes
+
+
 def _parse_dag_file(file_path: Path) -> DagTopology | None:
     """Parse a single Airflow DAG Python file into a structured DagTopology.
 
@@ -105,32 +143,14 @@ def _parse_dag_file(file_path: Path) -> DagTopology | None:
     except (SyntaxError, UnicodeDecodeError):
         return None
 
-    for node in tree.body:
-        if isinstance(node, ast.FunctionDef):
-            for dec in node.decorator_list:
-                if isinstance(dec, ast.Call) and getattr(dec.func, "id", None) == "dag":
-                    topology = DagTopology(dag_id=node.name, file_path=file_path)
-                    _extract_dag_metadata(dec, topology)
-
-                    # Extract nested tasks and operators
-                    for subnode in node.body:
-                        if isinstance(subnode, ast.FunctionDef):
-                            kind, desc = _determine_node_kind(subnode)
-                            topology.nodes.append(DagTaskNode(name=subnode.name, kind=kind, description=desc))
-                        elif isinstance(subnode, ast.Assign):
-                            for target in subnode.targets:
-                                if isinstance(target, ast.Name) and isinstance(subnode.value, ast.Call):
-                                    call_id = getattr(subnode.value.func, "id", "")
-                                    if "Operator" in call_id:
-                                        topology.nodes.append(
-                                            DagTaskNode(
-                                                name=target.id,
-                                                kind="Operator",
-                                                description=f"Instantiates {call_id}",
-                                            )
-                                        )
-                    return topology
-    return None
+    dag_match = _find_dag_function(tree)
+    if dag_match is None:
+        return None
+    node, dec = dag_match
+    topology = DagTopology(dag_id=node.name, file_path=file_path)
+    _extract_dag_metadata(dec, topology)
+    topology.nodes.extend(_extract_dag_nodes(node))
+    return topology
 
 
 def _render_dag(topology: DagTopology) -> None:
@@ -166,6 +186,29 @@ def _render_dag(topology: DagTopology) -> None:
     print()
 
 
+def _collect_dag_topologies(dags_dir: Path) -> list[DagTopology]:
+    """Parse all Python DAG definitions inside the target directory."""
+    topologies: list[DagTopology] = []
+    for f in sorted(dags_dir.glob("*.py")):
+        parsed = _parse_dag_file(f)
+        if parsed is not None:
+            topologies.append(parsed)
+    return topologies
+
+
+def _render_filtered_dag(topologies: list[DagTopology], filter_dag: str) -> int:
+    """Render a single matching DAG topology or report available IDs."""
+    matched = [t for t in topologies if t.dag_id == filter_dag]
+    if not matched:
+        available = ", ".join(t.dag_id for t in topologies)
+        print(f"Error: DAG '{filter_dag}' not found.", file=sys.stderr)
+        print(f"Available DAGs: {available}", file=sys.stderr)
+        return 1
+    for t in matched:
+        _render_dag(t)
+    return 0
+
+
 def main(argv: list[str]) -> int:
     """Entry point for DAG visualization CLI.
 
@@ -176,33 +219,17 @@ def main(argv: list[str]) -> int:
         Integer exit code.
     """
     filter_dag = argv[1].strip() if len(argv) > 1 else ""
-
     if not DAGS_DIR.is_dir():
         print(f"Error: Airflow DAGs directory '{DAGS_DIR}' not found.", file=sys.stderr)
         return 1
 
-    dag_files = sorted(DAGS_DIR.glob("*.py"))
-    topologies: list[DagTopology] = []
-
-    for f in dag_files:
-        parsed = _parse_dag_file(f)
-        if parsed is not None:
-            topologies.append(parsed)
-
+    topologies = _collect_dag_topologies(DAGS_DIR)
     if not topologies:
         print(f"No valid Airflow DAGs found in {DAGS_DIR}.", file=sys.stderr)
         return 1
 
     if filter_dag:
-        matched = [t for t in topologies if t.dag_id == filter_dag]
-        if not matched:
-            available = ", ".join(t.dag_id for t in topologies)
-            print(f"Error: DAG '{filter_dag}' not found.", file=sys.stderr)
-            print(f"Available DAGs: {available}", file=sys.stderr)
-            return 1
-        for t in matched:
-            _render_dag(t)
-        return 0
+        return _render_filtered_dag(topologies, filter_dag)
 
     print(f"TaxonVision Airflow Topology ({len(topologies)} registered workflows):\n")
     for t in topologies:

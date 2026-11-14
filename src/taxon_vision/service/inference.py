@@ -4,6 +4,7 @@
 
 import io
 import logging
+import os
 import time
 from functools import lru_cache
 from pathlib import Path
@@ -80,7 +81,10 @@ def load_taxa_catalog() -> list[dict[str, Any]]:
     Returns:
         List of taxa metadata dictionaries with scientific and common names.
     """
-    catalog_path = _resolve_artifact(get_settings().model.taxa_catalog_path)
+    env_catalog = os.getenv("TAXON_TAXA_CATALOG_PATH", "").strip()
+    catalog_path = _resolve_artifact(env_catalog) if env_catalog else None
+    if catalog_path is None or not catalog_path.is_file():
+        catalog_path = _resolve_artifact(get_settings().model.taxa_catalog_path)
     with open(catalog_path, encoding="utf-8") as f:
         data = yaml.safe_load(f)
     return data.get("taxa", [])
@@ -260,7 +264,10 @@ def _load_calibrated_ood_threshold() -> float | None:
     Returns:
         Calibrated float threshold if present and valid; otherwise None.
     """
-    calib_path = _resolve_artifact("config/conformal_config.yaml")
+    env_conformal = os.getenv("TAXON_CONFORMAL_CONFIG_PATH", "").strip()
+    calib_path = _resolve_artifact(env_conformal) if env_conformal else None
+    if calib_path is None or not calib_path.is_file():
+        calib_path = _resolve_artifact("config/conformal_config.yaml")
     if not calib_path.is_file():
         return None
     try:

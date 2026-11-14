@@ -3,9 +3,6 @@ type: concept
 title: Uncertainty Quantification & Safety
 description: Mathematical foundation and operational implementation of split conformal prediction, Helmholtz free-energy out-of-distribution detection, forward-only CAM attribution, and active learning human triage.
 tags: [uncertainty, conformal-prediction, ood-detection, free-energy, cam, active-learning, triage, safety]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-11-08T17:07:25.915Z
 sources:
   - id: openwiki-source-3371ed1f3cb580f413973243
     resource: repo://src/taxon_vision/active_learning/query.py

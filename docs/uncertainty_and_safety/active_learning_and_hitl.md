@@ -81,15 +81,16 @@ flowchart TD
 ```
 
 1. **Tier 1 (Ephemeral Inference by Default):** Unverified uploads are processed strictly in RAM for forward-pass classification and CAM visualization. Images expire from memory after `image_cache_ttl_seconds` (15 minutes) and are **never** written to training manifests.
-2. **Tier 2 (Affirmative Opt-In Staging):** Only when a user explicitly checks an affirmative opt-in box (*"Contribute to open science under CC-BY 4.0"*) and provides an attribution name does `persist_flagged_observation` stage the crop to `data/flagged_observations/`.
+2. **Tier 2 (Affirmative Opt-In Staging):** Only when a user explicitly checks an affirmative opt-in box (*"Contribute to open science under CC-BY 4.0"*) and provides an attribution name does `persist_flagged_observation` stage the crop to `data/flagged_observations/` and upload it via [`LabelStudioSyncClient.upload_crop_to_bucket()`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/active_learning/label_studio_sync.py#L341-L375) using pure Python standard library AWS SigV4 (`AWS4-HMAC-SHA256` over `urllib.request`, avoiding runtime `boto3` dependencies) into DagsHub S3 (`triage-queue/`).
 3. **Tier 3 (Automated Gatekeeper Invariant):** The feedback merger (`src/taxon_vision/active_learning/feedback.py`) and license auditor (`audit_license.py`) act as a hard barrier: any annotation export record missing a valid Creative Commons code (`CC0`, `CC-BY`, `CC-BY-NC`) or lacking a photographer attribution string is dropped immediately with an audit warning.
 
 ---
 
-## 3. Label Studio Triage Interface (`deploy/label_studio/project_config.xml`)
+## 3. Label Studio Triage Interface & Proxied S3 Access (`deploy/label_studio/project_config.xml`)
 
-Human annotation tasks are declared declaratively via XML configuration in `deploy/label_studio/project_config.xml`:
+Human annotation tasks are declared declaratively via XML configuration in `deploy/label_studio/project_config.xml`, synchronised automatically by [`LabelStudioSyncClient`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/active_learning/label_studio_sync.py):
 
+* **Proxied Private Bucket Resolution (`presign=False`):** When registering DagsHub's `/api/v1/repo-buckets/s3/` backend via `POST storages/s3`, [`LabelStudioSyncClient`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/active_learning/label_studio_sync.py#L258-L279) explicitly sets `"presign": False` so Label Studio streams `s3://taxon-vision-mlops/triage-queue/...` objects using server-side SigV4 `Authorization` headers through `/tasks/{id}/resolve/` (preventing HTTP 401 failures from DagsHub query-string presigned URLs without making private triage buckets public).
 * **Visual Inspection:** High-resolution zoomable image crop viewer with rotation controls.
 * **Attribution Verification Pill:** Displays `$photographer_name`, `$license_code`, and `$observation_uuid` directly above the choices so domain experts can verify copyright credentials before tagging.
 * **Canonical Taxonomy Choices:** Single-choice selection mapping the 10 catalog taxa from `config/taxa_catalog.yaml` alongside an explicit `"Out of Distribution"` category.

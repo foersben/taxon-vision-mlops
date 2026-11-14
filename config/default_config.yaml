@@ -94,14 +94,11 @@ ingestion:
   per_page: 200
 
 mlflow:
-  tracking_uri: "http://127.0.0.1:5000"
-  fallback_sqlite_uri: "sqlite:///data/mlflow/mlflow.db"
-  dagshub_uri: "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
+  tracking_uri: "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
   experiment_name: "taxon-vision-head-training"
   drift_experiment_name: "taxon-vision-drift"
   model_registry_name: "taxon_vision_classifier"
   onnx_registry_name: "taxon_vision_onnx"
-  health_check_timeout_seconds: 1.0
 
 conformal:
   alpha: 0.05
@@ -131,6 +128,13 @@ optuna:
   epochs: 30
   min_resource: 3
   reduction_factor: 2
+  lr_min: 0.0001
+  lr_max: 0.005
+  weight_decay_min: 0.005
+  weight_decay_max: 0.05
+  dropout_min: 0.15
+  dropout_max: 0.50
+  val_loss_penalty: 0.05
 
 telemetry:
   database_url: "postgresql+psycopg://telemetry:taxon_telemetry_pass@localhost:5432/telemetry"
@@ -149,6 +153,8 @@ drift:
   alpha: 0.01
   config_path: "config/drift_config.yaml"
   reference_embeddings_path: "data/embeddings/cal_embeddings.pt"
+  evidently_workspace_dir: "data/evidently_workspace"
+  evidently_project_name: "TaxonVision Production Drift"
 
 evaluation:
   latency_sla_ms: 120.0

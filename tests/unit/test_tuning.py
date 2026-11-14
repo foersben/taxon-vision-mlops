@@ -62,14 +62,23 @@ def test_setup_mlflow_success_and_exception(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(mlflow, "set_tracking_uri", mock_set_uri)
     monkeypatch.setattr(mlflow, "set_experiment", mock_set_exp)
 
-    cfg = TuningConfig(tracking_uri="http://localhost:5000", experiment_name="tuning_test")
+    cfg = TuningConfig(tracking_uri="https://custom-tracking.example.com", experiment_name="tuning_test")
     assert _setup_mlflow(cfg) is True
-    mock_set_uri.assert_called_once_with("http://localhost:5000")
+    mock_set_uri.assert_called_once_with("https://custom-tracking.example.com")
     mock_set_exp.assert_called_once_with("tuning_test")
 
     # When set_experiment raises, returns False safely
     mock_set_exp.side_effect = ConnectionError("Server down")
     assert _setup_mlflow(cfg) is False
+
+    # Unauthenticated DagsHub URI skips cleanly without contacting remote server
+    monkeypatch.delenv("DAGSHUB_TOKEN", raising=False)
+    monkeypatch.delenv("MLFLOW_TRACKING_PASSWORD", raising=False)
+    dagshub_cfg = TuningConfig(
+        tracking_uri="https://dagshub.com/foersben/taxon-vision-mlops.mlflow",
+        experiment_name="tuning_test",
+    )
+    assert _setup_mlflow(dagshub_cfg) is False
 
 
 def test_log_best_run(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -121,6 +130,18 @@ def test_hyperparameter_objective_trial(synthetic_split: EmbeddingSplit, monkeyp
     score = objective(trial)
     assert isinstance(score, float)
     assert 0.0 <= score <= 1.0
+    assert cfg.lr_min <= trial.params["learning_rate"] <= cfg.lr_max
+    assert cfg.weight_decay_min <= trial.params["weight_decay"] <= cfg.weight_decay_max
+    assert cfg.dropout_min <= trial.params["dropout"] <= cfg.dropout_max
+
+
+def test_calibrated_objective_penalises_high_val_loss() -> None:
+    """Verify calibration-aware objective rewards lower validation loss at identical PR-AUC."""
+    from taxon_vision.models.training.tuning import _compute_calibrated_objective_score
+
+    low_loss = _compute_calibrated_objective_score({"val_pr_auc": [0.98], "val_loss": [0.20]}, 0.05)
+    high_loss = _compute_calibrated_objective_score({"val_pr_auc": [0.98], "val_loss": [0.90]}, 0.05)
+    assert 0.0 <= high_loss.objective_score < low_loss.objective_score <= 1.0
 
 
 def test_tune_hyperparameters_fast(synthetic_split: EmbeddingSplit, monkeypatch: pytest.MonkeyPatch) -> None:
