@@ -118,7 +118,6 @@ stages:
       --quantize-int8
       --quantize-mode dynamic
       --quantized-output models/checkpoints/model_int8.onnx
-      --allow-untrained
     deps:
       - models/checkpoints/head.pt
       - src/taxon_vision/inference/onnx_exporter.py

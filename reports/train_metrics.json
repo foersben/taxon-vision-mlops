@@ -2,12 +2,12 @@
   "status": "completed",
   "extractor": "dinov3",
   "epochs_trained": 30,
-  "final_train_loss": 0.2597,
-  "final_val_loss": 0.2683,
-  "final_val_accuracy": 0.9329,
-  "duration_seconds": 3.606,
+  "final_train_loss": 0.2277,
+  "final_val_loss": 0.2533,
+  "final_val_accuracy": 0.9268,
+  "duration_seconds": 2.633,
   "promotion_status": "candidate_trained",
   "hyperparameter_source": "persisted_best_params",
-  "mlflow_run_id": "19bd162b2d8946ce93466439e237c2bb",
-  "mlflow_model_id": "m-353a96827ccb4485a58934d29522d104"
+  "mlflow_run_id": "35784004c10243fd8bbfc6008d4c4c74",
+  "mlflow_model_id": "m-884005a559574e16954c9e1a75141865"
 }

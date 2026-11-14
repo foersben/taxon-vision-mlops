@@ -1,8 +1,8 @@
 ---
 type: operations
 title: Deployment, Scheduling & Observability
-description: Kubernetes and Docker deployment manifests, Sablier scale-to-zero autoscaling, Prometheus metrics, telemetry storage, Airflow DAGs, and drift detection.
-tags: [kubernetes, deployment, docker, sablier, prometheus, telemetry, drift-detection, airflow, grafana, rbac]
+description: Kubernetes and Docker deployment manifests, Prometheus metrics, telemetry storage, Airflow DAGs, and drift detection.
+tags: [kubernetes, deployment, docker, prometheus, telemetry, drift-detection, airflow, grafana, rbac]
 verified:
   - by: openwiki/0.7.2
     at: 2026-11-08T17:07:25.915Z
@@ -16,13 +16,11 @@ sources:
   - id: openwiki-source-1a0d8a98db0ff747dfbee636
     resource: repo://deploy/docker/Dockerfile
   - id: openwiki-source-67ce6221cdcbd3b0ca969d34
-    resource: repo://deploy/k8s/api-deployment.yaml
+    resource: repo://deploy/k8s/base/api-deployment.yaml
   - id: openwiki-source-b9df81af2f7f5ce78210bf26
     resource: repo://deploy/k8s/jenkins-agent-rbac.yaml
   - id: openwiki-source-948b3861f8fd9364bb8fd9eb
     resource: repo://deploy/k8s/nvidia-time-slicing-config.yaml
-  - id: openwiki-source-b525b97cbf205d0e064ebe76
-    resource: repo://deploy/k8s/sablier-scaler.yaml
   - id: openwiki-source-2e24373091085e0b0a3eebb8
     resource: repo://deploy/k8s/traefik-ingress.yaml
   - id: openwiki-source-b79fbbd921df689b4bbdc82f

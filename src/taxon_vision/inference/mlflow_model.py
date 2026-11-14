@@ -339,6 +339,7 @@ def _preprocess_input_batch(
 def _compute_sample_prediction(
     probabilities: np.ndarray,
     logits: np.ndarray,
+    *,
     conformal_engine: ConformalPredictionEngine,
     ood_detector: EnergyOODDetector,
     taxa_catalog: list[dict[str, Any]],

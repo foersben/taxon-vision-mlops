@@ -9,3 +9,4 @@ spec:
     port: 8000
     targetPort: 8000
     nodePort: 30085
+    protocol: TCP

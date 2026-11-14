@@ -132,12 +132,16 @@ verify-contracts:
 	bash -n scripts/ci/jenkins_gpu_train.sh
 	bash -n scripts/ci/verify_deployment.sh
 	bash -n scripts/ci/local_ci.sh
+	bash -n scripts/deploy/provision_k8s_secrets.sh
+	bash scripts/deploy/provision_k8s_secrets.sh --dry-run --mock >/dev/null
 	@echo ">>> 2. Validating DVC DAG structure & dry-run execution plan..."
 	pixi run --frozen -e ci-dev dvc dag
 	pixi run --frozen -e ci-dev dvc repro --dry
 	@if command -v kubectl >/dev/null 2>&1; then \
 		echo ">>> 3. Validating Kubernetes manifests with kubectl..."; \
 		kubectl apply -f deploy/k8s/ --dry-run=client; \
+		kubectl apply -k deploy/k8s/overlays/production --dry-run=client; \
+		kubectl apply -k deploy/k8s/overlays/staging --dry-run=client; \
 	else \
 		echo ">>> 3. kubectl not found on workstation (skipping client-side K8s manifest validation)."; \
 	fi
@@ -271,28 +275,6 @@ dvc-dag:
 dvc-repro:
 	pixi run --frozen -e dev dvc repro
 
-# Kill any lingering local processes holding ports 5000 or 5001
-[group("mlops")]
-mlflow-kill:
-    @fuser -k 5000/tcp 5001/tcp 2>/dev/null || true
-
-# Start local MLflow 3.x UI against the SQLite fallback database (port 5000)
-[group("mlops")]
-mlflow-ui port="5000":
-    @mkdir -p data/mlflow/artifacts
-    pixi run --frozen -e dev mlflow ui --backend-store-uri sqlite:///data/mlflow/mlflow.db --default-artifact-root ./data/mlflow/artifacts --port {{port}}
-
-# Clean the local SQLite MLflow store for a fresh offline baseline
-[group("mlops")]
-mlflow-clean-sqlite: mlflow-kill
-    rm -rf data/mlflow/mlflow.db data/mlflow/artifacts
-    @mkdir -p data/mlflow/artifacts
-
-# Start the containerised MLflow 3.x stack (PostgreSQL + SeaweedFS + MLflow Server)
-[group("mlops")]
-mlflow-up: mlflow-kill
-    docker compose up -d postgres seaweedfs mlflow-server
-
 # Run the ephemeral pipeline container in Dev mode (with bind mounts) or Prod mode
 [group("mlops")]
 pipeline-run mode="dev":
@@ -351,6 +333,36 @@ simulate-traffic count="60":
 verify-deployment namespace="taxon-vision":
 	@bash scripts/ci/verify_deployment.sh {{namespace}}
 
+# Synchronise Airflow 3 DAGs and Python dependencies from Git into Kubernetes ConfigMaps
+[group("app")]
+sync-airflow-k8s namespace="taxon-vision":
+	#!/usr/bin/env bash
+	set -euo pipefail
+	dag_args=()
+	for f in airflow/dags/*.py; do
+		[ -f "$f" ] && dag_args+=("--from-file=$f")
+	done
+	kubectl create configmap airflow-dags "${dag_args[@]}" -n {{namespace}} --dry-run=client -o yaml | kubectl apply -f -
+	kubectl create configmap airflow-taxon-deps \
+		--from-file=feedback.py=src/taxon_vision/active_learning/feedback.py \
+		--from-file=label_studio_sync.py=src/taxon_vision/active_learning/label_studio_sync.py \
+		--from-file=triage_queue.py=src/taxon_vision/active_learning/triage_queue.py \
+		--from-file=taxa_catalog.yaml=config/taxa_catalog.yaml \
+		-n {{namespace}} --dry-run=client -o yaml | kubectl apply -f -
+
+# Deploy Airflow 3 orchestration manifests after syncing Git DAGs and helper dependencies
+[group("app")]
+deploy-airflow-k8s: sync-airflow-k8s
+	kubectl apply -f deploy/k8s/airflow.yaml
+	kubectl rollout restart deployment/airflow-apiserver deployment/airflow-scheduler -n taxon-vision
+	kubectl rollout status deployment/airflow-apiserver -n taxon-vision --timeout=180s
+	kubectl rollout status deployment/airflow-scheduler -n taxon-vision --timeout=180s
+
+# Provision encrypted Kubernetes Secrets out-of-band (Option A temporary MVP workflow)
+[group("app")]
+provision-k8s-secrets *args:
+	bash scripts/deploy/provision_k8s_secrets.sh {{args}}
+
 # ── Documentation ───────────────────────────────────────────────────────────
 
 # Build Zensical documentation site
@@ -406,4 +418,4 @@ lab:
 [group("utils")]
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
-	rm -rf .cache site build dist .pytest_cache .mypy_cache .ruff_cache htmlcov .coverage .coverage.* coverage.xml reports/coverage mlflow.db mlruns .complexipy_cache
+	rm -rf .cache site build dist .pytest_cache .mypy_cache .ruff_cache htmlcov .coverage .coverage.* coverage.xml reports/coverage .complexipy_cache

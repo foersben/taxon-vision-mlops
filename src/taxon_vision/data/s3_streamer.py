@@ -7,6 +7,7 @@ from __future__ import annotations
 import concurrent.futures
 import io
 import logging
+import os
 import threading
 import time
 from collections.abc import Generator
@@ -194,6 +195,158 @@ def _attempt_http_get(url: str, client: httpx.Client, attempt: int, retries: int
         return _FetchAttemptOutcome(content=None, should_retry=False)
 
 
+_DAGSHUB_S3_PREFIX = "https://dagshub.com/api/v1/repo-buckets/s3/"
+
+
+@dataclass(frozen=True)
+class _S3FetchSpec:
+    """Resolved S3 bucket, object key, endpoint, and optional credentials.
+
+    Why:
+        Stage 3 streaming fetches public iNaturalist buckets (`s3://inaturalist-open-data/...`), DagsHub repository triage URIs (`s3://taxon-vision-mlops/triage-queue/...`), and DagsHub HTTP repo-bucket URLs; encapsulating parsed client settings keeps `_fetch_s3_image_bytes` uniform and low-complexity.
+
+    How:
+        Produced by `_resolve_s3_fetch_spec()` from raw image URIs and runtime `DAGSHUB_TOKEN` environment variables.
+
+    Attributes:
+        bucket: Target S3 bucket name.
+        key: Object key inside the bucket.
+        endpoint_url: Optional custom S3 gateway URL (set for DagsHub or SeaweedFS).
+        aws_key: Optional SigV4 access key ID.
+        aws_secret: Optional SigV4 secret access key.
+    """
+
+    bucket: str
+    key: str
+    endpoint_url: str | None
+    aws_key: str | None
+    aws_secret: str | None
+
+
+def _is_s3_compatible_uri(url: str) -> bool:
+    """Return True when the URL targets an `s3://` or DagsHub S3 repository bucket URI.
+
+    Why:
+        Distinguishes authenticated object-store URIs routed to `boto3` from standard public HTTP(S) image links routed through `httpx.Client`.
+
+    How:
+        Matches `s3://`, DagsHub's `/api/v1/repo-buckets/s3/` gateway prefix, or virtual-style `https://dagshub.com/<owner>/<repo>.s3/<key>` links.
+
+    Args:
+        url: Image URI stored inside the dataset manifest.
+
+    Returns:
+        True if the URI must be fetched via `_fetch_s3_image_bytes`, False for HTTP(S).
+    """
+    return (
+        url.startswith("s3://")
+        or url.startswith(_DAGSHUB_S3_PREFIX)
+        or (url.startswith("https://dagshub.com/") and ".s3/" in url)
+    )
+
+
+def _parse_dagshub_s3_url(url: str) -> tuple[str, str, str]:
+    """Extract `(owner, bucket, key)` from a DagsHub HTTP(S) S3 bucket URL.
+
+    Why:
+        DagsHub exports task image URLs in two HTTPS forms depending on UI/API origin (`/api/v1/repo-buckets/s3/...` vs `<owner>/<repo>.s3/...`). Normalising both into S3 client coordinates eliminates duplicate parsing branches in `_resolve_s3_fetch_spec`.
+
+    How:
+        Partitions either `_DAGSHUB_S3_PREFIX` or `.s3/` suffixes into owner, repository bucket slug, and object key segments.
+
+    Args:
+        url: Full DagsHub HTTP(S) S3 object URL.
+
+    Returns:
+        Three-element tuple `(owner, bucket, key)`.
+    """
+    if url.startswith(_DAGSHUB_S3_PREFIX):
+        url_owner, _, bucket_and_key = url.removeprefix(_DAGSHUB_S3_PREFIX).partition("/")
+        bucket, _, key = bucket_and_key.partition("/")
+        return url_owner, bucket, key
+    owner_and_repo, _, key = url.removeprefix("https://dagshub.com/").partition(".s3/")
+    url_owner, _, bucket = owner_and_repo.partition("/")
+    return url_owner, bucket, key
+
+
+def _resolve_s3_fetch_spec(url: str) -> _S3FetchSpec | None:
+    """Parse an `s3://` or DagsHub repository bucket URI into S3 client coordinates.
+
+    Why:
+        Headless Jenkins Stage 3 workers need authenticated `boto3` coordinates for private DagsHub triage crops (`triage-queue/`) while leaving public `s3://inaturalist-open-data/...` URIs untouched.
+
+    How:
+        Reads `DAGSHUB_TOKEN`, `TAXON_DAGSHUB_OWNER`, and `TAXON_DAGSHUB_REPO`, parses DagsHub HTTPS or `s3://` URIs (normalising legacy `s3://dvc/triage-queue/` aliases), attaches SigV4 credentials only for repo/triage buckets, and returns `None` if bucket or key is empty.
+
+    Args:
+        url: Source S3 or DagsHub repository bucket URI.
+
+    Returns:
+        Populated `_S3FetchSpec` dataclass or `None` when malformed.
+    """
+    token = (os.getenv("DAGSHUB_TOKEN") or os.getenv("MLFLOW_TRACKING_PASSWORD") or "").strip() or None
+    owner = os.getenv("TAXON_DAGSHUB_OWNER", "foersben").strip()
+    dagshub_repo = os.getenv("TAXON_DAGSHUB_REPO", "taxon-vision-mlops").strip()
+    endpoint_url: str | None = os.getenv("MLFLOW_S3_ENDPOINT_URL") or None
+    aws_key: str | None = None
+    aws_secret: str | None = None
+
+    if not url.startswith("s3://"):
+        url_owner, bucket, key = _parse_dagshub_s3_url(url)
+        endpoint_url = f"{_DAGSHUB_S3_PREFIX}{url_owner or owner}"
+        aws_key, aws_secret = token, token
+    else:
+        bucket, _, key = url.removeprefix("s3://").partition("/")
+        if bucket == "dvc" and key.startswith("triage-queue/"):
+            bucket = dagshub_repo
+        if token and (bucket == dagshub_repo or key.startswith("triage-queue/")):
+            endpoint_url = f"{_DAGSHUB_S3_PREFIX}{owner}"
+            aws_key, aws_secret = token, token
+
+    if not bucket or not key:
+        logger.warning("Malformed S3 URI encountered during streaming: %s", url)
+        return None
+    return _S3FetchSpec(bucket=bucket, key=key, endpoint_url=endpoint_url, aws_key=aws_key, aws_secret=aws_secret)
+
+
+def _fetch_s3_image_bytes(url: str) -> bytes | None:
+    """Fetch raw image bytes from `s3://` or DagsHub S3 repository bucket URIs using lazy `boto3`.
+
+    Why:
+        Allows `S3ImageStreamer` to ingest active-learning triage crops stored inside private DagsHub S3 prefixes without exposing raw credentials in manifest Parquet URLs or requiring public bucket ACLs.
+
+    How:
+        Resolves `_S3FetchSpec`, lazily imports `boto3`, instantiates an S3 client with optional DagsHub endpoint/SigV4 credentials, reads `get_object()['Body']`, and logs warnings rather than crashing batch extraction on missing objects.
+
+    Args:
+        url: S3 or DagsHub bucket image URI.
+
+    Returns:
+        Raw JPEG/PNG bytes if retrieval succeeds, otherwise `None`.
+    """
+    import boto3
+    from botocore.exceptions import BotoCoreError, ClientError
+
+    spec = _resolve_s3_fetch_spec(url)
+    if spec is None:
+        return None
+
+    client_kwargs: dict[str, Any] = {"region_name": "us-east-1"}
+    if spec.endpoint_url:
+        client_kwargs["endpoint_url"] = spec.endpoint_url
+    if spec.aws_key and spec.aws_secret:
+        client_kwargs["aws_access_key_id"] = spec.aws_key
+        client_kwargs["aws_secret_access_key"] = spec.aws_secret
+
+    try:
+        s3_client = boto3.client("s3", **client_kwargs)
+        response = s3_client.get_object(Bucket=spec.bucket, Key=spec.key)
+        return bytes(response["Body"].read())
+    except (BotoCoreError, ClientError, OSError) as exc:
+        logger.warning("S3 image fetch failed for %s: %s", url, exc)
+        return None
+
+
 def fetch_image_with_retry(
     url: str,
     client: httpx.Client,
@@ -206,17 +359,20 @@ def fetch_image_with_retry(
         Remote object store endpoints can encounter DNS lookup throttling, socket exhaustion, or rate-limiting during high-concurrency ingestion. Retrying with exponential backoff prevents transient dropouts from corrupting training datasets.
 
     How:
-        Executes HTTP GET requests up to max_retries times via `_attempt_http_get`. Sleeps for backoff_factor * (2 ** attempt) seconds before retrying transient HTTP 429/5xx or transport errors. Returns content bytes on HTTP 200, or None after exhaustion.
+        Routes s3:// and DagsHub repository bucket URIs through _fetch_s3_image_bytes, and executes HTTP GET requests up to max_retries times via `_attempt_http_get` with backoff_factor * (2 ** attempt) exponential backoff on transient errors.
 
     Args:
-        url: Remote image URL to retrieve.
-        client: Persistent httpx.Client to reuse for requests.
+        url: Remote image URL or S3 URI to retrieve.
+        client: Persistent httpx.Client to reuse for HTTP requests.
         max_retries: Optional maximum retry attempts. If None, derived from centralized settings.
         backoff_factor: Optional exponential backoff multiplier. If None, derived from centralized settings.
 
     Returns:
         Decoded image bytes if retrieved successfully, or None if retrieval failed.
     """
+    if _is_s3_compatible_uri(url):
+        return _fetch_s3_image_bytes(url)
+
     settings = get_settings()
     retries = max_retries if max_retries is not None else settings.streaming.http_max_retries
     factor = backoff_factor if backoff_factor is not None else settings.streaming.http_backoff_factor

@@ -250,7 +250,7 @@ metadata:
   namespace: taxon-vision
 rules:
   - apiGroups: ["apps"]
-    resources: ["deployments"]
+    resources: ["deployments", "daemonsets", "statefulsets"]
     verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
   - apiGroups: [""]
     resources: ["services", "pods", "pods/log", "events"]

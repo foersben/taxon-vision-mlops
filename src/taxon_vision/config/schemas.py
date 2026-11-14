@@ -150,27 +150,21 @@ class IngestionConfig(BaseModel):
 
 
 class MLflowConfig(BaseModel):
-    """Experiment tracking and MLflow 3.x model registry configuration schema.
+    """Experiment tracking and MLflow model registry configuration schema.
 
     Attributes:
-        tracking_uri: Primary MLflow 3.x tracking server URI.
-        fallback_sqlite_uri: Local SQLite backend URI when remote server is unreachable.
-        dagshub_uri: Optional remote DagsHub MLflow mirror URI.
+        tracking_uri: Primary MLflow tracking server URI (DagsHub endpoint).
         experiment_name: Target experiment grouping name for training runs.
         drift_experiment_name: Target experiment grouping name for drift evaluations.
         model_registry_name: Registered model name for PyTorch/PyFunc classifiers.
         onnx_registry_name: Registered model name for quantized INT8 ONNX graphs.
-        health_check_timeout_seconds: Timeout in seconds when probing tracking_uri health.
     """
 
-    tracking_uri: str = "http://127.0.0.1:5000"
-    fallback_sqlite_uri: str = "sqlite:///data/mlflow/mlflow.db"
-    dagshub_uri: str = "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
+    tracking_uri: str = "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
     experiment_name: str = "taxon-vision-head-training"
     drift_experiment_name: str = "taxon-vision-drift"
     model_registry_name: str = "taxon_vision_classifier"
     onnx_registry_name: str = "taxon_vision_onnx"
-    health_check_timeout_seconds: float = Field(default=1.0, gt=0.0)
 
 
 class ConformalConfig(BaseModel):
@@ -263,6 +257,13 @@ class OptunaConfig(BaseModel):
     epochs: int = Field(default=20, gt=0)
     min_resource: int = Field(default=3, gt=0)
     reduction_factor: int = Field(default=2, gt=1)
+    lr_min: float = Field(default=1e-4, gt=0.0)
+    lr_max: float = Field(default=5e-3, gt=0.0)
+    weight_decay_min: float = Field(default=5e-3, ge=0.0)
+    weight_decay_max: float = Field(default=5e-2, gt=0.0)
+    dropout_min: float = Field(default=0.15, ge=0.0, lt=1.0)
+    dropout_max: float = Field(default=0.50, ge=0.0, lt=1.0)
+    val_loss_penalty: float = Field(default=0.05, ge=0.0)
 
 
 class TelemetryConfig(BaseModel):
@@ -289,6 +290,9 @@ class TelemetryConfig(BaseModel):
 class DriftConfig(BaseModel):
     """Configuration schema for embedding and concept drift monitoring.
 
+    Summary:
+        Defines sliding-window sample bounds, statistical test thresholds, reference embedding paths, and Evidently workspace persistence targets.
+
     Attributes:
         window_size (int): Number of recent production inference records evaluated in sliding window (default: 500).
         min_samples (int): Minimum required records in window to compute drift (default: 50).
@@ -298,6 +302,8 @@ class DriftConfig(BaseModel):
         alpha (float): Significance ceiling for MMD permutation hypothesis rejection (default: 0.01).
         config_path (str): Relative or absolute path to calibrated drift configuration YAML (default: 'config/drift_config.yaml').
         reference_embeddings_path (str): Path to baseline reference holdout embeddings (default: 'data/embeddings/cal_embeddings.pt').
+        evidently_workspace_dir (str): Filesystem path to the Evidently UI workspace directory (default: 'data/evidently_workspace').
+        evidently_project_name (str): Project name displayed inside the Evidently UI workspace (default: 'TaxonVision Production Drift').
     """
 
     window_size: int = Field(default=500, ge=10)
@@ -308,6 +314,8 @@ class DriftConfig(BaseModel):
     alpha: float = Field(default=0.01, gt=0.0, lt=1.0)
     config_path: str = Field(default="config/drift_config.yaml")
     reference_embeddings_path: str = Field(default="data/embeddings/cal_embeddings.pt")
+    evidently_workspace_dir: str = Field(default="data/evidently_workspace")
+    evidently_project_name: str = Field(default="TaxonVision Production Drift")
 
 
 class EvaluationConfig(BaseModel):

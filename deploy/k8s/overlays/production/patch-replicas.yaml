@@ -13,6 +13,11 @@ spec:
     spec:
       containers:
       - name: api-service
+        env:
+        - name: TAXON_TELEMETRY_ALLOW_IN_MEMORY_FALLBACK
+          value: "false"
+        - name: TAXON_TELEMETRY__ALLOW_IN_MEMORY_FALLBACK
+          value: "false"
         resources:
           requests:
             cpu: "200m"

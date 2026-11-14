@@ -24,14 +24,15 @@ verified: {by: process:okf-updater, at: "2026-10-30T00:00:00Z"}
 * **Stage 1 (Ingest):** S3 image streaming from iNaturalist Open Data bucket, validating CC0, CC-BY, and CC-BY-NC licenses while filtering non-compliant static domains.
 * **Stage 2 (Audit License):** Verifies license compliance and photographic attribution retention, outputting `dataset_manifest.parquet`.
 * **Stage 3 (Extract Features):** Batch inference over frozen foundation vision backbones (BioCLIP-2 / DINOv2 / DINOv3), caching normalized feature embeddings across 4 splits (`train`, `val`, `cal`, `test`).
-* **Stage 4 (Train Head):** Class-balanced cosine classifier training with PyTorch, Optuna HPO, and MLflow run tracking.
+* **Stage 4 (Train Head):** Class-balanced cosine classifier training with PyTorch, Optuna HPO (TPE + ASHA backed by PostgreSQL/SQLite WAL), and direct DagsHub MLflow run tracking (`taxon-vision-head-training`).
 * **Stage 5 (Export ONNX & Quantize):** Zero-allocation ONNX model export with INT8 Dynamic Quantization and FP16 support.
 * **Stage 6 (Calibrate Conformal & OOD):** Split Conformal Prediction calculating empirical non-conformity quantile $\hat{q}$ to guarantee $1 - \alpha$ marginal coverage; Energy-based Out-of-Distribution (OOD) detector calibration.
-* **Stage 7 (Evaluate & Pareto Benchmark):** Holdout evaluation calculating top-1/top-5 accuracy, conformal prediction set sizes, p95 latency benchmarks, and Grafana Prometheus metrics.
+* **Stage 7 (Evaluate & Pareto Benchmark):** Holdout evaluation calculating top-1/top-5 accuracy, conformal prediction set sizes, p95 latency benchmarks, direct DagsHub artefact attachment inside `resume_parent_mlflow_run()`, and Four-Gate `@Production`/`@Challenger` promotion.
 
-## 3. Serving & UI Architecture
+## 3. Serving, Telemetry & Drift Architecture
 
-* **FastAPI Backend:** Machine REST API (`/predict`, `/feedback`, `/health`) and Prometheus `/metrics`.
+* **FastAPI Backend:** Machine REST API (`/predict`, `/feedback`, `/health`, `/api/v1/drift/evaluate`) and Prometheus `/metrics`.
 * **Asynchronous Non-Blocking Invariant:** Heavy CPU-bound inference and disk I/O offloaded via `await anyio.to_thread.run_sync`.
 * **Jinja2 + HTMX Dashboard:** Operator interface for live drag-and-drop classification, Grad-CAM heatmap visualization, and conformal prediction set inspection.
 * **Distributed Upload Cache:** Redis-backed deduplication and transient caching preventing duplicate S3 transfers and split-brain states across replicas.
+* **Drift Observability:** Two-tier exact Tier 1 $W_1$ norm shift + Tier 2 unbiased RBF $\text{MMD}_u^2$ ($B=200$ permutations) paired with Evidently 0.7 `DataDriftPreset(num_method="wasserstein", num_threshold=0.1)` and `SingleValueMetric` scalar cards persisted to the mounted UI Workspace and logged to DagsHub MLflow (`taxon-vision-drift`).

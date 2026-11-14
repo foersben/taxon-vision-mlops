@@ -11,7 +11,6 @@ import json
 import logging
 import os
 import subprocess
-import urllib.request
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -24,6 +23,7 @@ import onnx
 import pandas as pd
 from mlflow.models import ModelSignature
 from mlflow.models.model import ModelInfo
+from mlflow.tracking import MlflowClient
 from mlflow.types.schema import Schema, TensorSpec
 from torch import nn
 
@@ -176,57 +176,85 @@ def _inject_lineage_tags() -> None:
         logger.debug("Could not resolve git lineage tags: %s", git_err)
 
 
+def _ensure_dagshub_auth(uri: str) -> bool:
+    """Populate MLflow Basic Auth environment credentials for DagsHub tracking URIs when a token is available.
+
+    Args:
+        uri: Candidate MLflow tracking URI.
+
+    Returns:
+        True if a non-empty DagsHub token is configured, False otherwise.
+    """
+    dagshub_token = os.getenv("DAGSHUB_TOKEN") or os.getenv("MLFLOW_TRACKING_PASSWORD")
+    if not dagshub_token:
+        return False
+    if "dagshub.com" in uri:
+        os.environ.setdefault("MLFLOW_TRACKING_USERNAME", "foersben")
+        os.environ.setdefault("MLFLOW_TRACKING_PASSWORD", dagshub_token)
+    return True
+
+
 def _resolve_reachable_tracking_uri(settings: Settings | None = None) -> str:
-    """Resolve the reachable MLflow tracking URI across explicit, network, and offline tiers.
+    """Resolve the active MLflow tracking URI targeting DagsHub or an explicit environment override.
 
     Summary:
-        Determines the optimal MLflow tracking URI by evaluating environment overrides, probing the primary HTTP/S tracking server for reachability, and falling back to a local SQLite database when offline.
+        Determines the active MLflow tracking URI from `MLFLOW_TRACKING_URI` or `cfg.mlflow.tracking_uri` and skips cleanly without creating local SQLite databases or `mlruns` directories when credentials are absent.
 
     Why:
-        Hardcoded remote URIs or silent tracking dropouts compromise experiment reproducibility. While production CI runs and cluster pods communicate directly with a dedicated MLflow 3.x tracking server, offline developer workstations or air-gapped environments must continue tracking experiments without dropping runs or polluting stdout with network timeout tracebacks.
+        Experiment tracking is consolidated exclusively onto the managed DagsHub MLflow server (`https://dagshub.com/foersben/taxon-vision-mlops.mlflow`) to eliminate duplicated in-cluster database state and cross-server run mirroring. Unauthenticated offline environments or dry-runs must skip tracking gracefully rather than writing orphaned local SQLite artefacts.
 
     How:
-        1. Tier 1: Checks for an explicit MLFLOW_TRACKING_URI environment variable and returns it immediately if present.
-        2. Tier 2: If the configured tracking URI begins with 'http://' or 'https://', performs a rapid HTTP health check against the server's /health endpoint bounded by health_check_timeout_seconds.
-        3. Tier 3: If Tier 2 fails or is unreachable, ensures local directories exist for SQLite storage (data/mlflow/artifacts) and returns the fallback SQLite URI whilst logging an operational warning.
+        1. Checks `MLFLOW_TRACKING_URI` if explicitly set in the environment: an empty string disables tracking immediately; non-empty URIs inject DagsHub Basic Auth credentials when targeting `dagshub.com` and return `""` if unauthenticated.
+        2. Otherwise inspects `cfg.mlflow.tracking_uri`: validates DagsHub credentials via `_ensure_dagshub_auth` when targeting `dagshub.com`, returning the URI if authenticated or logging a debug message and returning `""` when unauthenticated.
 
     Args:
         settings: Application settings instance. If None, resolved via get_settings().
 
     Returns:
-        Reachable MLflow tracking URI string (HTTP URL or SQLite URI).
+        Configured MLflow tracking URI string, or an empty string when tracking is disabled or unauthenticated.
     """
     env_uri = os.getenv("MLFLOW_TRACKING_URI")
-    if env_uri:
-        return env_uri
+    if env_uri is not None:
+        cleaned_env = env_uri.strip()
+        if not cleaned_env:
+            return ""
+        if "dagshub.com" in cleaned_env and not _ensure_dagshub_auth(cleaned_env):
+            return ""
+        return cleaned_env
 
     cfg = settings or get_settings()
-    configured_uri = cfg.mlflow.tracking_uri
+    configured_uri = (cfg.mlflow.tracking_uri or "").strip()
+    if not configured_uri:
+        return ""
+    if "dagshub.com" in configured_uri and not _ensure_dagshub_auth(configured_uri):
+        logger.debug("Skipping DagsHub MLflow tracking (%s): credentials unavailable.", configured_uri)
+        return ""
+    return configured_uri
 
-    if configured_uri.startswith(("http://", "https://")):
-        health_url = f"{configured_uri.rstrip('/')}/health"
-        timeout = cfg.mlflow.health_check_timeout_seconds
-        try:
-            req = urllib.request.Request(health_url, headers={"User-Agent": "TaxonVision-HealthProbe/1.0"})
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                if 200 <= resp.status < 300:
-                    return configured_uri
-        except Exception as probe_err:
-            logger.debug("MLflow tracking health probe failed for %s: %s", health_url, probe_err)
 
-    # Tier 3: Fallback to local SQLite backend
-    fallback_uri = cfg.mlflow.fallback_sqlite_uri
-    db_path_str = fallback_uri.replace("sqlite:///", "")
-    db_dir = Path(db_path_str).parent if db_path_str else Path("data/mlflow")
-    artifacts_dir = db_dir / "artifacts"
-    artifacts_dir.mkdir(parents=True, exist_ok=True)
-
-    logger.warning(
-        "Primary MLflow tracking server '%s' is unreachable. Falling back to local SQLite backend '%s'.",
-        configured_uri,
-        fallback_uri,
-    )
-    return fallback_uri
+def _open_mlflow_run(
+    run_name: str,
+    params: dict[str, Any] | None,
+    nested: bool,
+    experiment_name: str | None,
+) -> Any:
+    """Resolve DagsHub tracking URI, configure experiment, start run, and log initial metadata."""
+    settings = get_settings()
+    tracking_uri = _resolve_reachable_tracking_uri(settings)
+    if not tracking_uri:
+        return None
+    mlflow.set_tracking_uri(tracking_uri)
+    target_exp = experiment_name or settings.mlflow.experiment_name
+    if target_exp:
+        mlflow.set_experiment(target_exp)
+    active_run = mlflow.start_run(run_name=run_name, nested=True) if nested else mlflow.start_run(run_name=run_name)
+    if params:
+        mlflow.log_params(params)
+    dataset_hash = get_dvc_dataset_hash()
+    if dataset_hash:
+        mlflow.log_param("dvc_dataset_hash", dataset_hash)
+    _inject_lineage_tags()
+    return active_run
 
 
 @contextmanager
@@ -267,25 +295,7 @@ def mlflow_run_scope(
     """
     active_run = None
     try:
-        settings = get_settings()
-        tracking_uri = _resolve_reachable_tracking_uri(settings)
-        if tracking_uri:
-            mlflow.set_tracking_uri(tracking_uri)
-
-        target_exp = experiment_name or settings.mlflow.experiment_name
-        if target_exp:
-            mlflow.set_experiment(target_exp)
-
-        active_run = mlflow.start_run(run_name=run_name, nested=True) if nested else mlflow.start_run(run_name=run_name)
-
-        if params:
-            mlflow.log_params(params)
-
-        dataset_hash = get_dvc_dataset_hash()
-        if dataset_hash:
-            mlflow.log_param("dvc_dataset_hash", dataset_hash)
-
-        _inject_lineage_tags()
+        active_run = _open_mlflow_run(run_name, params, nested, experiment_name)
     except Exception as err:
         logger.debug("MLflow tracking setup skipped or unavailable: %s", err)
         active_run = None
@@ -313,7 +323,7 @@ def resume_parent_mlflow_run(
 
     How:
         1. Reads reports/train_metrics.json to recover mlflow_run_id and mlflow_model_id.
-        2. Resolves the reachable tracking URI across remote HTTP and local SQLite fallback tiers.
+        2. Resolves the active DagsHub or environment-overridden tracking URI and skips cleanly when unauthenticated.
         3. Invokes mlflow.start_run(run_id=run_id) to reopen the parent run.
         4. Yields a typed ParentRunContext dataclass to the caller.
         5. Automatically closes the reopened run on block exit without altering its terminal FINISHED status.
@@ -353,12 +363,18 @@ def resume_parent_mlflow_run(
 
     settings = get_settings()
     tracking_uri = _resolve_reachable_tracking_uri(settings)
-    if tracking_uri:
-        mlflow.set_tracking_uri(tracking_uri)
+    if not tracking_uri:
+        logger.debug("MLflow tracking URI unavailable or unauthenticated; skipping run resumption.")
+        yield None
+        return
+    mlflow.set_tracking_uri(tracking_uri)
 
     active_run = None
     try:
         active_run = mlflow.start_run(run_id=ctx.run_id)
+        if ctx.model_id:
+            with contextlib.suppress(Exception):
+                mlflow.set_active_model(model_id=ctx.model_id)
         logger.info("Resumed parent MLflow run %s for stage continuity", ctx.run_id)
     except Exception as start_err:
         logger.warning("Failed to resume parent MLflow run %s: %s", ctx.run_id, start_err)
@@ -460,6 +476,51 @@ def _compute_file_sha256(path: Path) -> str:
     return hasher.hexdigest()
 
 
+def _log_manifest_dataset(manifest_path: Path | str | None) -> Any | None:
+    """Register the Parquet manifest dataset with SHA256 lineage metadata into the active MLflow run."""
+    if manifest_path is None:
+        return None
+    path = Path(manifest_path)
+    if not path.is_file():
+        return None
+    try:
+        df = pd.read_parquet(path)
+        sha256 = _compute_file_sha256(path)
+        target_col = "taxon_id" if "taxon_id" in df.columns else None
+        manifest_ds = mlflow.data.from_pandas(  # type: ignore[attr-defined]
+            df,
+            source=str(path),
+            name="inaturalist_open_manifest",
+            targets=target_col,
+        )
+        mlflow.log_input(
+            manifest_ds,
+            context="manifest",
+            tags={
+                "sha256": sha256,
+                "license.policy": "CC0,CC-BY,CC-BY-NC",
+                "records_count": str(len(df)),
+            },
+        )
+        return manifest_ds
+    except Exception as err:
+        logger.debug("Failed to log manifest lineage to MLflow: %s", err)
+        return None
+
+
+def _log_numpy_dataset(embeddings: Any, labels: Any, name: str, context: str) -> Any | None:
+    """Register a feature and label split tensor as an MLflow input dataset."""
+    if embeddings is None or labels is None:
+        return None
+    dataset = mlflow.data.from_numpy(  # type: ignore[attr-defined]
+        features=embeddings.detach().cpu().numpy(),
+        targets=labels.detach().cpu().numpy(),
+        name=name,
+    )
+    mlflow.log_input(dataset, context=context)
+    return dataset
+
+
 def _log_dataset_lineage(
     data: EmbeddingSplit,
     manifest_path: Path | str | None = Path("data/manifests/dataset_manifest.parquet"),
@@ -485,67 +546,17 @@ def _log_dataset_lineage(
     if not mlflow.active_run():
         return LoggedDatasets(train=None, val=None)
 
-    manifest_ds = None
-    if manifest_path is not None:
-        p = Path(manifest_path)
-        if p.is_file():
-            try:
-                df = pd.read_parquet(p)
-                sha256 = _compute_file_sha256(p)
-                target_col = "taxon_id" if "taxon_id" in df.columns else None
-                manifest_ds = mlflow.data.from_pandas(  # type: ignore[attr-defined]
-                    df,
-                    source=str(p),
-                    name="inaturalist_open_manifest",
-                    targets=target_col,
-                )
-                mlflow.log_input(
-                    manifest_ds,
-                    context="manifest",
-                    tags={
-                        "sha256": sha256,
-                        "license.policy": "CC0,CC-BY,CC-BY-NC",
-                        "records_count": str(len(df)),
-                    },
-                )
-            except Exception as err:
-                logger.debug("Failed to log manifest lineage to MLflow: %s", err)
-
+    manifest_ds = _log_manifest_dataset(manifest_path)
     train_ds = None
     val_ds = None
     cal_ds = None
     test_ds = None
 
     try:
-        train_ds = mlflow.data.from_numpy(  # type: ignore[attr-defined]
-            features=data.train_embeddings.detach().cpu().numpy(),
-            targets=data.train_labels.detach().cpu().numpy(),
-            name="train_embeddings",
-        )
-        mlflow.log_input(train_ds, context="training")
-
-        val_ds = mlflow.data.from_numpy(  # type: ignore[attr-defined]
-            features=data.val_embeddings.detach().cpu().numpy(),
-            targets=data.val_labels.detach().cpu().numpy(),
-            name="val_embeddings",
-        )
-        mlflow.log_input(val_ds, context="validation")
-
-        if data.cal_embeddings is not None and data.cal_labels is not None:
-            cal_ds = mlflow.data.from_numpy(  # type: ignore[attr-defined]
-                features=data.cal_embeddings.detach().cpu().numpy(),
-                targets=data.cal_labels.detach().cpu().numpy(),
-                name="cal_embeddings",
-            )
-            mlflow.log_input(cal_ds, context="calibration")
-
-        if data.test_embeddings is not None and data.test_labels is not None:
-            test_ds = mlflow.data.from_numpy(  # type: ignore[attr-defined]
-                features=data.test_embeddings.detach().cpu().numpy(),
-                targets=data.test_labels.detach().cpu().numpy(),
-                name="test_embeddings",
-            )
-            mlflow.log_input(test_ds, context="test")
+        train_ds = _log_numpy_dataset(data.train_embeddings, data.train_labels, "train_embeddings", "training")
+        val_ds = _log_numpy_dataset(data.val_embeddings, data.val_labels, "val_embeddings", "validation")
+        cal_ds = _log_numpy_dataset(data.cal_embeddings, data.cal_labels, "cal_embeddings", "calibration")
+        test_ds = _log_numpy_dataset(data.test_embeddings, data.test_labels, "test_embeddings", "test")
     except Exception as err:
         logger.debug("Failed to log tensor split lineage to MLflow: %s", err)
 
@@ -721,20 +732,25 @@ class MLflowTracker:
 
     @staticmethod
     def build_onnx_signature(num_classes: int, image_size: int = 224) -> ModelSignature:
-        """Construct explicit MLflow ModelSignature for raw image tensor -> taxonomic logits.
+        """Construct explicit MLflow ModelSignature for raw image tensor -> (logits, embeddings).
 
         Why:
-            Provides end-to-end tensor contracts for deployed ONNX Runtime graphs.
+            Provides end-to-end tensor contracts for deployed ONNX Runtime graphs. Tensor names must match the exported dual-output graph (`input`, `logits`, `embeddings`) so MLflow serving-input validation feeds the expected input name to ONNX Runtime.
 
         Args:
             num_classes: Number of target taxonomic classes.
             image_size: Spatial resolution of input images in pixels.
 
         Returns:
-            ModelSignature with input_images tensor and taxonomic_logits output TensorSpecs.
+            ModelSignature with `input` tensor and dual `logits` / `embeddings` output TensorSpecs.
         """
-        input_schema = Schema([TensorSpec(np.dtype(np.float32), (-1, 3, image_size, image_size), name="input_images")])
-        output_schema = Schema([TensorSpec(np.dtype(np.float32), (-1, num_classes), name="taxonomic_logits")])
+        input_schema = Schema([TensorSpec(np.dtype(np.float32), (-1, 3, image_size, image_size), name="input")])
+        output_schema = Schema(
+            [
+                TensorSpec(np.dtype(np.float32), (-1, num_classes), name="logits"),
+                TensorSpec(np.dtype(np.float32), (-1, -1), name="embeddings"),
+            ]
+        )
         return ModelSignature(inputs=input_schema, outputs=output_schema)
 
     @classmethod
@@ -742,6 +758,7 @@ class MLflowTracker:
         cls,
         model: nn.Module,
         model_name: str = "taxon_vision_classifier",
+        *,
         input_dim: int | None = None,
         num_classes: int | None = None,
         signature: ModelSignature | None = None,
@@ -872,10 +889,11 @@ def log_stage_metrics_to_parent_run(
         if not run_id:
             return
         settings = get_settings()
-        tracking_uri = os.getenv("MLFLOW_TRACKING_URI") or settings.mlflow.tracking_uri
-        if tracking_uri:
-            mlflow.set_tracking_uri(tracking_uri)
-        client = mlflow.tracking.MlflowClient(tracking_uri=tracking_uri)
+        tracking_uri = _resolve_reachable_tracking_uri(settings)
+        if not tracking_uri:
+            return
+        mlflow.set_tracking_uri(tracking_uri)
+        client = MlflowClient(tracking_uri=tracking_uri)
         for key, val in metrics.items():
             if isinstance(val, (int, float)) and not isinstance(val, bool):
                 metric_name = f"{prefix}{key}" if prefix else key

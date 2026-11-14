@@ -16,11 +16,12 @@ Standard Fields:
     References: Fielding (2000) 'Architectural Styles and the Design of Network-based Software Architectures' (REST / HATEOAS).
 """
 
+import uuid
 from pathlib import Path
 from typing import Annotated
 
 import anyio
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
@@ -33,7 +34,12 @@ from taxon_vision.service.inference import (
 )
 from taxon_vision.service.passport import load_model_passport
 from taxon_vision.service.presentation import build_top_candidates
-from taxon_vision.service.storage import get_image_cache
+from taxon_vision.service.storage import (
+    ContributorConsent,
+    FlaggedObservationPayload,
+    get_image_cache,
+    handle_flagged_prediction_if_needed,
+)
 
 router = APIRouter()
 templates_dir = Path(__file__).parent.parent / "templates"
@@ -69,7 +75,15 @@ async def index(request: Request) -> HTMLResponse:
 
 
 @router.post("/ui/predict-htmx", response_class=HTMLResponse)
-async def predict_htmx(request: Request, file: Annotated[UploadFile, File(...)]) -> HTMLResponse:
+async def predict_htmx(
+    request: Request,
+    file: Annotated[UploadFile, File(...)],
+    background_tasks: BackgroundTasks,
+    *,
+    contribute_open_license: Annotated[bool, Form()] = False,
+    license_code: Annotated[str, Form()] = "",
+    photographer_name: Annotated[str, Form()] = "",
+) -> HTMLResponse:
     """Process an uploaded observation image and return an HTMX prediction card partial.
 
     Why:
@@ -93,6 +107,10 @@ async def predict_htmx(request: Request, file: Annotated[UploadFile, File(...)])
     Args:
         request: FastAPI HTTP request context.
         file: Multipart uploaded organism image file.
+        background_tasks: FastAPI background task coordinator for asynchronous DagsHub triage export.
+        contribute_open_license: Affirmative opt-in permitting flagged capture export under open Creative Commons terms.
+        license_code: Creative Commons license string (`CC0`, `CC-BY`, or `CC-BY-NC`) for consented captures.
+        photographer_name: Photographer attribution credit associated with consented captures.
 
     Returns:
         Rendered HTML partial fragment containing prediction badges and conformal sets.
@@ -124,6 +142,20 @@ async def predict_htmx(request: Request, file: Annotated[UploadFile, File(...)])
 
     cache = get_image_cache()
     image_hash = await anyio.to_thread.run_sync(cache.store, image_bytes)
+    await handle_flagged_prediction_if_needed(
+        FlaggedObservationPayload(
+            observation_id=str(uuid.uuid4()),
+            prediction_result=result,
+            embedding=result.get("embedding"),
+            image_bytes=image_bytes,
+            consent=ContributorConsent(
+                contribute_open_license=contribute_open_license,
+                photographer_name=photographer_name,
+                license_code=license_code,
+            ),
+        ),
+        background_tasks=background_tasks,
+    )
     catalog = load_taxa_catalog()
     top_candidates = build_top_candidates(
         probabilities=result["probabilities"],

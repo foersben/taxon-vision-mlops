@@ -149,7 +149,7 @@ def test_tune_hyperparameters_optuna(tmp_path: Path) -> None:
     val_z = torch.randn(10, feature_dim)
     val_y = torch.randint(0, num_classes, (10,))
 
-    local_mlflow_uri = f"file://{tmp_path}/mlruns"
+    local_mlflow_uri = f"sqlite:///{tmp_path}/mlflow_tuning_test.db"
 
     data = EmbeddingSplit(
         train_embeddings=train_z,

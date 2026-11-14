@@ -313,11 +313,31 @@ The production infrastructure deploys via K3s across isolated staging and produc
 | :--- | :--- | :--- | :--- |
 | **Staging Cockpit** | Staging (`develop`) | [http://192.168.178.30:30085](http://192.168.178.30:30085) | Dedicated NodePort `30085` / `staging.taxon.benjamin-foerster.eu` (single-replica CPU serving). |
 | **Production Cockpit** | Production (`main`) | [http://192.168.178.30:30080](http://192.168.178.30:30080) | Dedicated NodePort `30080` / `taxon.benjamin-foerster.eu` (dual-replica time-sliced GPU serving). |
-| **Grafana Cockpit** | Observability | [http://localhost:3000](http://localhost:3000) | Operational dashboards, p95 latency histograms, and Loki log visualisations (`admin`/`admin`). |
+| **Grafana Cockpit** | Observability | [http://localhost:3000](http://localhost:3000) | Operational dashboards, p95 latency histograms, and Loki log visualisations (`monitoring-secrets`). |
 | **Prometheus TSDB** | Monitoring | [http://localhost:9090](http://localhost:9090) | NodePort `30090` metrics scraper and alert rule evaluation engine. |
 | **Loki Log Engine** | Observability | [http://localhost:3100](http://localhost:3100) | Structured JSON log stream storage shipped via Promtail daemon. |
 | **MLflow Registry** | Model Governance | [http://localhost:5000](http://localhost:5000) | Self-hosted MLflow 3.16.0 experiment tracking and `@Production` model alias store. |
 | **SeaweedFS Object Store** | S3 Cluster Storage | [http://localhost:9333](http://localhost:9333) | S3-compatible filer endpoint on `:8333` staging embedding tensors without cloud egress. |
+
+#### Out-of-Band Secret Provisioning (Temporary Pre-FluxCD Setup)
+
+> [!NOTE]
+> This out-of-band secret workflow - combining [`scripts/deploy/provision_k8s_secrets.sh`](scripts/deploy/provision_k8s_secrets.sh), K3s `--secrets-encryption`, and imperative `kubectl apply` inside [`Jenkinsfile`](Jenkinsfile) - is a **temporary MVP solution** prior to migrating deployments permanently to **FluxCD + SOPS (`age`)** GitOps reconciliation.
+
+All cluster credentials (`postgres-secrets`, `seaweedfs-s3-secret`, `monitoring-secrets`, `mlflow-secrets`, `optuna-secrets`, `airflow-secrets`, and namespace-scoped `taxon-vision-secrets`) are excluded from Git and injected directly into K3s etcd (encrypted at rest via `secrets-encryption: true` in `/etc/rancher/k3s/config.yaml`):
+
+```bash
+# 1. Generate high-entropy out-of-band credentials once (chmod 0600, archive in KeePassXC)
+bash scripts/deploy/provision_k8s_secrets.sh --init-env --env-file /etc/taxon-vision/production.env
+
+# 2. Preview masked Kubernetes Secret output (or run CI-safe synthetic check via --dry-run --mock)
+bash scripts/deploy/provision_k8s_secrets.sh --dry-run --env-file /etc/taxon-vision/production.env
+
+# 3. Provision Secrets cleanly across both taxon-vision and taxon-vision-staging
+just provision-k8s-secrets --env-file /etc/taxon-vision/production.env
+```
+
+For CI/CD artefact hydration against in-cluster SeaweedFS, mirror the generated `SEAWEEDFS_ACCESS_KEY_ID` and `SEAWEEDFS_SECRET_ACCESS_KEY` into the Jenkins global credential `seaweedfs-s3-credentials` alongside `dagshub-token`. Once FluxCD is rolled out permanently, encrypted `secrets.enc.yaml` manifests decrypted in-cluster via `sops`/`age` will retire `provision_k8s_secrets.sh` and remove imperative `kubectl apply` steps from Jenkins.
 
 To verify cluster deployments locally:
 

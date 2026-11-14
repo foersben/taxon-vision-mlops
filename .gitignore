@@ -45,6 +45,7 @@ coverage.xml
 *.sqlite
 *.sqlite3
 mlruns/
+data/mlflow/
 
 # Jupyter Notebook & Scratch
 .ipynb_checkpoints/
@@ -76,6 +77,7 @@ data/raw/
 data/processed/
 data/sample/
 data/flagged_observations/
+data/evidently_workspace/
 models/checkpoints/*
 *.onnx
 *.pth
@@ -110,3 +112,6 @@ docs/.archive/
 # OpenWiki ephemeral runtime state
 openwiki/.run.json
 .openwiki/
+
+# Kubernetes local secrets
+deploy/k8s/secrets.yaml

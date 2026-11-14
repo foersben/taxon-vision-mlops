@@ -113,3 +113,43 @@ def test_compute_mmd2_input_validation() -> None:
 
     with pytest.raises(ValueError, match="at least two samples per group"):
         compute_mmd2_permutation(curr, ref)
+
+
+def test_generate_evidently_drift_report_persists_workspace(tmp_path) -> None:
+    """Persist Evidently snapshots into the configured UI workspace alongside standalone HTML output."""
+    import numpy as np
+
+    from taxon_vision.monitoring import drift_runner
+
+    rng = np.random.default_rng(42)
+    ref = rng.normal(0.0, 1.0, size=(30, 8)).astype(np.float32)
+    cur = rng.normal(0.2, 1.0, size=(25, 8)).astype(np.float32)
+
+    ws_dir = tmp_path / "evidently_ws"
+    html_out = tmp_path / "reports" / "drift.html"
+    drift_runner.generate_evidently_drift_report(
+        ref,
+        cur,
+        html_out,
+        workspace_dir=ws_dir,
+        project_name="TaxonVision Drift Monitor",
+    )
+
+    assert html_out.is_file()
+    assert ws_dir.is_dir()
+    assert any(ws_dir.rglob("*.json"))
+
+
+def test_structured_stdout_logging_handler_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Configure stdout handlers with StructuredJsonFormatter when TAXON_STRUCTURED_STDOUT=true without duplicates."""
+    import logging
+
+    from taxon_vision.service.structured_logging import StructuredJsonFormatter, _ensure_structured_stdout_handler
+
+    monkeypatch.setenv("TAXON_STRUCTURED_STDOUT", "true")
+    isolated_logger = logging.getLogger("taxon_vision.test_stdout_isolation")
+    isolated_logger.handlers.clear()
+    _ensure_structured_stdout_handler(isolated_logger)
+    _ensure_structured_stdout_handler(isolated_logger)
+    assert len(isolated_logger.handlers) == 1
+    assert isinstance(isolated_logger.handlers[0].formatter, StructuredJsonFormatter)
