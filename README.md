@@ -7,7 +7,7 @@
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
 [![Conformal Coverage](https://img.shields.io/badge/conformal%20coverage-95%25%20guaranteed-success)](docs/uncertainty_and_safety/conformal_prediction_theory.md)
 [![Model Backbone](https://img.shields.io/badge/backbone-DINOv3%20ViT--S%2F16-blueviolet)](https://github.com/facebookresearch/dinov)
-[![MLflow Registry](https://img.shields.io/badge/registry-MLflow%203.16.0-informational)](http://localhost:5000)
+[![MLflow Registry](https://img.shields.io/badge/MLflow-DagsHub%203.x-informational)](https://dagshub.com/foersben/taxon-vision-mlops.mlflow)
 [![DagsHub Hub](https://img.shields.io/badge/DagsHub-DVC%20%26%20MLflow-1890ff.svg)](https://dagshub.com/foersben/taxon-vision-mlops)
 
 TaxonVision-MLOps is a production-grade, end-to-end machine learning platform designed for fine-grained biological species identification from citizen-science photography (such as iNaturalist and GBIF DarwinCore). It unites self-supervised vision representations, class-balanced loss functions for long-tail biological distributions, distribution-free statistical uncertainty guarantees via Split Conformal Prediction, and an industrial MLOps infrastructure featuring automated drift monitoring, containerised microservices, and a four-gate model promotion lifecycle.
@@ -62,22 +62,22 @@ flowchart LR
 * **Loss Function:** Effective-Number Class-Balanced Cross-Entropy Loss:
   $$E_{n_y} = \frac{1 - \beta^{n_y}}{1 - \beta}, \quad W_y = \frac{1}{E_{n_y}}, \quad \mathcal{L}_{\text{CB}}(z, y) = - \frac{W_y}{\sum_{c} W_c} \log \left( \frac{\exp(z_y)}{\sum_{j} \exp(z_j)} \right)$$
   Configured with hyperparameter $\beta = 0.9999$, ensuring rare taxa receive compensatory gradient updates inversely proportional to their effective specimen frequency.
-* **Training Convergence:** Trains across 30 epochs in $3.61\,\text{seconds}$ on precomputed embeddings, achieving final training loss $0.2597$ and validation loss $0.2683$.
+* **Training Convergence:** Trains across 30 epochs in $2.63\,\text{seconds}$ on precomputed embeddings, achieving final training loss $0.2277$, validation loss $0.2533$, and validation accuracy $92.68\%$.
 
 ### 3. Holdout Empirical Performance & Latency
 
-Evaluated on the independent, holdout test split ($n = 164$ compliant observations across 10 biological taxa):
+Evaluated on the independent, holdout test split ($n = 164$ compliant observations across 10 biological taxa) via [`reports/pareto_evaluation.json`](reports/pareto_evaluation.json):
 
-| Evaluation Metric | Baseline FP32 | Quantized INT8 ONNX | Production Gate Limit | Status |
-| :--- | :--- | :--- | :--- | :--- |
-| **Top-1 Holdout Accuracy** | $93.29\%$ (val) | $92.07\%$ (test) | Degradation $\le 3.0\%$ | **PASSED** ($-1.22\%$ delta) |
-| **Median Class PR-AUC** | $0.9740$ | $0.9717$ | $\ge 0.9000$ | **PASSED** |
-| **Worst-Class PR-AUC** | $0.9310$ | $0.9255$ | $\ge 0.8500$ | **PASSED** |
-| **Expected Calibration Error (ECE)** | $0.0760$ | $0.0880$ | $\le 0.1500$ | **PASSED** |
-| **End-to-End Latency (p50)** | $58.12\,\text{ms}$ | $47.38\,\text{ms}$ | $\le 100.0\,\text{ms}$ | **PASSED** |
-| **End-to-End Latency (p95)** | $64.40\,\text{ms}$ | $50.38\,\text{ms}$ | $\le 120.0\,\text{ms}$ | **PASSED** |
-| **Inference Throughput** | $17.1\,\text{FPS}$ | $20.9\,\text{FPS}$ | $\ge 15.0\,\text{FPS}$ | **PASSED** |
-| **Standalone Head Latency** | $< 0.3\,\text{ms}$ | $< 0.2\,\text{ms}$ | $\le 1.0\,\text{ms}$ | **PASSED** |
+| Evaluation Metric | Quantized INT8 ONNX | Production Gate Limit | Status |
+| :--- | :--- | :--- | :--- |
+| **Top-1 Holdout Accuracy** | $91.46\%$ ($92.68\%$ val / $-1.22\%$ delta) | Degradation $\le 3.0\%$ | **PASSED** |
+| **Median Class PR-AUC** | $0.9782$ | $\ge 0.9000$ | **PASSED** |
+| **Worst-Class PR-AUC** | $0.9306$ | $\ge 0.8500$ | **PASSED** |
+| **Expected Calibration Error (ECE)** | $0.0889$ | $\le 0.1500$ | **PASSED** |
+| **End-to-End CPU Latency (p50)** | $49.02\,\text{ms}$ | $\le 100.0\,\text{ms}$ | **PASSED** |
+| **End-to-End CPU Latency (p95)** | $54.08\,\text{ms}$ | $\le 120.0\,\text{ms}$ | **PASSED** |
+| **Inference Throughput** | $19.9\,\text{FPS}$ | $\ge 15.0\,\text{FPS}$ | **PASSED** |
+| **Standalone Head Latency** | $< 0.2\,\text{ms}$ | $\le 1.0\,\text{ms}$ | **PASSED** |
 
 ---
 
@@ -88,10 +88,10 @@ In citizen-science applications, presenting an erroneous classification with $99
 ```mermaid
 flowchart TD
     Logits["Input Observation Logits & Embeddings"] --> EnergyCalc["Helmholtz Free Energy Gating<br/>E(x; T) = -T · log Σ exp(f_k / T)"]
-    EnergyCalc -->|"Energy > τ_ood (-2.4029)"| OODRoute["Out-of-Distribution Detected<br/>Route to Human Expert Review"]
+    EnergyCalc -->|"Energy > τ_ood (-2.3094)"| OODRoute["Out-of-Distribution Detected<br/>Route to Human Expert Review"]
 
     EnergyCalc -->|"Energy ≤ τ_ood"| ConformalCalc["Split Conformal Non-Conformity<br/>Score: s_k = 1 - π(k | x)"]
-    ConformalCalc --> SetGen["Form Conformal Prediction Set<br/>C(x) = {k : s_k ≤ q̂ (0.6337)}"]
+    ConformalCalc --> SetGen["Form Conformal Prediction Set<br/>C(x) = {k : s_k ≤ q̂ (0.7005)}"]
 
     SetGen --> CheckEmpty{"Prediction Set Cardinality"}
     CheckEmpty -->|"Empty Set: Cardinality = 0"| TriageEmpty["Model Entirely Unfamiliar<br/>Route to Triage Queue"]
@@ -112,7 +112,7 @@ flowchart TD
 
 Given $n = 155$ calibration samples exchangeable with future observations, we calculate non-conformity scores $s_i = 1 - \hat{\pi}(y_i \mid x_i)$. The non-conformity quantile $\hat{q}$ is derived via exact finite-sample correction:
 
-$$p = \frac{\lceil (n + 1)(1 - \alpha) \rceil}{n} = \frac{\lceil 156 \times 0.95 \rceil}{155} = \frac{149}{155} \implies \hat{q}_{0.05} = 0.6337$$
+$$p = \frac{\lceil (n + 1)(1 - \alpha) \rceil}{n} = \frac{\lceil 156 \times 0.95 \rceil}{155} = \frac{149}{155} \implies \hat{q}_{0.05} = 0.7005$$
 
 For any future observation $X_{n+1}$, the prediction set $C(X_{n+1}) = \{k : 1 - \hat{\pi}(k \mid X_{n+1}) \le \hat{q}_{0.05}\}$ satisfies:
 
@@ -120,10 +120,10 @@ $$P\left(Y_{n+1} \in C(X_{n+1})\right) \ge 1 - \alpha = 0.95$$
 
 ### 2. Empirical Calibration Results
 
-* **Empirical Holdout Coverage:** $91.46\%$ on the unseen test split ($96.77\%$ on the calibration split), satisfying the statistical coverage lower bound within standard sampling tolerance.
-* **Mean Prediction Set Size:** $1.01$ taxa per observation.
-* **Singleton Rate:** $95.12\%$ of test observations resolve to a single, unambiguous species prediction.
-* **Human Referral Rate:** $1.83\%$ empty prediction sets deferred to expert human review, preventing silent classification errors.
+* **Empirical Holdout Coverage:** $93.29\%$ on the unseen test split ($96.77\%$ on the calibration split), satisfying the statistical coverage lower bound within standard sampling tolerance.
+* **Mean Prediction Set Size:** $1.05$ taxa per observation.
+* **Singleton Rate:** $94.51\%$ of test observations resolve to a single, unambiguous species prediction.
+* **Human Referral Rate:** $0.00\%$ empty prediction sets (`referral_rate = 0.0`) on the current regularised holdout run, whilst ambiguous or out-of-distribution inputs automatically route to human triage.
 
 ### 3. Helmholtz Free-Energy OOD Gating
 
@@ -131,7 +131,7 @@ To detect observations belonging to unseen taxonomic phyla or non-biological ima
 
 $$E(x; T) = -T \log \sum_{k=1}^K \exp\left(\frac{f_k(x)}{T}\right)$$
 
-Configured with temperature $T = 1.0$ and threshold $\tau_{\text{OOD}} = -2.4029$, achieving a $95.0\%$ True Positive Rate on in-distribution observations whilst cleanly rejecting out-of-distribution inputs prior to conformal set generation.
+Configured with temperature $T = 1.0$ and threshold $\tau_{\text{OOD}} = -2.3094$, achieving a $95.0\%$ True Positive Rate on in-distribution observations whilst cleanly rejecting out-of-distribution inputs prior to conformal set generation.
 
 ---
 
@@ -166,7 +166,7 @@ flowchart TD
         H -->|conformal_config.yaml| I["8. Pareto Evaluation<br/><code>pipelines.evaluate</code>"]
         D4 --> I
         G --> I
-        I -->|Passes 4 Promotion Gates| J["@Production Registry<br/>(MLflow 3.16.0)"]
+        I -->|Passes 4 Promotion Gates| J["@Production Registry<br/>(DagsHub MLflow 3.x)"]
     end
 
     classDef stage fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
@@ -183,10 +183,10 @@ flowchart TD
 * **Stage 2 (License Gatekeeper):** Enforces open-access licensing compliance (`CC0`, `CC-BY`, `CC-BY-NC`). Rejects non-derivative or unverified rights, filtering 1,646 compliant records into `data/manifests/dataset_manifest.parquet` whilst preserving photographer attribution.
 * **Stage 3 (Feature Extraction):** Streams image assets directly from AWS S3 (`s3://inaturalist-open-data/`), passes them through the frozen DINOv3 backbone, and partitions normalized representations into four stratified splits: `train_embeddings.pt` (70%), `val_embeddings.pt` (10%), `cal_embeddings.pt` (10%), and `test_embeddings.pt` (10%).
 * **Stage 4 (Data Drift Gate):** Evaluates representation drift between newly extracted training embeddings and historical reference tensors using Tier 1 Wasserstein-1 distance ($W_1 = 0.0107 < \tau = 0.1281$) and Tier 2 RKHS $\text{MMD}^2$ ($p = 0.741 > 0.01$).
-* **Stage 5 (Head Training):** Fits the convex classification head with Class-Balanced loss on `train_embeddings.pt` with early stopping against `val_embeddings.pt`, exporting `models/checkpoints/head.pt` and tracking runs in MLflow.
+* **Stage 5 (Head Training):** Fits the convex classification head with Class-Balanced loss on `train_embeddings.pt` with early stopping against `val_embeddings.pt`, exporting `models/checkpoints/head.pt` and opening the parent MLflow run directly on DagsHub.
 * **Stage 6 (ONNX Export & Quantization):** Compiles a dual-output ONNX graph outputting classification logits and normalized embeddings, applying logit-preserving INT8 dynamic quantization into `models/checkpoints/model_int8.onnx`.
-* **Stage 7 (Conformal & OOD Calibration):** Computes Split Conformal threshold $\hat{q} = 0.6337$ and Helmholtz energy bound $\tau_{\text{OOD}} = -2.4029$ on the calibration split, serializing to `config/conformal_config.yaml`.
-* **Stage 8 (Pareto Evaluation & Promotion):** Executes comprehensive evaluation across accuracy, latency, and conformal coverage on the test holdout. Upon passing all four promotion gates, registers and promotes the model to `@Production` in MLflow.
+* **Stage 7 (Conformal & OOD Calibration):** Computes Split Conformal threshold $\hat{q} = 0.7005$ and Helmholtz energy bound $\tau_{\text{OOD}} = -2.3094$ on the calibration split, serializing to `config/conformal_config.yaml`.
+* **Stage 8 (Pareto Evaluation & Promotion):** Executes comprehensive evaluation across accuracy, latency, and conformal coverage on the test holdout. Upon passing all four promotion gates, registers and promotes the model to `@Production` in DagsHub MLflow.
 
 ---
 
@@ -210,31 +210,31 @@ flowchart LR
         ProdFastAPI -.->|Structured JSON Logs| Promtail["Promtail Log Shipper"]
         Promtail --> Loki["Grafana Loki"]
         ProdFastAPI -.->|Request Metrics| Prom["Prometheus TSDB"]
-        Prom --> Grafana["Grafana Cockpit (6 Panels)"]
+        Prom --> Grafana["Grafana Cockpit (24 Panels)"]
         Loki --> Grafana
-        ProdFastAPI -.->|Async Embeddings| PG["PostgreSQL 16"]
+        ProdFastAPI -.->|Async Embeddings| PG["PostgreSQL 16 (3-Schema Cluster)"]
         PG --> AirflowDrift["Airflow Hourly Drift Monitor"]
-        AirflowDrift -->|Evidently PCA| DriftReport["Evidently Drift Report"]
+        AirflowDrift -->|Evidently 0.7 Wasserstein| DriftReport["Evidently UI (:30082) & Workspace"]
         AirflowDrift -.->|"Sustained Drift Alert"| AirflowRetrain["Airflow model_retraining DAG"]
     end
 
     subgraph ActiveLearning ["Active Learning & Retraining Loop"]
-        ProdFastAPI -->|"Flag Ambiguous / OOD"| LabelStudio["Label Studio<br/>(Expert Taxonomist Triage)"]
+        ProdFastAPI -->|"Flag Ambiguous / OOD"| LabelStudio["DagsHub Label Studio<br/>(Expert Taxonomist Triage)"]
         LabelStudio -->|"Verified Annotations"| AirflowRetrain
         AirflowRetrain -.->|"Trigger Headless GPU Job"| Jenkins["Bare-Metal Jenkins<br/>(NVIDIA RTX 5070 Ti)"]
     end
 
-    subgraph InternalStorage ["Cluster Storage & Registry"]
-        ProdFastAPI -.-> MLflow["MLflow 3.16.0 Registry"]
-        MLflow -.-> S3["Local SeaweedFS S3 Store"]
-        Jenkins -->|"dvc push (local)"| S3
+    subgraph InternalStorage ["In-Cluster NVMe Cache"]
+        S3["Local SeaweedFS S3 Store<br/>(taxon-dvc-cache & triage-queue)"]
+        Jenkins -->|"dvc push -r local-seaweedfs"| S3
     end
 
-    subgraph CloudStorage ["Cloud Collaboration & CI (DagsHub)"]
+    subgraph CloudStorage ["Managed Control Plane & Tracking (DagsHub)"]
         Jenkins -->|"dvc push -r origin"| DagsHubDVC["DagsHub DVC Remote<br/>(s3://dvc)"]
         GHA["GitHub Actions CI"] -->|"dvc pull (DAGSHUB_TOKEN)"| DagsHubDVC
         Dev["Developer Workstation"] -->|"dvc push / pull"| DagsHubDVC
-        ProdFastAPI -.->|"Public Mirror"| DagsHubMLflow["DagsHub MLflow 2.x<br/>(Public Dashboard)"]
+        Jenkins -->|"Train / Export / Evaluate"| DagsHubMLflow["DagsHub MLflow 3.x<br/>(Experiment Tracking & Model Registry)"]
+        AirflowDrift -.->|"taxon-vision-drift"| DagsHubMLflow
     end
 
     classDef core fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
@@ -245,7 +245,7 @@ flowchart LR
     class Traefik,StagingFastAPI,ProdFastAPI,Dashboard,Redis core;
     class LabelStudio,AirflowRetrain,Jenkins loop;
     class Promtail,Loki,PG,Prom,Grafana,AirflowDrift,DriftReport obs;
-    class MLflow,S3 store;
+    class S3 store;
     class GHA,Dev,DagsHubDVC,DagsHubMLflow cloud;
 ```
 
@@ -256,32 +256,33 @@ flowchart LR
 
 ### 2. Experiment Tracking & Four-Gate Model Promotion
 
-* **Centralised Registry:** Self-hosted MLflow 3.16.0 backed by PostgreSQL 16 for experiment parameters/metrics and SeaweedFS (S3-compatible) for tensor checkpoints and ONNX graphs.
+* **Direct DagsHub Registry:** Experiment tracking (`taxon-vision-head-training`, `taxon-vision-drift`), nested Optuna HPO trials, first-class `LoggedModel` entities, and `@Production` / `@Challenger` / `@Archived` promotion aliases route directly to **DagsHub MLflow** (`https://dagshub.com/foersben/taxon-vision-mlops.mlflow`).
 * **Automated Four-Gate Promotion:** Models must strictly pass four automated gates before receiving the `@Production` alias:
-  1. *Accuracy Degradation Gate:* Top-1 accuracy drop between FP32 baseline and INT8 quantized ONNX graph $\le 3.0\%$.
-  2. *Statistical Coverage Gate:* Empirical coverage on holdout calibration/test splits $\ge 1 - \alpha - 0.05$ ($90.0\%$).
-  3. *Inference Latency Gate:* End-to-end CPU p95 latency $\le 120.0\,\text{ms}$.
-  4. *Input Drift Gate:* Wasserstein-1 distance against reference embeddings below threshold $\tau_{W_1} = 0.1281$.
+    1. *Accuracy Degradation Gate:* Top-1 accuracy drop between FP32 baseline and INT8 quantized ONNX graph $\le 3.0\%$.
+    2. *Statistical Coverage Gate:* Empirical coverage on holdout calibration/test splits $\ge 1 - \alpha - 0.05$ ($90.0\%$).
+    3. *Inference Latency Gate:* End-to-end CPU p95 latency $\le 120.0\,\text{ms}$.
+    4. *Input Drift Gate:* Wasserstein-1 distance against reference embeddings below threshold $\tau_{W_1} = 0.1281$.
 
 ### 3. Continuous Representation & Concept Drift Engine
 
 * Production inference requests asynchronously stage normalized feature embeddings ($D = 384$) into PostgreSQL via non-blocking background workers.
 * An hourly Apache Airflow 3.0 DAG executes two-tier statistical drift evaluation:
-    * *Tier 1 (Coordinate-wise Wasserstein-1):* Fast 1D earth mover distances evaluated with Bonferroni correction across all 384 feature dimensions.
-    * *Tier 2 (Multivariate RKHS $\text{MMD}^2$):* High-sensitivity kernel two-sample test ($B = 200$ bootstrap permutations).
-    * *Visual Diagnostics:* Automated rendering of 8-dimensional PCA projection snapshots via Evidently 0.7 (`reports/data_drift_report.html`).
+    * *Tier 1 (Coordinate-wise Wasserstein-1):* Fast 1D earth mover distances evaluated on pre-normalised embedding norms alongside Evidently 0.7's `DataDriftPreset(num_method="wasserstein", num_threshold=0.1)`.
+    * *Tier 2 (Multivariate RKHS $\text{MMD}^2$):* High-sensitivity unbiased U-statistic permutation test ($B = 200$ permutations, median-heuristic RBF kernel).
+    * *Visual Diagnostics:* Automated rendering of 9-column PCA snapshots (`["norm", "pca_0", ..., "pca_7"]`) plus precomputed `SingleValueMetric` cards persisted to the Evidently 0.7 UI `Workspace` (`NodePort 30082`) and logged as HTML artefacts (`reports/data_drift_report.html`) to DagsHub MLflow (`taxon-vision-drift`).
 * If sustained drift is detected, Airflow triggers Alertmanager and dispatches an automated retraining run on Jenkins.
 
-### 4. Dual-Tier Storage & Tracking: Cloud Collaboration (DagsHub) vs. Local Serving
+### 4. Storage & Control Plane Split: DagsHub Control Plane vs. In-Cluster Persistence
 
-To balance public reproducibility and CI automation with high-throughput local GPU training economics, the platform deploys a two-tier storage and tracking topology:
+To balance public reproducibility and CI automation with high-throughput local GPU training economics, the platform splits tracking and persistence cleanly:
 
-* **Cloud Collaboration Tier (DagsHub):**
+* **Cloud Control Plane (DagsHub):**
     * *DVC Remote (`origin`):* Hosted on DagsHub S3 storage (`https://dagshub.com/foersben/taxon-vision-mlops.s3`). Serves as the public immutable artefact hub for versioned Parquet manifests, feature tensors, and production ONNX models. GitHub Actions CI uses `DAGSHUB_TOKEN` to pull verified weights (`models/checkpoints/model_int8.onnx.dvc`) during pull request testing without requiring network access to private infrastructure.
-    * *MLflow 2.x Hosted Mirror:* Provides public web access to run parameters, validation metrics, and training curves for open scientific collaboration.
+    * *Managed MLflow 3.x Server & Model Registry:* Unified remote backend (`https://dagshub.com/foersben/taxon-vision-mlops.mlflow`) storing Optuna HPO studies (`optuna_study_{study_name}`), cross-stage resumed runs (`resume_parent_mlflow_run`), drift logs, and `@Production` / `@Challenger` aliases via HTTP Basic Auth (`DAGSHUB_TOKEN`). Unauthenticated offline runs skip tracking gracefully without creating orphan `mlruns/` or local SQLite stores.
+    * *DagsHub Label Studio:* Hosts human triage tasks synced via pure stdlib AWS SigV4 uploads to `triage-queue/` with `presign=False` proxy resolution.
 * **Internal Bare-Metal Tier (Cluster & Workstation):**
-    * *Local SeaweedFS S3 Remote (`local-seaweedfs`):* Cluster-internal S3-compatible object store (`http://seaweedfs:8333`). Eliminates cloud bandwidth latency and egress costs by staging multi-gigabyte embeddings and intermediate checkpoints directly over the local NVMe bus during continuous training.
-    * *Self-Hosted MLflow 3.16.0 + PostgreSQL 16:* Private high-performance tracking server powering live Bayesian Optuna sweeps, native MLflow 3.x First-Class `LoggedModel` lineage, and automated Four-Gate promotion tags (`@Production`, `@Challenger`, `@Archived`).
+    * *Local SeaweedFS S3 Remote (`local-seaweedfs`):* Cluster-internal S3-compatible object store (`http://seaweedfs:8333`) hosting two buckets (`taxon-dvc-cache`, `triage-queue`). Eliminates cloud bandwidth latency and egress costs by staging multi-gigabyte embeddings directly over the local NVMe bus during continuous training.
+    * *Consolidated Three-Schema PostgreSQL 16 (`max_connections=120`):* Isolates `telemetry` (prediction and drift logs), `optuna` (Bayesian HPO trial storage powering `optuna-dashboard` on NodePort `30081`), and `airflow` (Airflow 3 metadata) within a single tuned engine.
 
 ### 5. Automated Retraining & Human-in-the-Loop Feedback (Label Studio → Airflow → Jenkins → DagsHub)
 
@@ -316,15 +317,17 @@ The production infrastructure deploys via K3s across isolated staging and produc
 | **Grafana Cockpit** | Observability | [http://localhost:3000](http://localhost:3000) | Operational dashboards, p95 latency histograms, and Loki log visualisations (`monitoring-secrets`). |
 | **Prometheus TSDB** | Monitoring | [http://localhost:9090](http://localhost:9090) | NodePort `30090` metrics scraper and alert rule evaluation engine. |
 | **Loki Log Engine** | Observability | [http://localhost:3100](http://localhost:3100) | Structured JSON log stream storage shipped via Promtail daemon. |
-| **MLflow Registry** | Model Governance | [http://localhost:5000](http://localhost:5000) | Self-hosted MLflow 3.16.0 experiment tracking and `@Production` model alias store. |
-| **SeaweedFS Object Store** | S3 Cluster Storage | [http://localhost:9333](http://localhost:9333) | S3-compatible filer endpoint on `:8333` staging embedding tensors without cloud egress. |
+| **MLflow Registry (DagsHub)** | Model Governance | [https://dagshub.com/foersben/taxon-vision-mlops.mlflow](https://dagshub.com/foersben/taxon-vision-mlops.mlflow) | Hosted DagsHub MLflow 3.x tracking and `@Production` alias store (`taxon-vision-head-training` & `taxon-vision-drift`). |
+| **Evidently 0.7 Drift UI** | Drift Monitoring | [http://192.168.178.30:30082](http://192.168.178.30:30082) | NodePort `30082` evidently-service workspace displaying Wasserstein-1 + MMD^2 telemetry and 9-column drift panels. |
+| **Optuna Dashboard** | HPO Telemetry | [http://192.168.178.30:30081](http://192.168.178.30:30081) | NodePort `30081` live hyperparameter optimisation dashboard backed by the PostgreSQL `optuna` database. |
+| **SeaweedFS Object Store** | S3 Cluster Storage | [http://localhost:9333](http://localhost:9333) | S3-compatible filer endpoint on `:8333` staging `taxon-dvc-cache` and `triage-queue` without cloud egress. |
 
 #### Out-of-Band Secret Provisioning (Temporary Pre-FluxCD Setup)
 
 > [!NOTE]
 > This out-of-band secret workflow - combining [`scripts/deploy/provision_k8s_secrets.sh`](scripts/deploy/provision_k8s_secrets.sh), K3s `--secrets-encryption`, and imperative `kubectl apply` inside [`Jenkinsfile`](Jenkinsfile) - is a **temporary MVP solution** prior to migrating deployments permanently to **FluxCD + SOPS (`age`)** GitOps reconciliation.
 
-All cluster credentials (`postgres-secrets`, `seaweedfs-s3-secret`, `monitoring-secrets`, `mlflow-secrets`, `optuna-secrets`, `airflow-secrets`, and namespace-scoped `taxon-vision-secrets`) are excluded from Git and injected directly into K3s etcd (encrypted at rest via `secrets-encryption: true` in `/etc/rancher/k3s/config.yaml`):
+All cluster credentials (`postgres-secrets`, `seaweedfs-s3-secret`, `monitoring-secrets`, `optuna-secrets`, `airflow-secrets`, and namespace-scoped `taxon-vision-secrets`) are excluded from Git and injected directly into K3s etcd (encrypted at rest via `secrets-encryption: true` in `/etc/rancher/k3s/config.yaml`):
 
 ```bash
 # 1. Generate high-entropy out-of-band credentials once (chmod 0600, archive in KeePassXC)
@@ -355,7 +358,7 @@ Deploy the complete multi-service stack on any container host with Docker Compos
 git clone https://github.com/foersben/taxon-vision-mlops.git
 cd taxon-vision-mlops
 
-# Launch production stack (Traefik, FastAPI, MLflow, PostgreSQL, SeaweedFS, Prometheus, Grafana, Loki)
+# Launch production stack (Traefik, FastAPI, PostgreSQL, SeaweedFS, Prometheus, Grafana, Loki)
 just up
 
 # Or launch in development mode with live code and volume bind-mounts
@@ -366,7 +369,7 @@ Operational interface endpoints:
 
 * **Traefik Edge Ingress Gateway:** [http://localhost](http://localhost) (API forwarded on `/predict`, `/explain`, `/health`)
 * **TaxonVision HTMX Dashboard:** [http://localhost:8000/dashboard](http://localhost:8000/dashboard)
-* **MLflow Tracking & Model Registry:** [http://localhost:5000](http://localhost:5000)
+* **DagsHub MLflow Tracking & Model Registry:** [https://dagshub.com/foersben/taxon-vision-mlops.mlflow](https://dagshub.com/foersben/taxon-vision-mlops.mlflow)
 * **Grafana Operational Cockpit:** [http://localhost:3000](http://localhost:3000) (credentials: `admin` / `admin`)
 * **Prometheus Telemetry Scraper:** [http://localhost:9090](http://localhost:9090)
 * **SeaweedFS S3 Management UI:** [http://localhost:9333](http://localhost:9333)
@@ -426,7 +429,7 @@ To ensure cost-effective continuous training, regression testing, and low-latenc
 * **Central Processing Unit (CPU):** Intel Core i7-14700K (20 physical cores / 28 execution threads: 8 Performance cores, 12 Efficient cores). Compute-intensive PyTorch training and ONNX inference loops are pinned via `taskset` to the Performance cores (`threads 0-15`), whilst asynchronous I/O and telemetry are handled by the Efficient cores (`threads 16-27`).
 * **Graphics Processing Unit (GPU):** NVIDIA GeForce RTX 5070 Ti (16 GB GDDR7 VRAM, Blackwell architecture). PyTorch training processes operate within an explicit memory fraction envelope ($f = 0.70 \implies 11.2\,\text{GB}$ allocation ceiling), reserving $4.8\,\text{GB}$ VRAM for concurrent ONNX inference serving and host reserves.
 * **System Memory (RAM):** 128 GB DDR5 system RAM, enabling zero-copy in-memory caching of large feature embedding tensors.
-* **Storage Subsystem:** 2 TB PCIe Gen4 NVMe SSD formatted with BTRFS transparent `zstd:3` compression. Storage directories for SeaweedFS, SQLite, and MLflow are initialized with the non-CoW attribute (`chattr +C`) to eliminate block fragmentation across high-frequency write operations.
+* **Storage Subsystem:** 2 TB PCIe Gen4 NVMe SSD formatted with BTRFS transparent `zstd:3` compression. Storage directories for SeaweedFS, PostgreSQL, and Evidently are initialized with the non-CoW attribute (`chattr +C`) to eliminate block fragmentation across high-frequency write operations.
 * **Operating System:** Ubuntu 26.04 LTS on LUKS-encrypted root storage with kernel-level cgroups v2 process isolation.
 
 ---
