@@ -30,7 +30,11 @@ Model convergence, latency minimisation, and epistemic reliability depend fundam
 
 Neural network architectures require the optimisation of external hyperparameters, such as learning rates, weight decay penalties, and conformal confidence thresholds. Traditional Grid Search algorithms evaluate these spaces exhaustively, incurring a computational cost of $\mathcal{O}(S^D)$, where $S$ represents the number of discrete steps evaluated across $D$ hyperparameter dimensions. On a single-node bare-metal architecture, this geometric explosion renders hyperparameter tuning computationally unviable.
 
-The platform replaces brute-force evaluation with Optuna, driven by the Tree-structured Parzen Estimator (TPE). TPE abandons blind search grids in favour of Bayesian conditional density modelling. Let $y$ denote the objective validation Macro PR-AUC metric to be maximised, and let $y^*$ represent a dynamically evaluated scalar quantile threshold separating the upper quantile of top-performing trials from the baseline distribution. TPE models the conditional parameter probability distribution $p(\theta \mid y)$ directly as
+The platform replaces brute-force evaluation with Optuna, driven by the Tree-structured Parzen Estimator (TPE). TPE abandons blind search grids in favour of Bayesian conditional density modelling. Because pure rank-based Macro PR-AUC is invariant to logit scale and would otherwise tempt search trials to strip $L_2$ regularisation until softmax saturates on out-of-distribution inputs, \nolinkurl{tuning.py} (\nolinkurl{_compute_calibrated_objective_score()}) maximises a calibration-damped scalar objective $y$:
+\begin{equation}
+y = \frac{\max_{e} \text{PR-AUC}_{\text{val}}(e)}{1 + \lambda_{\text{loss}} \min_{e} \mathcal{L}_{\text{val}}(e)}, \qquad \lambda_{\text{loss}} = 0.05,
+\end{equation}
+bounded within $[0.0, 1.0]$. Let $y^*$ represent a dynamically evaluated scalar quantile threshold separating the upper quantile of top-performing trials from the baseline distribution. TPE models the conditional parameter probability distribution $p(\theta \mid y)$ directly as
 \[
 p(\theta \mid y) = 
 \begin{cases} 
@@ -59,9 +63,9 @@ The hyperparameter space comprises six dimensions, sampled deterministically via
 \toprule
 \textbf{Hyperparameter} & \textbf{Distribution} & \textbf{Range and role} \\
 \midrule
-Learning rate $\eta_{\text{lr}}$ & log-uniform & $[10^{-4}, 10^{-1}]$; step size of the AdamW optimiser. \\
-Weight decay $\lambda$ & log-uniform & $[10^{-6}, 10^{-2}]$; $L_2$ weight regularisation penalty. \\
-Dropout probability $p$ & uniform & $[0.0, 0.5]$; feature dropout rate prior to projection. \\
+Learning rate $\eta_{\text{lr}}$ & log-uniform & $[10^{-4}, 5 \times 10^{-3}]$; regularised step size of the AdamW optimiser. \\
+Weight decay $\lambda$ & log-uniform & $[5 \times 10^{-3}, 5 \times 10^{-2}]$; $L_2$ weight regularisation penalty bounding head norms. \\
+Dropout probability $p$ & uniform & $[0.15, 0.50]$; feature dropout rate prior to linear projection. \\
 Class-Balanced Loss $\beta$ & uniform & $[0.99, 0.9999]$; effective sample re-weighting parameter. \\
 Mini-batch size $B$ & discrete & $\{32, 64, 128\}$; stochastic batch sample cardinality. \\
 Feature jitter $\sigma$ & uniform & $[0.0, 0.05]$; zero-mean Gaussian perturbation $\mathcal{N}(0, \sigma^2 \mathbf{I})$. \\
@@ -123,7 +127,7 @@ The value declared in \nolinkurl{params.yaml:training.cb_beta} ($0.9999$) repres
 
 Whilst Optuna orchestrates the search mathematics, it inherently lacks the infrastructure to permanently archive model provenance across a distributed engineering team. MLflow bridges this gap, operating as the continuous flight data recorder for our training pipeline.
 
-The integration is implemented directly within the objective function and the overarching DVC pipeline. The tuning session registers as an MLflow experiment on the tracking server, and each trial is executed within a nested child run. To avoid socket starvation and excessive network I/O during rapid hyperparameter sweeps, all epoch metrics -- training loss, validation loss, Top-1 accuracy, Macro F1-score, and validation Macro PR-AUC -- are aggregated in memory and submitted at trial completion or ASHA pruning using \texttt{MlflowClient().log\_batch()}. The lifecycle of the primary run is governed by a deterministic context manager, guaranteeing that unexpected execution exceptions transition the run to a \texttt{FAILED} state rather than hanging perpetually.
+The integration is implemented directly within the objective function and the overarching DVC pipeline. Standalone tuning sweeps open a grouped parent run (\nolinkurl{optuna_study_{study_name}}) in the active DagsHub MLflow experiment via \nolinkurl{_run_optuna_study_in_mlflow()}, executing each individual trial inside a nested child run (\nolinkurl{trial_000..N}). To avoid socket starvation and excessive network I/O during rapid hyperparameter sweeps, all epoch metrics -- training loss, validation loss, Top-1 accuracy, Macro F1-score, and validation Macro PR-AUC -- are aggregated in memory alongside \nolinkurl{optuna.peak_val_pr_auc}, \nolinkurl{optuna.min_val_loss}, and \nolinkurl{optuna.objective_score}, and submitted at trial completion or ASHA pruning using \texttt{MlflowClient().log\_batch()}. The lifecycle of the primary run is governed by a deterministic context manager, guaranteeing that unexpected execution exceptions transition the run to a \texttt{FAILED} state rather than hanging perpetually.
 
 \subsubsection{MLflow 3.x First-Class LoggedModels and Cross-Stage Continuity}
 \label{sec:mlflow3_logged_models}

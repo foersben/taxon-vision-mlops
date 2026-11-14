@@ -63,7 +63,7 @@ Prometheus \& Grafana observability & \textbf{implemented} & FastAPI exposes \te
 \midrule
 Airflow 3 LocalExecutor orchestration & \textbf{planned} & Fully specified architecture in Chapter 4; \texttt{prediction\_drift\_monitor} DAG (@hourly) and event-driven \texttt{model\_retraining} DAG with authenticated webhook relay and Jenkins trigger. \\
 \addlinespace
-Evidently 0.7 Wasserstein \& MLflow logs & \textbf{implemented} & Evidently~0.7 \texttt{DataDriftPreset(\allowbreak num\_method="wasserstein", \allowbreak num\_threshold=0.1)} with precomputed \texttt{SingleValueMetric} scalar cards, UI \texttt{Workspace} persistence (NodePort~30850), and HTML artefact logging directly to DagsHub MLflow experiment \texttt{taxon-vision-drift}. \\
+Evidently 0.7 Wasserstein \& MLflow logs & \textbf{implemented} & Evidently~0.7 \texttt{DataDriftPreset(\allowbreak num\_method="wasserstein", \allowbreak num\_threshold=0.1)} with precomputed \texttt{SingleValueMetric} scalar cards, UI \texttt{Workspace} persistence (NodePort~30082), and HTML artefact logging directly to DagsHub MLflow experiment \texttt{taxon-vision-drift}. \\
 \addlinespace
 BADGE active learning \& triage queue & \textbf{partial} & \texttt{compute\_badge\_embeddings} (\texttt{query.py}) and Parquet-backed \texttt{TriageQueueManager} (\texttt{triage\_queue.py}) are unit-tested, pending full integration with the live triage queue. \\
 \midrule

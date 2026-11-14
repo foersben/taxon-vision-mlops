@@ -232,7 +232,7 @@ def _persist_to_evidently_workspace(
     """Persist an evaluated Evidently snapshot into the mounted Evidently UI Workspace directory.
 
     Why:
-        Rendering standalone HTML files isolates each drift check from historical longitudinal series rendered by the cluster Evidently UI container on port 30850. Writing the snapshot directly into the mounted workspace directory populates interactive project timelines without blocking serving workers.
+        Rendering standalone HTML files isolates each drift check from historical longitudinal series rendered by the cluster Evidently UI container on NodePort 30082. Writing the snapshot directly into the mounted workspace directory populates interactive project timelines without blocking serving workers.
 
     How:
         Ensures workspace_dir exists, opens or creates the workspace via Workspace.create, looks up project_name with search_project (creating the project if absent), and records the snapshot metadata via add_run(include_data=False).
