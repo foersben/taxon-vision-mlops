@@ -162,9 +162,9 @@ function initDVCExplorer() {
                 "training.weight_decay = 0.0001"
             ],
             outs: [
-                "models/checkpoints/head.pt (pushed to origin/DagsHub & SeaweedFS)"
+                "models/checkpoints/head.pt (tracked in DVC & logged to DagsHub MLflow 3.x)"
             ],
-            metrics: "reports/train_metrics.json: Train Loss: 0.2597, Val Loss: 0.2683, Val Accuracy: 93.29%, Duration: 3.61s (30 Epochs)",
+            metrics: "reports/train_metrics.json: Train Loss: 0.2277, Val Loss: 0.2533, Val Accuracy: 92.68%, Duration: 2.63s (30 Epochs)",
             algorithm: [
                 "Loads pre-extracted train_embeddings.pt (N=1,153) and val_embeddings.pt (N=164) via models.training.dataset.",
                 "Calculates Class-Balanced effective number weights: E_n = (1 - beta) / (1 - beta^n) with beta=0.9999.",
@@ -229,13 +229,13 @@ function initDVCExplorer() {
             outs: [
                 "config/conformal_config.yaml (tracked in Git)"
             ],
-            metrics: "reports/conformal_metrics.json: Empirical Cal Coverage: 96.77%, q_hat: 0.6337, tau_ood: -2.4029 (N_cal = 155 inliers)",
+            metrics: "reports/conformal_metrics.json: Empirical Cal Coverage: 96.77%, q_hat: 0.7005, tau_ood: -2.3094 (N_cal = 155 inliers)",
             algorithm: [
                 "Runs ONNX Runtime inference over unseen cal_embeddings.pt (164 samples; 155 inliers retained after 95% TPR OOD gating).",
                 "Calculates true-class non-conformity scores: s_i = 1 - f(x_i)_{y_i}.",
-                "Computes finite-sample inflated quantile q_hat = 0.6337 at level ceil((n+1)(1-alpha))/n.",
+                "Computes finite-sample inflated quantile q_hat = 0.7005 at level ceil((n+1)(1-alpha))/n.",
                 "Computes Helmholtz Free Energy scores E(x) = -T * log sum(exp(logits/T)).",
-                "Establishes OOD decision threshold tau_ood = -2.4029 anchoring In-Distribution TPR to 95%.",
+                "Establishes OOD decision threshold tau_ood = -2.3094 anchoring In-Distribution TPR to 95%.",
                 "Writes calibrated parameters to config/conformal_config.yaml."
             ],
             triggers: "Triggered when cal_embeddings.pt, model_int8.onnx, conformal.alpha, or conformal.ood_tpr changes.",
@@ -263,12 +263,12 @@ function initDVCExplorer() {
             outs: [
                 "docs/assets/pareto_results.json"
             ],
-            metrics: "reports/pareto_evaluation.json: Test Accuracy: 92.07%, Test Coverage: 91.46% (Cal: 96.77%), Mean Set Size: 1.01, p95: 50.38 ms (20.9 FPS)",
+            metrics: "reports/pareto_evaluation.json: Test Accuracy: 91.46%, Test Coverage: 93.29% (Cal: 96.77%), Mean Set Size: 1.05, p95: 54.08 ms (19.9 FPS)",
             algorithm: [
                 "Executes ONNX Runtime engine over holdout test_embeddings.pt (N=164).",
-                "Forms prediction sets C(X) = {y : f(x)_y >= 1 - q_hat} (threshold 1 - 0.6337 = 0.3663).",
-                "Verifies Gate 1 (Accuracy 92.07%, INT8 drop 1.22% <= 3.0%), Gate 2 (Test coverage 91.46% >= 90.0% finite-sample bound), Gate 3 (p95 latency 50.38 ms <= 120.0 ms SLA), and Gate 4 (Worst-class AP 92.55% >= 25.0%).",
-                "Promotes qualifying candidate to @Production in MLflow Registry and writes reports/pareto_evaluation.json."
+                "Forms prediction sets C(X) = {y : f(x)_y >= 1 - q_hat} (threshold 1 - 0.7005 = 0.2995).",
+                "Verifies Gate 1 (Accuracy 91.46%, INT8 drop 1.22% <= 3.0%), Gate 2 (Test coverage 93.29% >= 90.0% finite-sample bound), Gate 3 (p95 latency 54.08 ms <= 120.0 ms SLA), and Gate 4 (Worst-class AP 93.06% >= 25.0%).",
+                "Promotes qualifying candidate to @Production in DagsHub MLflow Registry and writes reports/pareto_evaluation.json."
             ],
             triggers: "Triggered when test_embeddings.pt, model_int8.onnx, conformal_config.yaml, or latency_sla_ms changes.",
             downstreamRadius: "Terminal stage. Blocks @Production alias promotion upon statistical coverage failure or SLO breach."
@@ -288,18 +288,18 @@ function initDVCExplorer() {
                 </div>
                 <div class="dvc-metric-pill">
                     <span class="title">Stage 4: Probe Training</span>
-                    <span class="value">93.29% Val Acc</span>
-                    <span class="subtext">Loss: 0.2597 → 0.2683 (30 Epochs in 3.61s)</span>
+                    <span class="value">92.68% Val Acc</span>
+                    <span class="subtext">Loss: 0.2277 → 0.2533 (30 Epochs in 2.63s)</span>
                 </div>
                 <div class="dvc-metric-pill">
                     <span class="title">Stage 6: Conformal Cal</span>
                     <span class="value">96.77% Cal Cov</span>
-                    <span class="subtext">q̂: 0.6337 | τ_ood: -2.4029 (α = 0.05, N=155)</span>
+                    <span class="subtext">q̂: 0.7005 | τ_ood: -2.3094 (α = 0.05, N=155)</span>
                 </div>
                 <div class="dvc-metric-pill">
                     <span class="title">Stage 7: Holdout Eval</span>
-                    <span class="value">92.07% Test Acc</span>
-                    <span class="subtext">Set Size: 1.01 | CPU p95: 50.38 ms (20.9 FPS)</span>
+                    <span class="value">91.46% Test Acc</span>
+                    <span class="subtext">Set Size: 1.05 | CPU p95: 54.08 ms (19.9 FPS)</span>
                 </div>
             </div>
             <div class="dvc-stage-nav" id="dvc-stage-nav"></div>

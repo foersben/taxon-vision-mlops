@@ -3,9 +3,6 @@ type: workflow
 title: Data Ingestion & Dataset Versioning
 description: End-to-end data pipelines for asynchronous iNaturalist ingestion, zero-disk S3 streaming, licensing compliance validation, 4-way stratified embedding caching, and dual-remote DVC versioning.
 tags: [data-ingestion, dataset-versioning, inaturalist, s3-streaming, arrow, parquet, dvc, dagshub, seaweedfs, licensing, attribution, feature-extraction]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-11-08T17:07:25.915Z
 sources:
   - id: openwiki-source-c28ca7ab362d7136f953793e
     resource: repo://.dvc/config

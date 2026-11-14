@@ -3,9 +3,6 @@ type: workflow
 title: Model Training & Experiment Tracking
 description: Frozen backbone feature extraction, stratified embedding caching, linear head probing with Class-Balanced Loss, Bayesian hyperparameter tuning with Optuna, and MLflow experiment tracking with DagsHub.
 tags: [model-training, embeddings, representation-caching, class-balanced-loss, linear-probing, mlflow, dagshub, optuna, hyperparameter-tuning, bioclip, dinov3, mobilenetv4]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-11-08T17:07:25.915Z
 sources:
   - id: openwiki-source-b6770f2af9eb66bdd4ad3d8e
     resource: repo://src/taxon_vision/models/factory.py

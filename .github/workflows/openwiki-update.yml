@@ -46,7 +46,7 @@ jobs:
         env:
           OPENWIKI_PROVIDER: gemini
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          OPENWIKI_MODEL_ID: "gemini-3.8-flash"
+          OPENWIKI_MODEL_ID: "gemini-4-hydrogen"
 
           # Required only if using the LangSmith connector.
           OPENWIKI_LANGSMITH_API_KEY: ${{ secrets.OPENWIKI_LANGSMITH_API_KEY }}

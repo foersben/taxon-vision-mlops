@@ -388,8 +388,9 @@ visualize-okf:
 wiki-update:
     @echo "Fetching credentials from KeePassXC via Secret Service..."
     OPENWIKI_PROVIDER="gemini" \
-    OPENWIKI_MODEL_ID="gemini-3.8-flash" \
-    GOOGLE_API_KEY=$(secret-tool lookup service openwiki key google_api_key) \
+    OPENWIKI_MODEL_ID="gemini-4-hydrogen" \
+    GOOGLE_API_KEY=$(secret-tool lookup title gemini_free_key) \
+    LANGSMITH_ENDPOINT="https://eu.api.smith.langchain.com" \
     LANGCHAIN_API_KEY=$(secret-tool lookup service openwiki key langsmith_api_key) \
     LANGSMITH_API_KEY=$(secret-tool lookup service openwiki key langsmith_api_key) \
     LANGCHAIN_TRACING_V2="true" \

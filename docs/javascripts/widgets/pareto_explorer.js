@@ -20,16 +20,16 @@ function initParetoExplorer() {
             feature_dim: 384,
             p50_latency_ms: 9.5,
             p95_latency_ms: 13.5,
-            cpu_p95_latency_ms: 50.38,
+            cpu_p95_latency_ms: 54.08,
             throughput_fps: 105.0,
             vram_peak_mb: 850.0,
-            top1_acc: 92.1,
+            top1_acc: 91.5,
             macro_pr_auc: 0.968,
             sla_passed: true,
-            badge: "Champion (92.1% Acc | 50.4ms CPU / ~13.5ms GPU)",
+            badge: "Champion (91.5% Acc | 54.1ms CPU / ~13.5ms GPU)",
             color: "#00e676",
             family: "vit",
-            profile: "Dense Morphology & Register Tokens (Active Trained Model: 92.07% INT8 Test Acc, 50.38 ms CPU INT8 p95)"
+            profile: "Dense Morphology & Register Tokens (Active Trained Model: 91.46% INT8 Test Acc, 54.08 ms CPU INT8 p95)"
         },
         {
             extractor: "bioclip-2",
@@ -113,7 +113,7 @@ function initParetoExplorer() {
     mountPoint.innerHTML = `
         <div class="pareto-explorer">
             <div class="pareto-provenance-banner" style="margin-bottom: 1rem; padding: 0.75rem 1rem; background: rgba(0, 230, 118, 0.08); border-left: 3px solid #00e676; border-radius: 4px; font-size: 0.82rem; line-height: 1.4;">
-                <strong>Benchmark Data Provenance:</strong> DINOv3 ViT-S/16 reflects empirical holdout evaluation on 1,646 verified observations (92.07% INT8 holdout test accuracy on N=164 test split; 47.38 ms p50 / 50.38 ms p95 single-stream CPU INT8 latency at 20.9 FPS within the &le; 120.0 ms Stage 7 SLA gate, <code>reports/pareto_evaluation.json</code>). Chart X-axis compares projected GPU FP16/TensorRT latency (&le; 15.0 ms target) across candidate backbones (BioCLIP-2, DINOv2, MobileNetV4, EfficientNet).
+                <strong>Benchmark Data Provenance:</strong> DINOv3 ViT-S/16 reflects empirical holdout evaluation on 1,646 verified observations (91.46% INT8 holdout test accuracy on N=164 test split; 49.02 ms p50 / 54.08 ms p95 single-stream CPU INT8 latency at 19.9 FPS within the &le; 120.0 ms Stage 7 SLA gate, <code>reports/pareto_evaluation.json</code>). Chart X-axis compares projected GPU FP16/TensorRT latency (&le; 15.0 ms target) across candidate backbones (BioCLIP-2, DINOv2, MobileNetV4, EfficientNet).
             </div>
             <div class="pareto-header-row">
                 <div class="pareto-chart-title">

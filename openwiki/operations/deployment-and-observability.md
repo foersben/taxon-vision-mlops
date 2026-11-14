@@ -3,9 +3,6 @@ type: operations
 title: Deployment, Scheduling & Observability
 description: Kubernetes and Docker deployment manifests, Prometheus metrics, telemetry storage, Airflow DAGs, and drift detection.
 tags: [kubernetes, deployment, docker, prometheus, telemetry, drift-detection, airflow, grafana, rbac]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-11-08T17:07:25.915Z
 sources:
   - id: openwiki-source-cc1e7b739acb03966fc5886e
     resource: repo://airflow/dags/model_retraining.py

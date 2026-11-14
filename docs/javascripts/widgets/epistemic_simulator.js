@@ -98,10 +98,10 @@ function initEpistemicSimulator() {
                 <div class="sim-param-col">
                     <label for="sim-tau-input">
                         <span>OOD Energy Cutoff (&tau;<sub>OOD</sub>)</span>
-                        <span id="sim-tau-display" class="badge-tag danger">-2.40</span>
+                        <span id="sim-tau-display" class="badge-tag danger">-2.31</span>
                     </label>
-                    <input type="range" id="sim-tau-input" min="-10.0" max="2.0" step="0.1" value="-2.40">
-                    <small>Helmholtz Free Energy cutoff (-2.4029) anchoring 95% In-Distribution TPR.</small>
+                    <input type="range" id="sim-tau-input" min="-10.0" max="2.0" step="0.01" value="-2.31">
+                    <small>Helmholtz Free Energy cutoff (-2.3094) anchoring 95% In-Distribution TPR.</small>
                 </div>
             </div>
 
@@ -114,7 +114,7 @@ function initEpistemicSimulator() {
                 <div class="sim-bars-column">
                     <div class="sim-section-heading">
                         <span>Calibrated Probabilities &pi;&#770;<sub>k</sub>(x)</span>
-                        <span class="threshold-legend" id="sim-threshold-legend">Threshold (1 - q̂<sub>&alpha;</sub>): 36.6%</span>
+                        <span class="threshold-legend" id="sim-threshold-legend">Threshold (1 - q̂<sub>&alpha;</sub>): 30.0%</span>
                     </div>
                     <div id="sim-bars-container" class="sim-bars-container"></div>
                 </div>
@@ -205,15 +205,15 @@ function initEpistemicSimulator() {
     function updateSimulation() {
         currentTemp = parseFloat(tempSlider.value) || 1.0;
         currentAlpha = parseFloat(alphaSlider.value) || 0.05;
-        currentTau = parseFloat(tauSlider.value) || -2.40;
+        currentTau = parseFloat(tauSlider.value) || -2.31;
 
         tempDisplay.textContent = currentTemp.toFixed(1);
         alphaDisplay.textContent = currentAlpha.toFixed(2);
         tauDisplay.textContent = currentTau.toFixed(2);
 
         // Finite-sample inflated quantile
-        // At alpha=0.05, calibrated q_hat = 0.6337 (1 - q_hat = 0.3663)
-        const q_hat = Math.min(0.995, Math.max(0.40, 1.0 - currentAlpha * 7.326));
+        // At alpha=0.05, calibrated q_hat = 0.7005 (1 - q_hat = 0.2995)
+        const q_hat = Math.min(0.995, Math.max(0.40, 1.0 - currentAlpha * 5.99));
         const nonConfThresh = 1.0 - q_hat;
 
         const threshLegend = document.getElementById("sim-threshold-legend");

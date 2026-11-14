@@ -27,8 +27,8 @@ Welcome to the **TaxonVision-MLOps Interactive Hub**. This portal provides real-
     </div>
     <div class="metric-card">
         <div class="metric-header">Pipeline DAG</div>
-        <div class="metric-value">7 Stages</div>
-        <div class="metric-desc">The complete Epistemic Diamond lifecycle from raw citizen-science ingest to calibrated inference.</div>
+        <div class="metric-value">8 Stages</div>
+        <div class="metric-desc">The complete Epistemic Diamond lifecycle from raw citizen-science ingest and drift auditing to calibrated inference.</div>
     </div>
 </div>
 
@@ -61,7 +61,7 @@ The interactive canvas below models the complete TaxonVision-MLOps ecosystem. Yo
 
 ## 2. OKF v0.2 Knowledge Graph Explorer
 
-The visualizer below renders the machine-attested knowledge graph maintained by `scripts/governance/validate_okf.py` and `scripts/governance/visualize_okf.py`. Every node represents an audited concept document or reference manual, linked by verified semantic dependencies.
+The visualizer below renders the machine-attested knowledge graph maintained by `scripts/governance/validate_okf.py` and `scripts/governance/visualize_okf.py`, integrating `docs/`, `.agents/`, and generated `openwiki/` architectural documentation alongside verified semantic dependencies and AST claims.
 
 <div class="visualizer-wrapper" id="vis-okf-wrapper">
     <div class="visualizer-header">

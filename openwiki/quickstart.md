@@ -3,9 +3,6 @@ type: guide
 title: Quickstart & Developer Guide
 description: Developer onboarding, environment bootstrapping with Pixi, Just recipe automation, repository layout, configuration hierarchy, and task routing for TaxonVision-MLOps.
 tags: [quickstart, developer-guide, onboarding, pixi, justfile, workflow, configuration, task-routing]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-11-08T17:07:25.915Z
 sources:
   - id: openwiki-source-978a014826b061d298cf1c14
     resource: repo://config/default_config.yaml

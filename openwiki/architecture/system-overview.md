@@ -3,9 +3,6 @@ type: architecture
 title: System Architecture & Design
 description: High-level dual-pipeline architectural blueprint, component topology, inter-service interactions, data boundaries, and operational layers of TaxonVision-MLOps.
 tags: [architecture, system-overview, dual-pipeline, configuration, pydantic, kubernetes, onnx, mlops, telemetry]
-verified:
-  - by: openwiki/0.7.2
-    at: 2026-11-08T17:07:25.915Z
 sources:
   - id: openwiki-source-978a014826b061d298cf1c14
     resource: repo://config/default_config.yaml
