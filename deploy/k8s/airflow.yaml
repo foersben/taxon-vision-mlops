@@ -19,6 +19,7 @@ data:
   TAXON_JENKINS_BRANCH: "main"
   MLFLOW_TRACKING_URI: "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
   PYTHONPATH: "/opt/airflow/src"
+  _PIP_ADDITIONAL_REQUIREMENTS: "polars>=1.0.0"
 ---
 apiVersion: apps/v1
 kind: Deployment
