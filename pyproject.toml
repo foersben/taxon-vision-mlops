@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "taxon-vision-mlops"
-version = "0.1.0"
+version = "0.2.0"
 description = "Automated end-to-end MLOps pipeline for species identification from citizen-science photographs."
 authors = [{ name = "Benjamin Förster", email = "mail@benjamin-foerster.de" }]
 readme = "README.md"
@@ -18,7 +18,6 @@ dependencies = [
     "numpy>=1.26.0",
     "pillow>=11.0.0",
     "polars>=1.20.0,<3",
-    "duckdb>=2.0.0",
     "scikit-learn>=1.6.0",
     "scipy>=1.14.0",
     "httpx>=0.28.0",

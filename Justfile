@@ -420,3 +420,13 @@ lab:
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	rm -rf .cache site build dist .pytest_cache .mypy_cache .ruff_cache htmlcov .coverage .coverage.* coverage.xml reports/coverage .complexipy_cache
+
+# Synchronise semantic version across pyproject.toml, __init__.py fallback, default_config.yaml, and docs
+[group("utils")]
+bump version:
+	@pixi run --frozen -e ci-dev python -c 'import re, sys; v = sys.argv[1]; sys.exit(0 if re.fullmatch(r"\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?", v) else "Invalid SemVer: " + v)' "{{version}}"
+	@sed -i 's/^version = "[^"]*"/version = "{{version}}"/' pyproject.toml
+	@sed -i 's/^    __version__ = "[^"]*"/    __version__ = "{{version}}"/' src/taxon_vision/__init__.py
+	@sed -i 's/^  version: "[^"]*"/  version: "{{version}}"/' config/default_config.yaml
+	@sed -i 's/| `service` | `version` | `str` | `"[^"]*"`/| `service` | `version` | `str` | `"{{version}}"`/' docs/foundations/system_reference.md
+	@echo "Bumped version to {{version}}. Remember to sign both commit and tag: git commit -S && git tag -s v{{version}}"
