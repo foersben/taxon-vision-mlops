@@ -246,7 +246,7 @@ function initDVCExplorer() {
             number: "7",
             title: "7. Pareto Evaluation & Four-Gate Promotion (Deployment Gate)",
             dvcStage: "eval",
-            cmd: "pixi run -e dev python -m taxon_vision.pipelines.evaluate --onnx-model models/checkpoints/model_int8.onnx --embeddings data/embeddings/test_embeddings.pt --conformal-config config/conformal_config.yaml --out docs/assets/pareto_results.json --metrics-out reports/pareto_evaluation.json --latency-sla-ms 120.0",
+            cmd: "pixi run -e dev python -m taxon_vision.pipelines.evaluate --onnx-model models/checkpoints/model_int8.onnx --embeddings data/embeddings/test_embeddings.pt --conformal-config config/conformal_config.yaml --out docs/assets/pareto_results.json --metrics-out reports/pareto_evaluation.json --latency-sla-ms 350.0",
             deps: [
                 "config/conformal_config.yaml",
                 "data/embeddings/test_embeddings.pt",
@@ -258,7 +258,7 @@ function initDVCExplorer() {
             ],
             params: [
                 "conformal.alpha = 0.05",
-                "evaluation.latency_sla_ms = 120.0"
+                "evaluation.latency_sla_ms = 350.0"
             ],
             outs: [
                 "docs/assets/pareto_results.json"
@@ -267,7 +267,7 @@ function initDVCExplorer() {
             algorithm: [
                 "Executes ONNX Runtime engine over holdout test_embeddings.pt (N=164).",
                 "Forms prediction sets C(X) = {y : f(x)_y >= 1 - q_hat} (threshold 1 - 0.7005 = 0.2995).",
-                "Verifies Gate 1 (Accuracy 91.46%, INT8 drop 1.22% <= 3.0%), Gate 2 (Test coverage 93.29% >= 90.0% finite-sample bound), Gate 3 (p95 latency 54.08 ms <= 120.0 ms SLA), and Gate 4 (Worst-class AP 93.06% >= 25.0%).",
+                "Verifies Gate 1 (Accuracy 91.46%, INT8 drop 1.22% <= 3.0%), Gate 2 (Test coverage 93.29% >= 90.0% finite-sample bound), Gate 3 (p95 latency 54.08 ms <= 350.0 ms SLA), and Gate 4 (Worst-class AP 93.06% >= 25.0%).",
                 "Promotes qualifying candidate to @Production in DagsHub MLflow Registry and writes reports/pareto_evaluation.json."
             ],
             triggers: "Triggered when test_embeddings.pt, model_int8.onnx, conformal_config.yaml, or latency_sla_ms changes.",

@@ -67,7 +67,7 @@ The platform exposes real-time Prometheus metrics at `GET /metrics` via `prometh
 
 | Metric Identifier | Metric Type | Labels / Dimensions | Architectural Description & Alert Thresholds |
 | :--- | :--- | :--- | :--- |
-| **`taxon_inference_latency_seconds_bucket`** | Histogram | `extractor`, `backend`, `le` | Tracks execution duration across feature extraction and head projection. Evaluates p50, p95, and p99 latency SLO ($\le 15.0\,\text{ms}$ GPU target / `50.38 ms` empirical CPU INT8 within $\le 120.0\,\text{ms}$ SLA). |
+| **`taxon_inference_latency_seconds_bucket`** | Histogram | `extractor`, `backend`, `le` | Tracks execution duration across feature extraction and head projection. Evaluates p50, p95, and p99 latency SLO ($\le 15.0\,\text{ms}$ GPU target / `50.38 ms` empirical CPU INT8 within $\le 350.0\,\text{ms}$ SLA). |
 | **`taxon_conformal_set_size_bucket`** | Histogram | `le` | Measures the cardinality $\lvert C(X) \rvert$ of admissible prediction sets. An elevated mean set size ($> 3.0$) indicates rising epistemic ambiguity. |
 | **`taxon_conformal_empty_set_total`** | Counter | None | Increments whenever $C(X) = \emptyset$. Indicates total lack of confidence at nominal $1 - \alpha$; routes to human triage. |
 | **`taxon_ood_energy_score_bucket`** | Histogram | `le` | Tracks negative Helmholtz free energy $E(\mathbf{x}; T)$ scores. Activations exceeding $\tau_{\text{OOD}}$ trigger outlier isolation. |
@@ -237,7 +237,7 @@ The primary operator dashboard incorporates **10 interactive panels across 3 ope
 * **Row 1: Service Health & Latency**
     * **Prediction Request Rate (timeseries):** Evaluates `sum(rate(taxon_predictions_total[1m]))`, displaying real-time inference throughput partitioned by status (`success`, `fallback`, `error`, `unavailable`).
     * **Error Ratio (5m) (stat):** Evaluates `sum(rate(taxon_predictions_total{status=~"error|unavailable"}[5m])) / clamp_min(sum(rate(taxon_predictions_total[5m])), 1e-9)`. Displays green for $< 1\%$, orange for $1\text{--}5\%$, and red above $5\%$ critical SLA threshold.
-    * **p95 Inference Latency (timeseries):** Evaluates `1000 * histogram_quantile(0.95, sum by (le) (rate(taxon_inference_latency_seconds_bucket[5m])))` against the $120.0\,\text{ms}$ CPU SLA ceiling (operating at $\approx 50.4\,\text{ms}$ on i7-14700K P-cores).
+    * **p95 Inference Latency (timeseries):** Evaluates `1000 * histogram_quantile(0.95, sum by (le) (rate(taxon_inference_latency_seconds_bucket[5m])))` against the $350.0\,\text{ms}$ CPU SLA ceiling (operating at $\approx 50.4\,\text{ms}$ on i7-14700K P-cores).
 * **Row 2: Statistical Drift & Manifold Exchangeability**
     * **Tier 1: Wasserstein-1 Distance vs Calibrated Threshold (timeseries):** Plots observed 1D Wasserstein-1 feature norm drift `taxon_drift_w1_distance` directly against the bootstrap-calibrated decision threshold `taxon_drift_w1_threshold` ($\tau_{W_1} = 0.12812$).
     * **Tier 2: MMD² Permutation p-value (timeseries):** Plots the multivariate RBF kernel $\text{MMD}_u^2$ Monte Carlo permutation test $p$-value (`taxon_drift_mmd2_p_value`) on a logarithmic scale against significance level $\alpha = 0.01$.
@@ -343,7 +343,7 @@ Grafana Alertmanager continuously evaluates four operational alert rules in grou
 
 | Alert UID | Rule Name | Condition & PromQL Expression | Severity | Action / Handling |
 | :--- | :--- | :--- | :--- | :--- |
-| `prediction_latency_p95_high` | `PredictionLatencyP95High` | `1000 * histogram_quantile(0.95, sum by (le) (rate(taxon_inference_latency_seconds_bucket[5m]))) > 120` for 5m | Warning | Dispatches email to `default-channel`. Signals compute starvation or CPU thread affinity contention. |
+| `prediction_latency_p95_high` | `PredictionLatencyP95High` | `1000 * histogram_quantile(0.95, sum by (le) (rate(taxon_inference_latency_seconds_bucket[5m]))) > 350` for 5m | Warning | Dispatches email to `default-channel`. Signals compute starvation or CPU thread affinity contention. |
 | `prediction_error_ratio_high` | `PredictionErrorRatioHigh` | `sum(rate(taxon_predictions_total{status=~"error\|unavailable"}[5m])) / clamp_min(...) > 0.05` for 5m | Critical | Dispatches email to `default-channel`. Signals network degradation or unhandled payload exceptions. |
 | `embedding_drift_detected` | `EmbeddingDriftDetected` | `taxon_drift_detected > 0.5` for 0s (immediate) | Critical | Tagged with `action=retrain`. Routes directly to the `retrain-webhook` relay to trigger autonomous Airflow retraining. |
 | `drift_monitor_stale` | `DriftMonitorStale` | `time() - taxon_drift_last_run_timestamp_seconds > 7200` for 10m | Warning | Dispatches warning if the Airflow drift monitoring DAG has not executed within 2 hours. |

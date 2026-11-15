@@ -55,7 +55,7 @@ Test harness \& code quality gates & \textbf{implemented} & 203 \texttt{pytest} 
 \addlinespace
 Two-tier drift detection ($W_1$ \& $\text{MMD}_u^2$) & \textbf{implemented} & Linear-time Wasserstein-1 ($W_1$) on pre-normalised activations and full-geometry unbiased RBF $\text{MMD}_u^2$ with $B=200$ Monte Carlo permutations in \texttt{monitoring/drift.py}; exposed via \nolinkurl{/api/v1/drift/evaluate} and DVC Stage~3.5 (\texttt{data\_drift.py}). \\
 \addlinespace
-Stage 7 Four-Gate Promotion Verdict & \textbf{implemented} & Terminal DVC evaluation gate in \texttt{pipelines/evaluate.py} asserting Macro PR-AUC superiority, INT8 degradation $\le 3\%$, conformal coverage $\ge (1-\alpha)-5\%$, and latency SLO $\le 120\,\text{ms}$ with live MMD² exchangeability ($p \ge 0.01$); generates \nolinkurl{reports/model_passport.json}. \\
+Stage 7 Four-Gate Promotion Verdict & \textbf{implemented} & Terminal DVC evaluation gate in \texttt{pipelines/evaluate.py} asserting Macro PR-AUC superiority, INT8 degradation $\le 3\%$, conformal coverage $\ge (1-\alpha)-5\%$, and latency SLO $\le 350\,\text{ms}$ with live MMD² exchangeability ($p \ge 0.01$); generates \nolinkurl{reports/model_passport.json}. \\
 \addlinespace
 In-cluster S3 cache \& Optuna dashboard & \textbf{implemented} & Kubernetes manifests deploy SeaweedFS (Apache 2.0, port 8333 with \texttt{strategy.type: Recreate}) and Optuna dashboard (NodePort 30081) backed by PostgreSQL 16 persistence; \texttt{docker-compose.yml} mirrors the stack locally. \\
 \addlinespace

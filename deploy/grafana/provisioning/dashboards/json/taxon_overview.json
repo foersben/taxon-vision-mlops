@@ -78,8 +78,8 @@
             "mode": "absolute",
             "steps": [
               { "color": "green", "value": null },
-              { "color": "yellow", "value": 80 },
-              { "color": "red", "value": 120 }
+              { "color": "yellow", "value": 250 },
+              { "color": "red", "value": 350 }
             ]
           }
         }

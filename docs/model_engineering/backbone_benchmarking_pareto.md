@@ -64,14 +64,14 @@ Universal academic benchmarks (e.g., ImageNet-1K or Tree-of-Life zero-shot evalu
 
 In Stage 7 of the DVC pipeline ([`evaluate.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/pipelines/evaluate.py)), candidate backbones are governed by a multi-tier latency budget (`params.yaml: evaluation.latency_sla_ms` and `promotion.latency_slo_ms`):
 
-$$\text{p95 Latency}_{\text{CPU/CI Gate}} \le 120.0\text{ ms}, \qquad \text{p95 Latency}_{\text{GPU Target}} \le 15.0\text{ ms}$$
+$$\text{p95 Latency}_{\text{CPU/CI Gate}} \le 350.0\text{ ms}, \qquad \text{p95 Latency}_{\text{GPU Target}} \le 15.0\text{ ms}$$
 
 ```mermaid
 flowchart LR
     subgraph Gate["Stage 7: Production Deployment SLO Gate"]
         M1["DINOv3 ViT-S/16<br/>(Empirical Production Model)"] -->|92.07% Test Acc / 50.38 ms CPU p95| DEPLOY["MLflow @Production Registry"]
         M2["Candidate Backbone Projections<br/>(MobileNetV4, BioCLIP-2, DINOv2)"] -.->|Literature Calibrated| EVAL["Architectural Evaluation Plane"]
-        M3["Uncapped Heavy Backbone (> 120 ms CPU)"] -->|REJECTED| FAIL["Automated Gate 3 Abort (@Archived)"]
+        M3["Uncapped Heavy Backbone (> 350 ms CPU)"] -->|REJECTED| FAIL["Automated Gate 3 Abort (@Archived)"]
     end
 ```
 
@@ -79,7 +79,7 @@ To guarantee adherence to this latency envelope:
 
 * **Contiguous Buffer Reuse on Hot Path:** The ONNX Runtime inference engine (`ONNXInferenceEngine`) reuses a persistent `InferenceSession` with contiguous C-order NumPy buffers (`np.ascontiguousarray`), avoiding Python dictionary boxing during inference.
 * **Dual-Output Graph Fusion:** PyTorch cosine classification heads and foundation backbones are fused into a unified ONNX graph (Opset 17) emitting both `logits` and `embeddings` in a single forward pass, alongside a standalone `head_int8.onnx` graph that projects cached embeddings in $< 0.2\text{ ms}$.
-* **Quantisation Headroom:** Logit-preserving dynamic INT8 Post-Training Quantisation (PTQ) reduces weight memory bandwidth pressure by ~75%, enabling the full 22M-parameter ViT-S/16 + head graph to execute in **47.38 ms p50 / 50.38 ms p95** on CPU P-cores (well inside the 120.0 ms Stage 7 SLA gate) and within the 15.0 ms target on GPU Tensor Cores.
+* **Quantisation Headroom:** Logit-preserving dynamic INT8 Post-Training Quantisation (PTQ) reduces weight memory bandwidth pressure by ~75%, enabling the full 22M-parameter ViT-S/16 + head graph to execute in **47.38 ms p50 / 50.38 ms p95** on CPU P-cores (well inside the 350.0 ms Stage 7 SLA gate) and within the 15.0 ms target on GPU Tensor Cores.
 
 ---
 

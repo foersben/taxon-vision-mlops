@@ -12,13 +12,13 @@ verified: {by: process:docs-librarian, at: "2026-10-18T12:00:00Z"}
 
 # TaxonVision-MLOps Platform Overview
 
-TaxonVision-MLOps is an automated, end-to-end machine learning operations platform and production service designed for biodiversity species identification from citizen-science photographs. The system bridges cloud-based GitHub Actions quality gates with private bare-metal NVIDIA GPU training clusters, enforcing distribution-free **Split Conformal Prediction** guarantees and verified multi-tier inference latency budgets ($50.38\text{ ms}$ p95 empirical full-graph CPU INT8 execution against a $\le 120.0\text{ ms}$ pipeline promotion SLA ceiling, with $\le 15.0\text{ ms}$ p95 targeted on bare-metal GPU FP16/CUDA and $< 0.2\text{ ms}$ for standalone linear-probe head projection).
+TaxonVision-MLOps is an automated, end-to-end machine learning operations platform and production service designed for biodiversity species identification from citizen-science photographs. The system bridges cloud-based GitHub Actions quality gates with private bare-metal NVIDIA GPU training clusters, enforcing distribution-free **Split Conformal Prediction** guarantees and verified multi-tier inference latency budgets ($50.38\text{ ms}$ p95 empirical full-graph CPU INT8 execution against a $\le 350.0\text{ ms}$ pipeline promotion SLA ceiling, with $\le 15.0\text{ ms}$ p95 targeted on bare-metal GPU FP16/CUDA and $< 0.2\text{ ms}$ for standalone linear-probe head projection).
 
 <div class="metric-grid">
     <div class="metric-card">
         <div class="metric-header">Inference Latency</div>
         <div class="metric-value">50.4 ms</div>
-        <div class="metric-desc">Empirical p95 CPU INT8 latency (47.38 ms p50, 20.9 FPS) for full fused ViT-S/16 + head graph against &le; 120.0 ms pipeline SLA gate (&le; 15.0 ms GPU target; &lt; 0.2 ms standalone head).</div>
+        <div class="metric-desc">Empirical p95 CPU INT8 latency (47.38 ms p50, 20.9 FPS) for full fused ViT-S/16 + head graph against &le; 350.0 ms pipeline SLA gate (&le; 15.0 ms GPU target; &lt; 0.2 ms standalone head).</div>
     </div>
     <div class="metric-card">
         <div class="metric-header">Conformal Coverage</div>

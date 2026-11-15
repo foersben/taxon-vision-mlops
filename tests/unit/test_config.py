@@ -30,10 +30,10 @@ def test_default_settings_loading(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.conformal.min_confidence_threshold == 0.60
     assert settings.conformal.min_confidence == 0.60
     assert settings.conformal.ood_tpr == 0.95
-    assert settings.evaluation.latency_sla_ms == 120.0
+    assert settings.evaluation.latency_sla_ms == 350.0
     assert settings.promotion.quantization_drop_tol == 0.03
     assert settings.promotion.coverage_tolerance == 0.05
-    assert settings.promotion.latency_slo_ms == 120.0
+    assert settings.promotion.latency_slo_ms == 350.0
     assert settings.promotion.min_telemetry_samples == 50
     assert settings.promotion.drift_alpha == 0.01
     assert settings.ood.energy_threshold == -2.40

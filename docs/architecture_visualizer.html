@@ -1201,7 +1201,7 @@
             <span class="kpi-val" style="color: var(--accent-cyan)"
               >54.1 ms CPU</span
             >
-            <span class="kpi-sub">&le; 120ms CPU SLA Gate (&le; 15ms GPU Target)</span>
+            <span class="kpi-sub">&le; 350ms CPU SLA Gate (&le; 15ms GPU Target)</span>
           </div>
           <div class="kpi-card">
             <span class="kpi-label">Recommended Server Backbone</span>
@@ -2065,9 +2065,9 @@
               role: "@qa-automator",
               path: "src/taxon_vision/pipelines/evaluate.py",
               description:
-                "Evaluates Top-1 accuracy (91.46%), empirical conformal coverage (93.29% test / 96.77% cal), worst-class AP (93.06%), and validates p95 latency (54.08 ms CPU INT8) against the 120.0 ms Stage 7 SLA gate.",
+                "Evaluates Top-1 accuracy (91.46%), empirical conformal coverage (93.29% test / 96.77% cal), worst-class AP (93.06%), and validates p95 latency (54.08 ms CPU INT8) against the 350.0 ms Stage 7 SLA gate.",
               invariants:
-                "Guarantees finite-sample coverage >= (1 - alpha) - 0.05 and p95 latency <= 120.0ms on CPU/CI test holdout (<= 15.0ms GPU target).",
+                "Guarantees finite-sample coverage >= (1 - alpha) - 0.05 and p95 latency <= 350.0ms on CPU/CI test holdout (<= 15.0ms GPU target).",
               config: "Pipeline: src/taxon_vision/pipelines/evaluate.py",
             },
           },

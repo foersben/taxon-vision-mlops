@@ -260,7 +260,7 @@ The drift auditing engine operates across two decoupled regimes: an automated CI
         \item \textbf{Gate 1 (Accuracy Superiority):} Validation Macro PR-AUC must improve upon the active production model ($\Delta \text{PR-AUC} \ge 0$).
         \item \textbf{Gate 2 (Quantisation Fidelity):} Top-1 accuracy degradation induced by INT8 Post-Training Quantisation must remain $\le 3.0\%$ relative to the unquantised FP32 PyTorch baseline.
         \item \textbf{Gate 3 (Empirical Conformal Coverage):} Empirical marginal coverage on the holdout test partition must satisfy the lower statistical bound $\ge (1 - \alpha) - 5\%$ (e.g. $\ge 90\%$ at nominal $\alpha = 0.05$).
-        \item \textbf{Gate 4 (Latency Ceiling \& Live Exchangeability):} The p95 CPU inference latency must remain strictly below the pipeline evaluation SLO ceiling ($\le 120\,\text{ms}$ per \nolinkurl{params.yaml}, complementing the $< 25\,\text{ms}$ fast-path serving SLO), and the two-sample RBF $\text{MMD}_u^2$ permutation test against live PostgreSQL prediction telemetry must confirm covariate exchangeability ($p \ge 0.01$).
+        \item \textbf{Gate 4 (Latency Ceiling \& Live Exchangeability):} The p95 CPU inference latency must remain strictly below the pipeline evaluation SLO ceiling ($\le 350\,\text{ms}$ per \nolinkurl{params.yaml}, complementing the $< 25\,\text{ms}$ fast-path serving SLO), and the two-sample RBF $\text{MMD}_u^2$ permutation test against live PostgreSQL prediction telemetry must confirm covariate exchangeability ($p \ge 0.01$).
     \end{itemize}
 \end{enumerate}
 

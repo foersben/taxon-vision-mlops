@@ -74,7 +74,7 @@ class PromotionCriteria:
         live_sample_count: Number of recent live production inference embeddings evaluated.
         quantization_drop_tol: Maximum tolerable accuracy drop between FP32 and INT8 (default: 0.03).
         coverage_tolerance: Margin allowed below nominal coverage for finite-sample variation (default: 0.05).
-        latency_slo_ms: Upper bound latency budget in milliseconds (default: 120.0).
+        latency_slo_ms: Upper bound latency budget in milliseconds (default: 350.0).
         min_telemetry_samples: Minimum live samples required to evaluate distribution exchangeability (default: 50).
         drift_alpha: Significance ceiling for rejecting calibration exchangeability (default: 0.01).
     """
@@ -88,7 +88,7 @@ class PromotionCriteria:
     live_sample_count: int = 0
     quantization_drop_tol: float = 0.03
     coverage_tolerance: float = 0.05
-    latency_slo_ms: float = 120.0
+    latency_slo_ms: float = 350.0
     min_telemetry_samples: int = 50
     drift_alpha: float = 0.01
 

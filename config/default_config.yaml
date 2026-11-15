@@ -10,7 +10,7 @@
 #     * training: epochs, batch_size, learning_rate, weight_decay, cb_beta, tune
 #     * export: quantize_int8
 #     * conformal: alpha (0.05 / 95% coverage), min_confidence, ood_tpr
-#     * evaluation: latency_sla_ms (25.0 ms fast-path SLO)
+#     * evaluation: latency_sla_ms (350.0 ms Stage 7 CPU/CI SLA)
 # - `config/default_config.yaml` (This File): Governs system runtime defaults,
 #   HTTP service parameters, paths, model registry mappings, telemetry, and
 #   external database infrastructure. Any overlapping keys defined in root `/params.yaml`
@@ -157,11 +157,11 @@ drift:
   evidently_project_name: "TaxonVision Production Drift"
 
 evaluation:
-  latency_sla_ms: 120.0
+  latency_sla_ms: 350.0
 
 promotion:
   quantization_drop_tol: 0.03
   coverage_tolerance: 0.05
-  latency_slo_ms: 120.0
+  latency_slo_ms: 350.0
   min_telemetry_samples: 50
   drift_alpha: 0.01

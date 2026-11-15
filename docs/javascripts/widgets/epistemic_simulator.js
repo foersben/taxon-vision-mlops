@@ -355,7 +355,7 @@ function initEpistemicSimulator() {
             icon.textContent = "⚡";
             title.textContent = "Route: Zero-Allocation Fast-Path Inference";
             const candidate = species[admittedIndices[0]].name;
-            desc.innerHTML = `Singleton prediction set admitted: <em>${candidate}</em> (&pi;&#770; = ${(probs[admittedIndices[0]] * 100).toFixed(1)}%). Mathematical ${( (1 - currentAlpha) * 100).toFixed(0)}% coverage guarantee verified. Direct ONNX Runtime serving (~50.4 ms CPU INT8 within 120 ms SLA; &le; 15 ms GPU target).`;
+            desc.innerHTML = `Singleton prediction set admitted: <em>${candidate}</em> (&pi;&#770; = ${(probs[admittedIndices[0]] * 100).toFixed(1)}%). Mathematical ${( (1 - currentAlpha) * 100).toFixed(0)}% coverage guarantee verified. Direct ONNX Runtime serving (~50.4 ms CPU INT8 within 350 ms SLA; &le; 15 ms GPU target).`;
         } else if (admittedIndices.length <= 3) {
             banner.classList.add("route-rag");
             icon.textContent = "🔍";

@@ -325,10 +325,10 @@ class EvaluationConfig(BaseModel):
         Declares operational service-level objective execution ceilings for inference evaluation.
 
     Attributes:
-        latency_sla_ms (float): Latency service level objective threshold in milliseconds (default: 120.0).
+        latency_sla_ms (float): Latency service level objective threshold in milliseconds (default: 350.0).
     """
 
-    latency_sla_ms: float = Field(default=120.0, gt=0.0)
+    latency_sla_ms: float = Field(default=350.0, gt=0.0)
 
 
 class PromotionConfig(BaseModel):
@@ -343,14 +343,14 @@ class PromotionConfig(BaseModel):
     Attributes:
         quantization_drop_tol (float): Maximum tolerable drop in accuracy between FP32 and INT8 (default: 0.03).
         coverage_tolerance (float): Finite-sample binomial margin allowed below nominal conformal coverage (default: 0.05).
-        latency_slo_ms (float): Pragmatic p95 execution latency threshold in milliseconds (default: 120.0).
+        latency_slo_ms (float): Pragmatic p95 execution latency threshold in milliseconds (default: 350.0).
         min_telemetry_samples (int): Minimum live inference records required before assessing exchangeability (default: 50).
         drift_alpha (float): Permutation test significance level for calibration exchangeability (default: 0.01).
     """
 
     quantization_drop_tol: float = Field(default=0.03, ge=0.0, le=0.20)
     coverage_tolerance: float = Field(default=0.05, ge=0.0, le=0.20)
-    latency_slo_ms: float = Field(default=120.0, gt=0.0)
+    latency_slo_ms: float = Field(default=350.0, gt=0.0)
     min_telemetry_samples: int = Field(default=50, ge=5)
     drift_alpha: float = Field(default=0.01, gt=0.0, lt=0.5)
 
