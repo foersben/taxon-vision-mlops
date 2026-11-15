@@ -18,7 +18,7 @@
 # ==============================================================================
 service:
   name: "TaxonVision Service"
-  version: "0.1.0"
+  version: "0.2.0"
   port: 8000
   host: "0.0.0.0"
   max_image_upload_bytes: 15728640  # 15 MB

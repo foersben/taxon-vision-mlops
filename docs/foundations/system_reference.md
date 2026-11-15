@@ -162,7 +162,7 @@ Defines default service infrastructure, model registry mappings, and connection 
 | Section | Parameter Key | Type | Default Value | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `service` | `name` | `str` | `"TaxonVision Service"` | Display name for the web service. |
-| `service` | `version` | `str` | `"0.1.0"` | Semantic version identifier. |
+| `service` | `version` | `str` | `"0.2.0"` | Semantic version identifier (kept in sync with `pyproject.toml` via `just bump <version>`). |
 | `service` | `port` | `int` | `8000` | TCP port for HTTP server binding. |
 | `service` | `host` | `str` | `"0.0.0.0"` | Network interface to listen on. |
 | `service` | `max_image_upload_bytes` | `int` | `15728640` | Maximum upload file payload size (15 MB). |

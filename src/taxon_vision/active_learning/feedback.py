@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 from xml.sax.saxutils import escape
 
-import pandas as pd
+import polars as pl
 import yaml
 
 logger = logging.getLogger(__name__)
@@ -530,24 +530,24 @@ def _atomic_write_text(content: str, target_path: Path) -> None:
         raise
 
 
-def _atomic_write_manifest(df: pd.DataFrame, manifest_path: Path) -> None:
-    """Write a DataFrame atomically to a target Parquet path via a temporary sibling file.
+def _atomic_write_manifest(df: pl.DataFrame, manifest_path: Path) -> None:
+    """Write a Polars DataFrame atomically to a target Parquet path via a temporary sibling file.
 
     Why:
-        Partial Parquet writes break PyArrow footer parsing across downstream DVC stages and dataset audits; atomic `replace()` prevents concurrent readers from seeing half-written files.
+        Partial Parquet writes break footer parsing across downstream DVC stages and dataset audits; atomic `replace()` prevents concurrent readers from seeing half-written files.
 
     How:
-        Serialises `df` into a sibling temporary `.parquet` file via pandas/PyArrow and renames it atomically onto `manifest_path`, cleaning up on error.
+        Serialises `df` into a sibling temporary `.parquet` file via Polars and renames it atomically onto `manifest_path`, cleaning up on error.
 
     Args:
-        df: Updated manifest DataFrame.
+        df: Updated manifest Polars DataFrame.
         manifest_path: Destination Parquet path on disk.
     """
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=manifest_path.parent, delete=False, suffix=".parquet") as tmp:
         tmp_path = Path(tmp.name)
     try:
-        df.to_parquet(tmp_path, index=False)
+        df.write_parquet(tmp_path)
         tmp_path.replace(manifest_path)
     except Exception:
         if tmp_path.exists():
@@ -586,27 +586,34 @@ def _append_deduplicated_parquet(
         Repeated exports from DagsHub Label Studio contain already-ingested tasks; O(N) set-based deduplication guarantees idempotency across scheduled/retried DAG runs for both `raw_manifest.parquet` and `ood_verified.parquet`.
 
     How:
-        Reads `target_path` if present (otherwise initialises an empty frame with `columns`), builds a set of existing `observation_uuid` strings, filters `records`, concatenates new rows, and writes via `_atomic_write_manifest`.
+        Reads `target_path` via Polars if present, builds a set of existing `observation_uuid` strings, filters `records`, concatenates new rows with relaxed diagonal schema alignment, and writes via `_atomic_write_manifest`.
 
     Args:
         records: Candidate record dicts to append.
         target_path: Destination Parquet file path.
-        columns: Canonical column list used when creating a new file.
+        columns: Canonical column list preserved when initialising or aligning rows.
 
     Returns:
         `ParquetAppendStats` holding counts of newly added rows and total rows.
     """
-    existing_df = pd.read_parquet(target_path) if target_path.is_file() else pd.DataFrame(columns=columns)
+    existing_df = pl.read_parquet(target_path) if target_path.is_file() else None
     existing_uuids = (
-        set(existing_df["observation_uuid"].astype(str)) if "observation_uuid" in existing_df.columns else set()
+        set(existing_df["observation_uuid"].cast(pl.String).to_list())
+        if existing_df is not None and "observation_uuid" in existing_df.columns
+        else set()
     )
     new_records = [rec for rec in records if str(rec["observation_uuid"]) not in existing_uuids]
     if not new_records:
-        return ParquetAppendStats(added_count=0, total_count=len(existing_df))
+        return ParquetAppendStats(added_count=0, total_count=existing_df.height if existing_df is not None else 0)
 
-    updated_df = pd.concat([existing_df, pd.DataFrame(new_records)], ignore_index=True)
+    new_df = pl.DataFrame(new_records)
+    updated_df = (
+        pl.concat([existing_df, new_df], how="diagonal_relaxed")
+        if existing_df is not None
+        else new_df.select([col for col in columns if col in new_df.columns])
+    )
     _atomic_write_manifest(updated_df, target_path)
-    return ParquetAppendStats(added_count=len(new_records), total_count=len(updated_df))
+    return ParquetAppendStats(added_count=len(new_records), total_count=updated_df.height)
 
 
 def _deduplicate_novel_specs(specs: list[NewTaxonSpec]) -> list[NewTaxonSpec]:

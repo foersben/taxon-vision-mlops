@@ -1,7 +1,7 @@
 # TaxonVision-MLOps: Automated Species Identification & Statistical Safety Platform
 
 [![CI & Deployment Pipeline](https://github.com/foersben/taxon-vision-mlops/actions/workflows/ci.yml/badge.svg)](https://github.com/foersben/taxon-vision-mlops/actions/workflows/ci.yml)
-[![Release: v0.1.0](https://img.shields.io/badge/release-v0.1.0-blue.svg)](https://github.com/foersben/taxon-vision-mlops/releases)
+[![Release](https://img.shields.io/github/v/release/foersben/taxon-vision-mlops?label=release&color=blue)](https://github.com/foersben/taxon-vision-mlops/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Pixi Managed](https://img.shields.io/badge/managed%20by-pixi-blue)](https://pixi.sh)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
