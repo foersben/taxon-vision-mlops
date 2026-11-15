@@ -93,7 +93,7 @@ While conceptually decoupled, the execution lineage of Pipeline 1 and Pipeline 2
 * `train`: Optimises the cosine classification head over 30 epochs with Class-Balanced Loss and optional Optuna Bayesian sweeps (`93.29%` validation accuracy).
 * `export`: Compiles PyTorch weights into dual-output INT8 ONNX graphs (`model_int8.onnx` and standalone `head_int8.onnx`).
 * `calibrate`: Computes conformal quantile thresholds ($\hat{q}_\alpha = 0.6337$, `96.77%` empirical calibration coverage) and Helmholtz energy boundaries ($\tau_{\text{OOD}} = -2.4029$) on $N_{\text{cal}} = 155$ inliers.
-* `eval`: Executes Pareto benchmarking and Four-Gate promotion (`92.07%` INT8 holdout test accuracy, `91.46%` empirical test coverage, and `50.38 ms` p95 CPU INT8 latency within the `120.0 ms` SLA ceiling).
+* `eval`: Executes Pareto benchmarking and Four-Gate promotion (`92.07%` INT8 holdout test accuracy, `91.46%` empirical test coverage, and `50.38 ms` p95 CPU INT8 latency within the `350.0 ms` SLA ceiling).
 
 High-throughput intermediate embeddings (`data/embeddings/*.pt`) and local model checkpoints are persisted to the in-cluster SeaweedFS object store (`s3://taxon-dvc-cache/`), whilst final production release artifacts are mirrored to DagsHub S3 (`s3://dvc`).
 

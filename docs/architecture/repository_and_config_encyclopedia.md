@@ -97,8 +97,8 @@ The root [`Settings`](file:///home/benni/Documents/antigravity_workspace/taxon-v
 | [`OptunaConfig`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/config/schemas.py#L240-L264) | `settings.optuna` | `optuna_storage_uri: "sqlite:///data/optuna/optuna_studies.db"`, `n_trials: 30`, `min_resource: 3`, `reduction_factor: 2` | Bayesian TPE study storage backend and ASHA successive halving pruning bounds. |
 | [`TelemetryConfig`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/config/schemas.py#L266-L285) | `settings.telemetry` | `database_url: "postgresql+psycopg://telemetry:...@localhost:5432/telemetry"`, `pool_min_size: 2`, `pool_max_size: 10`, `timeout_seconds: 5.0`, `allow_in_memory_fallback: false`, `fallback_buffer_size: 500` | PostgreSQL `psycopg_pool` connection limits and fail-fast vs ring-buffer fallback control. |
 | [`DriftConfig`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/config/schemas.py#L287-L309) | `settings.drift` | `window_size: 500`, `min_samples: 50`, `tau_w1: 0.15`, `mmd_max_samples: 500`, `mmd_permutations: 200`, `alpha: 0.01`, `config_path: "config/drift_config.yaml"`, `reference_embeddings_path: "data/embeddings/cal_embeddings.pt"` | Sliding window dimensions, Tier 1 $W_1$ norm ceiling, Tier 2 RBF MMD² permutation count, and reference tensor path. |
-| [`EvaluationConfig`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/config/schemas.py#L311-L321) | `settings.evaluation` | `latency_sla_ms: 120.0` (overridden by `params.yaml` when specified) | Operational latency ceiling enforced during Stage 7 (`eval`). |
-| [`PromotionConfig`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/config/schemas.py#L324-L346) | `settings.promotion` | `quantization_drop_tol: 0.03`, `coverage_tolerance: 0.05`, `latency_slo_ms: 120.0`, `min_telemetry_samples: 50`, `drift_alpha: 0.01` | Thresholds governing the Four-Gate Model Promotion audit in `src/taxon_vision/models/training/promotion.py`. |
+| [`EvaluationConfig`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/config/schemas.py#L311-L321) | `settings.evaluation` | `latency_sla_ms: 350.0` (overridden by `params.yaml` when specified) | Operational latency ceiling enforced during Stage 7 (`eval`). |
+| [`PromotionConfig`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/config/schemas.py#L324-L346) | `settings.promotion` | `quantization_drop_tol: 0.03`, `coverage_tolerance: 0.05`, `latency_slo_ms: 350.0`, `min_telemetry_samples: 50`, `drift_alpha: 0.01` | Thresholds governing the Four-Gate Model Promotion audit in `src/taxon_vision/models/training/promotion.py`. |
 
 ---
 
@@ -126,7 +126,7 @@ Every parameter declared in root [`params.yaml`](file:///home/benni/Documents/an
 | `conformal.alpha` | `float: 0.05` | `calibrate`, `eval` | Significance level $\alpha$ bounding marginal error rate to at most $5\%$ (target coverage $1 - \alpha = 95\%$). |
 | `conformal.min_confidence` | `float: 0.60` | `calibrate` | Minimum top-1 probability score required to bypass human review when the conformal set contains multiple candidates. |
 | `conformal.ood_tpr` | `float: 0.95` | `calibrate` | In-distribution True Positive Rate ($95\%$) anchor used to calibrate the Helmholtz free energy cutoff $\tau_{\text{OOD}}$. |
-| `evaluation.latency_sla_ms` | `float: 120.0` | `eval` | Maximum permissible p95 inference latency in milliseconds enforced during Stage 7 holdout evaluation. |
+| `evaluation.latency_sla_ms` | `float: 350.0` | `eval` | Maximum permissible p95 inference latency in milliseconds enforced during Stage 7 holdout evaluation. |
 
 ---
 

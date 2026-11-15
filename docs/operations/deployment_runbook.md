@@ -303,7 +303,7 @@ The Traefik ingress controller on `hive-mind` manages branch-scoped ingress via 
     kubectl apply -f deploy/k8s/canary-ab-service.yaml
     ```
 
-* **Canary Promotion Step 2 (Full Cutover 100/0):** If Prometheus metrics confirm the challenger meets the latency SLO (p95 $\le 15.0\text{ ms}$ on GPU / $\le 120.0\text{ ms}$ CPU SLA gate, `50.38 ms` empirical CPU INT8) and conformal error guarantees ($1 - \alpha \ge 0.90$), update the primary deployment image tag to the challenger release and reset weights to 100/0.
+* **Canary Promotion Step 2 (Full Cutover 100/0):** If Prometheus metrics confirm the challenger meets the latency SLO (p95 $\le 15.0\text{ ms}$ on GPU / $\le 350.0\text{ ms}$ CPU SLA gate, `50.38 ms` empirical CPU INT8) and conformal error guarantees ($1 - \alpha \ge 0.90$), update the primary deployment image tag to the challenger release and reset weights to 100/0.
 * **Instant Emergency Rollback:** If the challenger experiences elevated error rates, instantly route 100% of traffic back to the stable baseline:
 
     ```bash

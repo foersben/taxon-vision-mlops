@@ -1139,7 +1139,7 @@
             \begin{rosecard}
                 \textbf{\color{RoseAccent} Four Production Alerting Rules}\\[2pt]
                 \textbullet\ \textbf{\texttt{PredictionLatencyP95High}:}\\
-                \quad p95 latency $> 120\,\text{ms}$ for 5 min (\texttt{warning}).\\[2pt]
+                \quad p95 latency $> 350\,\text{ms}$ for 5 min (\texttt{warning}).\\[2pt]
                 \textbullet\ \textbf{\texttt{PredictionErrorRatioHigh}:}\\
                 \quad Error ratio $> 5\%$ for 5 min (\texttt{critical}).\\[2pt]
                 \textbullet\ \textbf{\texttt{EmbeddingDriftDetected}:}\\
@@ -1302,7 +1302,7 @@
                 \textbf{Gate 3: Empirical Conformal Coverage}\\
                 \textbullet\ Holdout test coverage $\ge 90.0\%$ (nominal $95\%$).\\[2pt]
                 \textbf{Gate 4: Latency Ceiling \& Exchangeability}\\
-                \textbullet\ CPU p95 latency $\le 120\,\text{ms}$ and live MMD $p \ge 0.01$.
+                \textbullet\ CPU p95 latency $\le 350\,\text{ms}$ and live MMD $p \ge 0.01$.
             \end{card}
         \end{column}
     \end{columns}

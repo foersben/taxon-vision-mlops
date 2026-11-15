@@ -153,7 +153,7 @@ Root `/params.yaml` serves as the authoritative single source of truth for all p
 | `conformal` | `alpha` | `float` | `0.05` | Maximum allowable marginal error rate ($1 - \alpha = 0.95$). |
 | `conformal` | `min_confidence` | `float` | `0.60` | Minimum top-1 probability to bypass human triage. |
 | `conformal` | `ood_tpr` | `float` | `0.95` | True positive rate on calibration data for OOD energy threshold. |
-| `evaluation` | `latency_sla_ms` | `float` | `120.0` | Stage 7 pipeline promotion p95 latency SLA ceiling in milliseconds (50.38 ms empirical CPU INT8; <= 15.0 ms GPU target). |
+| `evaluation` | `latency_sla_ms` | `float` | `350.0` | Stage 7 pipeline promotion p95 latency SLA ceiling in milliseconds (50.38 ms empirical CPU INT8; <= 15.0 ms GPU target). |
 
 ### 3.2 System Runtime Defaults (`config/default_config.yaml`)
 

@@ -113,12 +113,12 @@ function initParetoExplorer() {
     mountPoint.innerHTML = `
         <div class="pareto-explorer">
             <div class="pareto-provenance-banner" style="margin-bottom: 1rem; padding: 0.75rem 1rem; background: rgba(0, 230, 118, 0.08); border-left: 3px solid #00e676; border-radius: 4px; font-size: 0.82rem; line-height: 1.4;">
-                <strong>Benchmark Data Provenance:</strong> DINOv3 ViT-S/16 reflects empirical holdout evaluation on 1,646 verified observations (91.46% INT8 holdout test accuracy on N=164 test split; 49.02 ms p50 / 54.08 ms p95 single-stream CPU INT8 latency at 19.9 FPS within the &le; 120.0 ms Stage 7 SLA gate, <code>reports/pareto_evaluation.json</code>). Chart X-axis compares projected GPU FP16/TensorRT latency (&le; 15.0 ms target) across candidate backbones (BioCLIP-2, DINOv2, MobileNetV4, EfficientNet).
+                <strong>Benchmark Data Provenance:</strong> DINOv3 ViT-S/16 reflects empirical holdout evaluation on 1,646 verified observations (91.46% INT8 holdout test accuracy on N=164 test split; 49.02 ms p50 / 54.08 ms p95 single-stream CPU INT8 latency at 19.9 FPS within the &le; 350.0 ms Stage 7 SLA gate, <code>reports/pareto_evaluation.json</code>). Chart X-axis compares projected GPU FP16/TensorRT latency (&le; 15.0 ms target) across candidate backbones (BioCLIP-2, DINOv2, MobileNetV4, EfficientNet).
             </div>
             <div class="pareto-header-row">
                 <div class="pareto-chart-title">
                     <span>Multi-Objective Pareto Frontier (GPU p95 Latency vs. Accuracy)</span>
-                    <span class="pareto-slo-badge">15 ms GPU Target | 120 ms CPU SLA Gate</span>
+                    <span class="pareto-slo-badge">15 ms GPU Target | 350 ms CPU SLA Gate</span>
                 </div>
                 <div class="pareto-filter-group">
                     <button class="pareto-filter-btn active" data-family="all">All Models</button>

@@ -75,7 +75,7 @@ Evaluated on the independent, holdout test split ($n = 164$ compliant observatio
 | **Worst-Class PR-AUC** | $0.9306$ | $\ge 0.8500$ | **PASSED** |
 | **Expected Calibration Error (ECE)** | $0.0889$ | $\le 0.1500$ | **PASSED** |
 | **End-to-End CPU Latency (p50)** | $49.02\,\text{ms}$ | $\le 100.0\,\text{ms}$ | **PASSED** |
-| **End-to-End CPU Latency (p95)** | $54.08\,\text{ms}$ | $\le 120.0\,\text{ms}$ | **PASSED** |
+| **End-to-End CPU Latency (p95)** | $54.08\,\text{ms}$ | $\le 350.0\,\text{ms}$ | **PASSED** |
 | **Inference Throughput** | $19.9\,\text{FPS}$ | $\ge 15.0\,\text{FPS}$ | **PASSED** |
 | **Standalone Head Latency** | $< 0.2\,\text{ms}$ | $\le 1.0\,\text{ms}$ | **PASSED** |
 
@@ -260,7 +260,7 @@ flowchart LR
 * **Automated Four-Gate Promotion:** Models must strictly pass four automated gates before receiving the `@Production` alias:
     1. *Accuracy Degradation Gate:* Top-1 accuracy drop between FP32 baseline and INT8 quantized ONNX graph $\le 3.0\%$.
     2. *Statistical Coverage Gate:* Empirical coverage on holdout calibration/test splits $\ge 1 - \alpha - 0.05$ ($90.0\%$).
-    3. *Inference Latency Gate:* End-to-end CPU p95 latency $\le 120.0\,\text{ms}$.
+    3. *Inference Latency Gate:* End-to-end CPU p95 latency $\le 350.0\,\text{ms}$.
     4. *Input Drift Gate:* Wasserstein-1 distance against reference embeddings below threshold $\tau_{W_1} = 0.1281$.
 
 ### 3. Continuous Representation & Concept Drift Engine

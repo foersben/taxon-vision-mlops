@@ -173,4 +173,4 @@ $$S = \frac{r_{\max} - r_{\min}}{255}, \quad Z = \operatorname{round}\left(-\fra
 
 $$q = \operatorname{clamp}\left(\operatorname{round}\left(\frac{r}{S}\right) + Z, \; -128, \; 127\right)$$
 
-Calibrating $[r_{\min}, r_{\max}]$ on real domain images and preserving FP32 on final logit projection nodes prevents numerical saturation on diagnostic morphological details, achieving $92.07\%$ INT8 holdout accuracy ($1.22\%$ drop relative to the $93.29\%$ FP32 validation baseline, well within the $3.0\%$ Gate 1 tolerance) and $50.38\,\text{ms}$ p95 CPU INT8 latency ($\le 120.0\,\text{ms}$ Stage 7 SLA gate; $\le 15.0\,\text{ms}$ GPU target).
+Calibrating $[r_{\min}, r_{\max}]$ on real domain images and preserving FP32 on final logit projection nodes prevents numerical saturation on diagnostic morphological details, achieving $92.07\%$ INT8 holdout accuracy ($1.22\%$ drop relative to the $93.29\%$ FP32 validation baseline, well within the $3.0\%$ Gate 1 tolerance) and $50.38\,\text{ms}$ p95 CPU INT8 latency ($\le 350.0\,\text{ms}$ Stage 7 SLA gate; $\le 15.0\,\text{ms}$ GPU target).

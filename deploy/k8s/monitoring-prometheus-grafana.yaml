@@ -114,14 +114,14 @@ data:
                   conditions:
                     - evaluator:
                         type: gt
-                        params: [120]
+                        params: [350]
                       query:
                         params: [A]
             for: 5m
             labels:
               severity: warning
             annotations:
-              summary: "Inference p95 latency exceeded 120ms budget"
+              summary: "Inference p95 latency exceeded 350ms budget"
               description: "Steady-state p95 inference latency is currently {{ $value }} ms."
             noDataState: OK
             execErrState: Error

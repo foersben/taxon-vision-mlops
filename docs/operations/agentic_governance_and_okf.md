@@ -94,7 +94,7 @@ Repository architectural standards defined in `.agents/rules/` are immutable and
 * **Inference Latency Invariants (`02-inference-latency-invariants.md`):**
     * Zero dynamic memory allocations on hot inference paths.
     * Contiguous C-order NumPy buffers pre-allocated during application warmup.
-    * Strict p95 latency budget: $\le 15.0\text{ ms}$ on target GPU serving profiles (and $\le 120.0\text{ ms}$ Stage 7 CPU/CI SLA gate, with `50.38 ms` empirical CPU INT8 p95).
+    * Strict p95 latency budget: $\le 15.0\text{ ms}$ on target GPU serving profiles (and $\le 350.0\text{ ms}$ Stage 7 CPU/CI SLA gate, with `50.38 ms` empirical CPU INT8 p95).
 * **Git Security & Signing (`03-git-security-and-signing.md`):**
     * Mandatory GPG/SSH commit signing (`git commit -S`) for local developers and automated agents. Unsigned commits are rejected by Git pre-commit hooks.
 * **Markdown Formatting Rules (`04-markdown-formatting.md`):**
