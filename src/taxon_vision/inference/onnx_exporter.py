@@ -7,6 +7,8 @@ from __future__ import annotations
 import argparse
 import logging
 import warnings
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Literal, NamedTuple
 
@@ -74,6 +76,24 @@ class _ONNXDualOutputModule(nn.Module):
         return self.classifier.forward_with_embeddings(x)
 
 
+@contextmanager
+def _disable_mha_fastpath() -> Iterator[None]:
+    """Temporarily disable PyTorch's fused MultiheadAttention fast-path for ONNX export.
+
+    Why:
+        During ``eval()`` + ``torch.no_grad()`` tracing, ``nn.MultiheadAttention`` dispatches to ``aten::_native_multi_head_attention``, which ONNX opset 17 does not support. Scoped deactivation forces standard decomposed attention primitives whilst restoring the caller's global PyTorch backend flag deterministically on exit.
+
+    How:
+        Captures ``torch.backends.mha.get_fastpath_enabled()``, sets it to ``False`` for the duration of the block, and restores the prior flag in ``finally``.
+    """
+    was_enabled = torch.backends.mha.get_fastpath_enabled()
+    torch.backends.mha.set_fastpath_enabled(False)
+    try:
+        yield
+    finally:
+        torch.backends.mha.set_fastpath_enabled(was_enabled)
+
+
 def export_to_onnx(
     model: nn.Module,
     output_path: Path,
@@ -106,6 +126,8 @@ def export_to_onnx(
 
     is_dual = isinstance(model, TaxonClassifier) or isinstance(model, _ONNXDualOutputModule)
     export_module: nn.Module = _ONNXDualOutputModule(model) if isinstance(model, TaxonClassifier) else model
+    # Keep wrapper in eval mode so torch.onnx.export restores training=False on the caller's classifier.
+    export_module.eval()
 
     output_names = ["logits", "embeddings"] if is_dual else ["logits"]
     dynamic_axes: dict[str, dict[int, str]] = {
@@ -115,7 +137,7 @@ def export_to_onnx(
     if is_dual:
         dynamic_axes["embeddings"] = {0: "batch_size"}
 
-    with torch.no_grad(), warnings.catch_warnings():
+    with torch.no_grad(), warnings.catch_warnings(), _disable_mha_fastpath():
         warnings.filterwarnings("ignore", category=TracerWarning)
         torch.onnx.export(
             export_module,
