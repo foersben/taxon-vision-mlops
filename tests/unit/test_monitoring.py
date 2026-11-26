@@ -153,3 +153,86 @@ def test_structured_stdout_logging_handler_idempotent(monkeypatch: pytest.Monkey
     _ensure_structured_stdout_handler(isolated_logger)
     assert len(isolated_logger.handlers) == 1
     assert isinstance(isolated_logger.handlers[0].formatter, StructuredJsonFormatter)
+
+
+def _load_k8s_docs(relative_path: str) -> list[dict]:
+    """Load non-empty YAML documents from a workspace-relative Kubernetes manifest path."""
+    from pathlib import Path
+
+    import yaml
+
+    manifest_path = Path(__file__).resolve().parents[2] / relative_path
+    return [doc for doc in yaml.safe_load_all(manifest_path.read_text(encoding="utf-8")) if isinstance(doc, dict)]
+
+
+def _find_k8s_doc(docs: list[dict], kind: str, name: str) -> dict:
+    """Locate a single Kubernetes manifest document by kind and metadata name."""
+    matches = [doc for doc in docs if doc.get("kind") == kind and doc.get("metadata", {}).get("name") == name]
+    assert len(matches) == 1, f"Expected exactly one {kind}/{name}, found {len(matches)}"
+    return matches[0]
+
+
+def _assert_prometheus_sd_job(prom_config_doc: dict, serving_doc: dict) -> None:
+    """Verify per-pod Kubernetes SD relabelling matches the serving Deployment pod labels and port name."""
+    import yaml
+
+    prom_yml = yaml.safe_load(prom_config_doc["data"]["prometheus.yml"])
+    serving_jobs = [job for job in prom_yml["scrape_configs"] if job.get("job_name") == "taxon-vision-serving"]
+    assert len(serving_jobs) == 1
+    job = serving_jobs[0]
+
+    assert "static_configs" not in job
+    assert job["kubernetes_sd_configs"] == [{"role": "pod", "namespaces": {"names": ["taxon-vision"]}}]
+
+    pod_template = serving_doc["spec"]["template"]
+    expected_app_label = pod_template["metadata"]["labels"]["app.kubernetes.io/name"]
+    expected_port_name = pod_template["spec"]["containers"][0]["ports"][0]["name"]
+
+    keep_rules = {
+        tuple(rule["source_labels"]): rule["regex"] for rule in job["relabel_configs"] if rule.get("action") == "keep"
+    }
+    assert keep_rules[("__meta_kubernetes_pod_label_app_kubernetes_io_name",)] == expected_app_label
+    assert keep_rules[("__meta_kubernetes_pod_container_port_name",)] == expected_port_name
+    assert keep_rules[("__meta_kubernetes_pod_phase",)] == "Running"
+
+    target_labels = {
+        tuple(rule["source_labels"]): rule["target_label"] for rule in job["relabel_configs"] if "target_label" in rule
+    }
+    assert target_labels[("__meta_kubernetes_pod_name",)] == "pod"
+    assert target_labels[("__meta_kubernetes_namespace",)] == "namespace"
+
+
+def _assert_prometheus_rbac(docs: list[dict]) -> None:
+    """Verify namespace-scoped read-only RBAC for Prometheus pod discovery without ClusterRole escalation."""
+    assert not [doc for doc in docs if doc.get("kind") in {"ClusterRole", "ClusterRoleBinding"}]
+
+    sa = _find_k8s_doc(docs, "ServiceAccount", "prometheus")
+    assert sa["metadata"]["namespace"] == "taxon-vision"
+
+    role = _find_k8s_doc(docs, "Role", "prometheus-pod-sd")
+    assert role["metadata"]["namespace"] == "taxon-vision"
+    assert role["rules"] == [{"apiGroups": [""], "resources": ["pods"], "verbs": ["get", "list", "watch"]}]
+
+    binding = _find_k8s_doc(docs, "RoleBinding", "prometheus-pod-sd")
+    assert binding["metadata"]["namespace"] == "taxon-vision"
+    assert binding["roleRef"] == {
+        "apiGroup": "rbac.authorization.k8s.io",
+        "kind": "Role",
+        "name": "prometheus-pod-sd",
+    }
+    assert binding["subjects"] == [{"kind": "ServiceAccount", "name": "prometheus", "namespace": "taxon-vision"}]
+
+    prom_deploy = _find_k8s_doc(docs, "Deployment", "prometheus")
+    assert prom_deploy["spec"]["template"]["spec"]["serviceAccountName"] == "prometheus"
+
+
+def test_prometheus_k8s_sd_matches_serving_pod_manifest_and_rbac() -> None:
+    """Ensure Prometheus discovers every serving pod directly with least-privilege namespace-scoped RBAC."""
+    monitoring_docs = _load_k8s_docs("deploy/k8s/monitoring-prometheus-grafana.yaml")
+    serving_docs = _load_k8s_docs("deploy/k8s/base/api-deployment.yaml")
+
+    prom_config_doc = _find_k8s_doc(monitoring_docs, "ConfigMap", "prometheus-config")
+    serving_doc = _find_k8s_doc(serving_docs, "Deployment", "taxon-vision-serving")
+
+    _assert_prometheus_sd_job(prom_config_doc, serving_doc)
+    _assert_prometheus_rbac(monitoring_docs)
