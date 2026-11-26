@@ -145,7 +145,7 @@ To resolve this split-brain without imposing sticky sessions or heavy cloud obje
     \texttt{redis.setex(f"img:\{image\_hash\}", 900, raw\_bytes)}
     \]
     This guarantees zero memory leak accumulation without requiring background thread garbage-collection loops in Python.
-    \item \textbf{Sub-Millisecond Retrieval:} Any serving pod can retrieve the cached image payload in sub-millisecond latency ($t_{\text{redis}} < 0.5\text{ ms}$ over localhost loopback/cluster SDN), enabling Pod~2 to compute Grad-CAM overlays seamlessly.
+    \item \textbf{Sub-Millisecond Retrieval:} Any serving pod can retrieve the cached image payload in sub-millisecond latency ($t_{\text{redis}} < 0.5\text{ ms}$ over localhost loopback/cluster SDN), enabling Pod~2 to compute CAM overlays seamlessly.
     \item \textbf{Graceful Degradation:} If the Redis service becomes temporarily unreachable, the upload cache component (\texttt{UploadCache}) automatically falls back to local in-memory caching and logs a structured warning, ensuring service resilience during cache restarts.
 \end{itemize}
 

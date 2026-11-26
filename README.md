@@ -181,10 +181,10 @@ flowchart TD
 
 * **Stage 1 (Ingestion):** Retrieves DarwinCore observation records across 10 taxa from the iNaturalist REST API into `data/manifests/raw_manifest.parquet` (2,000 observations).
 * **Stage 2 (License Gatekeeper):** Enforces open-access licensing compliance (`CC0`, `CC-BY`, `CC-BY-NC`). Rejects non-derivative or unverified rights, filtering 1,646 compliant records into `data/manifests/dataset_manifest.parquet` whilst preserving photographer attribution.
-* **Stage 3 (Feature Extraction):** Streams image assets directly from AWS S3 (`s3://inaturalist-open-data/`), passes them through the frozen DINOv3 backbone, and partitions normalized representations into four stratified splits: `train_embeddings.pt` (70%), `val_embeddings.pt` (10%), `cal_embeddings.pt` (10%), and `test_embeddings.pt` (10%).
+* **Stage 3 (Feature Extraction):** Streams image assets directly from AWS S3 (`s3://inaturalist-open-data/`), passes them through the frozen DINOv3 backbone, and partitions pre-normalised representations into four stratified splits: `train_embeddings.pt` (70%), `val_embeddings.pt` (10%), `cal_embeddings.pt` (10%), and `test_embeddings.pt` (10%).
 * **Stage 4 (Data Drift Gate):** Evaluates representation drift between newly extracted training embeddings and historical reference tensors using Tier 1 Wasserstein-1 distance ($W_1 = 0.0107 < \tau = 0.1281$) and Tier 2 RKHS $\text{MMD}^2$ ($p = 0.741 > 0.01$).
 * **Stage 5 (Head Training):** Fits the convex classification head with Class-Balanced loss on `train_embeddings.pt` with early stopping against `val_embeddings.pt`, exporting `models/checkpoints/head.pt` and opening the parent MLflow run directly on DagsHub.
-* **Stage 6 (ONNX Export & Quantization):** Compiles a dual-output ONNX graph outputting classification logits and normalized embeddings, applying logit-preserving INT8 dynamic quantization into `models/checkpoints/model_int8.onnx`.
+* **Stage 6 (ONNX Export & Quantization):** Compiles a dual-output ONNX graph outputting classification logits and pre-normalised embeddings, applying logit-preserving INT8 dynamic quantization into `models/checkpoints/model_int8.onnx`.
 * **Stage 7 (Conformal & OOD Calibration):** Computes Split Conformal threshold $\hat{q} = 0.7005$ and Helmholtz energy bound $\tau_{\text{OOD}} = -2.3094$ on the calibration split, serializing to `config/conformal_config.yaml`.
 * **Stage 8 (Pareto Evaluation & Promotion):** Executes comprehensive evaluation across accuracy, latency, and conformal coverage on the test holdout. Upon passing all four promotion gates, registers and promotes the model to `@Production` in DagsHub MLflow.
 
@@ -265,7 +265,7 @@ flowchart LR
 
 ### 3. Continuous Representation & Concept Drift Engine
 
-* Production inference requests asynchronously stage normalized feature embeddings ($D = 384$) into PostgreSQL via non-blocking background workers.
+* Production inference requests asynchronously stage pre-normalised feature embeddings ($D = 384$) into PostgreSQL via non-blocking background workers.
 * An hourly Apache Airflow 3.0 DAG executes two-tier statistical drift evaluation:
     * *Tier 1 (Coordinate-wise Wasserstein-1):* Fast 1D earth mover distances evaluated on pre-normalised embedding norms alongside Evidently 0.7's `DataDriftPreset(num_method="wasserstein", num_threshold=0.1)`.
     * *Tier 2 (Multivariate RKHS $\text{MMD}^2$):* High-sensitivity unbiased U-statistic permutation test ($B = 200$ permutations, median-heuristic RBF kernel).

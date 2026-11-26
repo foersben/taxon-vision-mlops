@@ -186,7 +186,7 @@ Defines default service infrastructure, model registry mappings, and connection 
 | `model` | `allow_untrained_fallback` | `bool` | `false` | Disallows uninitialized weights in production. |
 | `model` | `prefer_onnx_runtime` | `bool` | `true` | Prioritizes ONNX Runtime over PyTorch for inference. |
 | `model` | `onnx_opset_version` | `int` | `17` | Target ONNX operator set version. |
-| `model` | `cam_numerical_epsilon` | `float` | `1.0e-8` | Small float to prevent division by zero in Grad-CAM. |
+| `model` | `cam_numerical_epsilon` | `float` | `1.0e-8` | Small float to prevent division by zero in CAM. |
 | `model` | `ood_temperature` | `float` | `1.0` | Softmax temperature for Helmholtz free energy. |
 | `model` | `ood_energy_threshold` | `float` | `-2.40` | Default energy threshold before calibration. |
 | `model` | `flagged_storage_dir` | `str` | `"data/flagged_observations"` | Directory for human triage observation queue. |

@@ -33,6 +33,6 @@ verified: {by: process:okf-updater, at: "2026-10-30T00:00:00Z"}
 
 * **FastAPI Backend:** Machine REST API (`/predict`, `/feedback`, `/health`, `/api/v1/drift/evaluate`) and Prometheus `/metrics`.
 * **Asynchronous Non-Blocking Invariant:** Heavy CPU-bound inference and disk I/O offloaded via `await anyio.to_thread.run_sync`.
-* **Jinja2 + HTMX Dashboard:** Operator interface for live drag-and-drop classification, Grad-CAM heatmap visualization, and conformal prediction set inspection.
+* **Jinja2 + HTMX Dashboard:** Operator interface for live drag-and-drop classification, CAM heatmap visualization, and conformal prediction set inspection.
 * **Distributed Upload Cache:** Redis-backed deduplication and transient caching preventing duplicate S3 transfers and split-brain states across replicas.
 * **Drift Observability:** Two-tier exact Tier 1 $W_1$ norm shift + Tier 2 unbiased RBF $\text{MMD}_u^2$ ($B=200$ permutations) paired with Evidently 0.7 `DataDriftPreset(num_method="wasserstein", num_threshold=0.1)` and `SingleValueMetric` scalar cards persisted to the mounted UI Workspace and logged to DagsHub MLflow (`taxon-vision-drift`).

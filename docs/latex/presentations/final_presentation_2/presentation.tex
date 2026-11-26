@@ -28,6 +28,7 @@
 \usetikzlibrary{shapes.geometric,arrows.meta,positioning,fit,calc,backgrounds,shadows.blur}
 \usepackage{xcolor}
 \usepackage[most]{tcolorbox}
+\newcommand{\toollogo}[1]{\raisebox{-0.18\height}{\includegraphics[height=1.05em]{logos/#1.png}}\,}
 
 % --- Modern Professional Colour Palette ---
 \definecolor{SlateDark}{HTML}{0F172A}    % Primary dark slate header
@@ -81,15 +82,33 @@
     \end{beamercolorbox}
 }
 
-% --- Clean Speaker Note Page Template ---
+% --- Clean Speaker Note Page Template & Readability Helpers ---
+\newcommand{\cuetime}[1]{%
+    \tcbox[on line, arc=2pt, colback=SlateDark, colframe=SlateDark, boxrule=0pt, left=4pt, right=4pt, top=1.5pt, bottom=1.5pt]{\tiny\bfseries\color{white}#1}%
+}
+\newcommand{\cuejury}[1]{%
+    \begin{tcolorbox}[enhanced, colback=AmberAccent!10, colframe=AmberAccent!60, boxrule=0.4pt, arc=2pt, left=4pt, right=4pt, top=2.5pt, bottom=2.5pt, before skip=3pt, after skip=3pt]
+        \scriptsize\textbf{\color{AmberAccent} Jury Q\&A:} #1
+    \end{tcolorbox}%
+}
+\newcommand{\cueterms}[1]{%
+    \vfill
+    \vspace{2pt}
+    {\color{SlateMid!35}\hrule height 0.4pt}
+    \vspace{2pt}
+    {\tiny\color{SlateMid!90}\textbf{Glossary:} #1}%
+}
 \setbeamertemplate{note page}{%
-    \vbox{%
+    \vbox to 0.91\paperheight{%
         \vskip 6pt
         {\footnotesize\bfseries\color{BlueAccent} Speaker Cue Card $\cdot$ Slide \insertframenumber: \insertframetitle}\\[2pt]
         {\tiny\color{SlateMid} \insertsubtitle}
-        \hrule height 0.5pt
-        \vskip 6pt
-        {\footnotesize\color{TextMain}\insertnote}
+        \vspace{2pt}
+        {\color{BlueAccent!50}\hrule height 0.6pt}
+        \vskip 5pt
+        \setlength{\parskip}{2pt}
+        {\scriptsize\color{TextMain}\insertnote}
+        \vfil
     }%
 }
 
@@ -182,17 +201,21 @@
         {\Huge\bfseries\color{SlateDark} TaxonVision-MLOps}\\[4pt]
         {\large\bfseries\color{BlueAccent} iNaturalist Species Classification with Safe Uncertainty \& Continuous Retraining}\\[10pt]
 
-        \begin{tikzpicture}[node distance=0.30cm]
-            \node[pill, fill=BlueAccent!10, draw=BlueAccent, minimum width=2.25cm] (p1) {\textbf{iNaturalist S3}\\{\tiny On-Demand Stream}};
-            \node[pill, fill=TealAccent!10, draw=TealAccent, minimum width=2.25cm, right=of p1] (p2) {\textbf{8-Stage DVC DAG}\\{\tiny Epistemic Diamond}};
-            \node[pill, fill=GreenAccent!10, draw=GreenAccent, minimum width=2.25cm, right=of p2] (p3) {\textbf{INT8 ONNX API}\\{\tiny Conformal + Energy}};
-            \node[pill, fill=AmberAccent!10, draw=AmberAccent, minimum width=2.25cm, right=of p3] (p4) {\textbf{17-Panel Cockpit}\\{\tiny $W_1$ \& $\text{MMD}_u^2$ Drift}};
-            \node[pill, fill=PurpleAccent!10, draw=PurpleAccent, minimum width=2.25cm, right=of p4] (p5) {\textbf{Airflow 3 \& Jenkins}\\{\tiny 7-Stage GPU CI/CD}};
+        \resizebox{0.98\textwidth}{!}{%
+        \begin{tikzpicture}[node distance=0.22cm]
+            \node[pill, fill=BlueAccent!10, draw=BlueAccent, minimum width=2.05cm] (p1) {\textbf{iNaturalist S3}\\{\tiny On-Demand Stream}};
+            \node[pill, fill=TealAccent!10, draw=TealAccent, minimum width=2.05cm, right=of p1] (p2) {\textbf{\toollogo{dvc}8-Stage DVC DAG}\\{\tiny Epistemic Diamond}};
+            \node[pill, fill=BlueAccent!12, draw=BlueAccent, minimum width=2.05cm, right=of p2] (p2b) {\textbf{\toollogo{mlflow}MLflow 3.x}\\{\tiny 4-Gate \texttt{@Production}}};
+            \node[pill, fill=GreenAccent!10, draw=GreenAccent, minimum width=2.05cm, right=of p2b] (p3) {\textbf{\toollogo{onnx}INT8 ONNX API}\\{\tiny Conformal + Energy}};
+            \node[pill, fill=AmberAccent!10, draw=AmberAccent, minimum width=2.05cm, right=of p3] (p4) {\textbf{\toollogo{grafana}17-Panel Cockpit}\\{\tiny \toollogo{evidently}$W_1$ \& $\text{MMD}_u^2$ Drift}};
+            \node[pill, fill=PurpleAccent!10, draw=PurpleAccent, minimum width=2.05cm, right=of p4] (p5) {\textbf{\toollogo{airflow}Airflow 3 \& \toollogo{jenkins}Jenkins}\\{\tiny 7-Stage GPU CI/CD}};
             \draw[flowarrow] (p1) -- (p2);
-            \draw[flowarrow] (p2) -- (p3);
+            \draw[flowarrow] (p2) -- (p2b);
+            \draw[flowarrow] (p2b) -- (p3);
             \draw[flowarrow] (p3) -- (p4);
             \draw[flowarrow] (p4) -- (p5);
-        \end{tikzpicture}
+        \end{tikzpicture}%
+        }
 
         \vspace{0.35cm}
         \begin{columns}[T]
@@ -226,7 +249,57 @@
 \end{frame}
 
 % ==============================================================================
-% SLIDE 2: Domain Challenge & Dual-Pipeline Strategy (0:45 - 2:00)
+% SLIDE 2: Introduction - Global Context, Goal & Core Stack
+% ==============================================================================
+\begin{frame}{Project Context \& Goal}{iNaturalist Brief: Production Chain First}
+    \begin{columns}[c]
+        \begin{column}{0.48\textwidth}
+            \begin{card}
+                \textbf{\color{BlueAccent} Global Context: iNaturalist \& Open Data}\\[2pt]
+                \textbullet\ \textbf{Scale \& Licences:} \textbf{iNaturalist} hosts \textbf{270M+} observations (\textbf{170M} research-grade); only open AWS licences (\texttt{CC0}/\texttt{CC-BY}/\texttt{CC-BY-NC}) with attribution are usable.\\[2pt]
+                \textbullet\ \textbf{Design Principle:} Separate immutable feature extraction (\texttt{timm} DINOv3) from fast-iterating decision boundaries (Class-Balanced head + conformal calibration) for low-cost, drift-responsive MLOps.
+            \end{card}
+            \vspace{0.05cm}
+            \begin{greencard}
+                \textbf{\color{GreenAccent} Project Goal (Levels 1-4 Achieved)}\\[2pt]
+                \textbullet\ \textbf{1. Safe Serving:} Species + confidence (\textbf{54 ms} CPU) + CAM explanation, routing uncertain/OOD photos to \textbf{human review}.\\[2pt]
+                \textbullet\ \textbf{2. Full Lineage:} Licence filtering, attribution, data/model versioning, and cost-latency benchmarking.\\[2pt]
+                \textbullet\ \textbf{3. Closed Loop:} Drift checks, active learning, and automated retraining gated by 4 promotion checks.
+            \end{greencard}
+        \end{column}
+        \begin{column}{0.49\textwidth}
+            \begin{bluecard}
+                \textbf{\color{SlateDark} Core MLOps Toolchain at a Glance}\\[3pt]
+                \textbf{\color{TealAccent} Data \& Reproducibility:}\\[1.5pt]
+                \toollogo{dvc}\textbf{DVC} $\cdot$ \toollogo{postgresql}\textbf{Postgres 16} $\cdot$ \toollogo{seaweedfs}\mbox{\textbf{SeaweedFS S3}} $\cdot$ \toollogo{dagshub}\textbf{DagsHub}\\[3pt]
+                \textbf{\color{BlueAccent} Modelling, HPO \& Registry:}\\[1.5pt]
+                \toollogo{pytorch}\textbf{PyTorch} $\cdot$ \toollogo{onnx}\textbf{ONNX INT8} $\cdot$ \toollogo{optuna}\textbf{Optuna} $\cdot$ \toollogo{mlflow}\textbf{MLflow 3.x}\\[3pt]
+                \textbf{\color{PurpleAccent} Serving \& Infrastructure:}\\[1.5pt]
+                \toollogo{fastapi}\textbf{FastAPI} $\cdot$ \toollogo{redis}\textbf{Redis} $\cdot$ \toollogo{docker}\textbf{Docker} $\cdot$ \toollogo{kubernetes}\textbf{Kubernetes (k3s)}\\[3pt]
+                \textbf{\color{AmberAccent} Monitoring \& Automation:}\\[1.5pt]
+                \toollogo{prometheus}\textbf{Prometheus} $\cdot$ \toollogo{grafana}\textbf{Grafana} $\cdot$ \toollogo{evidently}\textbf{Evidently}\\[1.5pt]
+                \toollogo{airflow}\textbf{Airflow 3} $\cdot$ \toollogo{jenkins}\textbf{Jenkins} $\cdot$ \toollogo{githubactions}\textbf{GitHub Actions}
+            \end{bluecard}
+            \vspace{0.05cm}
+            \begin{card}
+                \centering\scriptsize
+                \textbf{15-Minute Roadmap:} Problem $\to$ Architecture $\to$ Data \& Training $\to$ Safe Serving $\to$ Drift \& Closed-Loop Automation $\to$ \textbf{5-Min Live Demo}
+            \end{card}
+        \end{column}
+    \end{columns}
+
+    \note{
+        \textbf{Time: 0:45-1:30 (45s)}
+        \begin{itemize}
+            \item Grounding this in the original project brief: \textbf{iNaturalist} hosts over 270M wildlife observations (around 170M research-grade), but only open-licensed AWS dataset images with preserved photographer attribution can legally enter training.
+            \item Our design principle separates immutable feature extraction (\texttt{timm} DINOv3) from fast-iterating decision boundaries (Class-Balanced head + conformal calibration) for low-cost, drift-responsive MLOps.
+            \item Our goal covers all four difficulty levels: fast \textbf{ONNX} inference with calibrated confidence, visual CAM explanations and human review referral for uncertain/OOD photos, strict open-licence lineage (\textbf{DVC} + \textbf{MLflow}), and a closed feedback loop (\textbf{Prometheus}, \textbf{Grafana}, \textbf{Evidently}, \textbf{Airflow 3}, \textbf{Jenkins}).
+        \end{itemize}
+    }
+\end{frame}
+
+% ==============================================================================
+% SLIDE 3: Domain Challenge & Dual-Pipeline Strategy (1:30 - 2:30)
 % ==============================================================================
 \begin{frame}{Concept \& Dual-Pipeline Strategy}{Resilient Long-Tail Vision \& Roadmap Split}
     \begin{columns}[T]
@@ -257,12 +330,12 @@
             \begin{tikzpicture}[node distance=0.35cm]
                 % Pipeline 1
                 \node[sysbox, draw=BlueAccent, fill=BlueAccent!10, text width=3.8cm] (p1_in) at (0, 1.55) {
-                    \textbf{\color{BlueAccent} Pipeline 1: Weight-Centric}\\
+                    \textbf{\color{BlueAccent} \toollogo{dvc}Pipeline 1: Weight-Centric}\\
                     {\tiny \textbf{[Live Production]} Offline DVC Diamond}
                 };
                 \node[sysbox, draw=BlueAccent!70, fill=white, text width=3.8cm] (p1_op) at (0, 0.35) {
-                    \textbf{Frozen DINOv3 ($D=384$)}\\
-                    {\tiny Class-Balanced Head $\to$ INT8 ONNX}
+                    \textbf{\toollogo{pytorch}Frozen DINOv3 ($D=384$)}\\
+                    {\tiny Class-Balanced Head $\to$ \toollogo{onnx}INT8 ONNX}
                 };
 
                 % Pipeline 2
@@ -277,7 +350,7 @@
 
                 % Convergence
                 \node[sysbox, draw=GreenAccent, fill=GreenAccent!12, text width=8.8cm] (serv) at (2.35, -0.95) {
-                    \textbf{\color{GreenAccent} FastAPI Serving Boundary (CPU INT8 ONNX: 54.08 ms p95 $\le 350\text{ ms}$ SLO)}\\
+                    \textbf{\color{GreenAccent} \toollogo{fastapi}FastAPI Serving Boundary (CPU \toollogo{onnx}INT8 ONNX: 54.08 ms p95 $\le 350\text{ ms}$ SLO)}\\
                     {\tiny Decisive ($|C|=1$): Auto-Accept \quad$\cdot$\quad Moderate ($2\le |C|\le 3$): Exemplar Context}\\
                     {\tiny Uncertain ($|C|=0$ or $|C|>3$): Route to Human Triage}
                 };
@@ -295,6 +368,7 @@
             \end{card}
         \end{column}
     \end{columns}
+
     \note{
         \textbf{Time: 0:45-2:00 (1m 15s)}
         \begin{itemize}
@@ -311,36 +385,36 @@
 \begin{frame}{End-to-End MLOps Architecture}{Ingress, Telemetry, Retraining \& Dual S3}
     \centering
     \vspace{-0.05cm}
-    \resizebox{0.99\textwidth}{!}{%
+    \resizebox{0.94\textwidth}{!}{%
     \begin{tikzpicture}[node distance=0.3cm]
         % --- 1. Edge Ingress & Dual-Tier Serving ---
         \node[sysbox, draw=BlueAccent, fill=BlueAccent!8, text width=2.2cm] (user) at (0, 1.55) {\textbf{Ecologist / User}\\{\tiny Web UI \& REST API}};
         \node[sysbox, draw=BlueAccent, fill=BlueAccent!12, text width=2.2cm] (trf) at (0, 0.50) {\textbf{Traefik v3.1}\\{\tiny Cloudflare Tunnel}};
         \node[sysbox, draw=TealAccent, fill=TealAccent!10, text width=2.2cm] (stg) at (-1.42, -0.75) {\textbf{Staging (\texttt{develop})}\\{\tiny \texttt{:30085} $\cdot$ 1 CPU Pod}};
         \node[sysbox, draw=BlueAccent, fill=BlueAccent!15, text width=2.2cm] (prd) at (1.42, -0.75) {\textbf{Prod (\texttt{main}, 2x)}\\{\tiny \texttt{:30080} $\cdot$ GPU Sliced}};
-        \node[sysbox, draw=RoseAccent, fill=RoseAccent!10, text width=2.2cm] (red) at (-1.42, -2.05) {\textbf{Redis Cache}\\{\tiny \texttt{taxon:img:*} SHA}};
-        \node[sysbox, draw=BlueAccent!80, fill=white, text width=2.2cm] (htmx) at (1.42, -2.05) {\textbf{HTMX Cockpit}\\{\tiny Forward CAM + Cards}};
+        \node[sysbox, draw=RoseAccent, fill=RoseAccent!10, text width=2.2cm] (red) at (-1.42, -2.05) {\textbf{\toollogo{redis}Redis Cache}\\{\tiny \texttt{taxon:img:*} SHA}};
+        \node[sysbox, draw=BlueAccent!80, fill=white, text width=2.2cm] (htmx) at (1.42, -2.05) {\textbf{\toollogo{fastapi}HTMX Cockpit}\\{\tiny Forward CAM + Cards}};
 
         % --- 2. Observability, Logs & Drift Engine ---
         \node[sysbox, draw=AmberAccent, fill=AmberAccent!10, text width=2.55cm] (loki) at (5.00, 1.55) {\textbf{Promtail $\to$ Loki 3.0}\\{\tiny Structured JSON Logs}};
-        \node[sysbox, draw=AmberAccent, fill=AmberAccent!10, text width=2.55cm] (prom) at (5.00, 0.50) {\textbf{Prometheus (\texttt{:30090})}\\{\tiny Scrapes \texttt{/metrics} (15s)}};
-        \node[sysbox, draw=AmberAccent, fill=AmberAccent!18, text width=2.55cm] (graf) at (5.00, -0.55) {\textbf{Grafana (\texttt{:30300})}\\{\tiny 17 Panels (2 Dashboards)}};
-        \node[sysbox, draw=SlateDark, fill=SlateLight, text width=2.55cm] (pg) at (5.00, -1.60) {\textbf{PostgreSQL 16}\\{\tiny 3 DBs (\texttt{telemetry} etc.)}};
-        \node[sysbox, draw=AmberAccent!90, fill=white, text width=2.55cm] (evid) at (5.00, -2.60) {\textbf{Evidently UI (\texttt{:30082})}\\{\tiny 0.7 $W_1$ + $\text{MMD}_u^2$}};
+        \node[sysbox, draw=AmberAccent, fill=AmberAccent!10, text width=2.55cm] (prom) at (5.00, 0.50) {\textbf{\toollogo{prometheus}Prometheus (\texttt{:30090})}\\{\tiny Scrapes \texttt{/metrics} (15s)}};
+        \node[sysbox, draw=AmberAccent, fill=AmberAccent!18, text width=2.55cm] (graf) at (5.00, -0.55) {\textbf{\toollogo{grafana}Grafana (\texttt{:30300})}\\{\tiny 17 Panels (2 Dashboards)}};
+        \node[sysbox, draw=SlateDark, fill=SlateLight, text width=2.55cm] (pg) at (5.00, -1.60) {\textbf{\toollogo{postgresql}PostgreSQL 16}\\{\tiny 3 DBs (\texttt{telemetry} etc.)}};
+        \node[sysbox, draw=AmberAccent!90, fill=white, text width=2.55cm] (evid) at (5.00, -2.60) {\textbf{\toollogo{evidently}Evidently UI (\texttt{:30082})}\\{\tiny 0.7 $W_1$ + $\text{MMD}_u^2$}};
 
         % --- 3. Active Learning & Retraining Loop ---
-        \node[sysbox, draw=PurpleAccent, fill=PurpleAccent!12, text width=2.6cm] (ls) at (9.05, 1.30) {\textbf{DagsHub Label Studio}\\{\tiny Expert Taxonomist Triage}};
-        \node[sysbox, draw=AmberAccent!90, fill=AmberAccent!12, text width=2.6cm] (air_d) at (9.05, 0.05) {\textbf{Airflow Drift Monitor}\\{\tiny \texttt{@hourly} TaskFlow DAG}};
-        \node[sysbox, draw=RoseAccent, fill=RoseAccent!12, text width=2.6cm] (air_r) at (9.05, -1.20) {\textbf{Airflow Retrain DAG}\\{\tiny \texttt{model\_retraining} (\texttt{:30095})}};
-        \node[sysbox, draw=RoseAccent, fill=RoseAccent!18, text width=2.85cm] (jenk) at (9.05, -2.45) {\textbf{On-Prem Jenkins (Docker)}\\{\tiny Ephemeral K3s GPU Pods}};
+        \node[sysbox, draw=PurpleAccent, fill=PurpleAccent!12, text width=2.6cm] (ls) at (9.05, 1.30) {\textbf{\toollogo{dagshub}DagsHub Label Studio}\\{\tiny Expert Taxonomist Triage}};
+        \node[sysbox, draw=AmberAccent!90, fill=AmberAccent!12, text width=2.6cm] (air_d) at (9.05, 0.05) {\textbf{\toollogo{airflow}Airflow Drift Monitor}\\{\tiny \texttt{@hourly} TaskFlow DAG}};
+        \node[sysbox, draw=RoseAccent, fill=RoseAccent!12, text width=2.6cm] (air_r) at (9.05, -1.20) {\textbf{\toollogo{airflow}Airflow Retrain DAG}\\{\tiny \texttt{model\_retraining} (\texttt{:30095})}};
+        \node[sysbox, draw=RoseAccent, fill=RoseAccent!18, text width=2.85cm] (jenk) at (9.05, -2.45) {\textbf{\toollogo{jenkins}On-Prem Jenkins (Docker)}\\{\tiny Ephemeral K3s GPU Pods}};
 
         % --- 4. In-Cluster NVMe Cache ---
-        \node[sysbox, draw=PurpleAccent, fill=PurpleAccent!15, text width=2.6cm] (sea) at (12.90, 1.30) {\textbf{Local SeaweedFS S3}\\{\tiny \texttt{taxon-dvc-cache} (NVMe)}};
+        \node[sysbox, draw=PurpleAccent, fill=PurpleAccent!15, text width=2.6cm] (sea) at (12.90, 1.30) {\textbf{\toollogo{seaweedfs}Local SeaweedFS S3}\\{\tiny \texttt{taxon-dvc-cache} (NVMe)}};
 
         % --- 5. Managed Control Plane & Tracking (DagsHub) ---
-        \node[sysbox, draw=GreenAccent, fill=GreenAccent!12, text width=2.6cm] (dvc) at (12.90, -0.15) {\textbf{DagsHub DVC Remote}\\{\tiny \texttt{s3://dvc} Public Archive}};
-        \node[sysbox, draw=GreenAccent!80, fill=white, text width=2.6cm] (gha) at (12.90, -1.30) {\textbf{GitHub Actions CI}\\{\tiny \texttt{dvc pull} (\texttt{DAGSHUB\_TOKEN})}};
-        \node[sysbox, draw=GreenAccent, fill=GreenAccent!16, text width=2.6cm] (mlf) at (12.90, -2.45) {\textbf{DagsHub MLflow 3.x}\\{\tiny Tracking \& Model Registry}};
+        \node[sysbox, draw=GreenAccent, fill=GreenAccent!12, text width=2.6cm] (dvc) at (12.90, -0.15) {\textbf{\toollogo{dvc}DagsHub DVC Remote}\\{\tiny \texttt{s3://dvc} Public Archive}};
+        \node[sysbox, draw=GreenAccent!80, fill=white, text width=2.6cm] (gha) at (12.90, -1.30) {\textbf{\toollogo{githubactions}GitHub Actions CI}\\{\tiny \texttt{dvc pull} (\texttt{DAGSHUB\_TOKEN})}};
+        \node[sysbox, draw=GreenAccent, fill=GreenAccent!16, text width=2.6cm] (mlf) at (12.90, -2.45) {\textbf{\toollogo{mlflow}DagsHub MLflow 3.x}\\{\tiny Tracking \& Model Registry}};
 
         % Edges
         \draw[flowarrow] (user) -- (trf);
@@ -377,12 +451,16 @@
             \node[groupbox, fill=AmberAccent!3, draw=AmberAccent!35, fit=(loki)(prom)(graf)(pg)(evid), label={[font=\tiny\bfseries\color{AmberAccent}]above:2. Telemetry, Logs \& Drift}] {};
             \node[groupbox, fill=RoseAccent!3, draw=RoseAccent!35, fit=(ls)(air_d)(air_r)(jenk), label={[font=\tiny\bfseries\color{RoseAccent}]above:3. Active Learning \& Retraining}] {};
             \node[groupbox, fill=PurpleAccent!3, draw=PurpleAccent!35, fit=(sea), label={[font=\tiny\bfseries\color{PurpleAccent}]above:4. NVMe Cache}] {};
-            \node[groupbox, fill=GreenAccent!3, draw=GreenAccent!35, fit=(dvc)(gha)(mlf), label={[font=\tiny\bfseries\color{GreenAccent}]below:5. Control Plane (DagsHub)}] {};
+            \node[groupbox, fill=GreenAccent!3, draw=GreenAccent!35, fit=(dvc)(gha)(mlf), label={[font=\tiny\bfseries\color{GreenAccent}]below:\toollogo{dagshub}5. Control Plane (DagsHub)}] {};
         \end{scope}
     \end{tikzpicture}%
     }
+    \vspace{0.05cm}
+    \begin{card}
+        \centering\tiny
+        \textbf{\color{BlueAccent} Goal $\to$ Takeaway:} Connect serving, telemetry, expert triage, and GPU retraining in one automated loop with zero manual handoffs.
+    \end{card}
     \note{
-        \textbf{Time: 2:00-3:20 (1m 20s)}
         \begin{itemize}
             \item To answer directly how our components communicate: the system is partitioned into five cleanly isolated zones on \texttt{k3s} plus DagsHub.
             \item \textbf{1. Serving:} External traffic arrives over an outbound Cloudflare Tunnel to Traefik v3.1, routing \texttt{main} to 2 production replicas (\texttt{:30080}) and \texttt{develop} to a single CPU staging pod (\texttt{:30085}), sharing ephemeral Redis cache for cross-pod CAM heatmaps.
@@ -436,10 +514,10 @@
                     {\tiny\color{RoseAccent} $\times$ Concurrent FastAPI telemetry, Optuna \& Airflow writes triggered \texttt{database is locked}}
                 };
                 \node[sysbox, draw=GreenAccent, fill=GreenAccent!12, text width=5.6cm] (pg) at (0, 0.85) {
-                    \textbf{\color{GreenAccent} Unified PostgreSQL 16 Cluster (\texttt{postgres:16-alpine})}\\
+                    \textbf{\color{GreenAccent} \toollogo{postgresql}Unified PostgreSQL 16 Cluster (\texttt{postgres:16-alpine})}\\
                     {\tiny UID \texttt{70} $\cdot$ \texttt{max\_connections=120} $\cdot$ Non-CoW NVMe (\texttt{chattr +C})}
                 };
-                \node[pill, fill=BlueAccent!12, draw=BlueAccent, text width=1.65cm] (db1) at (-1.9, -0.35) {\textbf{\texttt{airflow}}\\{\tiny DAG State}};
+                \node[pill, fill=BlueAccent!12, draw=BlueAccent, text width=1.65cm] (db1) at (-1.9, -0.35) {\textbf{\toollogo{airflow}\texttt{airflow}}\\{\tiny DAG State}};
                 \node[pill, fill=AmberAccent!12, draw=AmberAccent, text width=1.65cm] (db2) at (0, -0.35) {\textbf{\texttt{telemetry}}\\{\tiny 384-D Vectors}};
                 \node[pill, fill=PurpleAccent!12, draw=PurpleAccent, text width=1.65cm] (db3) at (1.9, -0.35) {\textbf{\texttt{optuna}}\\{\tiny HPO Trials}};
 
@@ -455,6 +533,7 @@
             }
         \end{column}
     \end{columns}
+
     \note{
         \textbf{Time: 3:20-4:30 (1m 10s)}
         \begin{itemize}
@@ -470,21 +549,21 @@
 % ==============================================================================
 \begin{frame}{Tri-Plane CI/CD Orchestration}{GitHub Actions, Airflow 3 \& 7-Stage Jenkins}
     \centering
-    \resizebox{0.99\textwidth}{!}{%
+    \resizebox{0.94\textwidth}{!}{%
     \begin{tikzpicture}
         % 3 Orchestration Planes
         \node[sysbox, draw=BlueAccent, fill=BlueAccent!8, text width=4.1cm] (gha) at (0, 2.0) {
-            \textbf{\color{BlueAccent} 1. GitHub Actions (Cloud CPU)}\\
+            \textbf{\color{BlueAccent} \toollogo{githubactions}1. GitHub Actions (Cloud CPU)}\\
             {\tiny PR Gates: Ruff, MyPy (84 files), 306 Tests}\\
             {\tiny \textbf{DVC:} \texttt{dvc pull} $\cdot$ Publishes \texttt{ghcr.io/...:sha-<7>}}
         };
         \node[sysbox, draw=PurpleAccent, fill=PurpleAccent!8, text width=4.5cm] (air) at (4.7, 2.0) {
-            \textbf{\color{PurpleAccent} 2. Airflow 3 (\texttt{LocalExecutor}, \texttt{:30095})}\\
+            \textbf{\color{PurpleAccent} \toollogo{airflow}2. Airflow 3 (\texttt{LocalExecutor}, \texttt{:30095})}\\
             {\tiny TaskFlow (\texttt{@dag}, \texttt{@task}, \texttt{@task.short\_circuit})}\\
             {\tiny UID \texttt{50000} $\cdot$ Zero CUDA in scheduler; REST control}
         };
-        \node[sysbox, draw=RoseAccent, fill=RoseAccent!8, text width=4.3cm] (jen) at (9.55, 2.0) {
-            \textbf{\color{RoseAccent} 3. On-Prem Jenkins (Docker $\to$ 7 Stages)}\\
+        \node[sysbox, draw=RoseAccent, fill=RoseAccent!8, text width=4.55cm] (jen) at (9.65, 2.0) {
+            \textbf{\color{RoseAccent} \toollogo{jenkins}3. On-Prem Jenkins (Docker $\to$ 7 Stages)}\\
             {\tiny Ephemeral K3s Pods (\texttt{ServiceAccount: jenkins-agent})}\\
             {\tiny \textbf{DVC:} Runs 8-stage \texttt{dvc repro} \& Dual \texttt{dvc push}}
         };
@@ -502,14 +581,14 @@
         \draw[flowarrow, draw=PurpleAccent] (air.south) -- ++(0,-0.2) -| (dag1.north);
         \draw[flowarrow, draw=RoseAccent] (air.south) -- ++(0,-0.2) -| (dag2.north);
         \draw[retrainarrow] (dag1.east) -- (dag2.west);
-        \draw[retrainarrow] ([xshift=1.25cm]dag2.north) -- (jen.south);
+        \draw[retrainarrow] (jen.south |- dag2.north) -- (jen.south);
 
         % 7 Jenkins Stages Bar
         \node[pill, fill=SlateLight, draw=SlateMid!50, text width=1.65cm] (j1) at (-1.15, -0.75) {\textbf{1. Prepare}\\{\tiny Pixi Toolchain}};
         \node[pill, fill=BlueAccent!10, draw=BlueAccent, text width=1.85cm] (j2) at (0.85, -0.75) {\textbf{2. Static Gates}\\{\tiny Lint/MyPy/OKF}};
-        \node[pill, fill=BlueAccent!10, draw=BlueAccent, text width=1.65cm] (j3) at (2.85, -0.75) {\textbf{3. Unit Tests}\\{\tiny 306 Collected}};
-        \node[pill, fill=PurpleAccent!10, draw=PurpleAccent, text width=1.95cm] (j4) at (4.90, -0.75) {\textbf{4. Conformal}\\{\tiny Bounds/Integr.}};
-        \node[pill, fill=TealAccent!10, draw=TealAccent, text width=1.65cm] (j5) at (6.95, -0.75) {\textbf{5. Strict Docs}\\{\tiny OpenWiki/Zens.}};
+        \node[pill, fill=BlueAccent!10, draw=BlueAccent, text width=1.65cm] (j3) at (2.85, -0.75) {\textbf{3. Unit Tests}\\{\tiny \texttt{tests/unit/} Suite}};
+        \node[pill, fill=PurpleAccent!10, draw=PurpleAccent, text width=1.95cm] (j4) at (4.90, -0.75) {\textbf{4. Conformal}\\{\tiny Integr./Bounds ($\ge 80\%$)}};
+        \node[pill, fill=TealAccent!10, draw=TealAccent, text width=1.65cm] (j5) at (6.95, -0.75) {\textbf{5. Strict Docs}\\{\tiny OKF/Zensical}};
         \node[pill, fill=RoseAccent!15, draw=RoseAccent, text width=2.05cm] (j6) at (9.05, -0.75) {\textbf{6. GPU Train}\\{\tiny 8-Stage DVC Repro}};
         \node[pill, fill=GreenAccent!15, draw=GreenAccent, text width=1.85cm] (j7) at (11.25, -0.75) {\textbf{7. K8s Deploy}\\{\tiny SHA Pin \& Smoke}};
 
@@ -576,7 +655,7 @@
                     \textbf{5. \texttt{train} (Head)}\\{\tiny \texttt{pipelines.train}}\\{\tiny Class-Balanced $\to$ \texttt{head.pt}}
                 };
                 \node[sysbox, draw=BlueAccent, fill=BlueAccent!12, text width=2.10cm] (g) at (5.38, -0.45) {
-                    \textbf{6. \texttt{export} (ONNX)}\\{\tiny \texttt{pipelines.export\_onnx}}\\{\tiny INT8 PTQ (\texttt{model\_int8.onnx})}
+                    \textbf{6. \toollogo{onnx}\texttt{export} (ONNX)}\\{\tiny \texttt{pipelines.export\_onnx}}\\{\tiny INT8 PTQ (\texttt{model\_int8.onnx})}
                 };
 
                 % Row 4: Calibrate, Evaluate, Registry
@@ -587,7 +666,7 @@
                     \textbf{8. \texttt{eval} (Pareto)}\\{\tiny \texttt{pipelines.evaluate}}\\{\tiny 4 Promotion Gates}
                 };
                 \node[sysbox, draw=GreenAccent, fill=GreenAccent!18, text width=2.2cm] (j) at (8.90, -1.90) {
-                    \textbf{\texttt{@Production}}\\{\tiny DagsHub MLflow 3.x}\\{\tiny + \texttt{model\_passport}}
+                    \textbf{\texttt{@Production}}\\{\tiny \toollogo{mlflow}DagsHub MLflow 3.x}\\{\tiny + \texttt{model\_passport}}
                 };
 
                 % Connections (balanced lengths & clean orthogonal channels)
@@ -601,7 +680,7 @@
                 \draw[flowarrow] (d1.south) -- (e.north);
                 \draw[flowarrow] (d1.south) -- ++(0,-0.26) -| ([xshift=-14pt]f.north);
                 \draw[flowarrow] (e) -- (f) node[midway, above, yshift=2pt, inner sep=1pt, font=\tiny\bfseries\color{SlateMid}] {Audit};
-                \draw[flowarrow] (d2.south) -- ([xshift=6pt]f.north);
+                \draw[flowarrow] ([xshift=6pt]d2.south) -- ([xshift=6pt]f.north);
                 \draw[flowarrow] (f) -- (g);
 
                 \draw[flowarrow] (g.south) -- ++(0,-0.25) -| ([xshift=-6pt]h.north);
@@ -614,22 +693,27 @@
             }
         \end{column}
         \begin{column}{0.30\textwidth}
-            \begin{purplecard}
-                \textbf{\color{PurpleAccent} Local SeaweedFS S3}\\[2pt]
-                \textbullet\ \texttt{dvc push -r local-seaweedfs}\\[1pt]
-                \textbullet\ Apache 2.0 (Haystack needle packing on NVMe).\\[1pt]
-                \textbullet\ Hosts \texttt{taxon-dvc-cache} \& \texttt{triage-queue} buckets.\\[1pt]
+            \begin{purplecard}[fontupper=\tiny\RaggedRight]
+                \textbf{\scriptsize\color{PurpleAccent} \toollogo{seaweedfs}Local SeaweedFS S3}\\[1.5pt]
+                \textbullet\ \texttt{dvc push -r local-seaweedfs}\\
+                \textbullet\ Apache 2.0 (Haystack needle packing on NVMe).\\
+                \textbullet\ Hosts \texttt{taxon-dvc-cache} \& \texttt{triage-queue} buckets.\\
                 \textbullet\ Zero cloud egress bills.
             \end{purplecard}
-            \vspace{0.12cm}
-            \begin{greencard}
-                \textbf{\color{GreenAccent} DagsHub S3 (\texttt{origin})}\\[2pt]
-                \textbullet\ \texttt{dvc push -r origin}\\[1pt]
-                \textbullet\ Public cryptographic archive via \texttt{dvc.lock} MD5s.\\[1pt]
+            \vspace{0.05cm}
+            \begin{greencard}[fontupper=\tiny\RaggedRight]
+                \textbf{\scriptsize\color{GreenAccent} \toollogo{dvc}DagsHub S3 (\texttt{origin})}\\[1.5pt]
+                \textbullet\ \texttt{dvc push -r origin}\\
+                \textbullet\ Public cryptographic archive via \texttt{dvc.lock} MD5s.\\
                 \textbullet\ CI pulls checkpoints using \texttt{DAGSHUB\_TOKEN} without cluster VPN access.
             \end{greencard}
         \end{column}
     \end{columns}
+    \vspace{0.05cm}
+    \begin{card}
+        \centering\tiny
+        \textbf{\color{TealAccent} Goal $\to$ Takeaway:} Isolate Cal/Test splits from Train/Val to prevent coverage leakage whilst tracking every artefact via MD5s.
+    \end{card}
     \note{
         \textbf{Time: 5:45-7:00 (1m 15s)}
         \begin{itemize}
@@ -647,7 +731,7 @@
 % ==============================================================================
 \begin{frame}{Training, Optuna \& MLflow 3.x}{Cached Features, CB Loss \& Zero Pollution}
     \centering
-    \resizebox{0.99\textwidth}{!}{%
+    \resizebox{0.94\textwidth}{!}{%
     \begin{tikzpicture}
         % Column 1: Feature Caching
         \node[sysbox, draw=BlueAccent, fill=BlueAccent!10, text width=3.5cm] (vit) at (0, 1.55) {
@@ -663,9 +747,9 @@
 
         % Column 2: Optuna Bayesian HPO
         \node[sysbox, draw=PurpleAccent, fill=PurpleAccent!10, text width=3.9cm] (opt) at (4.55, 1.55) {
-            \textbf{\color{PurpleAccent} Optuna TPE + ASHA Pruner}\\
+            \textbf{\color{PurpleAccent} \toollogo{optuna}Optuna TPE + ASHA Pruner}\\
             {\tiny 6D Space (\texttt{lr, wd, dropout, beta, bs, noise})}\\
-            {\tiny PostgreSQL \texttt{optuna} DB (\texttt{:30081})}
+            {\tiny \toollogo{postgresql}PostgreSQL \texttt{optuna} DB (\texttt{:30081})}
         };
         \node[sysbox, draw=RoseAccent!80, fill=RoseAccent!8, text width=1.8cm] (t_bad) at (3.5, -0.05) {
             \textbf{\color{RoseAccent} Weak Trials}\\
@@ -680,7 +764,7 @@
 
         % Column 3: MLflow 3.x & Model Passport
         \node[sysbox, draw=GreenAccent, fill=GreenAccent!12, text width=4.3cm] (mlf) at (9.55, 1.55) {
-            \textbf{\color{GreenAccent} DagsHub MLflow 3.x Continuity}\\
+            \textbf{\color{GreenAccent} \toollogo{mlflow}DagsHub MLflow 3.x Continuity}\\
             {\tiny Single Parent Run (\texttt{resume\_parent\_mlflow\_run})}\\
             {\tiny 4-Split MD5s (\texttt{mlflow.data}) + PR/Energy Plots}
         };
@@ -713,6 +797,7 @@
             \end{greencard}
         \end{column}
     \end{columns}
+
     \note{
         \textbf{Time: 7:00-8:10 (1m 10s)}
         \begin{itemize}
@@ -741,10 +826,10 @@
     \end{columns}
     \vspace{0.12cm}
     \centering
-    \resizebox{0.99\textwidth}{!}{%
+    \resizebox{0.94\textwidth}{!}{%
     \begin{tikzpicture}
         % Ingress
-        \node[sysbox, draw=SlateDark, fill=SlateLight, text width=3.1cm] (trf) at (0, 0.9) {
+        \node[sysbox, draw=SlateDark, fill=SlateLight, text width=3.1cm] (trf) at (0, 0.75) {
             \textbf{Traefik v3.1 Ingress}\\
             {\tiny Cloudflare \texttt{hive-mind-tunnel}}
         };
@@ -758,7 +843,7 @@
 
         % Production Track
         \node[sysbox, draw=BlueAccent, fill=BlueAccent!12, text width=3.5cm] (prd) at (4.4, 0.75) {
-            \textbf{\color{BlueAccent} Prod (\texttt{:30080}, \texttt{main})}\\
+            \textbf{\color{BlueAccent} \toollogo{kubernetes}Prod (\texttt{:30080}, \texttt{main})}\\
             {\tiny 2 Replicas (\texttt{maxSurge:1, maxUnavail:0})}\\
             {\tiny 2x \texttt{nvidia.com/gpu} Time-Sliced}
         };
@@ -772,12 +857,12 @@
 
         % Right Column: Planarized Redis Cache (Top) + Startup ONNX (Bottom)
         \node[sysbox, draw=RoseAccent, fill=RoseAccent!10, text width=4.3cm] (red) at (9.5, 1.60) {
-            \textbf{\color{RoseAccent} Redis Ephemeral Cache (\texttt{redis:6379})}\\
+            \textbf{\color{RoseAccent} \toollogo{redis}Redis Ephemeral Cache (\texttt{redis:6379})}\\
             {\tiny \texttt{taxon:img:<sha256>} (15m TTL)}\\
             {\tiny Solves Multi-Pod Split-Brain for \texttt{/explain} CAM}
         };
         \node[sysbox, draw=GreenAccent, fill=GreenAccent!12, text width=4.3cm] (onnx) at (9.5, 0.15) {
-            \textbf{\color{GreenAccent} Startup Model Hydration (\texttt{/health/ready})}\\
+            \textbf{\color{GreenAccent} \toollogo{onnx}Startup Model Hydration (\texttt{/health/ready})}\\
             {\tiny \texttt{lifespan} + \texttt{readinessProbe} warm \texttt{@lru\_cache} singletons}\\
             {\tiny Atomic \texttt{hostPath} (\texttt{ro}) $\cdot$ Zero live MLflow network calls}
         };
@@ -790,14 +875,21 @@
         \draw[flowarrow] ([yshift=-4pt]prd.east) -- ++(0.35,0) |- (onnx.west);
     \end{tikzpicture}%
     }
+    \vspace{0.08cm}
+    \begin{card}
+        \centering\tiny
+        \textbf{\color{GreenAccent} Goal $\to$ Takeaway:} Pre-warm ONNX singletons at startup and share uploads via Redis to meet 54.08 ms p95 without live MLflow calls.
+    \end{card}
     \note{
-        \textbf{Time: 8:10-9:20 (1m 10s)}
+        \cuetime{8:10-9:20 (1m 10s)}
+        \cuejury{Does the API load the MLflow model dynamically or at startup? \textbf{Strictly once before serving traffic} - never per request.}
         \begin{itemize}
-            \item \textbf{Jury Question: Does the API load the MLflow model dynamically or at startup?}
-            \item \textbf{Strictly once before serving traffic} - never per request. FastAPI's \texttt{lifespan} warms the taxa catalogue, torchvision preprocessing transform, and PostgreSQL telemetry store, whilst Kubernetes' \texttt{readinessProbe} hits \texttt{/health/ready} to verify and populate the \texttt{@lru\_cache(maxsize=1)} singletons for \texttt{model\_int8.onnx} and \texttt{head.pt} from a read-only atomic \texttt{hostPath} mount. Model updates ship safely via Jenkins' rolling deployment (\texttt{maxSurge: 1, maxUnavailable: 0}) across two pods, avoiding per-request MLflow network stalls.
+            \item FastAPI's \texttt{lifespan} warms the taxa catalogue, torchvision preprocessing transform, and PostgreSQL telemetry store, whilst Kubernetes' \texttt{readinessProbe} hits \texttt{/health/ready} to verify and populate the \texttt{@lru\_cache(maxsize=1)} singletons for \texttt{model\_int8.onnx} and \texttt{head.pt} from a read-only atomic \texttt{hostPath} mount. Model updates ship safely via Jenkins' rolling deployment (\texttt{maxSurge: 1, maxUnavailable: 0}) across two pods, avoiding per-request MLflow network stalls.
             \item On verified holdout benchmarks (\texttt{n=164}), \texttt{ONNXInferenceEngine} (\texttt{CPUExecutionProvider}) achieves \textbf{49.02 ms} p50, \textbf{54.08 ms} p95 (well inside our \textbf{350 ms} SLO), \textbf{91.46\%} INT8 accuracy (-1.22\% vs FP32), and \textbf{0.9782} median PR-AUC.
+            \item \textbf{If asked - Why only 19.9 FPS with GPU slicing?} \texttt{19.9 FPS} is single-stream (\texttt{batch=1}) \texttt{CPUExecutionProvider} throughput ($1000 / 50.25\text{ ms}$, or $\approx 40\text{ FPS}$ across 2 pods); GPU time-slices are reserved for training and future CUDA EP serving.
             \item Our RTX 5070 Ti exposes 4 virtual GPU slices via NVIDIA device-plugin time-slicing (whilst Staging uses 0 GPUs so PR branches never starve Jenkins). Finally, \textbf{Redis} stores SHA-256 upload bytes (\texttt{15m} TTL) so on-demand Forward-Only CAM (\texttt{/explain}) works seamlessly across both pods.
         \end{itemize}
+        \cueterms{\textbf{GPU Time-Slicing:} Sharing 1 physical GPU (\texttt{replicas: 4} virtual K8s slots) across pods by switching compute cycles; paired with \texttt{0.7} VRAM cap (\texttt{11.2 GB}) since memory is not hardware-isolated. $\cdot$ \textbf{LRU:} Least Recently Used cache. $\cdot$ \textbf{TTL:} Time To Live. $\cdot$ \textbf{CAM:} Class Activation Map. $\cdot$ \textbf{SLO:} Service Level Objective. $\cdot$ \textbf{PR-AUC:} Precision-Recall Area Under Curve.}
     }
 \end{frame}
 
@@ -807,11 +899,11 @@
 \begin{frame}{Epistemic Safety \& Conformal}{Helmholtz Energy OOD \& Split Conformal Sets}
     \centering
     \vspace{-0.05cm}
-    \resizebox{0.96\textwidth}{!}{%
+    \resizebox{0.89\textwidth}{!}{%
     \begin{tikzpicture}
         % Step 1: Logits
         \node[sysbox, draw=BlueAccent, fill=BlueAccent!10, text width=4.8cm] (logits) at (0, 2.1) {
-            \textbf{Dual-Output ONNX Forward Pass}\\
+            \textbf{\toollogo{onnx}Dual-Output ONNX Forward Pass}\\
             {\tiny Logits $f(x) \in \mathbb{R}^K$ + Pre-Normalised $\tilde{z}(x) \in \mathbb{R}^{384}$}
         };
 
@@ -872,6 +964,11 @@
             node[pos=0.35, above, font=\tiny\bfseries\color{PurpleAccent}] {$|C| > 3$};
     \end{tikzpicture}%
     }
+    \vspace{0.05cm}
+    \begin{card}
+        \centering\tiny
+        \textbf{\color{PurpleAccent} Goal $\to$ Takeaway:} Gate OOD and ambiguous photos before returning predictions so only statistically bounded sets auto-accept.
+    \end{card}
     \note{
         \textbf{Time: 9:20-10:35 (1m 15s)}
         \begin{itemize}
@@ -936,7 +1033,7 @@
     \vspace{0.08cm}
     \begin{greencard}
         \centering
-        \textbf{\color{GreenAccent} Async Pipeline:} FastAPI logs \textbf{pre-normalised} $\tilde{z} \in \mathbb{R}^{384}$ via \texttt{BackgroundTasks} to PostgreSQL ($\approx 1.5\text{ KB}$/row) $\to$ Airflow evaluates hourly against \texttt{cal\_embeddings.pt} $\to$ \textbf{Evidently 0.7 (\texttt{:30082})} renders 8 PCA + norm cards $\to$ logs HTML to DagsHub \texttt{taxon-vision-drift}.
+        \textbf{\color{GreenAccent} Async Pipeline:} \toollogo{fastapi}FastAPI logs \textbf{pre-normalised} $\tilde{z} \in \mathbb{R}^{384}$ via \texttt{BackgroundTasks} to \toollogo{postgresql}PostgreSQL ($\approx 1.5\text{ KB}$/row) $\to$ \toollogo{airflow}Airflow evaluates hourly against \texttt{cal\_embeddings.pt} $\to$ \toollogo{evidently}\textbf{Evidently 0.7 (\texttt{:30082})} renders 8 PCA + norm cards $\to$ logs HTML to \toollogo{dagshub}DagsHub \texttt{taxon-vision-drift}.
     \end{greencard}
     \note{
         \textbf{Time: 10:35-11:45 (1m 10s)}
@@ -952,13 +1049,13 @@
 % ==============================================================================
 % SLIDE 11: Observability Cockpit & Closed-Loop Retraining (11:45 - 12:50)
 % ==============================================================================
-\begin{frame}{Observability \& Closed-Loop}{17-Panel Grafana, 6h Cooldown \& BADGE Triage}
+\begin{frame}{Observability \& Closed-Loop}{17-Panel Grafana, 6h Cooldown \& Triage}
     \centering
-    \resizebox{0.99\textwidth}{!}{%
+    \resizebox{0.94\textwidth}{!}{%
     \begin{tikzpicture}
         % Left: Sources
         \node[sysbox, draw=AmberAccent, fill=AmberAccent!10, text width=3.1cm] (src1) at (0, 1.45) {
-            \textbf{Prometheus (\texttt{:30090})}\\
+            \textbf{\toollogo{prometheus}Prometheus (\texttt{:30090})}\\
             {\tiny Scrapes \texttt{/metrics} (15s)}\\
             {\tiny \texttt{DriftMetricsCollector} (30s TTL)}
         };
@@ -970,27 +1067,27 @@
 
         % Center-Left: Grafana 17 Panels
         \node[sysbox, draw=AmberAccent, fill=AmberAccent!18, text width=3.8cm] (graf) at (4.15, 0.75) {
-            \textbf{\color{AmberAccent} Grafana Cockpit (\texttt{:30300})}\\
+            \textbf{\color{AmberAccent} \toollogo{grafana}Grafana Cockpit (\texttt{:30300})}\\
             {\tiny \textbf{Dashboard 1 (7 Panels):} Latency p50/p95/p99, $|\hat{C}|$, OOD Rate, $W_1$/$\text{MMD}^2$}\\
             {\tiny \textbf{Dashboard 2 (10 Panels):} GPU VRAM, CPU/RAM, NVMe, Loki Logs}
         };
 
         % Path A: Machine Retraining Loop (Top Right)
         \node[sysbox, draw=BlueAccent, fill=BlueAccent!12, text width=3.4cm] (hook) at (9.90, 1.55) {
-            \textbf{\color{BlueAccent} FastAPI Webhook Relay}\\
+            \textbf{\color{BlueAccent} \toollogo{fastapi}FastAPI Webhook Relay}\\
             {\tiny \texttt{POST /api/v1/retrain/webhook}}\\
             {\tiny Bearer Auth + \textbf{6h Cooldown Lock}}
         };
         \node[sysbox, draw=GreenAccent, fill=GreenAccent!12, text width=3.2cm] (air) at (13.75, 1.55) {
-            \textbf{\color{GreenAccent} Airflow $\to$ Jenkins GPU}\\
+            \textbf{\color{GreenAccent} \toollogo{airflow}Airflow $\to$ \toollogo{jenkins}Jenkins GPU}\\
             {\tiny OAuth2 JWT $\to$ \texttt{model\_retraining}}\\
             {\tiny 8-Stage DVC + 4-Gate Check}
         };
 
         % Path B: Human Active Learning Loop (Bottom Right)
         \node[sysbox, draw=PurpleAccent, fill=PurpleAccent!12, text width=3.4cm] (ls) at (9.90, -0.15) {
-            \textbf{\color{PurpleAccent} DagsHub Label Studio}\\
-            {\tiny \textbf{BADGE} / Entropy Query Ranking}\\
+            \textbf{\color{PurpleAccent} \toollogo{dagshub}DagsHub Label Studio}\\
+            {\tiny Conformal / Energy Triage Queue}\\
             {\tiny Taxonomist + Forward CAM}
         };
         \node[sysbox, draw=TealAccent, fill=TealAccent!12, text width=3.2cm] (mrg) at (13.75, -0.15) {
@@ -1022,7 +1119,7 @@
             \item Grafana (\texttt{:30300}) renders \textbf{17 visual panels across 2 provisioned dashboards}: 7 MLOps panels fed by Prometheus scraping \texttt{/metrics} every 15s (p50/p95/p99 latency, status counts, conformal referrals, and persistent PostgreSQL drift gauges via \texttt{DriftMetricsCollector}) plus 10 infrastructure and Loki 3.0 log panels (node CPU/RAM, 4-slot GPU VRAM, Promtail JSON logs).
             \item Drift is integrated via a \textbf{bifurcated closed loop} - alert + automatic retraining + human review:
             \item \textbf{Path A (Automated Retraining):} \texttt{EmbeddingDriftDetected} notifies \texttt{POST /api/v1/retrain/webhook} (constant-time Bearer auth). FastAPI acquires an atomic \textbf{6-hour cooldown lock} to stop alert storms, fetches an Airflow OAuth2 JWT, and triggers \texttt{model\_retraining}.
-            \item \textbf{Path B (Human Review):} OOD and ambiguous observations queue for taxonomist audit (ranked via BADGE/entropy active learning) and re-enter the DVC manifest after open-licence verification.
+            \item \textbf{Path B (Human Review):} OOD and ambiguous observations queue in \texttt{TriageQueue} for taxonomist audit (Conformal/Energy gating + Forward CAM) and re-enter \texttt{raw\_manifest.parquet} after open-licence verification.
         \end{itemize}
     }
 \end{frame}
@@ -1065,11 +1162,11 @@
         \end{column}
         \begin{column}{0.48\textwidth}
             \centering
-            \textbf{\scriptsize\color{RoseAccent} Docker Purpose \& K3s Security Posture}\\[3pt]
+            \textbf{\scriptsize\color{RoseAccent} \toollogo{docker}Docker Purpose \& \toollogo{kubernetes}K3s Security Posture}\\[3pt]
             \resizebox{\textwidth}{!}{%
             \begin{tikzpicture}
                 \node[sysbox, draw=BlueAccent, fill=BlueAccent!10, text width=5.6cm] (s1) at (0, 2.1) {
-                    \textbf{\color{BlueAccent} 1. Multi-Stage Non-Root Docker Isolation}\\
+                    \textbf{\color{BlueAccent} \toollogo{docker}1. Multi-Stage Non-Root Docker Isolation}\\
                     {\tiny Locks \texttt{pixi.lock} + ONNX/CUDA across CI \& K3s}\\
                     {\tiny Non-root UIDs: \texttt{10001}, \texttt{50000}, \texttt{70}}
                 };
@@ -1093,6 +1190,7 @@
             }
         \end{column}
     \end{columns}
+
     \note{
         \textbf{Time: 12:50-13:55 (1m 05s)}
         \begin{itemize}
@@ -1114,7 +1212,7 @@
     \begin{tikzpicture}
         \node[sysbox, draw=GreenAccent, fill=GreenAccent!10, text width=3.80cm, minimum height=2.45cm] (d1) at (0, 0) {
             \textbf{\color{GreenAccent} Step 1 (0:00-1:30)}\\
-            \textbf{HTMX Cockpit \& CAM}\\[2pt]
+            \textbf{\toollogo{fastapi}HTMX Cockpit \& \toollogo{redis}CAM}\\[2pt]
             {\tiny \texttt{taxon.benjamin-foerster.eu}}\\
             {\tiny \texttt{taxon-staging.benjamin-foerster.eu}}\\[3pt]
             {\tiny \textbullet\ Live INT8 ONNX Prediction}\\
@@ -1123,7 +1221,7 @@
         };
         \node[sysbox, draw=AmberAccent, fill=AmberAccent!10, text width=3.80cm, minimum height=2.45cm] (d2) at (4.25, 0) {
             \textbf{\color{AmberAccent} Step 2 (1:30-2:45)}\\
-            \textbf{Grafana \& Evidently}\\[2pt]
+            \textbf{\toollogo{grafana}Grafana \& \toollogo{evidently}Evidently}\\[2pt]
             {\tiny \texttt{taxon-grafana.benjamin-foerster.eu}}\\
             {\tiny \texttt{taxon-evidently.benjamin-foerster.eu}}\\[3pt]
             {\tiny \textbullet\ 17 Panels (MLOps + Infra)}\\
@@ -1132,16 +1230,16 @@
         };
         \node[sysbox, draw=BlueAccent, fill=BlueAccent!10, text width=3.80cm, minimum height=2.45cm] (d3) at (8.50, 0) {
             \textbf{\color{BlueAccent} Step 3 (2:45-4:00)}\\
-            \textbf{DagsHub \& Optuna}\\[2pt]
+            \textbf{\toollogo{dagshub}DagsHub \& \toollogo{optuna}Optuna}\\[2pt]
             {\tiny \texttt{dagshub.com/foersben/...}}\\
             {\tiny \texttt{taxon-optuna.benjamin-foerster.eu}}\\[3pt]
             {\tiny \textbullet\ 8-Stage DVC Lineage Graph}\\
-            {\tiny \textbullet\ MLflow 3.x Parent Run \& Plots}\\
+            {\tiny \textbullet\ \toollogo{mlflow}MLflow 3.x Parent Run \& Plots}\\
             {\tiny \textbullet\ \texttt{@Production} + Passports}
         };
         \node[sysbox, draw=PurpleAccent, fill=PurpleAccent!10, text width=3.80cm, minimum height=2.45cm] (d4) at (12.75, 0) {
             \textbf{\color{PurpleAccent} Step 4 (4:00-5:00)}\\
-            \textbf{Airflow 3 \& Jenkins}\\[2pt]
+            \textbf{\toollogo{airflow}Airflow 3 \& \toollogo{jenkins}Jenkins}\\[2pt]
             {\tiny \texttt{taxon-airflow.benjamin-foerster.eu}}\\
             {\tiny \texttt{jenkins.benjamin-foerster.eu}}\\[3pt]
             {\tiny \textbullet\ \texttt{prediction\_drift\_monitor}}\\
@@ -1157,7 +1255,7 @@
     \vspace{0.35cm}
     \begin{tcolorbox}[enhanced, width=0.80\textwidth, colback=SlateDark, colframe=BlueAccent, boxrule=0.6pt, arc=3pt, top=4pt, bottom=4pt]
         \centering\footnotesize\color{white}
-        \textbf{Thank you for your attention!} $\cdot$ Switching now to the live cluster demonstration \& jury Q\&A.
+        \textbf{Live Demo Walkthrough:} 5-minute tour across the cluster tabs before closing conclusions \& jury Q\&A.
     \end{tcolorbox}
     \note{
         \textbf{Time: 13:55-14:30 (35s) $\to$ Transition to 5-Min Live Demo}
@@ -1172,6 +1270,43 @@
 \end{frame}
 
 % ==============================================================================
+% SLIDE 15: Project Conclusion & Next Steps (Post-Demo Closing & Q&A Anchor)
+% ==============================================================================
+\begin{frame}{Conclusion \& Next Steps}{Proven Production Chain \& Closing Loop Gaps}
+    \begin{columns}[c]
+        \begin{column}{0.48\textwidth}
+            \begin{greencard}
+                \textbf{\color{GreenAccent} Project Conclusion: What Is Proven Live}\\[3pt]
+                \textbullet\ \textbf{Fast, Reproducible Serving:} \toollogo{onnx}\textbf{INT8 ONNX} via \toollogo{fastapi}\textbf{FastAPI} on \toollogo{kubernetes}\textbf{k3s} delivers \textbf{54.08 ms p95} CPU latency ($91.46\%$ accuracy) with pre-warmed startup singletons.\\[3pt]
+                \textbullet\ \textbf{Mathematically Bounded Safety:} Split Conformal sets ($95\%$ target, $93.29\%$ tested) and Helmholtz OOD gating route unfamiliar specimens to human triage.\\[3pt]
+                \textbullet\ \textbf{Automated Lineage \& Healing:} \toollogo{dvc}\textbf{8-stage DVC} + \toollogo{mlflow}\textbf{MLflow 4-gate} promotion + \toollogo{grafana}\textbf{Grafana}/\toollogo{evidently}\textbf{Evidently} drift $\to$ \toollogo{airflow}\textbf{Airflow} $\to$ \toollogo{jenkins}\textbf{Jenkins} GPU retraining.
+            \end{greencard}
+        \end{column}
+        \begin{column}{0.49\textwidth}
+            \begin{bluecard}
+                \textbf{\color{BlueAccent} Next Steps: Closing Remaining Loop Gaps}\\[3pt]
+                \textbullet\ \textbf{1. Active Learning Diversity (\texttt{BADGE} / \texttt{k-means++}):} Currently \texttt{TriageQueue} uses Conformal/Energy gating and \texttt{query.py} implements margin sampling only; wire batch-diverse \texttt{BADGE}/\texttt{k-means++} selection before \toollogo{dagshub}\textbf{Label Studio} upload.\\[3pt]
+                \textbullet\ \textbf{2. Pipeline 2 (\texttt{LanceDB HNSW} + KG) \& Routing:} Add $\mathcal{O}(1)$ taxonomic splits/lumps without retraining and an automated router deciding Pipeline 1 retraining vs.\ Pipeline 2 index updates.\\[3pt]
+                \textbullet\ \textbf{3. GitOps, Security \& Scaling:} Migrate to \texttt{FluxCD + SOPS/age}, add Traefik rate-limit/OIDC, \texttt{NetworkPolicy}/mTLS, and K8s \texttt{HPA}.
+            \end{bluecard}
+        \end{column}
+    \end{columns}
+    \vspace{0.18cm}
+    \centering
+    \begin{tcolorbox}[enhanced, width=0.82\textwidth, colback=SlateDark, colframe=BlueAccent, boxrule=0.6pt, arc=3pt, top=4pt, bottom=4pt]
+        \centering\footnotesize\color{white}
+        \textbf{Thank you for your attention!} $\cdot$ Ready for Jury Q\&A
+    \end{tcolorbox}
+    \note{
+        \textbf{Post-Demo Closing Slide (Leave up during Jury Q\&A)}
+        \begin{itemize}
+            \item \textbf{Conclusion:} TaxonVision-MLOps delivers the complete production chain requested in the project brief - open-licensed AWS data, frozen DINOv3 + INT8 ONNX serving at 54 ms p95, conformal uncertainty with human triage, and automated drift-triggered GPU retraining.
+            \item \textbf{Honest Next Steps:} (1) wire true batch-diverse \texttt{BADGE}/\texttt{k-means++} selection into \texttt{TriageQueue} ahead of Label Studio (today it queues by Conformal/Energy boundaries whilst \texttt{query.py} implements margin sampling), (2) implement Pipeline 2 (\texttt{LanceDB HNSW} + knowledge graph) with a decision gate choosing index updates vs.\ weight retraining, and (3) complete declarative \texttt{FluxCD + SOPS/age} GitOps, Traefik rate-limiting/OIDC, \texttt{NetworkPolicy}/mTLS, and multi-node K8s \texttt{HPA}.
+        \end{itemize}
+    }
+\end{frame}
+
+% ==============================================================================
 % BACKUP SLIDE B1: Traffic Spikes & Resource Budgeting (For Q&A)
 % ==============================================================================
 \begin{frame}{Backup B1: Traffic Burst Scaling}{Async Offloading, Thread Caps \& K8s HPA}
@@ -1179,17 +1314,17 @@
     \resizebox{0.97\textwidth}{!}{%
     \begin{tikzpicture}
         \node[sysbox, draw=BlueAccent, fill=BlueAccent!10, text width=3.95cm] (b1) at (0, 0) {
-            \textbf{\color{BlueAccent} 1. Non-Blocking Event Loop}\\
+            \textbf{\color{BlueAccent} \toollogo{fastapi}1. Non-Blocking Event Loop}\\
             {\tiny \texttt{anyio.to\_thread.run\_sync} for ONNX}\\
             {\tiny \texttt{BackgroundTasks} for Postgres / S3}
         };
         \node[sysbox, draw=TealAccent, fill=TealAccent!10, text width=4.05cm] (b2) at (4.85, 0) {
-            \textbf{\color{TealAccent} 2. Active 2-Replica Pool}\\
+            \textbf{\color{TealAccent} \toollogo{kubernetes}2. Active 2-Replica Pool}\\
             {\tiny \texttt{maxSurge=1, maxUnavailable=0}}\\
             {\tiny \texttt{intra\_op\_threads=2} $\cdot$ \texttt{200m-2} CPU / \texttt{1-4 GiB}}
         };
         \node[sysbox, draw=GreenAccent, fill=GreenAccent!12, text width=4.15cm] (b3) at (9.80, 0) {
-            \textbf{\color{GreenAccent} 3. Elastic HPA (Next-Phase)}\\
+            \textbf{\color{GreenAccent} \toollogo{prometheus}3. Elastic HPA (Next-Phase)}\\
             {\tiny Prometheus Adapter $\to$ \textbf{K8s HPA}}\\
             {\tiny Triggers on p95 Latency \& Queue Depth}
         };
@@ -1218,13 +1353,16 @@
             \end{greencard}
         \end{column}
     \end{columns}
+
     \note{
-        \textbf{Backup B1 - Q\&A: What happens if there is a traffic spike? Which tool is useful?}
+        \cuetime{Backup B1}
+        \cuejury{What happens if there is a traffic spike? Which tool is useful?}
         \begin{itemize}
             \item First, on our current cluster node, bursts do not stall FastAPI's event loop: two serving pods (\texttt{maxSurge=1, maxUnavailable=0}, \texttt{200m-2} CPU and \texttt{1-4 GiB} RAM) cap ONNX intra-op threads at \texttt{2} to prevent cgroup contention, offload CPU inference/drift math via \texttt{anyio.to\_thread.run\_sync}, and defer Postgres/S3 writes to \texttt{BackgroundTasks}.
             \item Second, for multi-node elastic burst scaling, the standard Kubernetes tool is the \textbf{HorizontalPodAutoscaler (HPA)} paired with \textbf{Prometheus Adapter}, scaling pods on custom SLO metrics such as \texttt{taxon\_inference\_latency\_seconds} p95 (with \textbf{KEDA} as a natural extension if asynchronous message-queue batch scoring is added).
             \item Meanwhile, GPU time-slicing exposes 4 virtual GPU slots whilst Stage 5 training enforces \texttt{TAXON\_CUDA\_MEMORY\_FRACTION=0.7} ($11.2\text{ GB}$ of $16\text{ GB}$) so training pods never starve active inference headroom.
         \end{itemize}
+        \cueterms{\textbf{GPU Time-Slicing:} Sharing 1 physical GPU (\texttt{replicas: 4} virtual K8s slots) across pods by switching compute cycles; paired with \texttt{0.7} VRAM cap (\texttt{11.2 GB}) since memory is not hardware-isolated. $\cdot$ \textbf{HPA:} Horizontal Pod Autoscaler. $\cdot$ \textbf{KEDA:} Kubernetes Event-driven Autoscaling. $\cdot$ \textbf{cgroup:} Linux Control Group.}
     }
 \end{frame}
 
@@ -1241,7 +1379,7 @@
             {\tiny HTTP 200, 429 backoff \& timeouts}
         };
         \node[sysbox, draw=TealAccent, fill=TealAccent!10, text width=3.9cm] (t2) at (4.45, 1.25) {
-            \textbf{\color{TealAccent} Tier 2: S3 / DVC Mocking}\\
+            \textbf{\color{TealAccent} \toollogo{dvc}Tier 2: S3 / DVC Mocking}\\
             {\tiny \texttt{moto} ephemeral in-memory S3}\\
             {\tiny Streaming, SigV4 \& hash integrity}
         };
@@ -1251,7 +1389,7 @@
             {\tiny Enforces hardware spec invariants}
         };
         \node[sysbox, draw=AmberAccent, fill=AmberAccent!10, text width=3.9cm] (t4) at (0, -0.25) {
-            \textbf{\color{AmberAccent} Tier 4: Serving \& Auth Routes}\\
+            \textbf{\color{AmberAccent} \toollogo{fastapi}Tier 4: Serving \& Auth Routes}\\
             {\tiny FastAPI integration (\texttt{/predict}, \texttt{/drift})}\\
             {\tiny Constant-time Bearer \& 6h cooldown}
         };
@@ -1270,7 +1408,7 @@
     \vspace{0.22cm}
     \begin{bluecard}
         \centering
-        \textbf{\color{BlueAccent} Continuous Enforcement:} GitHub Actions (\texttt{ci-dev} CPU matrix) \& Jenkins Stage 2-4 enforce all \textbf{306 collected \texttt{pytest} tests} with an \textbf{$\ge 80\%$ line-coverage gate} (\texttt{--cov-fail-under=80}), followed post-rollout by Tier 6 live cluster smoke probes (\texttt{/api/v1/predict} \& Prometheus metrics).
+        \textbf{\color{BlueAccent} Continuous Enforcement:} \toollogo{githubactions}GitHub Actions (\texttt{ci-dev} CPU matrix) \& \toollogo{jenkins}Jenkins Stage 2-4 enforce all \textbf{306 collected \texttt{pytest} tests} with an \textbf{$\ge 80\%$ line-coverage gate} (\texttt{--cov-fail-under=80}), followed post-rollout by Tier 6 live cluster smoke probes (\texttt{/api/v1/predict} \& \toollogo{prometheus}Prometheus metrics).
     \end{bluecard}
     \note{
         \textbf{Backup B2 - Q\&A: Which unit tests have been implemented and what are they used for?}
@@ -1305,7 +1443,7 @@
                 };
                 \node[sysbox, draw=PurpleAccent, fill=PurpleAccent!10, text width=5.6cm] (sec3) at (0, 0.0) {
                     \textbf{\color{PurpleAccent} 3. Control-Plane JWT, CSRF \& Key Scrubbing}\\
-                    {\tiny Airflow OAuth2 JWT $\cdot$ Jenkins CSRF Crumb $\cdot$ \texttt{EXIT} DVC key cleanup}
+                    {\tiny \toollogo{airflow}Airflow OAuth2 JWT $\cdot$ \toollogo{jenkins}Jenkins CSRF Crumb $\cdot$ \texttt{EXIT} DVC key cleanup}
                 };
                 \node[sysbox, draw=TealAccent, fill=TealAccent!10, text width=5.6cm] (sec4) at (0, -1.05) {
                     \textbf{\color{TealAccent} 4. Non-Root Runtime \& Out-of-Band Secrets}\\
@@ -1327,6 +1465,7 @@
             \end{ambercard}
         \end{column}
     \end{columns}
+
     \note{
         \textbf{Backup B3 - Q\&A: How do you manage API security, and how can it be improved?}
         \begin{itemize}
