@@ -5,7 +5,6 @@
 import io
 import logging
 import time
-import uuid
 from typing import Annotated, Any
 
 import anyio
@@ -14,7 +13,7 @@ from PIL import Image
 
 from taxon_vision.config import ConformalConfig, get_settings
 from taxon_vision.inference.cam import generate_cam_overlay
-from taxon_vision.monitoring.telemetry import LATENCY_HISTOGRAM, PREDICTION_COUNTER, REFERRAL_RATE
+from taxon_vision.monitoring.telemetry import PREDICTION_COUNTER
 from taxon_vision.service.inference import (
     InvalidImageError,
     ModelNotReadyError,
@@ -22,13 +21,13 @@ from taxon_vision.service.inference import (
     load_taxa_catalog,
     run_prediction,
 )
-from taxon_vision.service.schemas import ConformalRoutingTier, PredictionResponse, TaxonPrediction
-from taxon_vision.service.storage import (
-    ContributorConsent,
-    FlaggedObservationPayload,
-    handle_flagged_prediction_if_needed,
+from taxon_vision.service.prediction_telemetry import (
+    PredictionTelemetryContext,
+    read_validated_upload,
+    record_prediction_outcome,
 )
-from taxon_vision.service.telemetry_store import PredictionRecord, get_telemetry_store
+from taxon_vision.service.schemas import ConformalRoutingTier, PredictionResponse, TaxonPrediction
+from taxon_vision.service.storage import ContributorConsent
 
 logger = logging.getLogger(__name__)
 
@@ -205,48 +204,26 @@ async def predict_species(
         HTTPException: HTTP 413 for payload too large, 422 for undecodable/empty images, 503 if model inference fails.
     """
     t0 = time.perf_counter()
-    content = await file.read()
-    settings = get_settings()
-
-    if len(content) == 0:
-        logger.warning("Rejected empty image upload for %s", file.filename)
-        PREDICTION_COUNTER.labels(status="invalid_input").inc()
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Invalid or corrupted image upload.",
-        )
-
-    if len(content) > settings.service.max_image_upload_bytes:
-        PREDICTION_COUNTER.labels(status="invalid_input").inc()
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"Image upload exceeds maximum allowed size of {settings.service.max_image_upload_bytes} bytes.",
-        )
+    content = await read_validated_upload(file)
 
     try:
         pred = await anyio.to_thread.run_sync(run_prediction, content)
         duration_sec = time.perf_counter() - t0
         latency = duration_sec * 1000.0
-        LATENCY_HISTOGRAM.observe(duration_sec)
-
-        obs_id = str(uuid.uuid4())
-        if pred.get("is_ood") or pred.get("requires_human_review"):
-            REFERRAL_RATE.inc()
-            consent = ContributorConsent(
-                contribute_open_license=contribute_open_license,
-                photographer_name=photographer_name,
-                license_code=license_code,
-            )
-            await handle_flagged_prediction_if_needed(
-                FlaggedObservationPayload(
-                    observation_id=obs_id,
-                    prediction_result=pred,
-                    embedding=pred.get("embedding"),
-                    image_bytes=content,
-                    consent=consent,
-                ),
-                background_tasks=background_tasks,
-            )
+        consent = ContributorConsent(
+            contribute_open_license=contribute_open_license,
+            photographer_name=photographer_name,
+            license_code=license_code,
+        )
+        obs_id = await record_prediction_outcome(
+            PredictionTelemetryContext(
+                prediction_result=pred,
+                image_bytes=content,
+                duration_sec=duration_sec,
+                consent=consent,
+            ),
+            background_tasks,
+        )
 
         cam_base64: str | None = None
         if explain:
@@ -257,21 +234,6 @@ async def predict_species(
                 logger.warning("CAM overlay generation failed for %s: %s", file.filename, cam_err)
                 cam_base64 = None
 
-        rec = PredictionRecord(
-            observation_id=obs_id,
-            extractor=settings.model.default_extractor,
-            model_version=settings.service.version,
-            top1_taxon=str(pred.get("scientific_name")),
-            top1_confidence=float(pred.get("confidence", 0.0)),
-            conformal_set=[str(s) for s in pred.get("conformal_set", [])],
-            ood_energy=float(pred["ood_energy_score"]) if pred.get("ood_energy_score") is not None else None,
-            is_ood=bool(pred.get("is_ood", False)),
-            requires_review=bool(pred.get("requires_human_review", False)),
-            latency_ms=round(latency, 2),
-            embedding=pred.get("embedding"),
-        )
-        background_tasks.add_task(get_telemetry_store().record, rec)
-        PREDICTION_COUNTER.labels(status="success").inc()
         logger.info(
             "Prediction completed successfully for %s",
             file.filename,

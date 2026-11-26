@@ -245,3 +245,37 @@ def test_multi_pod_split_brain_resolution(monkeypatch: pytest.MonkeyPatch) -> No
     )
     assert resp_explain.status_code == 200
     assert "cam-overlay" in resp_explain.text
+
+
+def test_predict_htmx_records_prometheus_and_telemetry_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify HTMX UI uploads record Prometheus counters/latency and enqueue TelemetryStore writes."""
+    from prometheus_client import REGISTRY
+
+    from taxon_vision.service.telemetry_store import BoundedInMemoryTelemetryStore
+
+    fake_store = BoundedInMemoryTelemetryStore(maxlen=16)
+    monkeypatch.setattr("taxon_vision.service.prediction_telemetry.get_telemetry_store", lambda: fake_store)
+
+    before_success = REGISTRY.get_sample_value("taxon_predictions_total", {"status": "success"}) or 0.0
+    before_latency_count = REGISTRY.get_sample_value("taxon_inference_latency_seconds_count") or 0.0
+
+    resp = client.post("/ui/predict-htmx", files={"file": ("leaf.jpg", _jpeg_buffer("blue", 32), "image/jpeg")})
+    assert resp.status_code == 200
+
+    after_success = REGISTRY.get_sample_value("taxon_predictions_total", {"status": "success"}) or 0.0
+    after_latency_count = REGISTRY.get_sample_value("taxon_inference_latency_seconds_count") or 0.0
+    assert after_success == before_success + 1.0
+    assert after_latency_count == before_latency_count + 1.0
+    assert len(fake_store.records) == 1
+    assert fake_store.records[0].latency_ms >= 0.0
+
+
+def test_predict_htmx_empty_upload_increments_invalid_input_counter() -> None:
+    """Verify empty HTMX uploads increment invalid_input Prometheus counter and return HTTP 422."""
+    from prometheus_client import REGISTRY
+
+    before_invalid = REGISTRY.get_sample_value("taxon_predictions_total", {"status": "invalid_input"}) or 0.0
+    resp = client.post("/ui/predict-htmx", files={"file": ("empty.jpg", io.BytesIO(b""), "image/jpeg")})
+    assert resp.status_code == 422
+    after_invalid = REGISTRY.get_sample_value("taxon_predictions_total", {"status": "invalid_input"}) or 0.0
+    assert after_invalid == before_invalid + 1.0
