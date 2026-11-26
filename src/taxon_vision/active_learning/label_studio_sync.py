@@ -196,13 +196,52 @@ class DagsHubLabelStudioClient:
         req = urllib.request.Request(url=url, data=data_bytes, headers=headers, method=method)
         try:
             with urllib.request.urlopen(req, timeout=self.config.timeout_seconds) as resp:
-                raw = resp.read().decode("utf-8")
-                return json.loads(raw) if raw.strip() else {}
+                return self._parse_json_response(resp, method, url)
         except urllib.error.HTTPError as http_err:
             body = http_err.read().decode("utf-8", errors="replace")
             raise RuntimeError(
                 f"DagsHub Label Studio API {method} {url} failed with HTTP {http_err.code}: {body[:300]}"
             ) from http_err
+        except urllib.error.URLError as url_err:
+            raise RuntimeError(f"DagsHub Label Studio API {method} {url} network error: {url_err.reason}") from url_err
+
+    @staticmethod
+    def _parse_json_response(resp: Any, method: str, url: str) -> Any:
+        """Decode an HTTP response body into JSON, rejecting HTML sleeping/redirect pages cleanly.
+
+        Why:
+            DagsHub's hosted Label Studio workspace returns HTTP 200 HTML pages when asleep or redirecting, causing raw `json.loads` to fail with an opaque `JSONDecodeError`. Validating `Content-Type` and wrapping decode failures yields an actionable `RuntimeError`.
+
+        How:
+            Decodes UTF-8 response bytes, checks `Content-Type` for `text/html`, parses non-empty JSON payloads, and wraps `JSONDecodeError` with endpoint context.
+
+        Args:
+            resp: Active HTTP response context returned by `urlopen`.
+            method: HTTP verb used for the request.
+            url: Target request URL for error context.
+
+        Returns:
+            Parsed JSON object/list, or `{}` on an empty response body.
+
+        Raises:
+            RuntimeError: If the server returns HTML or malformed JSON.
+        """
+        raw = resp.read().decode("utf-8", errors="replace")
+        content_type = resp.headers.get("Content-Type", "") if resp.headers is not None else ""
+        if not raw.strip():
+            return {}
+        if "text/html" in content_type.lower():
+            raise RuntimeError(
+                f"DagsHub Label Studio API {method} {url} returned HTML instead of JSON "
+                f"(Content-Type: {content_type!r}; workspace may be asleep or redirecting): {raw[:120]!r}"
+            )
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError as json_err:
+            raise RuntimeError(
+                f"DagsHub Label Studio API {method} {url} returned invalid JSON "
+                f"(Content-Type: {content_type!r}): {raw[:120]!r}"
+            ) from json_err
 
     def resolve_or_create_project_id(
         self, label_config_path: Path | str = "deploy/label_studio/project_config.xml"
@@ -696,3 +735,118 @@ def background_sync_flagged_observation(meta_path: Path, crop_path: Path) -> Non
             client.sync_flagged_observation(meta_path, crop_path)
     except Exception:
         logger.exception("Background DagsHub Label Studio sync failed for %s", meta_path)
+
+
+@dataclass(frozen=True)
+class FeedbackSyncPaths:
+    """Filesystem path bundle for active-learning Label Studio synchronisation and manifest merging.
+
+    Why:
+        Encapsulates the four runtime PVC or local repository paths consumed by `sync_and_merge_human_feedback` into a single immutable value object, complying with Rule 08 parameter arity limits (<= 4 positional arguments).
+
+    How:
+        Constructed by Airflow's `model_retraining` DAG or unit tests and passed directly to `sync_and_merge_human_feedback`.
+
+    Attributes:
+        flagged_dir: Directory holding pending locally captured flagged observations.
+        export_path: Target JSON path for completed Label Studio annotations.
+        raw_manifest_path: Target Parquet path for `raw_manifest.parquet`.
+        catalog_path: Path to `config/taxa_catalog.yaml`.
+    """
+
+    flagged_dir: Path
+    export_path: Path
+    raw_manifest_path: Path
+    catalog_path: Path
+
+
+def _empty_feedback_summary(status: str, synced_pending: int = 0) -> dict[str, Any]:
+    """Build a uniform zero-merge XCom summary payload when no feedback export can be merged.
+
+    Why:
+        Guarantees downstream Airflow tasks (`trigger_jenkins_build`) always receive the expected schema keys (`catalog_expanded`, `new_annotations_merged`, `status`) even when remote Label Studio is unavailable or unconfigured.
+
+    How:
+        Returns a deterministic dictionary with zero counts and `catalog_expanded=False`.
+
+    Args:
+        status: Machine-readable skip status string.
+        synced_pending: Count of pending captures uploaded prior to any export error.
+
+    Returns:
+        Dictionary suitable for Airflow XCom serialisation.
+    """
+    return {
+        "new_annotations_merged": 0,
+        "catalog_expanded": False,
+        "new_taxon_ids": [],
+        "synced_pending": synced_pending,
+        "status": status,
+    }
+
+
+def sync_and_merge_human_feedback(
+    paths: FeedbackSyncPaths,
+    client: DagsHubLabelStudioClient | None = None,
+) -> dict[str, Any]:
+    """Synchronise pending captures with DagsHub Label Studio and merge completed annotations into `raw_manifest.parquet`.
+
+    Why:
+        Extracting this orchestration out of Airflow's `@task` closure makes the exact production control flow directly testable in unit tests without requiring Apache Airflow installed. Furthermore, catching remote `RuntimeError` failures prevents a sleeping DagsHub Label Studio workspace from blocking drift-triggered GPU retraining whilst preserving fail-fast propagation for local filesystem permission or schema errors.
+
+    How:
+        1. If the DagsHub client is configured, flushes consented captures from `paths.flagged_dir` and exports completed annotations to `paths.export_path`, degrading gracefully with a warning on remote `RuntimeError` failures.
+        2. If `paths.export_path` does not exist locally (either unconfigured or remote unavailable), returns a typed skip summary so Jenkins retraining still proceeds.
+        3. Invokes `merge_feedback_to_manifest` against `paths.raw_manifest_path` and returns merged counts and `catalog_expanded` metadata.
+
+    Args:
+        paths: `FeedbackSyncPaths` specifying flagged captures, export JSON, raw manifest, and taxa catalogue.
+        client: Optional explicit `DagsHubLabelStudioClient` instance (defaults to environment-configured client).
+
+    Returns:
+        Dictionary summarising merged record counts, OOD audit counts, newly registered taxon IDs, `catalog_expanded`, and status.
+    """
+    from taxon_vision.active_learning.feedback import merge_feedback_to_manifest
+
+    ls_client = client or DagsHubLabelStudioClient()
+    synced_pending = 0
+    remote_unavailable = False
+
+    if ls_client.is_configured:
+        try:
+            synced_pending = ls_client.sync_pending_directory(paths.flagged_dir)
+            exported_count = ls_client.export_completed_annotations(paths.export_path)
+            logger.info(
+                "DagsHub sync complete (uploaded_pending=%d, exported_completed=%d).", synced_pending, exported_count
+            )
+        except RuntimeError as err:
+            remote_unavailable = True
+            logger.warning("DagsHub Label Studio unavailable; continuing with local fallback if present: %s", err)
+
+    if not paths.export_path.is_file():
+        skip_status = "skipped_dagshub_unavailable" if remote_unavailable else "skipped_no_pending_annotations"
+        logger.info("No local export at %s (%s); proceeding without feedback merge.", paths.export_path, skip_status)
+        return _empty_feedback_summary(skip_status, synced_pending=synced_pending)
+
+    res = merge_feedback_to_manifest(
+        paths.export_path, manifest_path=paths.raw_manifest_path, catalog_path=paths.catalog_path
+    )
+    logger.info(
+        "Merged %d human annotations into %s (status=%s, total=%d, catalog_expanded=%s, ood_verified=%d)",
+        res.new_records_added,
+        paths.raw_manifest_path,
+        res.status,
+        res.total_manifest_records,
+        res.catalog_expanded,
+        res.ood_verified_added,
+    )
+    return {
+        "new_annotations_merged": res.new_records_added,
+        "ood_records_skipped": res.ood_records_skipped,
+        "ood_verified_added": res.ood_verified_added,
+        "total_manifest_records": res.total_manifest_records,
+        "catalog_expanded": res.catalog_expanded,
+        "new_taxon_ids": list(res.new_taxon_ids),
+        "synced_pending": synced_pending,
+        "status": res.status,
+    }

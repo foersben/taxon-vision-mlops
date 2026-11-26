@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 
 from taxon_vision.active_learning.query import margin_sampling
@@ -72,8 +74,9 @@ def test_dagshub_label_studio_client_consent_guard_and_export(tmp_path, monkeypa
     api_calls: list[tuple[str, str, object]] = []
 
     class _FakeResp:
-        def __init__(self, body: bytes = b"") -> None:
+        def __init__(self, body: bytes = b"", headers: dict[str, str] | None = None) -> None:
             self._body = body
+            self.headers = headers or {"Content-Type": "application/json"}
 
         def __enter__(self) -> _FakeResp:
             return self
@@ -219,3 +222,271 @@ def test_s3_streamer_routes_dagshub_triage_uri_through_boto3(monkeypatch) -> Non
     assert isinstance(kwargs_dict, dict)
     assert kwargs_dict["endpoint_url"] == "https://dagshub.com/api/v1/repo-buckets/s3/foersben"
     assert kwargs_dict["aws_access_key_id"] == "pat-s3-123"
+
+
+class _StubHttpResponse:
+    """Minimal HTTP response context manager stub for urllib.request tests."""
+
+    def __init__(self, body: bytes, content_type: str = "application/json") -> None:
+        self._body = body
+        self.headers = {"Content-Type": content_type}
+
+    def __enter__(self) -> _StubHttpResponse:
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return self._body
+
+
+def _write_test_catalog(path: Path) -> None:
+    """Write a minimal canonical taxa_catalog.yaml fixture for feedback integration tests."""
+    import yaml
+
+    catalog = {
+        "taxa": [
+            {
+                "id": 1,
+                "scientific_name": "Danaus plexippus",
+                "common_name": "Monarch Butterfly",
+                "kingdom": "Animalia",
+                "class": "Insecta",
+                "inat_taxon_id": 48662,
+            }
+        ]
+    }
+    path.write_text(yaml.safe_dump(catalog, sort_keys=False), encoding="utf-8")
+
+
+def _sample_completed_task(obs_uuid: str = "label_studio_obs-42") -> dict[str, object]:
+    """Build a realistic Label Studio JSON export task matching feedback.py parsing."""
+    return {
+        "id": 42,
+        "data": {
+            "observation_uuid": obs_uuid,
+            "image_url": "s3://taxon-vision-mlops/triage-queue/obs-42_crop.jpg",
+            "photographer_name": "Jane Doe",
+            "license_code": "CC-BY",
+            "license_url": "https://creativecommons.org/licenses/by/4.0/",
+        },
+        "annotations": [
+            {
+                "id": 99,
+                "result": [
+                    {
+                        "from_name": "taxon_choice",
+                        "type": "choices",
+                        "value": {"choices": ["48662"]},
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def test_label_studio_api_request_rejects_http_200_html_sleeping_workspace(monkeypatch) -> None:
+    """Verify HTTP 200 HTML sleeping/redirect pages raise actionable RuntimeError instead of JSONDecodeError."""
+    import urllib.request
+
+    import pytest
+
+    from taxon_vision.active_learning.label_studio_sync import DagsHubLabelStudioClient, DagsHubRepoConfig
+
+    monkeypatch.setattr(
+        urllib.request,
+        "urlopen",
+        lambda *_args, **_kwargs: _StubHttpResponse(
+            b"<!DOCTYPE html><html><body>Workspace starting...</body></html>",
+            content_type="text/html; charset=utf-8",
+        ),
+    )
+    client = DagsHubLabelStudioClient(DagsHubRepoConfig(token="pat-test"))
+
+    with pytest.raises(RuntimeError, match="returned HTML instead of JSON"):
+        client._api_request("GET", "projects/")
+
+
+def test_label_studio_api_request_rejects_malformed_json_payload(monkeypatch) -> None:
+    """Verify malformed JSON payloads raise contextual RuntimeError rather than raw JSONDecodeError."""
+    import urllib.request
+
+    import pytest
+
+    from taxon_vision.active_learning.label_studio_sync import DagsHubLabelStudioClient, DagsHubRepoConfig
+
+    monkeypatch.setattr(
+        urllib.request,
+        "urlopen",
+        lambda *_args, **_kwargs: _StubHttpResponse(b"{not valid json"),
+    )
+    client = DagsHubLabelStudioClient(DagsHubRepoConfig(token="pat-test"))
+
+    with pytest.raises(RuntimeError, match="returned invalid JSON"):
+        client._api_request("GET", "projects/")
+
+
+def test_sync_and_merge_human_feedback_degrades_gracefully_when_dagshub_sleeps(tmp_path, monkeypatch) -> None:
+    """Verify a sleeping DagsHub Label Studio backend returns a structured skip instead of blocking retraining."""
+    import urllib.request
+
+    from taxon_vision.active_learning.label_studio_sync import (
+        DagsHubLabelStudioClient,
+        DagsHubRepoConfig,
+        FeedbackSyncPaths,
+        sync_and_merge_human_feedback,
+    )
+
+    monkeypatch.setattr(
+        urllib.request,
+        "urlopen",
+        lambda *_args, **_kwargs: _StubHttpResponse(b"<html>Sign in</html>", content_type="text/html"),
+    )
+
+    catalog_path = tmp_path / "taxa_catalog.yaml"
+    _write_test_catalog(catalog_path)
+    paths = FeedbackSyncPaths(
+        flagged_dir=tmp_path / "flagged",
+        export_path=tmp_path / "flagged" / "label_studio_export.json",
+        raw_manifest_path=tmp_path / "raw_manifest.parquet",
+        catalog_path=catalog_path,
+    )
+    paths.flagged_dir.mkdir(parents=True)
+
+    summary = sync_and_merge_human_feedback(paths, client=DagsHubLabelStudioClient(DagsHubRepoConfig(token="pat-test")))
+    assert summary["status"] == "skipped_dagshub_unavailable"
+    assert summary["new_annotations_merged"] == 0
+    assert summary["catalog_expanded"] is False
+    assert not paths.raw_manifest_path.exists()
+
+
+def test_sync_and_merge_human_feedback_falls_back_to_local_export_when_dagshub_sleeps(tmp_path, monkeypatch) -> None:
+    """Verify existing local Label Studio exports still merge into raw_manifest.parquet if remote DagsHub sleeps."""
+    import json
+    import urllib.request
+
+    import polars as pl
+
+    from taxon_vision.active_learning.label_studio_sync import (
+        DagsHubLabelStudioClient,
+        DagsHubRepoConfig,
+        FeedbackSyncPaths,
+        sync_and_merge_human_feedback,
+    )
+
+    monkeypatch.setattr(
+        urllib.request,
+        "urlopen",
+        lambda *_args, **_kwargs: _StubHttpResponse(b"<html>Waking up</html>", content_type="text/html"),
+    )
+
+    flagged_dir = tmp_path / "flagged"
+    flagged_dir.mkdir(parents=True)
+    export_path = flagged_dir / "label_studio_export.json"
+    export_path.write_text(json.dumps([_sample_completed_task("label_studio_local-1")]), encoding="utf-8")
+
+    catalog_path = tmp_path / "taxa_catalog.yaml"
+    _write_test_catalog(catalog_path)
+    manifest_path = tmp_path / "raw_manifest.parquet"
+    paths = FeedbackSyncPaths(
+        flagged_dir=flagged_dir,
+        export_path=export_path,
+        raw_manifest_path=manifest_path,
+        catalog_path=catalog_path,
+    )
+
+    summary = sync_and_merge_human_feedback(paths, client=DagsHubLabelStudioClient(DagsHubRepoConfig(token="pat-test")))
+    assert summary["status"] == "merged"
+    assert summary["new_annotations_merged"] == 1
+    df = pl.read_parquet(manifest_path)
+    assert df.height == 1
+    assert df["observation_uuid"][0] == "label_studio_local-1"
+    assert df["photographer_name"][0] == "Jane Doe"
+    assert df["license_code"][0] == "CC-BY"
+
+
+def test_sync_and_merge_human_feedback_end_to_end_export_and_merge(tmp_path, monkeypatch) -> None:
+    """Verify full end-to-end sync exports JSON from DagsHub API and merges verified rows into raw_manifest.parquet."""
+    import json
+    import urllib.request
+
+    import polars as pl
+
+    from taxon_vision.active_learning.label_studio_sync import (
+        DagsHubLabelStudioClient,
+        DagsHubRepoConfig,
+        FeedbackSyncPaths,
+        sync_and_merge_human_feedback,
+    )
+
+    def _fake_urlopen(req: urllib.request.Request, timeout: float = 0.0) -> _StubHttpResponse:
+        if req.full_url.endswith("/projects/"):
+            return _StubHttpResponse(
+                json.dumps({"results": [{"id": 7, "title": "TaxonVision Active Learning Triage"}]}).encode("utf-8")
+            )
+        if req.full_url.endswith("/projects/7/export?exportType=JSON"):
+            return _StubHttpResponse(
+                json.dumps([_sample_completed_task("label_studio_e2e-7"), {"id": 99, "annotations": []}]).encode(
+                    "utf-8"
+                )
+            )
+        raise AssertionError(f"Unexpected URL: {req.full_url}")
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+
+    flagged_dir = tmp_path / "flagged"
+    flagged_dir.mkdir(parents=True)
+    export_path = flagged_dir / "label_studio_export.json"
+    catalog_path = tmp_path / "taxa_catalog.yaml"
+    _write_test_catalog(catalog_path)
+    manifest_path = tmp_path / "raw_manifest.parquet"
+    paths = FeedbackSyncPaths(
+        flagged_dir=flagged_dir,
+        export_path=export_path,
+        raw_manifest_path=manifest_path,
+        catalog_path=catalog_path,
+    )
+
+    summary = sync_and_merge_human_feedback(paths, client=DagsHubLabelStudioClient(DagsHubRepoConfig(token="pat-test")))
+    assert summary["status"] == "merged"
+    assert summary["new_annotations_merged"] == 1
+    assert export_path.is_file()
+    written_tasks = json.loads(export_path.read_text(encoding="utf-8"))
+    assert len(written_tasks) == 1
+    df = pl.read_parquet(manifest_path)
+    assert df.height == 1
+    assert df["observation_uuid"][0] == "label_studio_e2e-7"
+    assert df["taxon_id"][0] == 48662
+
+
+def test_sync_and_merge_human_feedback_propagates_local_permission_error(tmp_path, monkeypatch) -> None:
+    """Verify local filesystem PermissionError is never silently swallowed as remote unavailability."""
+    import pytest
+
+    from taxon_vision.active_learning.label_studio_sync import (
+        DagsHubLabelStudioClient,
+        DagsHubRepoConfig,
+        FeedbackSyncPaths,
+        sync_and_merge_human_feedback,
+    )
+
+    client = DagsHubLabelStudioClient(DagsHubRepoConfig(token="pat-test", project_id=7))
+    monkeypatch.setattr(client, "sync_pending_directory", lambda _dir: 0)
+
+    def _raise_perm(_path: object) -> int:
+        raise PermissionError(13, "Permission denied", str(tmp_path / "label_studio_export.json"))
+
+    monkeypatch.setattr(client, "export_completed_annotations", _raise_perm)
+
+    catalog_path = tmp_path / "taxa_catalog.yaml"
+    _write_test_catalog(catalog_path)
+    paths = FeedbackSyncPaths(
+        flagged_dir=tmp_path,
+        export_path=tmp_path / "label_studio_export.json",
+        raw_manifest_path=tmp_path / "raw_manifest.parquet",
+        catalog_path=catalog_path,
+    )
+
+    with pytest.raises(PermissionError):
+        sync_and_merge_human_feedback(paths, client=client)

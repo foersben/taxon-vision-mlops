@@ -343,10 +343,12 @@ spec:
               [ -f "$f" ] && set -- "$@" "--from-file=$f"
             done
             kubectl create configmap airflow-dags "$@" -n taxon-vision --dry-run=client -o yaml | kubectl apply -f -
+            set --
+            for f in src/taxon_vision/active_learning/*.py; do
+              [ -f "$f" ] && set -- "$@" "--from-file=$f"
+            done
+            kubectl create configmap airflow-active-learning "$@" -n taxon-vision --dry-run=client -o yaml | kubectl apply -f -
             kubectl create configmap airflow-taxon-deps \
-              --from-file=feedback.py=src/taxon_vision/active_learning/feedback.py \
-              --from-file=label_studio_sync.py=src/taxon_vision/active_learning/label_studio_sync.py \
-              --from-file=triage_queue.py=src/taxon_vision/active_learning/triage_queue.py \
               --from-file=taxa_catalog.yaml=config/taxa_catalog.yaml \
               -n taxon-vision --dry-run=client -o yaml | kubectl apply -f -
 

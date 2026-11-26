@@ -125,3 +125,87 @@ def test_visualize_airflow_dag_cli(capsys: pytest.CaptureFixture[str]) -> None:
     captured_invalid = capsys.readouterr()
     assert exit_code_invalid == 1
     assert "Error: DAG 'invalid_dag_id' not found" in captured_invalid.err
+
+
+def test_airflow_k8s_mounts_cover_all_model_retraining_imports() -> None:
+    """Ensure Airflow mounts the active_learning package directory and Jenkins syncs every module in it."""
+    dag_path = Path("airflow/dags/model_retraining.py")
+    tree = ast.parse(dag_path.read_text(encoding="utf-8"), filename=str(dag_path))
+    airflow_docs = list(yaml.safe_load_all(Path("deploy/k8s/airflow.yaml").read_text(encoding="utf-8")))
+    jenkinsfile = Path("Jenkinsfile").read_text(encoding="utf-8")
+
+    imported_modules: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("taxon_vision.active_learning."):
+            imported_modules.add(f"{node.module.rsplit('.', maxsplit=1)[-1]}.py")
+
+    assert imported_modules, "Expected at least one taxon_vision.active_learning.* import in model_retraining.py"
+    for filename in sorted(imported_modules):
+        assert (Path("src/taxon_vision/active_learning") / filename).is_file()
+
+    assert "airflow-active-learning" in jenkinsfile
+    assert "src/taxon_vision/active_learning/*.py" in jenkinsfile
+
+    deployments = [d for d in airflow_docs if isinstance(d, dict) and d.get("kind") == "Deployment"]
+    assert len(deployments) == 2
+    for dep in deployments:
+        pod_spec = dep["spec"]["template"]["spec"]
+        assert any(v.get("configMap", {}).get("name") == "airflow-active-learning" for v in pod_spec["volumes"])
+        for container in pod_spec["containers"]:
+            assert any(
+                m.get("name") == "airflow-active-learning"
+                and m.get("mountPath") == "/opt/airflow/src/taxon_vision/active_learning"
+                and "subPath" not in m
+                for m in container.get("volumeMounts", [])
+            )
+
+
+def test_api_and_airflow_shared_flagged_volume_permissions() -> None:
+    """Verify api-deployment and Airflow coordinate shared group 10001 + setgid access without world-writable 777."""
+    api_docs = list(yaml.safe_load_all(Path("deploy/k8s/base/api-deployment.yaml").read_text(encoding="utf-8")))
+    airflow_docs = list(yaml.safe_load_all(Path("deploy/k8s/airflow.yaml").read_text(encoding="utf-8")))
+
+    api_deploy = next(d for d in api_docs if isinstance(d, dict) and d.get("kind") == "Deployment")
+    api_volumes = api_deploy["spec"]["template"]["spec"]["volumes"]
+    assert any(v.get("hostPath", {}).get("path") == "/var/lib/taxon-vision/flagged_observations" for v in api_volumes)
+
+    init_containers = api_deploy["spec"]["template"]["spec"]["initContainers"]
+    init_cmd = " ".join(init_containers[0]["command"])
+    assert "chmod -R g+rwX /app/data/flagged_observations" in init_cmd
+    assert "chmod g+s /app/data/flagged_observations" in init_cmd
+    assert "a+rwX" not in init_cmd
+
+    scheduler_deploy = next(
+        d
+        for d in airflow_docs
+        if isinstance(d, dict)
+        and d.get("kind") == "Deployment"
+        and d.get("metadata", {}).get("name") == "airflow-scheduler"
+    )
+    sched_spec = scheduler_deploy["spec"]["template"]["spec"]
+    assert 10001 in sched_spec["securityContext"].get("supplementalGroups", [])
+    assert any(
+        v.get("hostPath", {}).get("path") == "/var/lib/taxon-vision/flagged_observations"
+        for v in sched_spec.get("volumes", [])
+    )
+
+
+def test_docker_image_includes_passport_reports_not_dockerignored() -> None:
+    """Verify serving Dockerfile copies tracked holdout reports and .dockerignore does not exclude them."""
+    dockerfile = Path("deploy/docker/Dockerfile").read_text(encoding="utf-8")
+    dockerignore_lines = {
+        line.strip().rstrip("/")
+        for line in Path(".dockerignore").read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    }
+
+    assert "reports" not in dockerignore_lines
+    required_reports = (
+        "reports/pareto_evaluation.json",
+        "reports/train_metrics.json",
+        "reports/conformal_metrics.json",
+        "reports/data_drift.json",
+    )
+    for rel_path in required_reports:
+        assert Path(rel_path).is_file(), f"Tracked report missing: {rel_path}"
+        assert rel_path in dockerfile, f"Dockerfile must copy {rel_path} for ModelPassport"
