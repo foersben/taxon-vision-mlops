@@ -12,6 +12,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
+from taxon_vision.service import retrain_dispatcher as dispatcher_mod
 from taxon_vision.service.api import app
 from taxon_vision.service.routes import retrain as retrain_mod
 
@@ -24,7 +25,7 @@ AUTH_HEADER = {"Authorization": f"Bearer {VALID_TOKEN}"}
 def _reset_cooldown(monkeypatch: pytest.MonkeyPatch) -> None:
     """Configure webhook secret explicitly and clear in-memory cooldown state before each test."""
     monkeypatch.setenv("TAXON_RETRAIN_WEBHOOK_SECRET", VALID_TOKEN)
-    retrain_mod.reset_retrain_cooldown()
+    dispatcher_mod.reset_retrain_cooldown()
 
 
 def test_retrain_webhook_unconfigured_secret_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -157,7 +158,7 @@ def _patch_airflow_env_and_transport(
     def _client_factory(*args: object, **kwargs: object) -> httpx.AsyncClient:
         return real_async_client(transport=httpx.MockTransport(handler))  # type: ignore[arg-type]
 
-    monkeypatch.setattr(retrain_mod.httpx, "AsyncClient", _client_factory)
+    monkeypatch.setattr(dispatcher_mod.httpx, "AsyncClient", _client_factory)
 
 
 def test_dispatch_airflow_retraining_v2_jwt(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -181,7 +182,7 @@ def test_dispatch_airflow_retraining_v2_jwt(monkeypatch: pytest.MonkeyPatch) -> 
         return httpx.Response(404)
 
     _patch_airflow_env_and_transport(monkeypatch, handler)
-    run_id = asyncio.run(retrain_mod.dispatch_airflow_retraining("DriftHigh"))
+    run_id = asyncio.run(dispatcher_mod.dispatch_airflow_retraining("DriftHigh"))
     assert run_id == "manual__2026-11-11"
     assert [path for path, _, _ in recorded] == [
         "/auth/token",
@@ -205,7 +206,7 @@ def test_dispatch_airflow_retraining_v1_fallback(monkeypatch: pytest.MonkeyPatch
         return httpx.Response(500)
 
     _patch_airflow_env_and_transport(monkeypatch, handler)
-    run_id = asyncio.run(retrain_mod.dispatch_airflow_retraining("DriftHigh"))
+    run_id = asyncio.run(dispatcher_mod.dispatch_airflow_retraining("DriftHigh"))
     assert run_id == "legacy__run_1"
     assert paths_called == ["/auth/token", "/api/v1/dags/model_retraining/dagRuns"]
 
@@ -222,7 +223,7 @@ def test_dispatch_airflow_retraining_auth_failure_fails_fast(monkeypatch: pytest
 
     _patch_airflow_env_and_transport(monkeypatch, handler)
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(retrain_mod.dispatch_airflow_retraining("DriftHigh"))
+        asyncio.run(dispatcher_mod.dispatch_airflow_retraining("DriftHigh"))
     assert exc_info.value.status_code == 502
     assert paths_called == ["/auth/token"]
 
@@ -233,5 +234,5 @@ def test_dispatch_airflow_retraining_missing_credentials_fails_closed(monkeypatc
     monkeypatch.delenv("TAXON_AIRFLOW_USER", raising=False)
     monkeypatch.delenv("TAXON_AIRFLOW_PASSWORD", raising=False)
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(retrain_mod.dispatch_airflow_retraining("DriftHigh"))
+        asyncio.run(dispatcher_mod.dispatch_airflow_retraining("DriftHigh"))
     assert exc_info.value.status_code == 503

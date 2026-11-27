@@ -133,9 +133,9 @@ Powers online HTTP inference, Class Activation Mapping, telemetry persistence, d
 | `routes/predict.py` | `router` | `POST /api/v1/predict(file: UploadFile) -> JSONResponse` | Machine REST API returning classification logits, conformal set members, and asynchronous telemetry recording. |
 | `routes/explain.py` | `router` | `POST /api/v1/explain(image_hash: str, ...) -> ExplainResponse \| HTMLResponse` | On-demand Class Activation Mapping supporting JSON attribution or server-rendered drawer fragments. |
 | `routes/drift.py` | `router` | `POST /api/v1/drift/evaluate`, `GET /api/v1/drift/latest` | Bearer-authenticated sliding-window drift evaluation endpoint and latest HTML/JSON report retrieval. |
-| `routes/retrain.py` | `router` | `POST /api/v1/retrain/webhook` | Secret-authenticated Grafana Alertmanager webhook relay triggering the Airflow `model_retraining` DAG. |
+| `routes/retrain.py` | `router` | `POST /api/v1/retrain/webhook` | Thin secret-authenticated Grafana Alertmanager webhook receiver delegating cooldown and dispatch logic. |
+| `retrain_dispatcher.py` | `acquire_retrain_cooldown`, `dispatch_airflow_retraining` | `dispatch_airflow_retraining(alert_name: str) -> str` | Enforces 6-hour cooldown lock and authenticates Airflow 3 OAuth2 JWT + v2/v1 DAG run triggering. |
 | `routes/views.py` | `router` | `GET /`, `POST /ui/predict-htmx` | Interactive operator dashboard view (rendering `ModelPassport`) and HTMX partial upload drawer handler. |
-| `routes/train.py` | `router` | `POST /api/v1/train(background_tasks: BackgroundTasks) -> JSONResponse` | Asynchronous training trigger endpoint dispatching background training runs. |
 | `routes/health.py` | `router` | `GET /health`, `GET /health/ready`, `GET /metrics` | Kubernetes liveness probe, model readiness probe, and Prometheus exposition scraper. |
 
 ### Subpackage 3: Models (`taxon_vision.models`)

@@ -6,10 +6,8 @@ from __future__ import annotations
 
 import subprocess
 import sys
-import urllib.request
 from pathlib import Path
 from typing import Any
-from urllib.error import URLError
 
 import pytest
 import torch
@@ -23,7 +21,6 @@ from taxon_vision.models.training.runner import (
 )
 from taxon_vision.models.training.types import TrainingPipelineResult
 from taxon_vision.pipelines.train import (
-    dispatch_remote_training,
     main as train_pipeline_main,
     train_cli,
 )
@@ -151,37 +148,6 @@ def test_train_pipeline_main_entrypoint() -> None:
     """Verify pipeline train main entrypoint execution."""
     ret = train_pipeline_main(["--epochs", "1", "--batch-size", "16"])
     assert ret == 0
-
-
-def test_dispatch_remote_training(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify HTTP remote training dispatch success and failure error handling."""
-
-    class MockResponse:
-        def __init__(self, data: bytes) -> None:
-            self._data = data
-
-        def read(self) -> bytes:
-            return self._data
-
-        def __enter__(self) -> MockResponse:
-            return self
-
-        def __exit__(self, *args: object) -> None:
-            pass
-
-    def mock_urlopen_success(req: Any, timeout: float = 30) -> MockResponse:
-        return MockResponse(b'{"status": "ok", "message": "Success"}')
-
-    def mock_urlopen_fail(req: Any, timeout: float = 30) -> Any:
-        raise URLError("Connection refused")
-
-    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen_success)
-    ret_ok = dispatch_remote_training("http://localhost:8000", "dinov3", 1, 16, 0.001)
-    assert ret_ok == 0
-
-    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen_fail)
-    ret_fail = dispatch_remote_training("http://localhost:8000", "dinov3", 1, 16, 0.001)
-    assert ret_fail == 1
 
 
 def test_build_training_components_typed() -> None:

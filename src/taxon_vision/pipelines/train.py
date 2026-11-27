@@ -12,8 +12,6 @@ import argparse
 import json
 import logging
 import sys
-import urllib.error
-import urllib.request
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -51,42 +49,6 @@ def setup_logging(level: int = logging.INFO, log_file: Path | str | None = None)
         root.addHandler(file_handler)
 
 
-def dispatch_remote_training(api_url: str, extractor: str, epochs: int, batch_size: int, lr: float) -> int:
-    """Trigger training remotely on a running FastAPI service.
-
-    Args:
-        api_url: Host base URL of the FastAPI service.
-        extractor: Feature extractor backbone name.
-        epochs: Number of training epochs.
-        batch_size: Mini-batch size.
-        lr: Learning rate.
-
-    Returns:
-        Process exit code (0 for success, 1 for error).
-    """
-    endpoint = f"{api_url.rstrip('/')}/training"
-    payload = json.dumps(
-        {
-            "extractor": extractor,
-            "epochs": epochs,
-            "batch_size": batch_size,
-            "learning_rate": lr,
-        }
-    ).encode("utf-8")
-    req = urllib.request.Request(endpoint, data=payload, headers={"Content-Type": "application/json"}, method="POST")
-    logger.info("Triggering remote training via API: %s", endpoint)
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            logger.info("Remote Training Completed: %s", data.get("message", "Success"))
-            logger.info("  Status: %s | Epochs: %s", data.get("status"), data.get("epochs_trained"))
-            logger.info("  Val Acc: %s | Loss: %s", data.get("final_val_accuracy"), data.get("final_val_loss"))
-            return 0
-    except urllib.error.URLError as err:
-        logger.error("Failed to communicate with API server at %s: %s", endpoint, err)
-        return 1
-
-
 def _build_arg_parser() -> argparse.ArgumentParser:
     """Construct CLI argument parser for Stage 4 training."""
     settings = get_settings()
@@ -120,12 +82,6 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         type=str,
         default=None,
         help=f"Output checkpoint file path (defaults to {settings.model.head_checkpoint_path})",
-    )
-    parser.add_argument(
-        "--api-url",
-        type=str,
-        default=None,
-        help="Optional running API server URL to trigger remotely",
     )
     parser.add_argument(
         "--log-file",
@@ -241,9 +197,6 @@ def train_cli(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     setup_logging(level=logging.INFO, log_file=args.log_file)
-
-    if args.api_url:
-        return dispatch_remote_training(args.api_url, args.extractor, args.epochs, args.batch_size, args.lr)
 
     settings = get_settings()
     should_tune = args.tune or settings.training.tune

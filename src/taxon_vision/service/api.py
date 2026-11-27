@@ -9,8 +9,9 @@ How:
     Instantiates the top-level FastAPI application with formal OpenAPI metadata, mounts static CSS/JS styling assets if present, and mounts modular route handlers:
     - `health`: Liveness probes and Prometheus metric scrapes.
     - `predict`: High-throughput species classification with conformal sets.
-    - `train`: Model head training triggering and status reporting.
     - `explain`: Visual attribution Class Activation Maps (CAM).
+    - `drift`: Bearing statistical drift triggers and report summaries.
+    - `retrain`: Authenticated Grafana Alertmanager webhook relay to Airflow.
     - `views`: Interactive Jinja2/HTMX dashboard views for field biologists.
 """
 
@@ -23,7 +24,7 @@ from fastapi.staticfiles import StaticFiles
 
 from taxon_vision.config import get_settings
 from taxon_vision.service.inference import get_image_transform, load_taxa_catalog, reset_model_caches
-from taxon_vision.service.routes import drift, explain, health, predict, retrain, train, views
+from taxon_vision.service.routes import drift, explain, health, predict, retrain, views
 from taxon_vision.service.storage import MemoryImageCache, get_image_cache
 from taxon_vision.service.structured_logging import configure_structured_logging
 from taxon_vision.service.telemetry_store import close_telemetry_store, get_telemetry_store
@@ -66,7 +67,6 @@ if static_dir.exists():
 
 app.include_router(health.router)
 app.include_router(predict.router)
-app.include_router(train.router)
 app.include_router(explain.router)
 app.include_router(views.router)
 app.include_router(drift.router)

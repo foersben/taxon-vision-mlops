@@ -73,62 +73,6 @@ class PredictionResponse(BaseModel):
     cam_heatmap_base64: str | None = None
 
 
-class TrainingRequest(BaseModel):
-    """Parameters governing model head training execution.
-
-    Why:
-        Allows callers to trigger and configure linear classification head optimization over cached foundation model representations via REST API without altering underlying server configuration files.
-
-    How:
-        Defines optional backbone extractor name, epoch budget, batch size, optimizer learning rate, and a background dispatch flag (`background=True`) to offload long jobs. Unspecified hyperparameters resolve dynamically from centralized application settings.
-
-    Attributes:
-        extractor: Name of the backbone extractor to use for training.
-        epochs: Number of epochs to train for.
-        batch_size: Batch size to use for training.
-        learning_rate: Learning rate to use for training.
-        background: Whether to train in the background.
-    """
-
-    extractor: str | None = None
-    epochs: int | None = None
-    batch_size: int | None = None
-    learning_rate: float | None = None
-    background: bool = False
-
-
-class TrainingResponse(BaseModel):
-    """Execution status and evaluation metrics from a model head training run.
-
-    Why:
-        Communicates the convergence outcomes, weight artifact destinations, and operational status of local or remote training pipelines to human operators and MLOps controllers.
-
-    How:
-        Serializes operational status ('started' or 'completed'), target backbone extractor, completed epochs count, final train and validation losses, top-1 accuracy, persisted checkpoint path, total elapsed duration, and summary status message.
-
-    Attributes:
-        status: Status of the training run.
-        extractor: Backbone extractor used for training.
-        epochs_trained: Number of epochs trained.
-        final_train_loss: Final training loss.
-        final_val_loss: Final validation loss.
-        final_val_accuracy: Final validation accuracy.
-        checkpoint_path: Path to the trained model checkpoint.
-        duration_seconds: Total duration of the training run in seconds.
-        message: Summary status message.
-    """
-
-    status: str
-    extractor: str
-    epochs_trained: int
-    final_train_loss: float | None = None
-    final_val_loss: float | None = None
-    final_val_accuracy: float | None = None
-    checkpoint_path: str
-    duration_seconds: float
-    message: str
-
-
 class DriftEvaluationResponse(BaseModel):
     """Outcome of an on-demand statistical drift evaluation cycle.
 

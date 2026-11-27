@@ -21,7 +21,7 @@ sources:
   - id: openwiki-source-b7adf0e3f020a140da2a69a7
     resource: repo://src/taxon_vision/service/routes/retrain.py
   - id: openwiki-source-c76f6032c78e13d9f4e0950c
-    resource: repo://src/taxon_vision/service/routes/train.py
+    resource: repo://src/taxon_vision/service/retrain_dispatcher.py
   - id: openwiki-source-f42c3056005dc5ebeff3de55
     resource: repo://src/taxon_vision/service/routes/views.py
   - id: openwiki-source-5406049059d7069a76884dd9
