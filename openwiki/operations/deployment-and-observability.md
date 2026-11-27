@@ -17,7 +17,7 @@ sources:
   - id: openwiki-source-b9df81af2f7f5ce78210bf26
     resource: repo://deploy/k8s/jenkins-agent-rbac.yaml
   - id: openwiki-source-948b3861f8fd9364bb8fd9eb
-    resource: repo://deploy/k8s/nvidia-time-slicing-config.yaml
+    resource: repo://deploy/k8s/optional/nvidia-time-slicing-config.yaml
   - id: openwiki-source-2e24373091085e0b0a3eebb8
     resource: repo://deploy/k8s/traefik-ingress.yaml
   - id: openwiki-source-b79fbbd921df689b4bbdc82f

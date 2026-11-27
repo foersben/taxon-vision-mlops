@@ -104,7 +104,7 @@ sudo systemctl restart k3s
 1. **Deploy NVIDIA Kubernetes Device Plugin & Time-Slicing Configuration:** Deploy the device plugin daemonset and apply the time-slicing ConfigMap so K3s exposes 4 virtual GPU slices for the physical RTX 5070 Ti:
 
 ```bash
-kubectl apply -f deploy/k8s/nvidia-time-slicing-config.yaml
+kubectl apply -f deploy/k8s/optional/nvidia-time-slicing-config.yaml
 ```
 
 Patch the device plugin daemonset to read the configuration:
@@ -144,7 +144,7 @@ The live API and server-rendered operator dashboard are publicly accessible at `
 * **Zero Public Inbound Ports:** The host firewall blocks all incoming WAN connections; edge traffic reaches the host exclusively via the authenticated Cloudflare Tunnel.
 * **Traefik v3.1 IngressRoute Overlays & Optional Canary Routing:** Deployed via [`deploy/k8s/overlays/production/ingress.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/overlays/production/ingress.yaml) and [`deploy/k8s/overlays/staging/ingress.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/overlays/staging/ingress.yaml), incoming requests are evaluated by custom resources in the `traefik.io/v1alpha1` API group without a shared wildcard catch-all:
     * `IngressRoute` pairs (`*-ingress` on `web` and `*-ingress-tls` on `websecure`): Match hosts `taxon.benjamin-foerster.eu` (production) and `staging.taxon.benjamin-foerster.eu` (staging), routing directly to `taxon-vision-serving:8000`.
-    * `TraefikService` (`taxon-vision-ab-service`, on-demand via [`deploy/k8s/canary-ab-service.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/canary-ab-service.yaml)): Weighted Canary / A/B routing when enabled:
+    * `TraefikService` (`taxon-vision-ab-service`, on-demand via [`deploy/k8s/optional/canary-ab-service.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/optional/canary-ab-service.yaml)): Weighted Canary / A/B routing when enabled:
         * Production baseline (`taxon-vision-serving:8000`): Weight $80$ ($80\%$ of inbound requests).
         * Challenger model (`taxon-vision-serving-challenger:8000`): Weight $20$ ($20\%$ of inbound requests).
 * **Zero-Downtime Weight Shifting:** Traffic split weights are updated in-place via declarative YAML changes without restarting application pods or dropping in-flight HTTP connections.
@@ -355,7 +355,7 @@ To guarantee operational autonomy without external telemetry egress or SaaS depe
     * **Port `30095`:** Apache Airflow 3 API server & web UI (`airflow-apiserver:8090`).
     * **Port `30300`:** Grafana visualizer (`grafana:3000`), authenticated with auto-provisioned Prometheus and Loki datasources, dual dashboards (10-panel Production Overview + 14-panel Infrastructure & Hardware Invariants), and Alertmanager webhook relay rules.
     * **Port `30432`:** Consolidated PostgreSQL 16 relational database (`postgres:5432`) hosting `telemetry`, `optuna`, and `airflow`.
-    * **Port `3100`:** Grafana Loki single-binary log engine (`config/loki.yaml`) with TSDB indexing and 168h retention.
+    * **Port `3100`:** Grafana Loki single-binary log engine (`deploy/loki/loki.yaml`) with TSDB indexing and 168h retention.
     * **Internal Port `9080`:** Promtail log shipper (`config/promtail.yaml`) parsing FastAPI JSON logs, Airflow DAG/task execution traces, and Traefik access streams.
     * **Internal Port `6379`:** In-cluster Redis ephemeral upload cache (`redis-ephemeral:6379`), providing 64 MB bounded LRU memory for multipart specimen uploads and on-demand CAM attribution across replicas.
     * **Internal Port `8333`:** SeaweedFS S3-compatible object gateway (`seaweedfs:8333`) hosting `taxon-dvc-cache` and `triage-queue`.

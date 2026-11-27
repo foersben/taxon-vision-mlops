@@ -445,10 +445,10 @@ The declarative pipeline logic is maintained in [`Jenkinsfile`](file:///home/ben
 
 ### 6.2 Ephemeral GPU Runner Pod Specification
 
-Heavy training, feature extraction, and Pareto benchmarking execute inside an ephemeral GPU pod defined in [`deploy/k8s/jenkins-gpu-pod.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/jenkins-gpu-pod.yaml):
+Heavy training, feature extraction, and Pareto benchmarking execute inside an ephemeral GPU pod defined in [`deploy/k8s/optional/jenkins-gpu-pod.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/optional/jenkins-gpu-pod.yaml):
 
 ```yaml
---8<-- "deploy/k8s/jenkins-gpu-pod.yaml"
+--8<-- "deploy/k8s/optional/jenkins-gpu-pod.yaml"
 ```
 
 ### 6.3 Dual CI/CD Bridge & GPU Execution Sequence Trace

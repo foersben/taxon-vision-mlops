@@ -274,13 +274,17 @@ def _collect_role_permissions(role_doc: dict) -> dict[tuple[str, str], set[str]]
 
 
 def test_jenkins_deployer_rbac_covers_applied_manifests() -> None:
-    """Ensure Jenkins deployer RBAC covers every Kubernetes resource kind applied in Jenkinsfile."""
-    import re
+    """Ensure Jenkins deployer RBAC covers every Kubernetes resource kind applied via Kustomize in Jenkinsfile."""
     from pathlib import Path
+
+    import yaml
 
     root = Path(__file__).resolve().parents[2]
     jenkinsfile_text = (root / "Jenkinsfile").read_text(encoding="utf-8")
-    applied_manifests = sorted(set(re.findall(r"kubectl apply -f (deploy/k8s/[^\s]+)", jenkinsfile_text)))
+    assert "kubectl apply -k deploy" in jenkinsfile_text
+
+    kustomization = yaml.safe_load((root / "deploy" / "kustomization.yaml").read_text(encoding="utf-8"))
+    applied_manifests = sorted(f"deploy/{rel}" for rel in kustomization.get("resources", []))
     assert "deploy/k8s/monitoring-prometheus-grafana.yaml" in applied_manifests
 
     rbac_docs = _load_k8s_docs("deploy/k8s/jenkins-agent-rbac.yaml")
@@ -295,6 +299,9 @@ def test_jenkins_deployer_rbac_covers_applied_manifests() -> None:
     granted = _collect_role_permissions(prod_roles[0])
 
     required_verbs = {"get", "create", "patch", "update"}
+    if kustomization.get("configMapGenerator"):
+        assert required_verbs.issubset(granted.get(_KIND_TO_RBAC_RESOURCE["ConfigMap"], set()))
+
     for manifest_rel in applied_manifests:
         for doc in _load_k8s_docs(manifest_rel):
             kind = str(doc["kind"])

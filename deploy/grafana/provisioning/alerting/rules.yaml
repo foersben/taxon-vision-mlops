@@ -18,7 +18,7 @@ contactPoints:
       - uid: retrain-webhook-receiver
         type: webhook
         settings:
-          url: "http://app:8000/api/v1/retrain/webhook"
+          url: "$__env{GF_RETRAIN_WEBHOOK_URL}"
           httpMethod: "POST"
           authorization_credentials: "$__env{GF_RETRAIN_WEBHOOK_SECRET}"
           authorization_scheme: "Bearer"

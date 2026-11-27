@@ -13,8 +13,9 @@ sources:
   - resource: "src/taxon_vision/monitoring/drift.py"
   - resource: "src/taxon_vision/monitoring/drift_runner.py"
   - resource: "src/taxon_vision/service/routes/retrain.py"
-  - resource: "config/loki.yaml"
+  - resource: "deploy/loki/loki.yaml"
   - resource: "config/promtail.yaml"
+  - resource: "deploy/k8s/promtail.yaml"
   - resource: "deploy/grafana/provisioning/datasources/loki.yaml"
   - resource: "deploy/grafana/provisioning/dashboards/json/taxon_overview.json"
   - resource: "deploy/grafana/provisioning/dashboards/json/infrastructure_overview.json"
@@ -305,9 +306,9 @@ flowchart LR
     LOKI_ENG --> GRAF_LOGS
 ```
 
-### 7.1 Grafana Loki Configuration (`config/loki.yaml`)
+### 7.1 Grafana Loki Configuration (`deploy/loki/loki.yaml`)
 
-Loki executes in single-binary filesystem mode on port `3100` ([`config/loki.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/config/loki.yaml)):
+Loki executes in single-binary filesystem mode on port `3100` ([`deploy/loki/loki.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/loki/loki.yaml)):
 
 * **Storage Engine:** Employs the `tsdb` index store paired with `filesystem` chunk storage in `/loki/chunks`, guaranteeing sub-second indexed queries across millions of log lines.
 * **Retention Enforcement:** Configured with `retention_period: 168h` (7 days) and `compaction_interval: 10m`. The built-in compactor automatically purges expired log chunks to prevent disk bloat on the host NVMe filesystem.
@@ -362,7 +363,7 @@ When `EmbeddingDriftDetected` fires:
 
 ### 9.1 Declarative 80/20 A/B Canary Routing
 
-Defined in [`deploy/k8s/traefik-ingress.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/traefik-ingress.yaml) and [`deploy/k8s/canary-ab-service.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/canary-ab-service.yaml), the `TraefikService` CRD (`taxon-vision-ab-service`) supports zero-downtime weighted round-robin traffic splitting between the baseline `@Production` deployment (`taxon-vision-serving:8000`, weight `80`) and a `@Challenger` canary deployment (`taxon-vision-serving-challenger:8000`, weight `20`).
+Defined in [`deploy/k8s/traefik-ingress.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/traefik-ingress.yaml) and [`deploy/k8s/optional/canary-ab-service.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/optional/canary-ab-service.yaml), the `TraefikService` CRD (`taxon-vision-ab-service`) supports zero-downtime weighted round-robin traffic splitting between the baseline `@Production` deployment (`taxon-vision-serving:8000`, weight `80`) and a `@Challenger` canary deployment (`taxon-vision-serving-challenger:8000`, weight `20`).
 
 ### 9.2 On-Demand Scale-to-Zero for Human Dashboards (`Sablier`)
 

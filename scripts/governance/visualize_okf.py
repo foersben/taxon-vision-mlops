@@ -73,13 +73,13 @@ DOC_FILE_COVERAGE: dict[str, list[str]] = {
     ],
     "docs/operations/deployment_runbook.md": [
         "deploy/k8s/base/api-deployment.yaml",
-        "deploy/k8s/nvidia-time-slicing-config.yaml",
+        "deploy/k8s/optional/nvidia-time-slicing-config.yaml",
         "scripts/ci/verify_deployment.sh",
     ],
-    "docs/operations/current_infrastructure.md": ["deploy/k8s/nvidia-time-slicing-config.yaml"],
+    "docs/operations/current_infrastructure.md": ["deploy/k8s/optional/nvidia-time-slicing-config.yaml"],
     "docs/operations/jenkins_ci_infrastructure.md": [
         "deploy/k8s/jenkins-agent-rbac.yaml",
-        "deploy/k8s/jenkins-gpu-pod.yaml",
+        "deploy/k8s/optional/jenkins-gpu-pod.yaml",
         "scripts/ci/jenkins_gpu_train.sh",
     ],
     "docs/operations/api_reference.md": ["src/taxon_vision/service/"],

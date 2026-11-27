@@ -139,7 +139,7 @@ verify-contracts:
 	pixi run --frozen -e ci-dev dvc repro --dry
 	@if command -v kubectl >/dev/null 2>&1; then \
 		echo ">>> 3. Validating Kubernetes manifests with kubectl..."; \
-		kubectl apply -f deploy/k8s/ --dry-run=client; \
+		kubectl apply -k deploy --dry-run=client; \
 		kubectl apply -k deploy/k8s/overlays/production --dry-run=client; \
 		kubectl apply -k deploy/k8s/overlays/staging --dry-run=client; \
 	else \

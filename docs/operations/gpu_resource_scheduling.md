@@ -51,7 +51,7 @@ For environments lacking GPU hardware (such as local development machines), work
 
 To satisfy the competing demands of high-throughput training, agile CI/CD, and real-time user inference on a single GPU, we adopt a hybrid architecture:
 
-* **Enable Time-Slicing:** Configure the `k3s` NVIDIA plugin for Time-Slicing via [deploy/k8s/nvidia-time-slicing-config.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/nvidia-time-slicing-config.yaml), allowing the Web API to coexist permanently with background tasks via standard Kubernetes GPU resource allocation (`nvidia.com/gpu: 1`).
+* **Enable Time-Slicing:** Configure the `k3s` NVIDIA plugin for Time-Slicing via [deploy/k8s/optional/nvidia-time-slicing-config.yaml](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/optional/nvidia-time-slicing-config.yaml), allowing the Web API to coexist permanently with background tasks via standard Kubernetes GPU resource allocation (`nvidia.com/gpu: 1`).
 * **Enforce VRAM Fractions:** Hardcode per-process memory limits in training via `configure_cuda_memory_budget()` in [src/taxon_vision/models/training/runner.py](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/runner.py), paired with ultra-light ONNX quantization for FastAPI endpoints.
 * **Queue Heavy Backends:** Implement Kueue exclusively for batch jobs. This ensures that while the Web API is always alive via Time-Slicing, multiple heavy backend tasks do not crash each other, but instead queue up politely.
 * **Node Isolation:** Configure node taints and tolerations for dedicated ML worker nodes to ensure regular non-ML pods do not accidentally schedule onto scarce GPU resources.
@@ -82,7 +82,7 @@ $$\underbrace{1_{\text{ARC Runner}}}_{\text{arc-systems}} + \underbrace{2_{\text
 
 * **Slot 0 (ARC GitHub Actions Runner):** Dedicated to the standing self-hosted runner pod in `namespace: arc-systems` (`gpu-runner-deployment-xxfjd-8994t`), providing GPU acceleration for on-cluster GitHub Actions workflows.
 * **Slots 1 & 2 (Production Serving Replicas):** Dedicated to the two high-availability production inference replicas in `namespace: taxon-vision` ([`deploy/k8s/overlays/production/patch-replicas.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/overlays/production/patch-replicas.yaml)).
-* **Slot 3 (Ephemeral Jenkins GPU Training Agent):** Claimed on-demand by the dynamic Jenkins training pod ([`deploy/k8s/jenkins-gpu-pod.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/jenkins-gpu-pod.yaml)) during stage `Model Training & Checkpoint (GPU)`. The pod is terminated immediately upon pipeline completion to release the slot.
+* **Slot 3 (Ephemeral Jenkins GPU Training Agent):** Claimed on-demand by the dynamic Jenkins training pod ([`deploy/k8s/optional/jenkins-gpu-pod.yaml`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/k8s/optional/jenkins-gpu-pod.yaml)) during stage `Model Training & Checkpoint (GPU)`. The pod is terminated immediately upon pipeline completion to release the slot.
 
 ### Staging CPU Invariant & Deadlock Elimination
 

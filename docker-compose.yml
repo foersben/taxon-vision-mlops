@@ -170,6 +170,8 @@ services:
       - "3000:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_RETRAIN_WEBHOOK_URL=http://app:8000/api/v1/retrain/webhook
+      - GF_RETRAIN_WEBHOOK_SECRET=${TAXON_RETRAIN_WEBHOOK_SECRET:-dev-secret-token}
       - TAXON_RETRAIN_WEBHOOK_SECRET=${TAXON_RETRAIN_WEBHOOK_SECRET:-dev-secret-token}
     volumes:
       - grafana_data:/var/lib/grafana
@@ -186,7 +188,7 @@ services:
       - "3100:3100"
     command: -config.file=/etc/loki/loki.yaml
     volumes:
-      - ./config/loki.yaml:/etc/loki/loki.yaml:ro
+      - ./deploy/loki/loki.yaml:/etc/loki/loki.yaml:ro
       - loki_data:/loki
     restart: unless-stopped
 

@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: 2026 Benjamin Förster
+# SPDX-License-Identifier: MIT
+# Promtail Kubernetes DaemonSet Configuration (reads CRI containerd pod logs).
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /positions/positions.yaml
+
+clients:
+  - url: http://loki.taxon-vision.svc.cluster.local:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: taxon-vision-pods
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: taxon-vision
+          __path__: /var/log/pods/taxon-vision*/*/*.log
+    pipeline_stages:
+      - cri: {}
+      - regex:
+          source: filename
+          expression: '/var/log/pods/(?P<namespace>[^_]+)_(?P<pod>[^_]+)_[^/]+/(?P<container>[^/]+)/.*\.log'
+      - labels:
+          namespace:
+          container:
+      - match:
+          selector: '{container="api-service"}'
+          stages:
+            - json:
+                expressions:
+                  level: level
+                  logger: logger
+                  event: event
+                  request_id: request_id
+                  ood_flagged: ood_flagged
+                  human_review: human_review
+            - labels:
+                level:
+                event:

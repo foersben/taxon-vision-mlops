@@ -14,7 +14,7 @@
 #   'torch.cuda.set_per_process_memory_fraction' (batch training) and lightweight ONNX INT8 runtimes (web API).
 #
 # Deployment:
-#   kubectl apply -f deploy/k8s/nvidia-time-slicing-config.yaml
+#   kubectl apply -f deploy/k8s/optional/nvidia-time-slicing-config.yaml
 #   kubectl set env daemonset/nvidia-device-plugin-daemonset -n kube-system \
 #     CONFIG_FILE=/etc/nvidia-container-runtime/config.yaml || true
 #

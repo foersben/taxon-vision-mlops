@@ -10,7 +10,7 @@ generated: {by: "process:docs-librarian", at: "2026-11-08T17:10:00Z"}
 verified: {by: "process:docs-librarian", at: "2026-11-08T17:10:00Z"}
 sources:
   - resource: "deploy/postgres/init/01-databases.sql"
-  - resource: "deploy/postgres/telemetry/001_predictions.sql"
+  - resource: "deploy/postgres/init/02-telemetry.sql"
   - resource: "deploy/k8s/postgres.yaml"
   - resource: "deploy/k8s/mlops-storage-and-optuna.yaml"
   - resource: "src/taxon_vision/service/telemetry_store.py"
@@ -122,7 +122,7 @@ On the bare-metal host (`hive-mind`), the PostgreSQL data directory (`/var/lib/t
 
 ### 3.2 Prediction Telemetry Schema (`telemetry` Database)
 
-Online covariate drift detection requires comparing recent production feature representations against the reference calibration distribution (`cal_embeddings.pt`). Rather than coupling drift computation to the synchronous inference path, the `telemetry` database persists each evaluated observation via [`deploy/postgres/telemetry/001_predictions.sql`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/postgres/telemetry/001_predictions.sql):
+Online covariate drift detection requires comparing recent production feature representations against the reference calibration distribution (`cal_embeddings.pt`). Rather than coupling drift computation to the synchronous inference path, the `telemetry` database persists each evaluated observation via [`deploy/postgres/init/02-telemetry.sql`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/deploy/postgres/init/02-telemetry.sql):
 
 ```sql
 CREATE TABLE IF NOT EXISTS predictions (

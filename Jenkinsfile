@@ -263,7 +263,7 @@ spec:
         kubernetes {
           cloud 'k3s'
           defaultContainer 'ml-runner'
-          yamlFile 'deploy/k8s/jenkins-gpu-pod.yaml'
+          yamlFile 'deploy/k8s/optional/jenkins-gpu-pod.yaml'
         }
       }
       steps {
@@ -391,15 +391,8 @@ spec:
               --from-file=taxa_catalog.yaml=config/taxa_catalog.yaml \
               -n taxon-vision --dry-run=client -o yaml | kubectl apply -f -
 
-            # Apply shared backing services, log aggregation, and dashboards
-            kubectl apply -f deploy/k8s/postgres.yaml
-            kubectl apply -f deploy/k8s/loki-promtail.yaml
-            kubectl apply -f deploy/k8s/monitoring-prometheus-grafana.yaml
-            kubectl apply -f deploy/k8s/grafana-dashboards.yaml
-            kubectl apply -f deploy/k8s/mlops-storage-and-optuna.yaml
-            kubectl apply -f deploy/k8s/evidently-ui.yaml
-            kubectl apply -f deploy/k8s/airflow.yaml
-            kubectl apply -f deploy/k8s/traefik-ingress.yaml
+            # Apply shared backing services, log aggregation, Postgres initdb, and dashboards via Kustomize
+            kubectl apply -k deploy
 
             kubectl rollout restart deployment/airflow-apiserver deployment/airflow-scheduler -n taxon-vision
             kubectl rollout status deployment/airflow-apiserver -n taxon-vision --timeout=180s
