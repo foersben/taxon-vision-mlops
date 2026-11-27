@@ -209,3 +209,14 @@ def test_docker_image_includes_passport_reports_not_dockerignored() -> None:
     for rel_path in required_reports:
         assert Path(rel_path).is_file(), f"Tracked report missing: {rel_path}"
         assert rel_path in dockerfile, f"Dockerfile must copy {rel_path} for ModelPassport"
+
+
+def test_jenkins_skip_code_gates_wired_for_airflow_retrains() -> None:
+    """Verify SKIP_CODE_GATES skips PR gates for Airflow/timer retrains whilst keeping manual RETRAIN_MODEL gated."""
+    jenkinsfile = Path("Jenkinsfile").read_text(encoding="utf-8")
+    retrain_dag = Path("airflow/dags/model_retraining.py").read_text(encoding="utf-8")
+
+    assert "booleanParam(name: 'SKIP_CODE_GATES', defaultValue: false" in jenkinsfile
+    assert jenkinsfile.count("expression { params.SKIP_CODE_GATES == true }") == 4
+    assert jenkinsfile.count("triggeredBy 'TimerTrigger'") >= 5
+    assert "SKIP_CODE_GATES=true" in retrain_dag

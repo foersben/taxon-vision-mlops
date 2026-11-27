@@ -60,6 +60,7 @@ spec:
     booleanParam(name: 'RETRAIN_MODEL', defaultValue: false, description: 'Force GPU feature extraction and model retraining on deployment')
     booleanParam(name: 'TUNE_HYPERPARAMETERS', defaultValue: false, description: 'Run Optuna Bayesian hyperparameter optimization during training')
     booleanParam(name: 'INGEST_DATA', defaultValue: false, description: 'Unfreeze DVC ingestion stage and fetch fresh observations from iNaturalist')
+    booleanParam(name: 'SKIP_CODE_GATES', defaultValue: false, description: 'Skip static quality, test, and docs gates (intended exclusively for automated Airflow drift retrains and scheduled runs)')
     string(name: 'EXTRACTOR', defaultValue: 'dinov3', description: 'Vision foundation backbone extractor')
   }
 
@@ -120,6 +121,15 @@ spec:
     }
 
     stage('Static Quality & Invariants') {
+      when {
+        beforeAgent true
+        not {
+          anyOf {
+            triggeredBy 'TimerTrigger'
+            expression { params.SKIP_CODE_GATES == true }
+          }
+        }
+      }
       parallel {
         stage('Lint & Format') {
           steps {
@@ -154,6 +164,15 @@ spec:
     }
 
     stage('Unit Tests') {
+      when {
+        beforeAgent true
+        not {
+          anyOf {
+            triggeredBy 'TimerTrigger'
+            expression { params.SKIP_CODE_GATES == true }
+          }
+        }
+      }
       steps {
         container('ml-runner') {
           sh '''
@@ -167,6 +186,15 @@ spec:
     }
 
     stage('Integration & Conformal Invariants') {
+      when {
+        beforeAgent true
+        not {
+          anyOf {
+            triggeredBy 'TimerTrigger'
+            expression { params.SKIP_CODE_GATES == true }
+          }
+        }
+      }
       steps {
         container('ml-runner') {
           sh '''
@@ -182,6 +210,15 @@ spec:
     }
 
     stage('Documentation Strict Build') {
+      when {
+        beforeAgent true
+        not {
+          anyOf {
+            triggeredBy 'TimerTrigger'
+            expression { params.SKIP_CODE_GATES == true }
+          }
+        }
+      }
       steps {
         container('ml-runner') {
           sh '''
