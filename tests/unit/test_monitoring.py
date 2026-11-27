@@ -274,14 +274,16 @@ def _collect_role_permissions(role_doc: dict) -> dict[tuple[str, str], set[str]]
 
 
 def test_jenkins_deployer_rbac_covers_applied_manifests() -> None:
-    """Ensure Jenkins deployer RBAC covers every Kubernetes resource kind applied via Kustomize in Jenkinsfile."""
+    """Ensure Jenkins deployer RBAC covers every Kubernetes resource kind applied via Kustomize in deploy_k8s.sh."""
     from pathlib import Path
 
     import yaml
 
     root = Path(__file__).resolve().parents[2]
     jenkinsfile_text = (root / "Jenkinsfile").read_text(encoding="utf-8")
-    assert "kubectl apply -k deploy" in jenkinsfile_text
+    deploy_script_text = (root / "scripts/ci/deploy_k8s.sh").read_text(encoding="utf-8")
+    assert "scripts/ci/deploy_k8s.sh" in jenkinsfile_text
+    assert "kubectl apply -k deploy" in deploy_script_text
 
     kustomization = yaml.safe_load((root / "deploy" / "kustomization.yaml").read_text(encoding="utf-8"))
     applied_manifests = sorted(f"deploy/{rel}" for rel in kustomization.get("resources", []))

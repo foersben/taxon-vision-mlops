@@ -11,26 +11,12 @@ export TAXON_OPTUNA_STORAGE_URI="${TAXON_OPTUNA_STORAGE_URI:-sqlite:////workspac
 
 USE_LOCAL_SEAWEEDFS=false
 CATALOG_EXPANDED=false
+PIXI_ENV="dev"
 
-cleanup_dvc_local() {
-    pixi run --frozen -e dev dvc config --local --unset remote.local-seaweedfs.access_key_id >/dev/null 2>&1 || true
-    pixi run --frozen -e dev dvc config --local --unset remote.local-seaweedfs.secret_access_key >/dev/null 2>&1 || true
-}
-trap cleanup_dvc_local EXIT
+# shellcheck source=scripts/ci/hydrate_and_stage_checkpoints.sh
+source "$(dirname "${BASH_SOURCE[0]}")/hydrate_and_stage_checkpoints.sh"
 
-# Copy one file atomically (.tmp + chmod a+r + mv) so UID 10001 serving pods never observe partial writes
-atomic_stage_file() {
-    local src="$1"
-    local dest_dir="$2"
-    [ -f "${src}" ] || return 0
-
-    local fname tmp_path
-    fname=$(basename "${src}")
-    tmp_path="${dest_dir}/.${fname}.tmp"
-    cp -f "${src}" "${tmp_path}"
-    chmod a+r "${tmp_path}"
-    mv -f "${tmp_path}" "${dest_dir}/${fname}"
-}
+trap 'cleanup_dvc_local "dev"' EXIT
 
 setup_toolchain() {
     echo ">>> Setting up GPU training pipeline..."
@@ -38,24 +24,6 @@ setup_toolchain() {
     which kubectl >/dev/null 2>&1 || pixi global install kubernetes-client
     git config --global --add safe.directory "*"
     pixi install --frozen -e dev
-}
-
-configure_seaweedfs_remote() {
-    local k8s_key k8s_secret
-    k8s_key="$(kubectl get secret seaweedfs-s3-secret -n taxon-vision -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' 2>/dev/null | base64 -d 2>/dev/null || true)"
-    k8s_secret="$(kubectl get secret seaweedfs-s3-secret -n taxon-vision -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' 2>/dev/null | base64 -d 2>/dev/null || true)"
-    if [ -n "${k8s_key}" ] && [ -n "${k8s_secret}" ]; then
-        SEAWEEDFS_ACCESS_KEY_ID="${k8s_key}"
-        SEAWEEDFS_SECRET_ACCESS_KEY="${k8s_secret}"
-    fi
-
-    if [ -n "${SEAWEEDFS_ACCESS_KEY_ID:-}" ] && [ -n "${SEAWEEDFS_SECRET_ACCESS_KEY:-}" ]; then
-        pixi run --frozen -e dev dvc config --local remote.local-seaweedfs.access_key_id "${SEAWEEDFS_ACCESS_KEY_ID}"
-        pixi run --frozen -e dev dvc config --local remote.local-seaweedfs.secret_access_key "${SEAWEEDFS_SECRET_ACCESS_KEY}"
-        USE_LOCAL_SEAWEEDFS=true
-    else
-        echo ">>> Warning: SEAWEEDFS_ACCESS_KEY_ID/SECRET_ACCESS_KEY unset; skipping in-cluster SeaweedFS DVC sync."
-    fi
 }
 
 prime_host_caches() {

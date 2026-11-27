@@ -134,29 +134,21 @@ spec:
         stage('Lint & Format') {
           steps {
             container('ml-runner') {
-              sh '''
-                pixi run --frozen -e ci-dev ruff check .
-                pixi run --frozen -e ci-dev ruff format --check .
-              '''
+              sh 'pixi run --frozen -e ci-dev just ci-lint'
             }
           }
         }
         stage('Type Checking') {
           steps {
             container('ml-runner') {
-              sh '''
-                pixi run --frozen -e ci-dev mypy src scripts
-              '''
+              sh 'pixi run --frozen -e ci-dev just ci-typecheck'
             }
           }
         }
         stage('Compliance & OKF Audits') {
           steps {
             container('ml-runner') {
-              sh '''
-                pixi run --frozen -e ci-dev python -m taxon_vision.pipelines.audit_license
-                pixi run --frozen -e ci-dev python scripts/governance/validate_okf.py
-              '''
+              sh 'pixi run --frozen -e ci-dev just ci-audit'
             }
           }
         }
@@ -175,12 +167,7 @@ spec:
       }
       steps {
         container('ml-runner') {
-          sh '''
-            pixi run --frozen -e ci-dev pytest tests/unit/ \
-              --cov=src/taxon_vision \
-              --cov-report= \
-              -o "addopts="
-          '''
+          sh 'pixi run --frozen -e ci-dev just ci-test-unit'
         }
       }
     }
@@ -197,14 +184,7 @@ spec:
       }
       steps {
         container('ml-runner') {
-          sh '''
-            pixi run --frozen -e ci-dev pytest tests/integration/ tests/invariants/ \
-              --cov=src/taxon_vision \
-              --cov-append \
-              --cov-report=xml:reports/coverage/coverage.xml \
-              --cov-fail-under=80 \
-              -x -q -o "addopts="
-          '''
+          sh 'pixi run --frozen -e ci-dev just ci-test-integration'
         }
       }
     }
@@ -221,10 +201,7 @@ spec:
       }
       steps {
         container('ml-runner') {
-          sh '''
-            pixi run --frozen -e ci-dev python scripts/governance/visualize_okf.py
-            pixi run --frozen -e ci-dev zensical build --strict
-          '''
+          sh 'pixi run --frozen -e ci-dev just ci-docs'
         }
       }
     }
@@ -304,150 +281,7 @@ spec:
       steps {
         container('ml-runner') {
           withCredentials([usernamePassword(credentialsId: 'seaweedfs-s3-credentials', usernameVariable: 'SEAWEEDFS_ACCESS_KEY_ID', passwordVariable: 'SEAWEEDFS_SECRET_ACCESS_KEY')]) {
-            sh '''
-              export PATH="/root/.pixi/bin:$PATH"
-              cleanup_dvc_local() {
-                pixi run --frozen -e ci-dev dvc config --local --unset remote.local-seaweedfs.access_key_id >/dev/null 2>&1 || true
-                pixi run --frozen -e ci-dev dvc config --local --unset remote.local-seaweedfs.secret_access_key >/dev/null 2>&1 || true
-              }
-              trap cleanup_dvc_local EXIT
-
-              echo ">>> Executing zero-downtime rolling deployment to Kubernetes cluster..."
-              kubectl version --client
-              git fetch origin "${BRANCH_NAME}" && git reset --hard "origin/${BRANCH_NAME}" || true
-
-              if [ -f "/var/lib/taxon-vision/checkpoints/head.pt" ] && [ -f "/var/lib/taxon-vision/checkpoints/model_int8.onnx" ] && [ -f "/var/lib/taxon-vision/reference/cal_embeddings.pt" ]; then
-                echo ">>> Host volume /var/lib/taxon-vision/checkpoints/ already holds active checkpoints; preserving host checkpoints."
-              else
-                # Hydrate model checkpoints and calibrated reference embeddings from DVC (prefer in-cluster SeaweedFS cache, fallback to DagsHub origin)
-                echo ">>> Hydrating missing model checkpoints and reference embeddings from DVC remotes..."
-                K8S_S3_KEY="$(kubectl get secret seaweedfs-s3-secret -n taxon-vision -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' 2>/dev/null | base64 -d 2>/dev/null || true)"
-                K8S_S3_SECRET="$(kubectl get secret seaweedfs-s3-secret -n taxon-vision -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' 2>/dev/null | base64 -d 2>/dev/null || true)"
-                if [ -n "${K8S_S3_KEY}" ] && [ -n "${K8S_S3_SECRET}" ]; then
-                  SEAWEEDFS_ACCESS_KEY_ID="${K8S_S3_KEY}"
-                  SEAWEEDFS_SECRET_ACCESS_KEY="${K8S_S3_SECRET}"
-                fi
-                PULLED=false
-                if kubectl get service seaweedfs -n taxon-vision >/dev/null 2>&1 && [ -n "${SEAWEEDFS_ACCESS_KEY_ID:-}" ] && [ -n "${SEAWEEDFS_SECRET_ACCESS_KEY:-}" ]; then
-                  pixi run --frozen -e ci-dev dvc config --local remote.local-seaweedfs.access_key_id "${SEAWEEDFS_ACCESS_KEY_ID}"
-                  pixi run --frozen -e ci-dev dvc config --local remote.local-seaweedfs.secret_access_key "${SEAWEEDFS_SECRET_ACCESS_KEY}"
-                  echo ">>> Attempting hydration from in-cluster SeaweedFS (local-seaweedfs)..."
-                  if env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY pixi run --frozen -e ci-dev dvc pull --force -r local-seaweedfs \
-                      models/checkpoints/head.pt \
-                      models/checkpoints/model_int8.onnx \
-                      data/embeddings/cal_embeddings.pt; then
-                    PULLED=true
-                    echo ">>> Checkpoints and reference embeddings successfully hydrated from local-seaweedfs."
-                  fi
-                fi
-
-                if [ "$PULLED" != "true" ]; then
-                  echo ">>> Pulling checkpoints and reference embeddings from DagsHub archive (origin)..."
-                  pixi run --frozen -e ci-dev dvc pull --force -r origin \
-                    models/checkpoints/head.pt \
-                    models/checkpoints/model_int8.onnx \
-                    data/embeddings/cal_embeddings.pt || \
-                  pixi run --frozen -e ci-dev dvc pull --force \
-                    models/checkpoints/head.pt \
-                    models/checkpoints/model_int8.onnx \
-                    data/embeddings/cal_embeddings.pt || \
-                  echo ">>> Warning: Remote artifacts not found in DVC; falling back to existing host volume checkpoints."
-                fi
-
-                # Synchronize checkpoints, co-versioned runtime configs, and calibrated reference embeddings atomically for non-root API pod (UID 10001)
-                if [ -d "/var/lib/taxon-vision/checkpoints" ] && [ -f "models/checkpoints/head.pt" ]; then
-                  echo ">>> Atomically staging checkpoints and co-versioned configs to host volume /var/lib/taxon-vision/checkpoints/..."
-                  for ckpt in models/checkpoints/* config/taxa_catalog.yaml config/conformal_config.yaml; do
-                      [ -f "$ckpt" ] || continue
-                      fname=$(basename "$ckpt")
-                      cp -f "$ckpt" "/var/lib/taxon-vision/checkpoints/.${fname}.tmp"
-                      chmod a+r "/var/lib/taxon-vision/checkpoints/.${fname}.tmp"
-                      mv -f "/var/lib/taxon-vision/checkpoints/.${fname}.tmp" "/var/lib/taxon-vision/checkpoints/${fname}"
-                  done
-                fi
-
-                if [ -d "/var/lib/taxon-vision/reference" ] && [ -f "data/embeddings/cal_embeddings.pt" ]; then
-                  echo ">>> Atomically staging cal_embeddings.pt to host volume /var/lib/taxon-vision/reference/..."
-                  cp -f "data/embeddings/cal_embeddings.pt" "/var/lib/taxon-vision/reference/.cal_embeddings.pt.tmp"
-                  chmod a+r "/var/lib/taxon-vision/reference/.cal_embeddings.pt.tmp"
-                  mv -f "/var/lib/taxon-vision/reference/.cal_embeddings.pt.tmp" "/var/lib/taxon-vision/reference/cal_embeddings.pt"
-                fi
-              fi
-
-            # Synchronise Airflow 3 DAGs & helper dependencies into ConfigMaps before applying Airflow
-            sync_py_configmap() {
-              cm_name="$1"; shift
-              count=$#; i=0
-              while [ "$i" -lt "$count" ]; do
-                f="$1"; shift
-                [ -f "$f" ] && set -- "$@" "--from-file=${f}"
-                i=$((i + 1))
-              done
-              kubectl create configmap "${cm_name}" "$@" -n taxon-vision --dry-run=client -o yaml | kubectl apply -f -
-            }
-            sync_py_configmap airflow-dags airflow/dags/*.py
-            sync_py_configmap airflow-active-learning src/taxon_vision/active_learning/*.py
-            kubectl create configmap airflow-taxon-deps \
-              --from-file=taxa_catalog.yaml=config/taxa_catalog.yaml \
-              -n taxon-vision --dry-run=client -o yaml | kubectl apply -f -
-
-            # Apply shared backing services, log aggregation, Postgres initdb, and dashboards via Kustomize
-            kubectl apply -k deploy
-
-            kubectl rollout restart deployment/airflow-apiserver deployment/airflow-scheduler -n taxon-vision
-            kubectl rollout status deployment/airflow-apiserver -n taxon-vision --timeout=180s
-            kubectl rollout status deployment/airflow-scheduler -n taxon-vision --timeout=180s
-
-            # Determine target overlay from Git branch
-            if [ "${BRANCH_NAME}" = "main" ]; then
-              TARGET_ENV="production"
-              TARGET_NS="taxon-vision"
-            else
-              TARGET_ENV="staging"
-              TARGET_NS="taxon-vision-staging"
-            fi
-
-            echo ">>> Deploying ${TARGET_ENV} overlay to namespace ${TARGET_NS} via Kustomize..."
-            kubectl apply -k deploy/k8s/overlays/${TARGET_ENV}
-
-            # Wait for GHCR SHA image tag published by GitHub Actions to eliminate stale image pull race
-            SHORT_SHA=$(git rev-parse --short=7 HEAD)
-            COMMIT_MSG=$(git log -1 --pretty=%B || true)
-            GHCR_IMAGE="ghcr.io/foersben/taxon-vision-mlops"
-            IMAGE_READY=false
-            if ! echo "${COMMIT_MSG}" | grep -qiE "skip ci|ci skip"; then
-              echo ">>> Waiting for GHCR image ${GHCR_IMAGE}:sha-${SHORT_SHA} (up to 360s)..."
-              WAITED=0
-              while [ "${WAITED}" -lt 360 ]; do
-                GHCR_TOK=$(curl -fsSL "https://ghcr.io/token?service=ghcr.io&scope=repository:foersben/taxon-vision-mlops:pull" | grep -o '"token":"[^"]*"' | cut -d'"' -f4 || true)
-                if [ -n "${GHCR_TOK}" ]; then
-                  CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-                    -H "Authorization: Bearer ${GHCR_TOK}" \
-                    -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json" \
-                    "https://ghcr.io/v2/foersben/taxon-vision-mlops/manifests/sha-${SHORT_SHA}" || echo "000")
-                  if [ "${CODE}" = "200" ]; then
-                    IMAGE_READY=true
-                    echo ">>> Confirmed GHCR image sha-${SHORT_SHA} is published."
-                    break
-                  fi
-                fi
-                sleep 10
-                WAITED=$((WAITED + 10))
-              done
-            fi
-
-            if [ "${IMAGE_READY}" = "true" ]; then
-              kubectl set image deployment/taxon-vision-serving api-service="${GHCR_IMAGE}:sha-${SHORT_SHA}" -n ${TARGET_NS}
-            else
-              echo ">>> Using branch overlay image tag and restarting deployment to load updated host-mounted artefacts..."
-              kubectl rollout restart deployment/taxon-vision-serving -n ${TARGET_NS}
-            fi
-
-            # Verify deployment health
-            kubectl rollout status deployment/taxon-vision-serving -n ${TARGET_NS} --timeout=600s
-            bash scripts/ci/verify_deployment.sh ${TARGET_NS}
-            echo ">>> Deployment successfully verified for ${TARGET_ENV}."
-            '''
+            sh 'bash scripts/ci/deploy_k8s.sh "${BRANCH_NAME}"'
           }
         }
       }

@@ -125,13 +125,48 @@ ci job="all":
 ci-test:
 	./scripts/ci/local_ci.sh tests
 
+# Raw non-nesting CI gate recipes (executed inside `pixi run --frozen -e <env> just <recipe>`).
+[group("ci")]
+ci-lint:
+	ruff check .
+	ruff format --check .
+
+[group("ci")]
+ci-typecheck:
+	mypy src scripts
+
+[group("ci")]
+ci-audit:
+	python -m taxon_vision.pipelines.audit_license
+	python scripts/governance/validate_okf.py
+
+[group("ci")]
+ci-test-unit:
+	pytest tests/unit/ --cov=src/taxon_vision --cov-report= -o "addopts="
+
+[group("ci")]
+ci-test-integration:
+	pytest tests/integration/ tests/invariants/ --cov=src/taxon_vision --cov-append --cov-report=xml:reports/coverage/coverage.xml --cov-fail-under=80 -x -q -o "addopts="
+
+[group("ci")]
+ci-test-all: ci-test-unit ci-test-integration
+
+[group("ci")]
+ci-docs:
+	python scripts/governance/visualize_okf.py
+	zensical build --strict
+
 # Fast static contract & syntax validation (< 3 seconds, zero GPU/network required)
 [group("quality")]
 verify-contracts:
 	@echo ">>> 1. Checking shell script syntax..."
+	bash -n scripts/ci/deploy_k8s.sh
+	bash -n scripts/ci/hydrate_and_stage_checkpoints.sh
 	bash -n scripts/ci/jenkins_gpu_train.sh
-	bash -n scripts/ci/verify_deployment.sh
 	bash -n scripts/ci/local_ci.sh
+	bash -n scripts/ci/sync_airflow_configmaps.sh
+	bash -n scripts/ci/verify_deployment.sh
+	bash -n scripts/ci/wait_for_ghcr_image.sh
 	bash -n scripts/deploy/provision_k8s_secrets.sh
 	bash scripts/deploy/provision_k8s_secrets.sh --dry-run --mock >/dev/null
 	@echo ">>> 2. Validating DVC DAG structure & dry-run execution plan..."
@@ -336,19 +371,7 @@ verify-deployment namespace="taxon-vision":
 # Synchronise Airflow 3 DAGs and Python dependencies from Git into Kubernetes ConfigMaps
 [group("app")]
 sync-airflow-k8s namespace="taxon-vision":
-	#!/usr/bin/env bash
-	set -euo pipefail
-	dag_args=()
-	for f in airflow/dags/*.py; do
-		[ -f "$f" ] && dag_args+=("--from-file=$f")
-	done
-	kubectl create configmap airflow-dags "${dag_args[@]}" -n {{namespace}} --dry-run=client -o yaml | kubectl apply -f -
-	kubectl create configmap airflow-taxon-deps \
-		--from-file=feedback.py=src/taxon_vision/active_learning/feedback.py \
-		--from-file=label_studio_sync.py=src/taxon_vision/active_learning/label_studio_sync.py \
-		--from-file=triage_queue.py=src/taxon_vision/active_learning/triage_queue.py \
-		--from-file=taxa_catalog.yaml=config/taxa_catalog.yaml \
-		-n {{namespace}} --dry-run=client -o yaml | kubectl apply -f -
+	bash scripts/ci/sync_airflow_configmaps.sh {{namespace}}
 
 # Deploy Airflow 3 orchestration manifests after syncing Git DAGs and helper dependencies
 [group("app")]

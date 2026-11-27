@@ -62,12 +62,10 @@ jobs:
         run: pixi run --frozen -e ci-dev python scripts/governance/visualize_okf.py
 
       - name: Pass 1 - Unit Tests & Coverage
-        run: |
-          pixi run --frozen -e ci-dev pytest tests/ --cov=src/taxon_vision --cov-report=xml --cov-fail-under=80 -o "addopts="
+        run: pixi run --frozen -e ci-dev just ci-test-unit
 
       - name: Pass 2 - Integration & Conformal Invariants
-        run: |
-          pixi run --frozen -e ci-dev pytest tests/integration/ tests/invariants/ -x -q -o "addopts="
+        run: pixi run --frozen -e ci-dev just ci-test-integration
 
   cognitive-complexity:
     name: Complexipy Cognitive Complexity
@@ -119,11 +117,8 @@ jobs:
         with:
           environments: ci-dev
 
-      - name: Generate OKF Knowledge Graph Visualization
-        run: pixi run --frozen -e ci-dev python scripts/governance/visualize_okf.py
-
-      - name: Build Docs with Zensical
-        run: pixi run --frozen -e ci-dev zensical build --strict
+      - name: Build & Verify Docs (OKF Graph + Strict Zensical)
+        run: pixi run --frozen -e ci-dev just ci-docs
 
       - name: Upload Pages Artifact
         if: ${{ !env.ACT }}

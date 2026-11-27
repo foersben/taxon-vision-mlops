@@ -133,6 +133,8 @@ def test_airflow_k8s_mounts_cover_all_model_retraining_imports() -> None:
     tree = ast.parse(dag_path.read_text(encoding="utf-8"), filename=str(dag_path))
     airflow_docs = list(yaml.safe_load_all(Path("deploy/k8s/airflow.yaml").read_text(encoding="utf-8")))
     jenkinsfile = Path("Jenkinsfile").read_text(encoding="utf-8")
+    deploy_script = Path("scripts/ci/deploy_k8s.sh").read_text(encoding="utf-8")
+    sync_script = Path("scripts/ci/sync_airflow_configmaps.sh").read_text(encoding="utf-8")
 
     imported_modules: set[str] = set()
     for node in ast.walk(tree):
@@ -143,8 +145,10 @@ def test_airflow_k8s_mounts_cover_all_model_retraining_imports() -> None:
     for filename in sorted(imported_modules):
         assert (Path("src/taxon_vision/active_learning") / filename).is_file()
 
-    assert "airflow-active-learning" in jenkinsfile
-    assert "src/taxon_vision/active_learning/*.py" in jenkinsfile
+    assert "scripts/ci/deploy_k8s.sh" in jenkinsfile
+    assert "scripts/ci/sync_airflow_configmaps.sh" in deploy_script
+    assert "airflow-active-learning" in sync_script
+    assert "src/taxon_vision/active_learning/*.py" in sync_script
 
     deployments = [d for d in airflow_docs if isinstance(d, dict) and d.get("kind") == "Deployment"]
     assert len(deployments) == 2

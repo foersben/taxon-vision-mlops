@@ -49,32 +49,20 @@ run_quality() {
   fi
   echo ">>> Enforcing Markdown formatting invariants"
   pixi run --frozen -e dev python scripts/governance/verify_markdown_rules.py
-  echo ">>> Validating OKF Frontmatter and Links"
-  pixi run --frozen -e dev python scripts/governance/validate_okf.py
-  echo ">>> Running Ruff lint"
-  pixi run --frozen -e dev ruff check .
-  echo ">>> Running Ruff format check"
-  pixi run --frozen -e dev ruff format --check .
-  echo ">>> Running Mypy"
-  pixi run --frozen -e dev mypy src scripts
+  echo ">>> Validating OKF Frontmatter, Ruff Lint/Format & Mypy"
+  pixi run --frozen -e dev just ci-audit ci-lint ci-typecheck
 }
 
 run_tests() {
-  echo ">>> Pass 1: Unit Tests & Coverage"
-  pixi run --frozen -e dev pytest tests/ --cov=src/taxon_vision --cov-fail-under=80
-
-  echo ">>> Pass 2: Integration & Invariants"
-  pixi run --frozen -e dev pytest tests/integration/ tests/invariants/ -x -q -o "addopts="
-
-  echo ">>> Open License Compliance Audit"
+  echo ">>> Running Unit, Integration, Coverage & Open License Audits"
+  pixi run --frozen -e dev just ci-test-all
   pixi run --frozen -e dev python -m taxon_vision.pipelines.audit_license
 }
 
 run_docs() {
-  echo ">>> Validating OKF Frontmatter and Links"
+  echo ">>> Validating OKF and building docs in strict mode"
   pixi run --frozen -e dev python scripts/governance/validate_okf.py
-  echo ">>> Building docs in strict mode"
-  pixi run --frozen -e dev zensical build --strict
+  pixi run --frozen -e dev just ci-docs
 }
 
 case "$job" in
