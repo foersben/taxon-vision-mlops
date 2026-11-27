@@ -236,3 +236,63 @@ def test_prometheus_k8s_sd_matches_serving_pod_manifest_and_rbac() -> None:
 
     _assert_prometheus_sd_job(prom_config_doc, serving_doc)
     _assert_prometheus_rbac(monitoring_docs)
+
+
+_KIND_TO_RBAC_RESOURCE: dict[str, tuple[str, str]] = {
+    "ConfigMap": ("", "configmaps"),
+    "Secret": ("", "secrets"),
+    "Service": ("", "services"),
+    "ServiceAccount": ("", "serviceaccounts"),
+    "PersistentVolumeClaim": ("", "persistentvolumeclaims"),
+    "Deployment": ("apps", "deployments"),
+    "DaemonSet": ("apps", "daemonsets"),
+    "StatefulSet": ("apps", "statefulsets"),
+    "Role": ("rbac.authorization.k8s.io", "roles"),
+    "RoleBinding": ("rbac.authorization.k8s.io", "rolebindings"),
+    "IngressRoute": ("traefik.io", "ingressroutes"),
+    "TraefikService": ("traefik.io", "traefikservices"),
+    "Middleware": ("traefik.io", "middlewares"),
+}
+
+
+def _collect_role_permissions(role_doc: dict) -> dict[tuple[str, str], set[str]]:
+    """Expand a Kubernetes Role spec into an (apiGroup, resource) -> verbs lookup table."""
+    granted: dict[tuple[str, str], set[str]] = {}
+    for rule in role_doc.get("rules", []):
+        verbs = set(rule.get("verbs", []))
+        for group in rule.get("apiGroups", []):
+            for resource in rule.get("resources", []):
+                granted.setdefault((group, resource), set()).update(verbs)
+    return granted
+
+
+def test_jenkins_deployer_rbac_covers_applied_manifests() -> None:
+    """Ensure Jenkins deployer RBAC covers every Kubernetes resource kind applied in Jenkinsfile."""
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    jenkinsfile_text = (root / "Jenkinsfile").read_text(encoding="utf-8")
+    applied_manifests = sorted(set(re.findall(r"kubectl apply -f (deploy/k8s/[^\s]+)", jenkinsfile_text)))
+    assert "deploy/k8s/monitoring-prometheus-grafana.yaml" in applied_manifests
+
+    rbac_docs = _load_k8s_docs("deploy/k8s/jenkins-agent-rbac.yaml")
+    prod_roles = [
+        doc
+        for doc in rbac_docs
+        if doc.get("kind") == "Role"
+        and doc.get("metadata", {}).get("name") == "jenkins-deployer-role"
+        and doc.get("metadata", {}).get("namespace") == "taxon-vision"
+    ]
+    assert len(prod_roles) == 1
+    granted = _collect_role_permissions(prod_roles[0])
+
+    required_verbs = {"get", "create", "patch", "update"}
+    for manifest_rel in applied_manifests:
+        for doc in _load_k8s_docs(manifest_rel):
+            kind = str(doc["kind"])
+            assert kind in _KIND_TO_RBAC_RESOURCE, f"Unmapped kind {kind} in {manifest_rel}"
+            key = _KIND_TO_RBAC_RESOURCE[kind]
+            assert required_verbs.issubset(granted.get(key, set())), (
+                f"Role jenkins-deployer-role lacks {required_verbs} on {key} needed by {manifest_rel}"
+            )

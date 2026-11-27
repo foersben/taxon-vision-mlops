@@ -295,3 +295,34 @@ def test_predict_endpoint_explain_flag() -> None:
     assert data["cam_heatmap_base64"] is not None
     assert isinstance(data["cam_heatmap_base64"], str)
     assert len(data["cam_heatmap_base64"]) > 50
+
+
+def test_predict_dry_run_skips_triage_and_telemetry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify /api/v1/predict?dry_run=true runs full inference without polluting triage queues or telemetry."""
+    import base64
+    import re
+
+    from taxon_vision.monitoring.telemetry import PREDICTION_COUNTER
+
+    flagged_dir = tmp_path / "flagged_dry_run"
+    flagged_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("TAXON_FLAGGED_STORAGE_DIR", str(flagged_dir))
+    get_settings.cache_clear()
+
+    script_text = Path("scripts/ci/verify_deployment.sh").read_text(encoding="utf-8")
+    b64_match = re.search(r'PROBE_PNG_BASE64="([^"]+)"', script_text)
+    assert b64_match is not None
+    probe_png = base64.b64decode(b64_match.group(1))
+
+    before_success = PREDICTION_COUNTER.labels(status="success")._value.get()
+    resp = client.post(
+        "/api/v1/predict?dry_run=true",
+        files={"file": ("probe.png", io.BytesIO(probe_png), "image/png")},
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["top_prediction"]["scientific_name"]
+    assert payload["top_candidates"]
+    assert list(flagged_dir.iterdir()) == []
+    assert PREDICTION_COUNTER.labels(status="success")._value.get() == before_success
+    get_settings.cache_clear()

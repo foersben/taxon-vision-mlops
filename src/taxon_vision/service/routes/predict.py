@@ -166,6 +166,7 @@ async def predict_species(
     background_tasks: BackgroundTasks,
     *,
     explain: bool = False,
+    dry_run: bool = False,
     contribute_open_license: Annotated[bool, Form()] = False,
     license_code: Annotated[str, Form()] = "",
     photographer_name: Annotated[str, Form()] = "",
@@ -193,6 +194,7 @@ async def predict_species(
         file: Multipart uploaded image file.
         background_tasks: FastAPI background task coordinator for non-blocking I/O dispatch.
         explain: Optional boolean flag to request forward-only CAM saliency visualization.
+        dry_run: When true, executes full inference without writing flagged triage records, TelemetryStore entries, or Prometheus prediction counters (for deployment smoke probes).
         contribute_open_license: Affirmative opt-in permitting triage crop and metadata export to DagsHub Label Studio.
         license_code: Open Creative Commons license code (`CC0`, `CC-BY`, or `CC-BY-NC`) accompanying consented uploads.
         photographer_name: Attribution credit string recorded alongside consented citizen-science captures.
@@ -215,14 +217,18 @@ async def predict_species(
             photographer_name=photographer_name,
             license_code=license_code,
         )
-        obs_id = await record_prediction_outcome(
-            PredictionTelemetryContext(
-                prediction_result=pred,
-                image_bytes=content,
-                duration_sec=duration_sec,
-                consent=consent,
-            ),
-            background_tasks,
+        obs_id = (
+            "dry-run"
+            if dry_run
+            else await record_prediction_outcome(
+                PredictionTelemetryContext(
+                    prediction_result=pred,
+                    image_bytes=content,
+                    duration_sec=duration_sec,
+                    consent=consent,
+                ),
+                background_tasks,
+            )
         )
 
         cam_base64: str | None = None
