@@ -54,8 +54,6 @@ spec:
           value: "0.0.0.0"
         - name: TAXON_SERVICE__REDIS_URL
           value: "redis://redis-ephemeral.taxon-vision.svc.cluster.local:6379/0"
-        - name: TAXON_TELEMETRY_ALLOW_IN_MEMORY_FALLBACK
-          value: "true"
         - name: TAXON_TELEMETRY__ALLOW_IN_MEMORY_FALLBACK
           value: "true"
         - name: TAXON_OPTUNA__OPTUNA_STORAGE_URI

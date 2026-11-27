@@ -237,6 +237,13 @@ def test_prometheus_k8s_sd_matches_serving_pod_manifest_and_rbac() -> None:
     _assert_prometheus_sd_job(prom_config_doc, serving_doc)
     _assert_prometheus_rbac(monitoring_docs)
 
+    for deploy_name in ("prometheus", "grafana"):
+        dep = _find_k8s_doc(monitoring_docs, "Deployment", deploy_name)
+        assert dep["spec"]["strategy"]["type"] == "Recreate"
+        pod_spec = dep["spec"]["template"]["spec"]
+        for container in [*pod_spec.get("initContainers", []), *pod_spec.get("containers", [])]:
+            assert not str(container["image"]).endswith(":latest")
+
 
 _KIND_TO_RBAC_RESOURCE: dict[str, tuple[str, str]] = {
     "ConfigMap": ("", "configmaps"),

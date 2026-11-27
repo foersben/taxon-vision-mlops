@@ -288,6 +288,8 @@ metadata:
     app.kubernetes.io/part-of: taxon-vision-mlops
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: prometheus
@@ -299,14 +301,14 @@ spec:
       serviceAccountName: prometheus
       initContainers:
       - name: fix-permissions
-        image: docker.io/busybox:latest
+        image: docker.io/busybox:1.36
         command: ["sh", "-c", "chown -R 65534:65534 /prometheus && chmod -R 775 /prometheus"]
         volumeMounts:
         - name: storage
           mountPath: /prometheus
       containers:
       - name: prometheus
-        image: docker.io/prom/prometheus:latest
+        image: docker.io/prom/prometheus:v3.16.0
         args:
         - "--config.file=/etc/prometheus/prometheus.yml"
         - "--storage.tsdb.path=/prometheus"
@@ -364,6 +366,8 @@ metadata:
     app.kubernetes.io/part-of: taxon-vision-mlops
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: grafana
@@ -376,14 +380,14 @@ spec:
         fsGroup: 472
       initContainers:
       - name: fix-permissions
-        image: docker.io/busybox:latest
+        image: docker.io/busybox:1.36
         command: ["sh", "-c", "chown -R 472:472 /var/lib/grafana && chmod -R 775 /var/lib/grafana"]
         volumeMounts:
         - name: grafana-storage
           mountPath: /var/lib/grafana
       containers:
       - name: grafana
-        image: docker.io/grafana/grafana:latest
+        image: docker.io/grafana/grafana:13.3.2
         ports:
         - name: web
           containerPort: 3000
