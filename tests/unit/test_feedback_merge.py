@@ -311,7 +311,7 @@ def test_merge_feedback_readonly_stages_expansions_and_routes_ood(
     import pandas as pd
     import yaml
 
-    from taxon_vision.active_learning import feedback as fb_mod
+    from taxon_vision.active_learning import catalog_expansion, feedback as fb_mod
 
     catalog_path = tmp_path / "taxa_catalog.yaml"
     catalog_path.write_text(
@@ -366,7 +366,7 @@ def test_merge_feedback_readonly_stages_expansions_and_routes_ood(
         encoding="utf-8",
     )
 
-    monkeypatch.setattr(fb_mod, "_is_path_writable", lambda target: target != catalog_path)
+    monkeypatch.setattr(catalog_expansion, "_is_path_writable", lambda target: target != catalog_path)
     res = fb_mod.merge_feedback_to_manifest(
         export_path,
         manifest_path=raw_manifest,

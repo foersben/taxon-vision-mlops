@@ -37,8 +37,10 @@ try:
 except ImportError:
     from airflow.decorators import dag, task  # type: ignore[no-redef]
 
-from taxon_vision.active_learning.feedback import merge_feedback_to_manifest
-from taxon_vision.active_learning.label_studio_sync import DagsHubLabelStudioClient
+from taxon_vision.active_learning.label_studio_sync import (
+    FeedbackSyncPaths,
+    sync_and_merge_human_feedback,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -257,67 +259,29 @@ def model_retraining() -> None:
         Returns:
             Dictionary summarising merged record counts, OOD audit counts, newly registered taxon IDs, and `catalog_expanded`.
         """
-        flagged_dir = _resolve_runtime_path(
-            "TAXON_FLAGGED_DIR",
-            "/opt/airflow/data/flagged_observations",
-            "data/flagged_observations",
+        paths = FeedbackSyncPaths(
+            flagged_dir=_resolve_runtime_path(
+                "TAXON_FLAGGED_DIR",
+                "/opt/airflow/data/flagged_observations",
+                "data/flagged_observations",
+            ),
+            export_path=_resolve_runtime_path(
+                "TAXON_LABEL_STUDIO_EXPORT_PATH",
+                "/opt/airflow/data/flagged_observations/label_studio_export.json",
+                "data/flagged_observations/label_studio_export.json",
+            ),
+            raw_manifest_path=_resolve_runtime_path(
+                "TAXON_RAW_MANIFEST_PATH",
+                "/opt/airflow/data/manifests/raw_manifest.parquet",
+                "data/manifests/raw_manifest.parquet",
+            ),
+            catalog_path=_resolve_runtime_path(
+                "TAXON_CATALOG_PATH",
+                "/opt/airflow/config/taxa_catalog.yaml",
+                "config/taxa_catalog.yaml",
+            ),
         )
-        export_path = _resolve_runtime_path(
-            "TAXON_LABEL_STUDIO_EXPORT_PATH",
-            "/opt/airflow/data/flagged_observations/label_studio_export.json",
-            "data/flagged_observations/label_studio_export.json",
-        )
-        raw_manifest_path = _resolve_runtime_path(
-            "TAXON_RAW_MANIFEST_PATH",
-            "/opt/airflow/data/manifests/raw_manifest.parquet",
-            "data/manifests/raw_manifest.parquet",
-        )
-        catalog_path = _resolve_runtime_path(
-            "TAXON_CATALOG_PATH",
-            "/opt/airflow/config/taxa_catalog.yaml",
-            "config/taxa_catalog.yaml",
-        )
-
-        ls_client = DagsHubLabelStudioClient()
-        synced_pending = 0
-        if ls_client.is_configured:
-            synced_pending = ls_client.sync_pending_directory(flagged_dir)
-            exported_count = ls_client.export_completed_annotations(export_path)
-            logger.info(
-                "DagsHub sync complete (uploaded_pending=%d, exported_completed=%d).", synced_pending, exported_count
-            )
-        elif not export_path.is_file():
-            logger.info(
-                "DAGSHUB_TOKEN unset and no local export at %s; proceeding without feedback merge.", export_path
-            )
-            return {
-                "new_annotations_merged": 0,
-                "catalog_expanded": False,
-                "new_taxon_ids": [],
-                "synced_pending": 0,
-                "status": "skipped_no_pending_annotations",
-            }
-
-        res = merge_feedback_to_manifest(export_path, manifest_path=raw_manifest_path, catalog_path=catalog_path)
-        logger.info(
-            "Merged %d human annotations into %s (status=%s, total=%d, catalog_expanded=%s, ood_verified=%d)",
-            res.new_records_added,
-            raw_manifest_path,
-            res.status,
-            res.total_manifest_records,
-            res.catalog_expanded,
-            res.ood_verified_added,
-        )
-        return {
-            "new_annotations_merged": res.new_records_added,
-            "ood_records_skipped": res.ood_records_skipped,
-            "ood_verified_added": res.ood_verified_added,
-            "total_manifest_records": res.total_manifest_records,
-            "catalog_expanded": res.catalog_expanded,
-            "new_taxon_ids": list(res.new_taxon_ids),
-            "synced_pending": synced_pending,
-            "status": res.status,
-        }
+        return sync_and_merge_human_feedback(paths)
 
     @task
     def trigger_jenkins_build(feedback_status: dict[str, Any]) -> dict[str, Any]:

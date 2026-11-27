@@ -54,19 +54,21 @@ repos:
 
       - id: ruff-check
         name: Ruff Linting & Quality Checks
-        entry: pixi run -e dev ruff check --fix
+        entry: bash scripts/governance/pixi_hook_exec.sh ruff check --fix
         language: system
         types: [python]
+        require_serial: true
 
       - id: ruff-format
         name: Ruff Formatting
-        entry: pixi run -e dev ruff format
+        entry: bash scripts/governance/pixi_hook_exec.sh ruff format
         language: system
         types: [python]
+        require_serial: true
 
       - id: mypy
         name: Strict Mypy Type Checking
-        entry: pixi run -e dev mypy src scripts
+        entry: bash scripts/governance/pixi_hook_exec.sh mypy src scripts
         language: system
         files: ^(src/|scripts/|pyproject\.toml)
         pass_filenames: false
@@ -74,7 +76,7 @@ repos:
 
       - id: verify-markdown-rules
         name: Enforce Markdown Rule 04 Formatting
-        entry: pixi run -e dev python scripts/governance/verify_markdown_rules.py --fix
+        entry: bash scripts/governance/pixi_hook_exec.sh python scripts/governance/verify_markdown_rules.py --fix
         language: system
         files: ^(docs/|\.agents/|README\.md)
         exclude: ^docs/latex/concept_design/considerations/
@@ -82,14 +84,15 @@ repos:
 
       - id: validate-okf
         name: Enforce Google Open Knowledge Format (OKF v0.2)
-        entry: pixi run -e dev python scripts/governance/validate_okf.py
+        entry: bash scripts/governance/pixi_hook_exec.sh python scripts/governance/validate_okf.py
         language: system
         files: ^(docs/|\.agents/|openwiki/).*\.md$
         pass_filenames: true
+        require_serial: true
 
       - id: verify-hardware-invariants
         name: Enforce Rule 07 Hardware Invariants
-        entry: pixi run -e dev python scripts/governance/verify_hardware_invariants.py
+        entry: bash scripts/governance/pixi_hook_exec.sh python scripts/governance/verify_hardware_invariants.py
         language: system
         files: ^(docs/|\.agents/|README\.md)
         pass_filenames: false
@@ -103,7 +106,7 @@ repos:
 
       - id: audit-license-compliance
         name: Audit iNaturalist Open License Compliance
-        entry: pixi run -e dev python -m taxon_vision.pipelines.audit_license
+        entry: bash scripts/governance/pixi_hook_exec.sh python -m taxon_vision.pipelines.audit_license
         language: system
         files: ^(src/taxon_vision/data/|src/taxon_vision/domain/license\.py|src/taxon_vision/pipelines/audit_license\.py|data/manifests/)
         pass_filenames: false

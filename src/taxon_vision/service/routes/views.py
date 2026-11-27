@@ -16,7 +16,8 @@ Standard Fields:
     References: Fielding (2000) 'Architectural Styles and the Design of Network-based Software Architectures' (REST / HATEOAS).
 """
 
-import uuid
+import logging
+import time
 from pathlib import Path
 from typing import Annotated
 
@@ -26,6 +27,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from taxon_vision.config import get_settings
+from taxon_vision.monitoring.telemetry import PREDICTION_COUNTER
 from taxon_vision.service.inference import (
     InvalidImageError,
     ModelNotReadyError,
@@ -33,13 +35,15 @@ from taxon_vision.service.inference import (
     run_prediction,
 )
 from taxon_vision.service.passport import load_model_passport
-from taxon_vision.service.presentation import build_top_candidates
-from taxon_vision.service.storage import (
-    ContributorConsent,
-    FlaggedObservationPayload,
-    get_image_cache,
-    handle_flagged_prediction_if_needed,
+from taxon_vision.service.prediction_telemetry import (
+    PredictionTelemetryContext,
+    read_validated_upload,
+    record_prediction_outcome,
 )
+from taxon_vision.service.presentation import build_top_candidates
+from taxon_vision.service.storage import ContributorConsent, get_image_cache
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 templates_dir = Path(__file__).parent.parent / "templates"
@@ -118,43 +122,38 @@ async def predict_htmx(
     Raises:
         HTTPException: HTTP 413 for oversized payloads, 422 for undecodable images, 503 if model is unavailable.
     """
-    image_bytes = await file.read()
+    t0 = time.perf_counter()
+    image_bytes = await read_validated_upload(file)
     settings = get_settings()
-
-    if len(image_bytes) == 0:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Invalid or corrupted image upload.",
-        )
-
-    if len(image_bytes) > settings.service.max_image_upload_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"Image upload exceeds maximum allowed size of {settings.service.max_image_upload_bytes} bytes.",
-        )
 
     try:
         result = await anyio.to_thread.run_sync(run_prediction, image_bytes)
+        duration_sec = time.perf_counter() - t0
     except InvalidImageError as err:
+        PREDICTION_COUNTER.labels(status="invalid_input").inc()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(err)) from err
     except ModelNotReadyError as err:
+        PREDICTION_COUNTER.labels(status="unavailable").inc()
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(err)) from err
+    except Exception as err:
+        PREDICTION_COUNTER.labels(status="error").inc()
+        logger.exception("HTMX inference failed unexpectedly for %s: %s", file.filename, err)
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Model inference failed.") from err
 
     cache = get_image_cache()
     image_hash = await anyio.to_thread.run_sync(cache.store, image_bytes)
-    await handle_flagged_prediction_if_needed(
-        FlaggedObservationPayload(
-            observation_id=str(uuid.uuid4()),
+    await record_prediction_outcome(
+        PredictionTelemetryContext(
             prediction_result=result,
-            embedding=result.get("embedding"),
             image_bytes=image_bytes,
+            duration_sec=duration_sec,
             consent=ContributorConsent(
                 contribute_open_license=contribute_open_license,
                 photographer_name=photographer_name,
                 license_code=license_code,
             ),
         ),
-        background_tasks=background_tasks,
+        background_tasks,
     )
     catalog = load_taxa_catalog()
     top_candidates = build_top_candidates(

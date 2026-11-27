@@ -53,3 +53,23 @@ def test_no_uv_in_active_pre_commit_hooks() -> None:
     content = pre_commit_config.read_text(encoding="utf-8")
     assert "uv run" not in content, "Pre-commit config contains forbidden 'uv run' entry."
     assert "uvx" not in content, "Pre-commit config contains forbidden 'uvx' entry."
+
+
+def test_pre_commit_hooks_respect_active_pixi_env_and_serial_locking() -> None:
+    """Invariant: Local Pixi hooks must honour active CI/dev environments without parallel lock races."""
+    import yaml
+
+    wrapper = ROOT / "scripts/governance/pixi_hook_exec.sh"
+    assert wrapper.is_file()
+    wrapper_text = wrapper.read_text(encoding="utf-8")
+    assert "PIXI_ENVIRONMENT_NAME" in wrapper_text
+
+    raw = yaml.safe_load((ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
+    local_hooks = next(repo["hooks"] for repo in raw["repos"] if repo.get("repo") == "local")
+
+    pixi_hooks = [hook for hook in local_hooks if "pixi_hook_exec.sh" in str(hook.get("entry", ""))]
+    assert len(pixi_hooks) >= 7
+    for hook in pixi_hooks:
+        assert "pixi run -e dev" not in hook["entry"]
+        if hook.get("pass_filenames", True):
+            assert hook.get("require_serial") is True, f"Hook '{hook['id']}' must set require_serial: true"

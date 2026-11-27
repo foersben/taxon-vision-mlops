@@ -60,7 +60,7 @@
         \draw[arrow] (htmx_router) -- (htmx_render) node[midway, above] {Renders};
         
         % Real-Time Display components attached to HTMX Box
-        \node[base_box, below=0.5cm of htmx_render, minimum width=5cm] (realtime) {Real-time display: top species,\\conformal sets, energy OOD\\alert, Grad-CAM heatmap};
+        \node[base_box, below=0.5cm of htmx_render, minimum width=5cm] (realtime) {Real-time display: top species,\\conformal sets, energy OOD\\alert, CAM heatmap};
         \draw[arrow, dotted] (htmx_render) -- (realtime);
 
         % Grouping FastAPI Core

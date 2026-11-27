@@ -252,3 +252,117 @@ def test_save_head_checkpoint_explicit_path(tmp_path: Path) -> None:
     saved = save_checkpoint(head, checkpoint_path=target)
     assert saved == target
     assert saved.exists()
+
+
+def _build_tiny_openclip_vit() -> nn.Module:
+    """Construct a tiny CPU-friendly OpenCLIP VisionTransformer with non-trivial projection."""
+    from open_clip.model import VisionTransformer
+
+    return VisionTransformer(
+        image_size=32,
+        patch_size=8,
+        width=32,
+        layers=1,
+        heads=4,
+        mlp_ratio=2.0,
+        output_dim=16,
+    )
+
+
+def test_openclip_visual_wrapper_routing_freezing_and_cam(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify bioclip-2 OpenCLIP dispatch, parameter freezing, feature dimension probing, and CAM compatibility."""
+    import open_clip
+
+    from taxon_vision.inference.cam import _compute_spatial_cam, _extract_linear_layer
+    from taxon_vision.models.factory import _OpenCLIPVisualWrapper
+
+    tiny_vit = _build_tiny_openclip_vit()
+    seen_calls: list[tuple[str, bool]] = []
+
+    class _FakeCLIPModel:
+        def __init__(self, visual: nn.Module) -> None:
+            self.visual = visual
+
+    def fake_timm_create(name: str, pretrained: bool = False, num_classes: int = 0) -> nn.Module:
+        raise RuntimeError(f"timm does not support OpenCLIP hub checkpoint {name}")
+
+    def fake_openclip_create(
+        model_name: str,
+        pretrained: str | None = None,
+        load_weights: bool = True,
+    ) -> _FakeCLIPModel:
+        seen_calls.append((model_name, load_weights))
+        return _FakeCLIPModel(tiny_vit)
+
+    monkeypatch.setattr(timm, "create_model", fake_timm_create)
+    monkeypatch.setattr(open_clip, "create_model", fake_openclip_create)
+
+    backbone = create_feature_extractor("bioclip-2", pretrained=False)
+    assert seen_calls == [("hf-hub:imageomics/bioclip-2", False)]
+    assert isinstance(backbone, _OpenCLIPVisualWrapper)
+    assert not backbone.training
+    assert all(not p.requires_grad for p in backbone.parameters())
+    assert get_feature_dimension(backbone, image_size=32) == 16
+
+    batch = torch.randn(2, 3, 32, 32)
+    embeddings = extract_features(backbone, batch)
+    assert embeddings.shape == (2, 16)
+
+    classifier = TaxonClassifier(backbone=backbone, feature_dim=16, num_classes=4)
+    linear_layer = _extract_linear_layer(classifier.head)
+    spatial_cam = _compute_spatial_cam(backbone, linear_layer.weight[0], batch[:1])
+    assert spatial_cam.shape == (1, 4, 4)
+    assert float(spatial_cam.min()) >= 0.0
+
+
+def test_openclip_visual_wrapper_onnx_dual_output_export(tmp_path: Path) -> None:
+    """Verify OpenCLIP-wrapped classifiers export clean dual-output ONNX graphs matching PyTorch outputs."""
+    import numpy as np
+    import onnxruntime as ort
+
+    from taxon_vision.inference.onnx_exporter import export_to_onnx
+    from taxon_vision.models.factory import _OpenCLIPVisualWrapper
+
+    backbone = _OpenCLIPVisualWrapper(_build_tiny_openclip_vit())
+    backbone.eval()
+    classifier = TaxonClassifier(backbone=backbone, feature_dim=16, num_classes=4)
+    classifier.eval()
+
+    onnx_path = tmp_path / "bioclip2_test.onnx"
+    export_to_onnx(classifier, onnx_path, input_shape=(1, 3, 32, 32))
+    assert onnx_path.is_file()
+
+    batch = torch.randn(2, 3, 32, 32)
+    with torch.inference_mode():
+        pt_logits, pt_embeddings = classifier.forward_with_embeddings(batch)
+
+    session = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
+    ort_logits, ort_embeddings = session.run(["logits", "embeddings"], {"input": batch.numpy().astype(np.float32)})
+    np.testing.assert_allclose(ort_logits, pt_logits.numpy(), atol=1e-4, rtol=1e-4)
+    np.testing.assert_allclose(ort_embeddings, pt_embeddings.numpy(), atol=1e-4, rtol=1e-4)
+
+
+def test_openclip_bioclip_failure_respects_allow_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify OpenCLIP failures raise when allow_fallback=False and fall back cleanly when allow_fallback=True."""
+    import open_clip
+
+    def failing_timm(name: str, pretrained: bool = False, num_classes: int = 0) -> nn.Module:
+        if not name.startswith("mobilenetv4_conv_small"):
+            raise RuntimeError("timm failure")
+        return nn.Linear(10, 10)
+
+    def failing_openclip(
+        model_name: str,
+        pretrained: str | None = None,
+        load_weights: bool = True,
+    ) -> object:
+        raise RuntimeError("open_clip download failed")
+
+    monkeypatch.setattr(timm, "create_model", failing_timm)
+    monkeypatch.setattr(open_clip, "create_model", failing_openclip)
+
+    with pytest.raises(RuntimeError, match="Could not create backbone"):
+        create_feature_extractor("bioclip-2", allow_fallback=False)
+
+    fallback = create_feature_extractor("bioclip-2", allow_fallback=True)
+    assert isinstance(fallback, nn.Linear)

@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: MIT
 """Vision Foundation Model (VFM) backbone factory.
 
-This module provides factory functions to instantiate pre-trained domain foundation models (specifically BioCLIP-2, DINOv3, DINOv2, MobileNetV4, and EfficientNet) via the `timm` library. The feature extractor backbones are instantiated with their classification heads removed (`num_classes=0`) and all parameter gradients frozen (`requires_grad=False`), decoupling downstream taxonomic head training from full backbone backpropagation.
+This module provides factory functions to instantiate pre-trained domain foundation models (specifically BioCLIP-2, DINOv3, DINOv2, MobileNetV4, and EfficientNet) via ``timm`` and ``open_clip``. Feature extractor backbones are instantiated with classification heads removed and all parameter gradients frozen (``requires_grad=False``), decoupling downstream taxonomic head training from full backbone backpropagation.
 
-Model architecture mappings, fallback identifiers, and image dimensions are resolved dynamically from the centralized type-safe application configuration (`taxon_vision.config`), eliminating magic numbers and hardcoded globals.
+Model architecture mappings, fallback identifiers, and image dimensions are resolved dynamically from the centralised type-safe application configuration (``taxon_vision.config``), eliminating magic numbers and hardcoded globals.
 
 Typical usage example:
     backbone = create_feature_extractor("bioclip-2", pretrained=True)
@@ -15,7 +15,7 @@ Typical usage example:
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, Protocol, runtime_checkable
 
 import timm
 import torch
@@ -24,7 +24,7 @@ import torch.nn as nn
 from taxon_vision.config import ModelConfig, get_settings
 
 BACKBONE_REGISTRY: dict[str, str] = get_settings().model.backbone_registry
-"""dict[str, str]: Mapping of canonical model identifiers to timm/HuggingFace model identifiers."""
+"""dict[str, str]: Mapping of canonical model identifiers to timm/OpenCLIP Hugging Face model identifiers."""
 
 
 class CachedFeaturesResult(NamedTuple):
@@ -32,6 +32,165 @@ class CachedFeaturesResult(NamedTuple):
 
     features: torch.Tensor
     labels: torch.Tensor
+
+
+@runtime_checkable
+class _OpenCLIPModelProtocol(Protocol):
+    """Protocol for OpenCLIP models exposing an image encoder module."""
+
+    visual: nn.Module
+
+
+@runtime_checkable
+class _OpenCLIPVisualIntermediatesProtocol(Protocol):
+    """Protocol for OpenCLIP vision encoders exposing intermediate spatial tokens."""
+
+    def forward_intermediates(
+        self,
+        x: torch.Tensor,
+        indices: list[int] | None = None,
+        stop_early: bool = False,
+        normalize_intermediates: bool = False,
+        intermediates_only: bool = False,
+        output_fmt: str = "NCHW",
+        output_extra_tokens: bool = False,
+    ) -> dict[str, Any]:
+        """Extract intermediate spatial patch tokens from the OpenCLIP vision trunk."""
+        ...
+
+
+@runtime_checkable
+class _SpatialFeaturesProtocol(Protocol):
+    """Protocol for vision backbones implementing ``forward_features``."""
+
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        """Emit spatial activations prior to global pooling."""
+        ...
+
+
+def _project_openclip_tokens(tokens: torch.Tensor, visual: nn.Module) -> torch.Tensor:
+    """Project OpenCLIP visual tokens into the shared embedding width when a projection is defined.
+
+    Why:
+        OpenCLIP Vision Transformers maintain an internal transformer width distinct from the linear classifier head width (for example projecting 768-D or 1024-D patch tokens down to 512-D or 768-D CLIP embeddings via ``visual.proj``). Forward-only CAM contracts spatial tokens directly against head weights, so token channels must match the head's input dimension. Note that ``nn.Parameter`` fields live in PyTorch's ``_parameters`` table rather than ``__dict__``, so checking ``named_parameters()`` and ``named_children()`` avoids both ``hasattr``/``getattr`` reflection and ``Protocol`` data-descriptor misses.
+
+    How:
+        Checks ``visual.named_parameters()`` for a tensor parameter named ``"proj"`` (applying matrix multiplication ``tokens @ proj``) and falls back to ``visual.named_children()`` for a callable projection sub-module named ``"proj"``.
+
+    Args:
+        tokens: Token tensor of shape ``(batch, seq_len, hidden_width)``.
+        visual: Underlying OpenCLIP image encoder module.
+
+    Returns:
+        Projected token tensor of shape ``(batch, seq_len, embedding_dim)``.
+    """
+    named_params = dict(visual.named_parameters())
+    proj_param = named_params.get("proj")
+    if proj_param is not None:
+        return tokens @ proj_param
+
+    named_children = dict(visual.named_children())
+    proj_module = named_children.get("proj")
+    if proj_module is not None:
+        projected: torch.Tensor = proj_module(tokens)
+        return projected
+
+    return tokens
+
+
+class _OpenCLIPVisualWrapper(nn.Module):
+    """Adapter wrapping an OpenCLIP image encoder behind TaxonVision's backbone contract.
+
+    Why:
+        BioCLIP-2 and related OpenCLIP models are distributed with ``open_clip_config.json`` manifests that ``timm.create_model`` cannot instantiate directly, whilst OpenCLIP visual trunks return raw pooled embeddings without exposing a ``timm``-compatible ``forward_features`` method for forward-only Class Activation Mapping. Wrapping only ``clip_model.visual`` discards unused text-tower weights from memory and unifies both inference and saliency attribution behind one interface.
+
+    How:
+        Delegates ``forward(x)`` to the underlying OpenCLIP visual encoder (returning un-normalised pre-L2 embeddings to preserve norm sensitivity for Wasserstein drift monitoring) and implements ``forward_features(x)`` via ``forward_intermediates(..., output_fmt="NLC", output_extra_tokens=True)`` projected through ``visual.proj`` with ``num_prefix_tokens = 1`` for square ViT patch grid reconstruction.
+
+    Complexity:
+        O(1) wrapper overhead beyond the underlying visual transformer forward pass.
+    """
+
+    def __init__(self, visual: nn.Module) -> None:
+        """Initialise the OpenCLIP visual adapter.
+
+        Args:
+            visual: The image encoder sub-module extracted from an OpenCLIP model.
+        """
+        super().__init__()
+        self.visual = visual
+        self.num_prefix_tokens: int = 1
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Extract un-normalised dense image embeddings of shape ``(batch, embedding_dim)``."""
+        output = self.visual(x)
+        if isinstance(output, tuple):
+            pooled: torch.Tensor = output[0]
+            return pooled
+        features: torch.Tensor = output
+        return features
+
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        """Extract normalised spatial patch tokens projected into the classifier head space."""
+        if isinstance(self.visual, _OpenCLIPVisualIntermediatesProtocol):
+            intermediates = self.visual.forward_intermediates(
+                x,
+                indices=[-1],
+                normalize_intermediates=True,
+                intermediates_only=True,
+                output_fmt="NLC",
+                output_extra_tokens=True,
+            )
+            patch_tokens: torch.Tensor = intermediates["image_intermediates"][-1]
+            prefix_list = intermediates.get("image_intermediates_prefix")
+            if isinstance(prefix_list, list) and prefix_list:
+                prefix_tokens: torch.Tensor = prefix_list[-1]
+            else:
+                prefix_tokens = torch.zeros(
+                    patch_tokens.shape[0],
+                    1,
+                    patch_tokens.shape[-1],
+                    device=patch_tokens.device,
+                    dtype=patch_tokens.dtype,
+                )
+            combined = torch.cat([prefix_tokens, patch_tokens], dim=1)
+            return _project_openclip_tokens(combined, self.visual)
+
+        if isinstance(self.visual, _SpatialFeaturesProtocol):
+            return self.visual.forward_features(x)
+
+        raise RuntimeError(
+            f"OpenCLIP visual encoder '{type(self.visual).__name__}' exposes neither forward_intermediates nor forward_features."
+        )
+
+
+def _create_openclip_visual_extractor(resolved_name: str, pretrained: bool) -> nn.Module:
+    """Instantiate an OpenCLIP image encoder wrapped in ``_OpenCLIPVisualWrapper``."""
+    import open_clip
+
+    clip_model = open_clip.create_model(resolved_name, pretrained=None, load_weights=pretrained)
+    if not isinstance(clip_model, _OpenCLIPModelProtocol):
+        raise RuntimeError(f"OpenCLIP model '{resolved_name}' does not expose a visual sub-module.")
+    return _OpenCLIPVisualWrapper(clip_model.visual)
+
+
+def _instantiate_backbone(resolved_name: str, pretrained: bool) -> nn.Module:
+    """Instantiate a vision backbone from a resolved ``timm``, ``hf-hub:``, or ``open-clip:`` identifier."""
+    if resolved_name.startswith("open-clip:"):
+        return _create_openclip_visual_extractor(resolved_name.removeprefix("open-clip:"), pretrained=pretrained)
+
+    try:
+        model: nn.Module = timm.create_model(resolved_name, pretrained=pretrained, num_classes=0)
+        return model
+    except Exception as timm_exc:
+        if resolved_name.startswith("hf-hub:"):
+            try:
+                return _create_openclip_visual_extractor(resolved_name, pretrained=pretrained)
+            except Exception as openclip_exc:
+                raise RuntimeError(
+                    f"Backbone '{resolved_name}' failed in timm ({timm_exc}) and OpenCLIP ({openclip_exc})."
+                ) from openclip_exc
+        raise
 
 
 def create_feature_extractor(
@@ -43,32 +202,32 @@ def create_feature_extractor(
     """Instantiate a frozen pre-trained feature extractor backbone.
 
     Why:
-        Fine-tuning Vision Foundation Models end-to-end across long-tailed taxonomic classes risks catastrophic forgetting and exceeds the 11.2 GB VRAM training ceiling. Freezing the backbone (`requires_grad=False`) and removing its classification head (`num_classes=0`) decouples representation extraction from linear probing. A failed load raises by default so un-pretrained random weights are never silently substituted unless `allow_fallback=True` is explicitly passed for offline CI tests.
+        Fine-tuning Vision Foundation Models end-to-end across long-tailed taxonomic classes risks catastrophic forgetting and exceeds the 11.2 GB VRAM training ceiling. Freezing the backbone (``requires_grad=False``) and removing its classification head decouples representation extraction from linear probing whilst supporting both ``timm`` and OpenCLIP domain checkpoints such as BioCLIP-2. A failed load raises by default so un-pretrained random weights are never silently substituted unless ``allow_fallback=True`` is explicitly passed for offline CI tests.
 
     How:
-        Resolves `model_name` through `config.backbone_registry`, instantiates the `timm` backbone with `num_classes=0`, locks all parameters (`requires_grad=False`), and activates evaluation mode (`eval()`).
+        Resolves ``model_name`` through ``config.backbone_registry``, routes ``open-clip:`` identifiers directly to OpenCLIP and attempts OpenCLIP fallback for ``hf-hub:`` identifiers when ``timm`` cannot load them, locks all parameters (``requires_grad=False``), and activates evaluation mode (``eval()``).
 
     Complexity:
         O(P) time and space where P is the number of backbone parameters.
 
     Args:
-        model_name: Identifier for the desired model backbone. Can be a key from `config.backbone_registry` or any valid timm model name. If None, uses `config.default_extractor`.
+        model_name: Identifier for the desired model backbone. Can be a key from ``config.backbone_registry``, an ``open-clip:`` architecture, or any valid ``timm`` model name. If None, uses ``config.default_extractor``.
         pretrained: Whether to download and load pre-trained weights from the remote registry or Hugging Face Hub.
-        config: Model subsystem configuration. If None, loaded from global `get_settings().model`.
-        allow_fallback: Whether to fall back to the un-pretrained `config.fallback_extractor` if the requested model cannot be created.
+        config: Model subsystem configuration. If None, loaded from global ``get_settings().model``.
+        allow_fallback: Whether to fall back to the un-pretrained ``config.fallback_extractor`` if the requested model cannot be created.
 
     Returns:
         The instantiated PyTorch backbone with frozen parameters and evaluation mode active.
 
     Raises:
-        RuntimeError: If the requested model cannot be created and `allow_fallback` is False, or if both the requested model and the fallback architecture fail.
+        RuntimeError: If the requested model cannot be created and ``allow_fallback`` is False, or if both the requested model and the fallback architecture fail.
     """
     model_cfg = config or get_settings().model
     target_name = model_name or model_cfg.default_extractor
     resolved_name = model_cfg.backbone_registry.get(target_name, target_name)
 
     try:
-        model: nn.Module = timm.create_model(resolved_name, pretrained=pretrained, num_classes=0)
+        model = _instantiate_backbone(resolved_name, pretrained=pretrained)
     except Exception as exc:
         if not allow_fallback:
             raise RuntimeError(f"Could not create backbone '{resolved_name}' (pretrained={pretrained}): {exc}") from exc

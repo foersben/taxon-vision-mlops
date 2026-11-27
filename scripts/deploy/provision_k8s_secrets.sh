@@ -43,56 +43,58 @@ Options:
 EOF
 }
 
-POSITIONAL_ENV=""
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --env-file)
-            ENV_FILE="$2"
-            shift 2
-            ;;
-        --namespace)
-            TARGET_NAMESPACE="$2"
-            shift 2
-            ;;
-        --init-env)
-            INIT_ENV=true
-            shift
-            ;;
-        --force)
-            FORCE_OVERWRITE=true
-            shift
-            ;;
-        --dry-run)
-            DRY_RUN=true
-            shift
-            ;;
-        --mock)
-            MOCK_MODE=true
-            shift
-            ;;
-        --unsafe-reveal)
-            UNSAFE_REVEAL=true
-            shift
-            ;;
-        --help|-h)
-            print_usage
-            exit 0
-            ;;
-        -*)
-            echo "Error: Unknown argument '$1'" >&2
-            print_usage >&2
-            exit 1
-            ;;
-        *)
-            POSITIONAL_ENV="$1"
-            shift
-            ;;
-    esac
-done
+parse_args() {
+    local positional_env=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --env-file)
+                ENV_FILE="$2"
+                shift 2
+                ;;
+            --namespace)
+                TARGET_NAMESPACE="$2"
+                shift 2
+                ;;
+            --init-env)
+                INIT_ENV=true
+                shift
+                ;;
+            --force)
+                FORCE_OVERWRITE=true
+                shift
+                ;;
+            --dry-run)
+                DRY_RUN=true
+                shift
+                ;;
+            --mock)
+                MOCK_MODE=true
+                shift
+                ;;
+            --unsafe-reveal)
+                UNSAFE_REVEAL=true
+                shift
+                ;;
+            --help|-h)
+                print_usage
+                exit 0
+                ;;
+            -*)
+                echo "Error: Unknown argument '$1'" >&2
+                print_usage >&2
+                exit 1
+                ;;
+            *)
+                positional_env="$1"
+                shift
+                ;;
+        esac
+    done
 
-if [[ -n "${POSITIONAL_ENV}" ]]; then
-    ENV_FILE="${POSITIONAL_ENV}"
-fi
+    if [[ -n "${positional_env}" ]]; then
+        ENV_FILE="${positional_env}"
+    fi
+}
 
 gen_hex() {
     local nbytes="${1:-24}"
@@ -107,32 +109,17 @@ gen_fernet_key() {
     python3 -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode('ascii'))"
 }
 
-lookup_keepass_optional() {
-    local attr_key="$1"
-    local attr_val="$2"
-    if command -v secret-tool >/dev/null 2>&1; then
-        secret-tool lookup "${attr_key}" "${attr_val}" 2>/dev/null || true
-    fi
-}
-
-if [[ "${INIT_ENV}" == "true" ]]; then
+init_env_file() {
     if [[ -f "${ENV_FILE}" && "${FORCE_OVERWRITE}" != "true" ]]; then
         echo "Error: Refusing to overwrite existing '${ENV_FILE}' without --force." >&2
         exit 1
     fi
-    PARENT_DIR="$(dirname "${ENV_FILE}")"
-    if [[ ! -d "${PARENT_DIR}" ]]; then
-        mkdir -p "${PARENT_DIR}"
-        chmod 700 "${PARENT_DIR}"
-    fi
 
-    EXISTING_JENKINS=$(lookup_keepass_optional "Title" "Jenkins")
-    if [[ -z "${EXISTING_JENKINS}" ]]; then
-        EXISTING_JENKINS=$(lookup_keepass_optional "service" "jenkins")
-    fi
-    EXISTING_DAGSHUB=$(lookup_keepass_optional "service" "dagshub")
-    if [[ -z "${EXISTING_DAGSHUB}" ]]; then
-        EXISTING_DAGSHUB=$(lookup_keepass_optional "Title" "DagsHub")
+    local parent_dir
+    parent_dir="$(dirname "${ENV_FILE}")"
+    if [[ ! -d "${parent_dir}" ]]; then
+        mkdir -p "${parent_dir}"
+        chmod 700 "${parent_dir}"
     fi
 
     (
@@ -161,8 +148,8 @@ AIRFLOW__API_AUTH__JWT_SECRET=$(gen_hex 32)
 AIRFLOW_API_USER=admin
 AIRFLOW_ADMIN_PASSWORD=$(gen_hex 24)
 JENKINS_USER=admin
-JENKINS_API_TOKEN=${EXISTING_JENKINS:-REPLACE_WITH_JENKINS_ADMIN_API_TOKEN}
-DAGSHUB_TOKEN=${EXISTING_DAGSHUB:-REPLACE_WITH_DAGSHUB_PAT_TOKEN}
+JENKINS_API_TOKEN=${JENKINS_API_TOKEN:-REPLACE_WITH_JENKINS_ADMIN_API_TOKEN}
+DAGSHUB_TOKEN=${DAGSHUB_TOKEN:-REPLACE_WITH_DAGSHUB_PAT_TOKEN}
 
 # FastAPI Internal Bearer & Grafana Retrain Webhook Secrets
 INTERNAL_API_TOKEN=$(gen_hex 32)
@@ -172,13 +159,12 @@ EOF
     chmod 600 "${ENV_FILE}"
     echo "Generated restricted credential file '${ENV_FILE}' (mode 0600)."
     echo "Next steps:"
-    echo "  1. Archive these generated credentials in KeePassXC."
+    echo "  1. Store a backup copy of '${ENV_FILE}' in your password manager."
     echo "  2. If JENKINS_API_TOKEN or DAGSHUB_TOKEN still show REPLACE_WITH_*, set your real tokens and verify JENKINS_USER."
     echo "  3. Add SEAWEEDFS_ACCESS_KEY_ID / SEAWEEDFS_SECRET_ACCESS_KEY as Jenkins credential 'seaweedfs-s3-credentials'."
-    exit 0
-fi
+}
 
-if [[ "${MOCK_MODE}" == "true" ]]; then
+load_mock_secrets() {
     if [[ "${DRY_RUN}" != "true" ]]; then
         echo "Error: --mock mode is strictly limited to CI dry-run verification (--dry-run --mock)." >&2
         exit 1
@@ -200,20 +186,23 @@ if [[ "${MOCK_MODE}" == "true" ]]; then
     DAGSHUB_TOKEN="PLACEHOLDER_MOCK_DAGSHUB_$(gen_hex 6)"
     INTERNAL_API_TOKEN="PLACEHOLDER_MOCK_INTERNAL_$(gen_hex 8)"
     RETRAIN_WEBHOOK_SECRET="PLACEHOLDER_MOCK_WEBHOOK_$(gen_hex 8)"
-else
+}
+
+load_env_file() {
     if [[ ! -f "${ENV_FILE}" ]]; then
         echo "Error: Environment file not found at '${ENV_FILE}'." >&2
         echo "Hint: Generate one with '--init-env --env-file ${ENV_FILE}' or run CI verification via '--dry-run --mock'." >&2
         exit 1
     fi
 
-    FILE_PERMS=$(stat -c "%a" "${ENV_FILE}" 2>/dev/null || stat -f "%OLp" "${ENV_FILE}" 2>/dev/null || echo "unknown")
-    if [[ "${FILE_PERMS}" != "600" && "${FILE_PERMS}" != "400" && "${FILE_PERMS}" != "unknown" ]]; then
-        echo "Error: Insecure permissions (${FILE_PERMS}) on '${ENV_FILE}'. Require 0600 or 0400." >&2
+    local file_perms raw_line key value
+    file_perms=$(stat -c "%a" "${ENV_FILE}" 2>/dev/null || stat -f "%OLp" "${ENV_FILE}" 2>/dev/null || echo "unknown")
+    if [[ "${file_perms}" != "600" && "${file_perms}" != "400" && "${file_perms}" != "unknown" ]]; then
+        echo "Error: Insecure permissions (${file_perms}) on '${ENV_FILE}'. Require 0600 or 0400." >&2
         exit 1
     fi
 
-    declare -A SECRETS=()
+    declare -A secrets=()
     while IFS= read -r raw_line || [[ -n "${raw_line}" ]]; do
         [[ "${raw_line}" =~ ^[[:space:]]*# ]] && continue
         [[ -z "${raw_line// }" ]] && continue
@@ -221,82 +210,82 @@ else
         value="${raw_line#*=}"
         key="$(echo "${key}" | xargs)"
         value="$(echo "${value}" | sed -e 's/^[[:space:]]*["'\'']//' -e 's/["'\''][[:space:]]*$//')"
-        SECRETS["${key}"]="${value}"
+        secrets["${key}"]="${value}"
     done < "${ENV_FILE}"
 
-    POSTGRES_PASSWORD="${SECRETS[POSTGRES_PASSWORD]:-}"
-    TELEMETRY_DB_PASSWORD="${SECRETS[TELEMETRY_DB_PASSWORD]:-}"
-    OPTUNA_DB_PASSWORD="${SECRETS[OPTUNA_DB_PASSWORD]:-}"
-    AIRFLOW_DB_PASSWORD="${SECRETS[AIRFLOW_DB_PASSWORD]:-}"
-    SEAWEEDFS_ACCESS_KEY_ID="${SECRETS[SEAWEEDFS_ACCESS_KEY_ID]:-}"
-    SEAWEEDFS_SECRET_ACCESS_KEY="${SECRETS[SEAWEEDFS_SECRET_ACCESS_KEY]:-}"
-    GF_SECURITY_ADMIN_USER="${SECRETS[GF_SECURITY_ADMIN_USER]:-admin}"
-    GF_SECURITY_ADMIN_PASSWORD="${SECRETS[GF_SECURITY_ADMIN_PASSWORD]:-}"
-    AIRFLOW_FERNET_KEY="${SECRETS[AIRFLOW__CORE__FERNET_KEY]:-${SECRETS[AIRFLOW_FERNET_KEY]:-}}"
-    AIRFLOW_JWT_SECRET="${SECRETS[AIRFLOW__API_AUTH__JWT_SECRET]:-${SECRETS[AIRFLOW__API__AUTH_JWT_SECRET]:-${SECRETS[AIRFLOW_JWT_SECRET]:-}}}"
-    AIRFLOW_API_USER="${SECRETS[AIRFLOW_API_USER]:-admin}"
-    AIRFLOW_ADMIN_PASSWORD="${SECRETS[AIRFLOW_ADMIN_PASSWORD]:-}"
-    JENKINS_USER="${SECRETS[JENKINS_USER]:-benni}"
-    JENKINS_API_TOKEN="${SECRETS[JENKINS_API_TOKEN]:-}"
-    DAGSHUB_TOKEN="${SECRETS[DAGSHUB_TOKEN]:-${DAGSHUB_TOKEN:-}}"
-    if [[ -z "${DAGSHUB_TOKEN}" ]]; then
-        DAGSHUB_TOKEN=$(lookup_keepass_optional "service" "dagshub")
-    fi
+    POSTGRES_PASSWORD="${secrets[POSTGRES_PASSWORD]:-}"
+    TELEMETRY_DB_PASSWORD="${secrets[TELEMETRY_DB_PASSWORD]:-}"
+    OPTUNA_DB_PASSWORD="${secrets[OPTUNA_DB_PASSWORD]:-}"
+    AIRFLOW_DB_PASSWORD="${secrets[AIRFLOW_DB_PASSWORD]:-}"
+    SEAWEEDFS_ACCESS_KEY_ID="${secrets[SEAWEEDFS_ACCESS_KEY_ID]:-}"
+    SEAWEEDFS_SECRET_ACCESS_KEY="${secrets[SEAWEEDFS_SECRET_ACCESS_KEY]:-}"
+    GF_SECURITY_ADMIN_USER="${secrets[GF_SECURITY_ADMIN_USER]:-admin}"
+    GF_SECURITY_ADMIN_PASSWORD="${secrets[GF_SECURITY_ADMIN_PASSWORD]:-}"
+    AIRFLOW_FERNET_KEY="${secrets[AIRFLOW__CORE__FERNET_KEY]:-${secrets[AIRFLOW_FERNET_KEY]:-}}"
+    AIRFLOW_JWT_SECRET="${secrets[AIRFLOW__API_AUTH__JWT_SECRET]:-${secrets[AIRFLOW__API__AUTH_JWT_SECRET]:-${secrets[AIRFLOW_JWT_SECRET]:-}}}"
+    AIRFLOW_API_USER="${secrets[AIRFLOW_API_USER]:-admin}"
+    AIRFLOW_ADMIN_PASSWORD="${secrets[AIRFLOW_ADMIN_PASSWORD]:-}"
+    JENKINS_USER="${secrets[JENKINS_USER]:-benni}"
+    JENKINS_API_TOKEN="${secrets[JENKINS_API_TOKEN]:-${JENKINS_API_TOKEN:-}}"
+    DAGSHUB_TOKEN="${secrets[DAGSHUB_TOKEN]:-${DAGSHUB_TOKEN:-}}"
     if [[ -z "${DAGSHUB_TOKEN}" && "${DRY_RUN}" != "true" ]] && command -v kubectl >/dev/null 2>&1; then
         DAGSHUB_TOKEN=$(kubectl get secret dagshub-credentials -n taxon-vision -o jsonpath='{.data.DAGSHUB_TOKEN}' 2>/dev/null | base64 -d 2>/dev/null || true)
     fi
-    INTERNAL_API_TOKEN="${SECRETS[TAXON_INTERNAL_API_TOKEN]:-${SECRETS[INTERNAL_API_TOKEN]:-}}"
-    RETRAIN_WEBHOOK_SECRET="${SECRETS[TAXON_RETRAIN_WEBHOOK_SECRET]:-${SECRETS[RETRAIN_WEBHOOK_SECRET]:-}}"
+    INTERNAL_API_TOKEN="${secrets[TAXON_INTERNAL_API_TOKEN]:-${secrets[INTERNAL_API_TOKEN]:-}}"
+    RETRAIN_WEBHOOK_SECRET="${secrets[TAXON_RETRAIN_WEBHOOK_SECRET]:-${secrets[RETRAIN_WEBHOOK_SECRET]:-}}"
 
     # Support explicit URI overrides if supplied, otherwise derive deterministically from role passwords
-    TELEMETRY_DATABASE_URL="${SECRETS[TAXON_TELEMETRY__DATABASE_URL]:-${SECRETS[TELEMETRY_DATABASE_URL]:-}}"
-    OPTUNA_STORAGE_URI="${SECRETS[TAXON_OPTUNA_STORAGE_URI]:-${SECRETS[OPTUNA_STORAGE_URI]:-}}"
-    OPTUNA_DASHBOARD_STORAGE_URI="${SECRETS[OPTUNA_DASHBOARD_STORAGE_URI]:-}"
-    AIRFLOW_DB_URI="${SECRETS[AIRFLOW__DATABASE__SQL_ALCHEMY_CONN]:-${SECRETS[AIRFLOW_DB_URI]:-}}"
-fi
+    TELEMETRY_DATABASE_URL="${secrets[TAXON_TELEMETRY__DATABASE_URL]:-${secrets[TELEMETRY_DATABASE_URL]:-}}"
+    OPTUNA_STORAGE_URI="${secrets[TAXON_OPTUNA_STORAGE_URI]:-${secrets[OPTUNA_STORAGE_URI]:-}}"
+    OPTUNA_DASHBOARD_STORAGE_URI="${secrets[OPTUNA_DASHBOARD_STORAGE_URI]:-}"
+    AIRFLOW_DB_URI="${secrets[AIRFLOW__DATABASE__SQL_ALCHEMY_CONN]:-${secrets[AIRFLOW_DB_URI]:-}}"
+}
 
-PG_HOST="postgres.taxon-vision.svc.cluster.local:5432"
-TELEMETRY_DATABASE_URL="${TELEMETRY_DATABASE_URL:-postgresql+psycopg://telemetry:${TELEMETRY_DB_PASSWORD}@${PG_HOST}/telemetry}"
-OPTUNA_STORAGE_URI="${OPTUNA_STORAGE_URI:-postgresql+psycopg://optuna:${OPTUNA_DB_PASSWORD}@${PG_HOST}/optuna}"
-OPTUNA_DASHBOARD_STORAGE_URI="${OPTUNA_DASHBOARD_STORAGE_URI:-postgresql+psycopg2://optuna:${OPTUNA_DB_PASSWORD}@${PG_HOST}/optuna}"
-AIRFLOW_DB_URI="${AIRFLOW_DB_URI:-postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@${PG_HOST}/airflow}"
+derive_and_validate_secrets() {
+    local pg_host="postgres.taxon-vision.svc.cluster.local:5432"
+    TELEMETRY_DATABASE_URL="${TELEMETRY_DATABASE_URL:-postgresql+psycopg://telemetry:${TELEMETRY_DB_PASSWORD}@${pg_host}/telemetry}"
+    OPTUNA_STORAGE_URI="${OPTUNA_STORAGE_URI:-postgresql+psycopg://optuna:${OPTUNA_DB_PASSWORD}@${pg_host}/optuna}"
+    OPTUNA_DASHBOARD_STORAGE_URI="${OPTUNA_DASHBOARD_STORAGE_URI:-postgresql+psycopg2://optuna:${OPTUNA_DB_PASSWORD}@${pg_host}/optuna}"
+    AIRFLOW_DB_URI="${AIRFLOW_DB_URI:-postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@${pg_host}/airflow}"
 
-REQUIRED_VARS=(
-    POSTGRES_PASSWORD
-    TELEMETRY_DB_PASSWORD
-    OPTUNA_DB_PASSWORD
-    AIRFLOW_DB_PASSWORD
-    SEAWEEDFS_ACCESS_KEY_ID
-    SEAWEEDFS_SECRET_ACCESS_KEY
-    GF_SECURITY_ADMIN_PASSWORD
-    AIRFLOW_FERNET_KEY
-    AIRFLOW_JWT_SECRET
-    AIRFLOW_ADMIN_PASSWORD
-    JENKINS_API_TOKEN
-    INTERNAL_API_TOKEN
-    RETRAIN_WEBHOOK_SECRET
-    JENKINS_USER
-)
+    local -a required_vars=(
+        POSTGRES_PASSWORD
+        TELEMETRY_DB_PASSWORD
+        OPTUNA_DB_PASSWORD
+        AIRFLOW_DB_PASSWORD
+        SEAWEEDFS_ACCESS_KEY_ID
+        SEAWEEDFS_SECRET_ACCESS_KEY
+        GF_SECURITY_ADMIN_PASSWORD
+        AIRFLOW_FERNET_KEY
+        AIRFLOW_JWT_SECRET
+        AIRFLOW_ADMIN_PASSWORD
+        JENKINS_API_TOKEN
+        INTERNAL_API_TOKEN
+        RETRAIN_WEBHOOK_SECRET
+        JENKINS_USER
+    )
 
-for var_name in "${REQUIRED_VARS[@]}"; do
-    val="${!var_name}"
-    if [[ -z "${val}" ]]; then
-        echo "Error: Required secret '${var_name}' is empty or missing." >&2
+    local var_name val
+    for var_name in "${required_vars[@]}"; do
+        val="${!var_name}"
+        if [[ -z "${val}" ]]; then
+            echo "Error: Required secret '${var_name}' is empty or missing." >&2
+            exit 1
+        fi
+        if [[ "${DRY_RUN}" != "true" && "${val}" =~ ^(REPLACE_WITH_|CHANGE_ME_|PLACEHOLDER_) ]]; then
+            echo "Error: Secret '${var_name}' still holds an unreplaced placeholder value." >&2
+            exit 1
+        fi
+    done
+
+    if [[ "${DRY_RUN}" != "true" && "${DAGSHUB_TOKEN:-}" =~ ^(REPLACE_WITH_|CHANGE_ME_|PLACEHOLDER_) ]]; then
+        echo "Error: Secret 'DAGSHUB_TOKEN' still holds an unreplaced placeholder value." >&2
         exit 1
     fi
-    if [[ "${DRY_RUN}" != "true" && "${val}" =~ ^(REPLACE_WITH_|CHANGE_ME_|PLACEHOLDER_) ]]; then
-        echo "Error: Secret '${var_name}' still holds an unreplaced placeholder value." >&2
-        exit 1
+    if [[ -z "${DAGSHUB_TOKEN:-}" ]]; then
+        echo "Note: DAGSHUB_TOKEN is empty; DagsHub Label Studio sync and MLflow experiment tracking remain inactive until configured." >&2
     fi
-done
-
-if [[ "${DRY_RUN}" != "true" && "${DAGSHUB_TOKEN:-}" =~ ^(REPLACE_WITH_|CHANGE_ME_|PLACEHOLDER_) ]]; then
-    echo "Error: Secret 'DAGSHUB_TOKEN' still holds an unreplaced placeholder value." >&2
-    exit 1
-fi
-if [[ -z "${DAGSHUB_TOKEN:-}" ]]; then
-    echo "Note: DAGSHUB_TOKEN is empty; DagsHub Label Studio sync and MLflow experiment tracking remain inactive until configured." >&2
-fi
+}
 
 render_s3_json() {
     local access_key="$1"
@@ -349,9 +338,7 @@ emit_infra_secrets_yaml() {
     jnk_usr="$(mask_val "${JENKINS_USER}")"
     jnk_tok="$(mask_val "${JENKINS_API_TOKEN}")"
     dh_tok=""
-    if [[ -n "${DAGSHUB_TOKEN:-}" ]]; then
-        dh_tok="$(mask_val "${DAGSHUB_TOKEN}")"
-    fi
+    [[ -n "${DAGSHUB_TOKEN:-}" ]] && dh_tok="$(mask_val "${DAGSHUB_TOKEN}")"
     s3_json_indented="$(render_s3_json "${s3_ak}" "${s3_sk}" | sed 's/^/    /')"
 
     cat <<EOF
@@ -436,9 +423,7 @@ emit_app_secret_yaml() {
     af_usr="$(mask_val "${AIRFLOW_API_USER}")"
     af_pw="$(mask_val "${AIRFLOW_ADMIN_PASSWORD}")"
     dh_tok=""
-    if [[ -n "${DAGSHUB_TOKEN:-}" ]]; then
-        dh_tok="$(mask_val "${DAGSHUB_TOKEN}")"
-    fi
+    [[ -n "${DAGSHUB_TOKEN:-}" ]] && dh_tok="$(mask_val "${DAGSHUB_TOKEN}")"
 
     cat <<EOF
 apiVersion: v1
@@ -481,18 +466,38 @@ emit_all_manifests() {
     done
 }
 
-if [[ "${DRY_RUN}" == "true" ]]; then
-    echo "# Dry-run secret manifest generation (target=${TARGET_NAMESPACE})"
-    emit_all_manifests
-    exit 0
-fi
+main() {
+    parse_args "$@"
 
-KUBECTL_BIN=$(command -v kubectl || echo "")
-if [[ -z "${KUBECTL_BIN}" ]]; then
-    echo "Error: kubectl binary not found in PATH." >&2
-    exit 1
-fi
+    if [[ "${INIT_ENV}" == "true" ]]; then
+        init_env_file
+        exit 0
+    fi
 
-echo "Applying Kubernetes secrets (target=${TARGET_NAMESPACE})..."
-emit_all_manifests | "${KUBECTL_BIN}" apply -f -
-echo "Successfully provisioned encrypted Kubernetes Secrets (target=${TARGET_NAMESPACE})."
+    if [[ "${MOCK_MODE}" == "true" ]]; then
+        load_mock_secrets
+    else
+        load_env_file
+    fi
+
+    derive_and_validate_secrets
+
+    if [[ "${DRY_RUN}" == "true" ]]; then
+        echo "# Dry-run secret manifest generation (target=${TARGET_NAMESPACE})"
+        emit_all_manifests
+        exit 0
+    fi
+
+    local kubectl_bin
+    kubectl_bin=$(command -v kubectl || echo "")
+    if [[ -z "${kubectl_bin}" ]]; then
+        echo "Error: kubectl binary not found in PATH." >&2
+        exit 1
+    fi
+
+    echo "Applying Kubernetes secrets (target=${TARGET_NAMESPACE})..."
+    emit_all_manifests | "${kubectl_bin}" apply -f -
+    echo "Successfully provisioned encrypted Kubernetes Secrets (target=${TARGET_NAMESPACE})."
+}
+
+main "$@"

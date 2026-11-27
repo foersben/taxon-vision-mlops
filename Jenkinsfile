@@ -197,7 +197,6 @@ spec:
         timeout(time: 150, unit: 'MINUTES')
       }
       environment {
-        // INGEST_DATA = "${params.INGEST_DATA || currentBuild.getBuildCauses().any { it.toString().contains('TimerTrigger') }}"
         INGEST_DATA = "${params.INGEST_DATA}"
         TUNE_HYPERPARAMETERS = "${params.TUNE_HYPERPARAMETERS}"
         EXTRACTOR = "${params.EXTRACTOR}"
@@ -211,9 +210,10 @@ spec:
           allOf {
             branch 'develop'
             anyOf {
+              changeset "config/default_config.yaml"
+              changeset "config/conformal_config.yaml"
               changeset "config/taxa_catalog.yaml"
               changeset "data/**"
-              changeset "config/**"
               changeset "params.yaml"
               changeset "dvc.yaml"
               changeset "src/taxon_vision/models/**"
@@ -338,15 +338,19 @@ spec:
               fi
 
             # Synchronise Airflow 3 DAGs & helper dependencies into ConfigMaps before applying Airflow
-            set --
-            for f in airflow/dags/*.py; do
-              [ -f "$f" ] && set -- "$@" "--from-file=$f"
-            done
-            kubectl create configmap airflow-dags "$@" -n taxon-vision --dry-run=client -o yaml | kubectl apply -f -
+            sync_py_configmap() {
+              cm_name="$1"; shift
+              count=$#; i=0
+              while [ "$i" -lt "$count" ]; do
+                f="$1"; shift
+                [ -f "$f" ] && set -- "$@" "--from-file=${f}"
+                i=$((i + 1))
+              done
+              kubectl create configmap "${cm_name}" "$@" -n taxon-vision --dry-run=client -o yaml | kubectl apply -f -
+            }
+            sync_py_configmap airflow-dags airflow/dags/*.py
+            sync_py_configmap airflow-active-learning src/taxon_vision/active_learning/*.py
             kubectl create configmap airflow-taxon-deps \
-              --from-file=feedback.py=src/taxon_vision/active_learning/feedback.py \
-              --from-file=label_studio_sync.py=src/taxon_vision/active_learning/label_studio_sync.py \
-              --from-file=triage_queue.py=src/taxon_vision/active_learning/triage_queue.py \
               --from-file=taxa_catalog.yaml=config/taxa_catalog.yaml \
               -n taxon-vision --dry-run=client -o yaml | kubectl apply -f -
 
@@ -410,7 +414,7 @@ spec:
             fi
 
             # Verify deployment health
-            kubectl rollout status deployment/taxon-vision-serving -n ${TARGET_NS} --timeout=300s
+            kubectl rollout status deployment/taxon-vision-serving -n ${TARGET_NS} --timeout=600s
             bash scripts/ci/verify_deployment.sh ${TARGET_NS}
             echo ">>> Deployment successfully verified for ${TARGET_ENV}."
             '''

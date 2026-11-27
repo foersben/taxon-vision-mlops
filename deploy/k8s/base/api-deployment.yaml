@@ -29,7 +29,7 @@ spec:
         command:
         - sh
         - -c
-        - mkdir -p /app/data/flagged_observations /var/lib/taxon-vision/evidently && chown -R 10001:10001 /app/data/flagged_observations /var/lib/taxon-vision/evidently
+        - mkdir -p /app/data/flagged_observations /var/lib/taxon-vision/evidently && chown -R 10001:10001 /app/data/flagged_observations /var/lib/taxon-vision/evidently && chmod -R g+rwX /app/data/flagged_observations && chmod g+s /app/data/flagged_observations
         volumeMounts:
         - name: flagged-observations-volume
           mountPath: /app/data/flagged_observations
@@ -54,8 +54,6 @@ spec:
           value: "0.0.0.0"
         - name: TAXON_SERVICE__REDIS_URL
           value: "redis://redis-ephemeral.taxon-vision.svc.cluster.local:6379/0"
-        - name: TAXON_TELEMETRY_ALLOW_IN_MEMORY_FALLBACK
-          value: "true"
         - name: TAXON_TELEMETRY__ALLOW_IN_MEMORY_FALLBACK
           value: "true"
         - name: TAXON_OPTUNA__OPTUNA_STORAGE_URI

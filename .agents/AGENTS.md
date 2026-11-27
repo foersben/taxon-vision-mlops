@@ -32,7 +32,7 @@ Primary routing table for AI IDEs defining roles in `.agents/roles/` and core co
 | `@taxonomic-architect` | Manages DarwinCore schemas and taxonomic trees. | Taxonomy, GBIF, biological classifications. |
 | `@mlops-data-engineer` | S3 streaming, DVC versioning, license filtering. | Data ingestion, DVC, AWS datasets. |
 | `@model-engineer` | Timm backbone factory, Class-Balanced Loss, training. | PyTorch training, model heads, loss functions. |
-| `@inference-optimizer` | ONNX Runtime, quantization (INT8/FP16), Grad-CAM. | Inference speed, latency, ONNX export. |
+| `@inference-optimizer` | ONNX Runtime, quantization (INT8/FP16), CAM. | Inference speed, latency, ONNX export. |
 | `@uncertainty-safety-engineer` | Conformal prediction sets, OOD energy detection. | Uncertainty calibration, coverage bounds, OOD. |
 | `@active-learning-engineer` | BADGE, CoreSet query strategies, human review queue. | Active learning, triage ranking, annotations. |
 | `@observability-engineer` | Prometheus metrics, embedding & concept drift. | Telemetry, drift detection, Pareto curves. |

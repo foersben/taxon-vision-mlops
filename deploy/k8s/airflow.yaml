@@ -182,17 +182,8 @@ spec:
         - name: airflow-dags
           mountPath: /opt/airflow/dags
           readOnly: true
-        - name: airflow-taxon-deps
-          mountPath: /opt/airflow/src/taxon_vision/active_learning/feedback.py
-          subPath: feedback.py
-          readOnly: true
-        - name: airflow-taxon-deps
-          mountPath: /opt/airflow/src/taxon_vision/active_learning/label_studio_sync.py
-          subPath: label_studio_sync.py
-          readOnly: true
-        - name: airflow-taxon-deps
-          mountPath: /opt/airflow/src/taxon_vision/active_learning/triage_queue.py
-          subPath: triage_queue.py
+        - name: airflow-active-learning
+          mountPath: /opt/airflow/src/taxon_vision/active_learning
           readOnly: true
         - name: airflow-taxon-deps
           mountPath: /opt/airflow/config/taxa_catalog.yaml
@@ -229,6 +220,9 @@ spec:
           name: airflow-dags
       - name: airflow-dags
         emptyDir: {}
+      - name: airflow-active-learning
+        configMap:
+          name: airflow-active-learning
       - name: airflow-taxon-deps
         configMap:
           name: airflow-taxon-deps
@@ -281,6 +275,7 @@ spec:
         runAsUser: 50000
         runAsGroup: 0
         fsGroup: 0
+        supplementalGroups: [10001]
         appArmorProfile:
           type: Unconfined
       initContainers:
@@ -411,17 +406,8 @@ spec:
         - name: airflow-dags
           mountPath: /opt/airflow/dags
           readOnly: true
-        - name: airflow-taxon-deps
-          mountPath: /opt/airflow/src/taxon_vision/active_learning/feedback.py
-          subPath: feedback.py
-          readOnly: true
-        - name: airflow-taxon-deps
-          mountPath: /opt/airflow/src/taxon_vision/active_learning/label_studio_sync.py
-          subPath: label_studio_sync.py
-          readOnly: true
-        - name: airflow-taxon-deps
-          mountPath: /opt/airflow/src/taxon_vision/active_learning/triage_queue.py
-          subPath: triage_queue.py
+        - name: airflow-active-learning
+          mountPath: /opt/airflow/src/taxon_vision/active_learning
           readOnly: true
         - name: airflow-taxon-deps
           mountPath: /opt/airflow/config/taxa_catalog.yaml
@@ -504,17 +490,8 @@ spec:
         - name: airflow-dags
           mountPath: /opt/airflow/dags
           readOnly: true
-        - name: airflow-taxon-deps
-          mountPath: /opt/airflow/src/taxon_vision/active_learning/feedback.py
-          subPath: feedback.py
-          readOnly: true
-        - name: airflow-taxon-deps
-          mountPath: /opt/airflow/src/taxon_vision/active_learning/label_studio_sync.py
-          subPath: label_studio_sync.py
-          readOnly: true
-        - name: airflow-taxon-deps
-          mountPath: /opt/airflow/src/taxon_vision/active_learning/triage_queue.py
-          subPath: triage_queue.py
+        - name: airflow-active-learning
+          mountPath: /opt/airflow/src/taxon_vision/active_learning
           readOnly: true
         - name: airflow-taxon-deps
           mountPath: /opt/airflow/config/taxa_catalog.yaml
@@ -546,6 +523,9 @@ spec:
           name: airflow-dags
       - name: airflow-dags
         emptyDir: {}
+      - name: airflow-active-learning
+        configMap:
+          name: airflow-active-learning
       - name: airflow-taxon-deps
         configMap:
           name: airflow-taxon-deps

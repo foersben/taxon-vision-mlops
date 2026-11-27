@@ -20,10 +20,11 @@ COPY --chown=appuser:appgroup scripts/ scripts/
 # Install the minimal CPU-only production/inference environment directly as non-root user
 RUN pixi install --frozen -e ci
 
-# Copy configuration, model checkpoints, and default parameters
+# Copy configuration, tracked evaluation reports, and default parameters
 COPY --chown=appuser:appgroup config/ config/
 COPY --chown=appuser:appgroup params.yaml ./params.yaml
-RUN mkdir -p models/checkpoints data/sample data/optuna data/flagged_observations reports && \
+COPY --chown=appuser:appgroup reports/pareto_evaluation.json reports/train_metrics.json reports/conformal_metrics.json reports/data_drift.json reports/
+RUN mkdir -p models/checkpoints data/sample data/optuna data/flagged_observations && \
   chown -R appuser:appgroup models data reports
 
 # Expose FastAPI HTTP serving port
