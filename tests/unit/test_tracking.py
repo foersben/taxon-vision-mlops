@@ -20,30 +20,31 @@ from mlflow.models import ModelSignature
 from mlflow.types.schema import Schema, TensorSpec
 
 from taxon_vision.models.training.dataset import get_dvc_dataset_hash
-from taxon_vision.models.training.promotion import (
-    ModelPromotionTarget,
-    PromotionCriteria,
-    evaluate_promotion_gates,
-    promote_candidate_model,
-)
-from taxon_vision.models.training.tracking import (
-    MLflowTracker,
-    _attach_mlflow_artifact_safely,
-    _determine_promotion_alias,
-    _end_mlflow_run_safely,
-    _log_mlflow_metrics,
-    _plot_confusion_matrix,
-    _prepare_model_signature_and_example,
-    _promote_model_if_better,
-    _resolve_reachable_tracking_uri,
-    log_training_visualizations,
-    mlflow_run_scope,
-    resume_parent_mlflow_run,
-)
 from taxon_vision.models.training.types import PromotionAlias
 from taxon_vision.models.training.visualizations import (
     HoldoutVisualizationPayload,
+    _plot_confusion_matrix,
     log_holdout_visualizations,
+    log_training_visualizations,
+)
+from taxon_vision.registry.dataset_lineage import log_mlflow_metrics
+from taxon_vision.registry.promotion import (
+    evaluate_promotion_gates,
+    promote_candidate_model,
+)
+from taxon_vision.registry.run_context import (
+    MLflowTracker,
+    attach_mlflow_artifact_safely,
+    end_mlflow_run_safely,
+    mlflow_run_scope,
+    resolve_reachable_tracking_uri,
+    resume_parent_mlflow_run,
+)
+from taxon_vision.registry.types import (
+    ModelPromotionTarget,
+    ONNXModelLogSpec,
+    PromotionCriteria,
+    PyTorchModelLogSpec,
 )
 
 
@@ -97,37 +98,37 @@ def test_get_dvc_dataset_hash_malformed(tmp_path: Path, monkeypatch: pytest.Monk
 
 
 def test_end_mlflow_run_safely(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify _end_mlflow_run_safely delegates to mlflow.end_run and swallows exceptions."""
+    """Verify end_mlflow_run_safely delegates to mlflow.end_run and swallows exceptions."""
     mock_end_run = MagicMock()
     monkeypatch.setattr(mlflow, "end_run", mock_end_run)
 
-    _end_mlflow_run_safely("FINISHED")
+    end_mlflow_run_safely("FINISHED")
     mock_end_run.assert_called_once_with(status="FINISHED")
 
     # When mlflow raises an exception, it should not propagate
     mock_end_run.side_effect = RuntimeError("Tracking server down")
-    _end_mlflow_run_safely("FAILED")
+    end_mlflow_run_safely("FAILED")
 
 
 def test_attach_mlflow_artifact_safely(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify _attach_mlflow_artifact_safely attaches existing files and handles missing files."""
+    """Verify attach_mlflow_artifact_safely attaches existing files and handles missing files."""
     mock_log_artifact = MagicMock()
     monkeypatch.setattr(mlflow, "log_artifact", mock_log_artifact)
 
     # None path or nonexistent path: no action
-    _attach_mlflow_artifact_safely(None)
-    _attach_mlflow_artifact_safely(tmp_path / "nonexistent.log")
+    attach_mlflow_artifact_safely(None)
+    attach_mlflow_artifact_safely(tmp_path / "nonexistent.log")
     assert mock_log_artifact.call_count == 0
 
     # Existing file: logs artifact
     real_log = tmp_path / "training.log"
     real_log.write_text("epoch 1", encoding="utf-8")
-    _attach_mlflow_artifact_safely(real_log)
+    attach_mlflow_artifact_safely(real_log)
     mock_log_artifact.assert_called_once_with(str(real_log))
 
     # Exception during artifact logging: swallowed safely
     mock_log_artifact.side_effect = OSError("Disk error")
-    _attach_mlflow_artifact_safely(real_log)
+    attach_mlflow_artifact_safely(real_log)
 
 
 def test_mlflow_run_scope_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -146,7 +147,7 @@ def test_mlflow_run_scope_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(mlflow, "log_params", mock_log_params)
     monkeypatch.setattr(mlflow, "log_param", mock_log_param)
     monkeypatch.setattr(mlflow, "set_tag", mock_set_tag)
-    monkeypatch.setattr("taxon_vision.models.training.tracking.get_dvc_dataset_hash", lambda: "mock_dvc_hash")
+    monkeypatch.setattr("taxon_vision.registry.run_context.get_dvc_dataset_hash", lambda: "mock_dvc_hash")
 
     log_file = tmp_path / "run.log"
     log_file.write_text("test logs", encoding="utf-8")
@@ -173,7 +174,7 @@ def test_mlflow_run_scope_failure_propagation(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(mlflow, "log_params", MagicMock())
     monkeypatch.setattr(mlflow, "log_param", MagicMock())
     monkeypatch.setattr(mlflow, "set_tag", MagicMock())
-    monkeypatch.setattr("taxon_vision.models.training.tracking.get_dvc_dataset_hash", lambda: "mock_dvc_hash")
+    monkeypatch.setattr("taxon_vision.registry.run_context.get_dvc_dataset_hash", lambda: "mock_dvc_hash")
 
     with pytest.raises(ValueError, match="Training exploded"), mlflow_run_scope("failing_run"):
         raise ValueError("Training exploded")
@@ -193,7 +194,7 @@ def test_mlflow_run_scope_unreachable_server(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_log_mlflow_metrics(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify _log_mlflow_metrics logs per-epoch trajectories and training duration."""
+    """Verify log_mlflow_metrics logs per-epoch trajectories and training duration."""
     mock_log_metrics = MagicMock()
     mock_log_metric = MagicMock()
     monkeypatch.setattr(mlflow, "log_metrics", mock_log_metrics)
@@ -207,141 +208,14 @@ def test_log_mlflow_metrics(monkeypatch: pytest.MonkeyPatch) -> None:
         "val_pr_auc": [0.70, 0.85],
     }
 
-    _log_mlflow_metrics(history, duration=12.5)
+    log_mlflow_metrics(history, duration=12.5)
 
     assert mock_log_metrics.call_count == 2
     mock_log_metric.assert_called_once_with("duration_seconds", 12.5)
 
     # Safe handling of exceptions
     mock_log_metrics.side_effect = RuntimeError("Tracking failure")
-    _log_mlflow_metrics(history, duration=10.0)
-
-
-def test_promote_model_initial_production(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify first registered model is tagged as Production when no baseline exists."""
-    dummy_model = nn.Sequential(nn.Dropout(0.2), nn.Linear(32, 5))
-
-    mock_model_info = MagicMock(model_uri="runs:/123/model")
-    mock_model_info.registered_model_version = "1"
-    monkeypatch.setattr(mlflow.pytorch, "log_model", MagicMock(return_value=mock_model_info))
-    monkeypatch.setattr(mlflow, "log_metric", MagicMock())
-    monkeypatch.setattr(mlflow, "set_tag", MagicMock())
-    monkeypatch.setattr(mlflow, "register_model", MagicMock(return_value=MagicMock(version="1")))
-
-    mock_client = MagicMock()
-    mock_client.get_model_version_by_alias.side_effect = Exception("No alias found")
-    monkeypatch.setattr("mlflow.tracking.MlflowClient", lambda: mock_client)
-
-    alias = _promote_model_if_better(dummy_model, pr_auc=0.82)
-    assert alias == "Production"
-    mock_client.set_registered_model_alias.assert_called_once_with("taxon_vision_classifier", "Production", "1")
-
-
-def test_promote_model_challenger(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify new superior model is registered and tagged as Challenger for canary evaluation."""
-    dummy_model = nn.Sequential(nn.Linear(64, 10))
-
-    mock_model_info = MagicMock(model_uri="runs:/123/model")
-    mock_model_info.registered_model_version = "2"
-    monkeypatch.setattr(mlflow.pytorch, "log_model", MagicMock(return_value=mock_model_info))
-    monkeypatch.setattr(mlflow, "log_metric", MagicMock())
-    monkeypatch.setattr(mlflow, "set_tag", MagicMock())
-    monkeypatch.setattr(mlflow, "register_model", MagicMock(return_value=MagicMock(version="2")))
-
-    mock_prod_version = MagicMock(run_id="prod_run_123")
-    mock_prod_run = MagicMock()
-    mock_prod_run.data.metrics = {"val_promotion_score": 0.75}
-
-    mock_client = MagicMock()
-    mock_client.get_model_version_by_alias.return_value = mock_prod_version
-    mock_client.get_run.return_value = mock_prod_run
-    monkeypatch.setattr("mlflow.tracking.MlflowClient", lambda: mock_client)
-
-    alias = _promote_model_if_better(dummy_model, pr_auc=0.88)
-    assert alias == "Challenger"
-    mock_client.set_registered_model_alias.assert_called_once_with("taxon_vision_classifier", "Challenger", "2")
-
-
-def test_promote_model_skipped_below_incumbent(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify underperforming model is not registered and tagged as skipped_below_incumbent."""
-    dummy_model = nn.Sequential(nn.Linear(64, 10))
-
-    mock_model_info = MagicMock(model_uri="runs:/123/model")
-    monkeypatch.setattr(mlflow.pytorch, "log_model", MagicMock(return_value=mock_model_info))
-    monkeypatch.setattr(mlflow, "log_metric", MagicMock())
-    mock_set_tag = MagicMock()
-    monkeypatch.setattr(mlflow, "set_tag", mock_set_tag)
-    mock_register_model = MagicMock()
-    monkeypatch.setattr(mlflow, "register_model", mock_register_model)
-
-    mock_prod_version = MagicMock(run_id="prod_run_123")
-    mock_prod_run = MagicMock()
-    mock_prod_run.data.metrics = {"val_promotion_score": 0.85}
-
-    mock_client = MagicMock()
-    mock_client.get_model_version_by_alias.return_value = mock_prod_version
-    mock_client.get_run.return_value = mock_prod_run
-    monkeypatch.setattr("mlflow.tracking.MlflowClient", lambda: mock_client)
-
-    # 1. Inferior score (0.80 < 0.85) -> skipped_below_incumbent
-    alias = _promote_model_if_better(dummy_model, pr_auc=0.80)
-    assert alias == "skipped_below_incumbent"
-    mock_register_model.assert_not_called()
-    mock_set_tag.assert_any_call("registry.status", "skipped_below_incumbent")
-
-    # 2. Equal score (0.85 == 0.85) -> strictly beats required -> skipped_below_incumbent
-    alias_tie = _promote_model_if_better(dummy_model, pr_auc=0.85)
-    assert alias_tie == "skipped_below_incumbent"
-    mock_register_model.assert_not_called()
-
-
-def test_promote_model_serialization_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify None is returned when model logging fails completely."""
-    dummy_model = nn.Sequential(nn.Linear(16, 2))
-    monkeypatch.setattr(mlflow.pytorch, "log_model", MagicMock(side_effect=RuntimeError("Serialization error")))
-    monkeypatch.setattr(mlflow, "log_metric", MagicMock())
-
-    alias = _promote_model_if_better(dummy_model, pr_auc=0.75)
-    assert alias is None
-
-
-def test_promote_model_with_real_val_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify real validation embeddings infer model signature and populate version metadata."""
-    dummy_model = nn.Sequential(nn.Linear(32, 5))
-    val_embeddings = torch.randn(10, 32)
-
-    mock_model_info = MagicMock(model_uri="runs:/123/model")
-    mock_model_info.registered_model_version = "4"
-    mock_log_model = MagicMock(return_value=mock_model_info)
-    monkeypatch.setattr(mlflow.pytorch, "log_model", mock_log_model)
-    monkeypatch.setattr(mlflow, "log_metric", MagicMock())
-    monkeypatch.setattr(mlflow, "set_tag", MagicMock())
-    monkeypatch.setattr(mlflow, "register_model", MagicMock(return_value=MagicMock(version="4")))
-
-    mock_client = MagicMock()
-    mock_client.get_model_version_by_alias.side_effect = Exception("No alias found")
-    monkeypatch.setattr("mlflow.tracking.MlflowClient", lambda: mock_client)
-
-    alias = _promote_model_if_better(
-        dummy_model,
-        pr_auc=0.92,
-        val_embeddings=val_embeddings,
-        extractor="dinov3",
-    )
-    assert alias == "Production"
-
-    # Verify signature and input example were provided
-    mock_log_model.assert_called_once()
-    kwargs = mock_log_model.call_args.kwargs
-    assert kwargs.get("signature") is not None
-    example = kwargs.get("input_example")
-    assert example is not None
-    assert example.shape == (5, 32)
-
-    # Verify model metadata updates
-    mock_client.update_model_version.assert_called_once()
-    mock_client.set_model_version_tag.assert_any_call("taxon_vision_classifier", "4", "extractor", "dinov3")
-    mock_client.set_model_version_tag.assert_any_call("taxon_vision_classifier", "4", "val_pr_auc", "0.9200")
+    log_mlflow_metrics(history, duration=10.0)
 
 
 def test_log_training_visualizations(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -421,46 +295,6 @@ def test_log_holdout_visualizations(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "visualizations/pareto_frontier.png" in artifact_paths
 
 
-def test_determine_promotion_alias_tie_break() -> None:
-    """Verify promotion tie-breaking logic favors replacement on equal or better metrics."""
-    mock_client = MagicMock()
-
-    # Scenario 1: Initial model when no production exists -> Production
-    mock_client.get_model_version_by_alias.side_effect = Exception("No alias")
-    alias = _determine_promotion_alias(mock_client, "taxon_vision_classifier", version="1", pr_auc=0.8500)
-    assert alias == "Production"
-
-    # Scenario 2: Production exists at 0.85. Candidate achieves 0.85 (exact tie) -> Challenger
-    prod_mv = MagicMock()
-    prod_mv.run_id = "run_1"
-    prod_run = MagicMock()
-    prod_run.data.metrics = {"val_promotion_score": 0.8500}
-
-    mock_client.get_model_version_by_alias.side_effect = None
-    mock_client.get_model_version_by_alias.return_value = prod_mv
-    mock_client.get_run.return_value = prod_run
-
-    alias = _determine_promotion_alias(mock_client, "taxon_vision_classifier", version="2", pr_auc=0.8500)
-    assert alias == "Challenger"
-
-    # Scenario 3: Candidate below production (0.75 < 0.85) -> Archived
-    alias = _determine_promotion_alias(mock_client, "taxon_vision_classifier", version="3", pr_auc=0.7500)
-    assert alias == "Archived"
-
-
-def test_prepare_model_signature_and_example_cpu_isolation() -> None:
-    """Verify model is isolated on CPU and input example is NumPy array to prevent PT2 CUDA errors."""
-    model = nn.Sequential(nn.Linear(16, 4))
-    val_embeddings = torch.randn(20, 16)
-
-    signature, example = _prepare_model_signature_and_example(model, val_embeddings)
-
-    # Example must be numpy array with at most 5 rows
-    assert isinstance(example, np.ndarray)
-    assert example.shape == (5, 16)
-    assert signature is not None
-
-
 def test_plot_confusion_matrix_explicit_labels() -> None:
     """Verify _plot_confusion_matrix builds K x K matrix even when validation split has single label."""
     y_true = np.zeros(10, dtype=int)
@@ -515,7 +349,7 @@ def test_log_model_with_explicit_schema(monkeypatch: pytest.MonkeyPatch) -> None
 
     model = nn.Sequential(nn.Dropout(0.2), nn.Linear(64, 8))
 
-    MLflowTracker.log_model(model=model, model_name="taxon_vision_classifier")
+    MLflowTracker.log_model(PyTorchModelLogSpec(model=model, model_name="taxon_vision_classifier"))
 
     mock_log_model.assert_called_once()
     kwargs = mock_log_model.call_args.kwargs
@@ -556,10 +390,12 @@ def test_log_onnx_model_signature(monkeypatch: pytest.MonkeyPatch) -> None:
 
     dummy_onnx = MagicMock()
     MLflowTracker.log_onnx_model(
-        onnx_model=dummy_onnx,
-        artifact_path="model",
-        num_classes=12,
-        image_size=224,
+        ONNXModelLogSpec(
+            onnx_model=dummy_onnx,
+            artifact_path="model",
+            num_classes=12,
+            image_size=224,
+        )
     )
 
     mock_log_onnx.assert_called_once()
@@ -601,7 +437,7 @@ def test_mlflow_run_scope_nested_and_ci_tags(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(mlflow, "start_run", mock_start_run)
     monkeypatch.setattr(mlflow, "end_run", MagicMock())
     monkeypatch.setattr(mlflow, "set_tag", mock_set_tag)
-    monkeypatch.setattr("taxon_vision.models.training.tracking.get_dvc_dataset_hash", lambda: None)
+    monkeypatch.setattr("taxon_vision.registry.run_context.get_dvc_dataset_hash", lambda: None)
 
     monkeypatch.setenv("BUILD_TAG", "jenkins-taxon-pipeline-42")
     monkeypatch.setenv("BUILD_URL", "https://ci.taxon.org/job/taxon/42/")
@@ -624,15 +460,17 @@ def test_log_model_strict_signature_enforcement() -> None:
     dummy_model = nn.Linear(16, 4)
     with pytest.raises(ValueError, match="Strict contract violation"):
         MLflowTracker.log_model(
-            model=dummy_model,
-            signature=cast(Any, "not_a_model_signature"),
+            PyTorchModelLogSpec(
+                model=dummy_model,
+                signature=cast(Any, "not_a_model_signature"),
+            )
         )
 
 
 def test_log_dataset_lineage(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify _log_dataset_lineage converts arrays via mlflow.data and calls mlflow.log_input."""
-    from taxon_vision.models.training.tracking import _log_dataset_lineage
+    """Verify log_dataset_lineage converts arrays via mlflow.data and calls mlflow.log_input."""
     from taxon_vision.models.training.types import EmbeddingSplit
+    from taxon_vision.registry.dataset_lineage import log_dataset_lineage
 
     mock_log_input = MagicMock()
     mock_from_numpy = MagicMock(return_value="mock_dataset")
@@ -647,7 +485,7 @@ def test_log_dataset_lineage(monkeypatch: pytest.MonkeyPatch) -> None:
         val_embeddings=emb,
         val_labels=lbl,
     )
-    result = _log_dataset_lineage(data=split, manifest_path=None)
+    result = log_dataset_lineage(data=split, manifest_path=None)
     assert result.train == "mock_dataset"
     assert result.val == "mock_dataset"
     assert mock_log_input.call_count >= 2
@@ -666,10 +504,12 @@ def test_log_onnx_model_from_file_path(tmp_path: Path, monkeypatch: pytest.Monke
     monkeypatch.setattr(mlflow.onnx, "log_model", mock_log_onnx)
 
     MLflowTracker.log_onnx_model(
-        onnx_model=dummy_onnx_path,
-        artifact_path="model",
-        num_classes=5,
-        image_size=224,
+        ONNXModelLogSpec(
+            onnx_model=dummy_onnx_path,
+            artifact_path="model",
+            num_classes=5,
+            image_size=224,
+        )
     )
 
     mock_onnx_load.assert_called_once_with(str(dummy_onnx_path))
@@ -680,10 +520,10 @@ def test_log_onnx_model_from_file_path(tmp_path: Path, monkeypatch: pytest.Monke
 def test_resolve_reachable_tracking_uri_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify MLFLOW_TRACKING_URI environment variable overrides config and empty string disables tracking."""
     monkeypatch.setenv("MLFLOW_TRACKING_URI", "https://custom-runner.example.com")
-    assert _resolve_reachable_tracking_uri() == "https://custom-runner.example.com"
+    assert resolve_reachable_tracking_uri() == "https://custom-runner.example.com"
 
     monkeypatch.setenv("MLFLOW_TRACKING_URI", "")
-    assert _resolve_reachable_tracking_uri() == ""
+    assert resolve_reachable_tracking_uri() == ""
 
 
 def test_resolve_reachable_tracking_uri_unauthenticated_skips_without_local_artefacts(
@@ -701,7 +541,7 @@ def test_resolve_reachable_tracking_uri_unauthenticated_skips_without_local_arte
     settings = get_settings()
     monkeypatch.setattr(settings.mlflow, "tracking_uri", "https://dagshub.com/foersben/taxon-vision-mlops.mlflow")
 
-    assert _resolve_reachable_tracking_uri(settings) == ""
+    assert resolve_reachable_tracking_uri(settings) == ""
     assert not (tmp_path / "mlruns").exists()
     assert not (tmp_path / "data" / "mlflow").exists()
 
@@ -723,7 +563,7 @@ def test_resolve_reachable_tracking_uri_dagshub_authenticated(monkeypatch: pytes
     settings = get_settings()
     monkeypatch.setattr(settings.mlflow, "tracking_uri", "https://dagshub.com/foersben/taxon-vision-mlops.mlflow")
 
-    resolved = _resolve_reachable_tracking_uri(settings)
+    resolved = resolve_reachable_tracking_uri(settings)
     assert resolved == "https://dagshub.com/foersben/taxon-vision-mlops.mlflow"
     assert os.environ["MLFLOW_TRACKING_USERNAME"] == "foersben"
     assert os.environ["MLFLOW_TRACKING_PASSWORD"] == "mock-dagshub-pat-token"
@@ -764,7 +604,7 @@ def test_resume_parent_mlflow_run_success(tmp_path: Path, monkeypatch: pytest.Mo
     monkeypatch.setattr(mlflow, "start_run", mock_start_run)
     monkeypatch.setattr(mlflow, "end_run", mock_end_run)
     monkeypatch.setattr(
-        "taxon_vision.models.training.tracking._resolve_reachable_tracking_uri",
+        "taxon_vision.registry.run_context.resolve_reachable_tracking_uri",
         lambda _settings=None: "https://dagshub.com/foersben/taxon-vision-mlops.mlflow",
     )
 
@@ -812,7 +652,7 @@ def test_resume_parent_mlflow_run_connection_error(tmp_path: Path, monkeypatch: 
         MagicMock(side_effect=ConnectionError("Server unreachable")),
     )
     monkeypatch.setattr(
-        "taxon_vision.models.training.tracking._resolve_reachable_tracking_uri",
+        "taxon_vision.registry.run_context.resolve_reachable_tracking_uri",
         lambda _settings=None: "https://dagshub.com/foersben/taxon-vision-mlops.mlflow",
     )
 

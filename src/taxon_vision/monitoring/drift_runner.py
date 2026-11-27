@@ -43,8 +43,8 @@ from evidently.ui.workspace import Workspace
 from sklearn.decomposition import PCA
 
 from taxon_vision.config import Settings, get_settings
-from taxon_vision.models.training.tracking import mlflow_run_scope
 from taxon_vision.monitoring.drift import compute_mmd2_permutation, compute_wasserstein_drift
+from taxon_vision.registry.run_context import mlflow_run_scope
 from taxon_vision.service.telemetry_store import (
     DriftRunRecord,
     TelemetryStore,

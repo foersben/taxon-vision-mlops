@@ -23,7 +23,8 @@ from taxon_vision.inference.onnx_exporter import (
     export_to_onnx,
 )
 from taxon_vision.models.head import TaxonClassifier
-from taxon_vision.models.training.tracking import MLflowTracker, resume_parent_mlflow_run
+from taxon_vision.registry.run_context import MLflowTracker, resume_parent_mlflow_run
+from taxon_vision.registry.types import ONNXModelLogSpec
 
 logger = logging.getLogger(__name__)
 
@@ -155,11 +156,13 @@ def _log_export_to_parent_run(
         if ctx is None:
             return
         MLflowTracker.log_onnx_model(
-            onnx_model=target_artifact,
-            artifact_path="onnx_model",
-            num_classes=num_classes,
-            image_size=image_dim,
-            registered_model_name="taxon_vision_onnx",
+            ONNXModelLogSpec(
+                onnx_model=target_artifact,
+                artifact_path="onnx_model",
+                num_classes=num_classes,
+                image_size=image_dim,
+                registered_model_name="taxon_vision_onnx",
+            )
         )
         export_metrics = {
             "export.onnx_model_size_mb": round(file_size_mb, 2),

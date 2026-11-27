@@ -26,13 +26,13 @@ from taxon_vision.config import get_settings
 from taxon_vision.models.loss import ClassBalancedLoss
 from taxon_vision.models.training.dataset import get_dvc_dataset_hash
 from taxon_vision.models.training.embeddings import train_head_on_cached_embeddings
-from taxon_vision.models.training.tracking import (
-    _ensure_dagshub_auth,
-    _inject_lineage_tags,
-    _resolve_reachable_tracking_uri,
-)
 from taxon_vision.models.training.types import EmbeddingSplit, HeadTrainingConfig, TuningConfig
 from taxon_vision.models.training.visualizations import log_optuna_diagnostic_plots
+from taxon_vision.registry.run_context import (
+    ensure_dagshub_auth,
+    inject_lineage_tags,
+    resolve_reachable_tracking_uri,
+)
 
 warnings.filterwarnings("ignore", category=ExperimentalWarning)
 
@@ -339,10 +339,10 @@ def _setup_mlflow(cfg: TuningConfig) -> bool:
         resolved_uri = cfg.tracking_uri.strip()
         if not resolved_uri:
             return False
-        if "dagshub.com" in resolved_uri and not _ensure_dagshub_auth(resolved_uri):
+        if "dagshub.com" in resolved_uri and not ensure_dagshub_auth(resolved_uri):
             return False
     else:
-        resolved_uri = _resolve_reachable_tracking_uri(settings)
+        resolved_uri = resolve_reachable_tracking_uri(settings)
 
     if not resolved_uri:
         return False
@@ -358,7 +358,7 @@ def _setup_mlflow(cfg: TuningConfig) -> bool:
 
 def _apply_git_lineage_tags() -> None:
     """Resolve and attach Git commit and branch tags to active MLflow run."""
-    _inject_lineage_tags()
+    inject_lineage_tags()
 
 
 def _log_best_run(

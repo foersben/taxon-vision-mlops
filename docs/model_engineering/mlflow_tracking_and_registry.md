@@ -9,7 +9,9 @@ tags: [mlflow, dagshub, tracking, registry, lineage, pyfunc, visualizations, dvc
 generated: {by: "process:docs-librarian", at: "2026-11-08T17:20:00Z"}
 verified: {by: "process:docs-librarian", at: "2026-11-14T13:00:00Z"}
 sources:
-  - resource: "src/taxon_vision/models/training/tracking.py"
+  - resource: "src/taxon_vision/registry/run_context.py"
+  - resource: "src/taxon_vision/registry/dataset_lineage.py"
+  - resource: "src/taxon_vision/registry/promotion.py"
   - resource: "src/taxon_vision/models/training/visualizations.py"
   - resource: "src/taxon_vision/inference/mlflow_model.py"
   - resource: "src/taxon_vision/pipelines/evaluate.py"
@@ -83,9 +85,9 @@ While Jenkins GPU pods and authenticated developer shells push directly to DagsH
 
 ### 3.1 Deterministic Context Management (`mlflow_run_scope`)
 
-In compliance with Rule 08 (RAII Lifecycle Management), manual boolean state flags (`is_active: bool`) are prohibited. Every experiment run is scoped via the `@contextmanager` [`mlflow_run_scope()`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/tracking.py#L254-L345):
+In compliance with Rule 08 (RAII Lifecycle Management), manual boolean state flags (`is_active: bool`) are prohibited. Every experiment run is scoped via the `@contextmanager` [`mlflow_run_scope()`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/registry/run_context.py):
 
-* On entry, it resolves the active tracking URI via `_resolve_reachable_tracking_uri()`, sets the target experiment (`taxon-vision-head-training` or `taxon-vision-drift`), starts the run, logs the DVC dataset lock hash (`dvc_dataset_hash`), and calls [`_inject_lineage_tags()`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/tracking.py#L140-L169) to attach `git.commit_sha`, `git.branch`, `ci.jenkins_build_tag`, and `ci.github_run_id`.
+* On entry, it resolves the active tracking URI via `resolve_reachable_tracking_uri()`, sets the target experiment (`taxon-vision-head-training` or `taxon-vision-drift`), starts the run, logs the DVC dataset lock hash (`dvc_dataset_hash`), and calls [`inject_lineage_tags()`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/registry/run_context.py) to attach `git.commit_sha`, `git.branch`, `ci.jenkins_build_tag`, and `ci.github_run_id`.
 * If an unhandled exception occurs inside the `with` block, the context manager marks the run as `FAILED` via `mlflow.end_run(status="FAILED")` before re-raising the exception, preventing orphaned `RUNNING` zombie runs in the DagsHub tracker.
 * On normal exit, it attaches any execution log file artefact and closes the run as `FINISHED`.
 
@@ -94,14 +96,14 @@ In compliance with Rule 08 (RAII Lifecycle Management), manual boolean state fla
 To unify the multi-process DVC pipeline into a single cohesive MLflow run:
 
 1. During Stage 4 (`train`), `runner.py` records the active `mlflow_run_id` and the MLflow 3 `mlflow_model_id` (`m-...` returned by `MLflowTracker.log_model`) inside `reports/train_metrics.json`.
-2. When Stage 5 (`export_onnx.py`), Stage 6 (`calibrate.py`), and Stage 7 (`evaluate.py`) execute as separate DVC subprocesses, each enters the `@contextmanager` [`resume_parent_mlflow_run("reports/train_metrics.json")`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/tracking.py#L305-L373).
-3. `resume_parent_mlflow_run` deserialises `reports/train_metrics.json`, constructs an immutable [`ParentRunContext(run_id, model_id, extractor, status)`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/tracking.py#L62-L83), re-opens the existing run via `mlflow.start_run(run_id=ctx.run_id)`, yields the context to the stage, and cleanly closes the run as `FINISHED` upon completion.
+2. When Stage 5 (`export_onnx.py`), Stage 6 (`calibrate.py`), and Stage 7 (`evaluate.py`) execute as separate DVC subprocesses, each enters the `@contextmanager` [`resume_parent_mlflow_run("reports/train_metrics.json")`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/registry/run_context.py).
+3. `resume_parent_mlflow_run` deserialises `reports/train_metrics.json`, constructs an immutable [`ParentRunContext(run_id, model_id, extractor, status)`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/registry/types.py), re-opens the existing run via `mlflow.start_run(run_id=ctx.run_id)`, yields the context to the stage, and cleanly closes the run as `FINISHED` upon completion.
 
 ---
 
 ## 4. Five-Dataset Cryptographic Lineage & `LoggedModel` Binding
 
-During Stage 4 (`train`), [`_log_dataset_lineage()`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/tracking.py#L463-L559) registers all five canonical data inputs into the active MLflow run and returns a frozen [`LoggedDatasets`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/tracking.py#L85-L102) container:
+During Stage 4 (`train`), [`log_dataset_lineage()`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/registry/dataset_lineage.py) registers all five canonical data inputs into the active MLflow run and returns a frozen [`LoggedDatasets`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/registry/types.py) container:
 
 | Dataset Identifier | MLflow Context Tag | Constructor & Source | Attached Provenance Metadata |
 | :--- | :--- | :--- | :--- |
@@ -111,7 +113,7 @@ During Stage 4 (`train`), [`_log_dataset_lineage()`](file:///home/benni/Document
 | `cal_embeddings` | `context="calibration"` | `mlflow.data.from_numpy(features=cal_embeddings, targets=cal_labels)` | 10% conformal calibration partition ($164 \times 384$; $155$ inliers) |
 | `test_embeddings` | `context="test"` | `mlflow.data.from_numpy(features=test_embeddings, targets=test_labels)` | 10% unbiased holdout evaluation partition ($164 \times 384$) |
 
-Furthermore, [`_log_bound_evaluation_metrics()`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/tracking.py#L391-L415) passes `model_id=model_id` and `dataset=val_ds` directly to `mlflow.log_metrics(...)`, linking validation curves and holdout scores to both the `LoggedModel` entity and the specific dataset split in the MLflow 3.x UI.
+Furthermore, [`_log_bound_evaluation_metrics()`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/registry/dataset_lineage.py) passes `model_id=model_id` and `dataset=val_ds` directly to `mlflow.log_metrics(...)`, linking validation curves and holdout scores to both the `LoggedModel` entity and the specific dataset split in the MLflow 3.x UI.
 
 ---
 

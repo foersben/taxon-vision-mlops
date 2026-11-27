@@ -653,9 +653,9 @@ def test_evaluate_cli_with_mlflow_logging(tmp_path: Path, monkeypatch: pytest.Mo
 
     import mlflow
 
-    from taxon_vision.models.training.tracking import ParentRunContext
     from taxon_vision.pipelines.evaluate import evaluate_cli
     from taxon_vision.pipelines.export_onnx import export_onnx_cli
+    from taxon_vision.registry.types import ParentRunContext
 
     # 1. Create a dummy quantized model
     int8_model = tmp_path / "model_int8.onnx"

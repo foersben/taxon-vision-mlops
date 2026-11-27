@@ -30,12 +30,6 @@ import torch
 
 from taxon_vision.config import get_settings
 from taxon_vision.inference.mlflow_model import TaxonVisionPyFuncModel
-from taxon_vision.models.training.promotion import (
-    ModelPromotionTarget,
-    PromotionCriteria,
-    promote_candidate_model,
-)
-from taxon_vision.models.training.tracking import resume_parent_mlflow_run
 from taxon_vision.models.training.types import PromotionAlias
 from taxon_vision.models.training.visualizations import (
     HoldoutVisualizationPayload,
@@ -47,6 +41,9 @@ from taxon_vision.pipelines.eval_metrics import (
     ONNXLatencyProfile,
     ParetoResult,
 )
+from taxon_vision.registry.promotion import promote_candidate_model
+from taxon_vision.registry.run_context import resume_parent_mlflow_run
+from taxon_vision.registry.types import ModelPromotionTarget, PromotionCriteria
 from taxon_vision.service.telemetry_store import get_telemetry_store
 
 logger = logging.getLogger(__name__)

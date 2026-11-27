@@ -25,7 +25,7 @@ sources:
   - id: openwiki-source-d85184689573a45a9b19fe01
     resource: repo://src/taxon_vision/models/training/dataset.py
   - id: openwiki-source-a88159face5e03f82447df3c
-    resource: repo://src/taxon_vision/models/training/tracking.py
+    resource: repo://src/taxon_vision/registry/dataset_lineage.py
   - id: openwiki-source-008989c0fbf0341320ce8c34
     resource: repo://src/taxon_vision/pipelines/audit_license.py
   - id: openwiki-source-db9076027e694f431684d0c0

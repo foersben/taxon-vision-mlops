@@ -153,12 +153,21 @@ Neural network architectures, probe heads, loss functions, and modular training 
 | `training/dataset.py` | `load_or_create_training_split`, `get_dvc_dataset_hash` | `load_or_create_training_split(train_path: Path, val_path: Path, ...) -> EmbeddingSplit` | Loads stratified embedding tensors and extracts DVC lock hashes without git dependencies. |
 | `training/loops.py` | `train_head_epoch`, `evaluate_head` | `train_head_epoch(model, loader, optimizer, criterion) -> float` | Isolated single-epoch mini-batch SGD passes returning typed `HeadEvaluationResult`. |
 | `training/embeddings.py` | `train_head_on_cached_embeddings` | `train_head_on_cached_embeddings(head, data, optimizer, criterion, config) -> tuple` | Multi-epoch training loop coordinating early stopping and learning rate scheduling. |
-| `training/promotion.py` | `_promote_model_if_better`, `_determine_promotion_alias` | `_promote_model_if_better(head, val_pr_auc, metrics, ...) -> None` | Evaluates Macro PR-AUC against incumbent models and tags MLflow aliases (`Production`/`Challenger`). |
-| `training/tracking.py` | `mlflow_run_scope`, `MLflowTracker` | `mlflow_run_scope(run_name: str, params: dict) -> Generator` | RAII context manager guaranteeing deterministic MLflow session lifecycle and fail-fast logging. |
 | `training/tuning.py` | `tune_hyperparameters`, `HyperparameterObjective` | `tune_hyperparameters(data: EmbeddingSplit, ...) -> TuningResult` | Bayesian hyperparameter optimization study orchestration with TPE sampling and ASHA pruning. |
 | `training/visualizations.py` | `log_training_visualizations` | `log_training_visualizations(tracker, history, ...) -> None` | Diagnostic plot rendering (confusion matrices, PR curves, and energy distributions). |
 | `training/checkpoint.py` | `save_checkpoint` | `save_checkpoint(model: nn.Module, path: Path) -> Path` | Checkpoint serialization and PyTorch state dictionary export. |
 | `training/types.py` | `ResolvedTrainingParameters`, `EmbeddingSplit` | Pydantic Models & Frozen Dataclasses | Parameter containers enforcing parameter encapsulation and zero tuple blindness (typed frozen dataclasses and models). |
+
+### Subpackage 3b: Registry & Lineage (`taxon_vision.registry`)
+
+MLflow 3.x RAII experiment run scoping, cryptographic dataset lineage binding, and Four-Gate Model Registry governance.
+
+| Module File | Key Classes / Functions | Primary Method Signatures | Description |
+| :--- | :--- | :--- | :--- |
+| `registry/types.py` | `ParentRunContext`, `LoggedDatasets`, `PyTorchModelLogSpec`, `ONNXModelLogSpec` | `build_embedding_signature`, `build_onnx_signature`, `resolve_model_dims` | Typed request containers, TensorSpec signature builders, and safe MLflow API wrappers. |
+| `registry/run_context.py` | `mlflow_run_scope`, `resume_parent_mlflow_run`, `MLflowTracker` | `mlflow_run_scope(run_name, params, ...) -> Generator` | RAII context managers and direct MLflow 3 PyTorch/ONNX model loggers. |
+| `registry/dataset_lineage.py` | `log_dataset_lineage`, `log_mlflow_metrics` | `log_dataset_lineage(data: EmbeddingSplit, manifest_path) -> LoggedDatasets` | Cryptographic Parquet manifest SHA-256 lineage and per-epoch metric bindings. |
+| `registry/promotion.py` | `evaluate_promotion_gates`, `promote_candidate_model` | `promote_candidate_model(target: ModelPromotionTarget, criteria: PromotionCriteria) -> PromotionVerdict` | Four-Gate champion/challenger promotion governance and `@Production`/`@Challenger` alias rotation. |
 
 ### Subpackage 4: Inference (`taxon_vision.inference`)
 

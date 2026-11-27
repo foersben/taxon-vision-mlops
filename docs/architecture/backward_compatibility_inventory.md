@@ -36,18 +36,18 @@ This document provides a comprehensive inventory of all legacy shims, alias laye
 | **SH-08** | `service/inference.py:tau_ood` | Config Alias | 4 | `config/conformal_config.yaml` legacy keys | **RETIRED** | Very Low | 5 mins |
 | **SH-09** | `service/routes/train.py` (`/training` alias) | API Route Alias | 19 | Retired (in-pod training incompatible with read-only K3s mounts) | **RETIRED** | Low | 15 mins |
 | **SH-10** | `uncertainty/ood_detector.py:compute_energy_score` | Function Alias | 7 | None (historical alias for `compute_energy`) | **RETIRED** | Very Low | 5 mins |
-| **SH-11** | `models/training/tracking.py:_log_pytorch_model_with_fallback` | Model Fallback | 50 | None (runtime fallback to pyfunc) | Active | Low | 20 mins |
+| **SH-11** | `models/training/tracking.py:_log_pytorch_model_with_fallback` | Model Fallback | 50 | None (runtime fallback to pyfunc) | **RETIRED** | Low | 20 mins |
 | **SH-12** | `models/training/runner.py:_generate_synthetic_embedding_split` | Test Fallback | 72 | Offline CI/CD unit test runners (delegates to `dataset.py`) | Active | Medium | 45 mins |
 | **SH-13** | `models/training/checkpoint.py:_save_checkpoint` | Function Alias | 5 | Legacy callers expecting private `_save_checkpoint` | **RETIRED** | Very Low | 5 mins |
 | **SH-14** | `models/training/dataset.py` (backward aliases) | Module Re-export | 12 | Tests and runner backward compatibility | **RETIRED** | Low | 10 mins |
-| **SH-15** | `models/training/tracking.py` (re-exports) | Module Re-export | 30 | Tests mocking routines on `tracking` | Active | Low | 15 mins |
+| **SH-15** | `models/training/tracking.py` (re-exports) | Module Re-export | 30 | Tests mocking routines on `tracking` | **RETIRED** | Low | 15 mins |
 | **SH-16** | `models/training/runner.py:setup_logging` & `_dispatch_remote_training` | CLI / Remote Shims | 22 | External scripts & runner callers (delegates to `pipelines.train`) | **RETIRED** | Low | 15 mins |
 | **SH-17** | `models/training/tuning.py:_log_optuna_diagnostic_plots` | Visualization Shim | 8 | Internal callers (delegates to `visualizations.py`) | **RETIRED** | Very Low | 5 mins |
 | **SH-18** | `models/training/promotion.py` & `tracking.py:_get_dvc_dataset_hash` | Data Lineage Shims | 18 | Model promotion and MLflow tracking (delegates to `dataset.py`) | **RETIRED** | Very Low | 5 mins |
 | **SH-19** | `models/training/runner.py:_build_training_components` | Function Signature Shim | 55 | Legacy callers expecting 15-parameter signature returning untyped 5-tuple | **RETIRED** | Low | 15 mins |
 
-* **Total Retired Technical Debt:** 223 LOC across 14 shims eliminated cleanly.
-* **Remaining Backward-Compatibility Footprint:** ~251 LOC across 5 shims.
+* **Total Retired Technical Debt:** 303 LOC across 16 shims eliminated cleanly.
+* **Remaining Backward-Compatibility Footprint:** ~171 LOC across 3 shims.
 
 ---
 
@@ -176,13 +176,11 @@ This document provides a comprehensive inventory of all legacy shims, alias laye
     * Verify no active callers reference `compute_energy_score`.
     * Delete method alias.
 
-#### SH-11: `_log_pytorch_model_with_fallback` in `tracking.py`
+#### SH-11: `_log_pytorch_model_with_fallback` in `tracking.py` (Retired in `T-13`)
 
-* **Location:** [`src/taxon_vision/models/training/tracking.py:L463-512`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/tracking.py#L463-L512)
+* **Former Location:** `src/taxon_vision/models/training/tracking.py`
 * **Code Size:** 50 LOC
-* **Description:** Catches exceptions from `mlflow.pytorch.log_model` and falls back to logging via generic `mlflow.pyfunc.log_model`.
-* **Action Required:**
-    * Retain for now as intentional fault tolerance, or simplify to direct `mlflow.pytorch.log_model` once confirmed stable on the active MLflow server version.
+* **Resolution:** Retired cleanly during the extraction of `src/taxon_vision/registry/`. Direct MLflow 3 `mlflow.pytorch.log_model(...)` calls in `registry/run_context.py` replace the 3-tier nested fallback chain.
 
 #### SH-12: Synthetic Embeddings Fallback in `dataset.py` & Re-export in `runner.py`
 
@@ -209,13 +207,11 @@ This document provides a comprehensive inventory of all legacy shims, alias laye
     * Consolidate all external callers onto `load_or_create_training_split` and typed `DatasetManifest`.
     * Remove re-exports.
 
-#### SH-15: Legacy Re-exports in `src/taxon_vision/models/training/tracking.py`
+#### SH-15: Legacy Re-exports in `src/taxon_vision/models/training/tracking.py` (Retired in `T-13`)
 
-* **Location:** [`src/taxon_vision/models/training/tracking.py:L514-544`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/tracking.py#L514-L544)
+* **Former Location:** `src/taxon_vision/models/training/tracking.py`
 * **Code Size:** 30 LOC
-* **Description:** Preserves legacy function names and aliases on `tracking.py` (`_log_training_hyperparameters`, `_log_calibrated_energy_threshold`, `mlflow_run_scope`) for tests monkeypatching or calling routines through the tracking namespace.
-* **Action Required:**
-    * Migrate tests to test pure helper functions in isolation.
+* **Resolution:** Retired cleanly upon decomposing `tracking.py` and `promotion.py` into `src/taxon_vision/registry/{types,run_context,dataset_lineage,promotion}.py`; all callers and tests now import from canonical target modules directly.
 
 #### SH-16: Logging & Remote Dispatching Delegation in `runner.py`
 

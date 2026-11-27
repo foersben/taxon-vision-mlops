@@ -34,15 +34,6 @@ from taxon_vision.models.training.dataset import (
     resolve_synthetic_permission,
 )
 from taxon_vision.models.training.embeddings import train_head_on_cached_embeddings
-from taxon_vision.models.training.tracking import (
-    LoggedDatasets,
-    MLflowTracker,
-    _log_calibrated_energy_threshold,
-    _log_dataset_lineage,
-    _log_mlflow_metrics,
-    _log_training_hyperparameters,
-    mlflow_run_scope,
-)
 from taxon_vision.models.training.tuning import tune_hyperparameters
 from taxon_vision.models.training.types import (
     EmbeddingSplit,
@@ -54,6 +45,14 @@ from taxon_vision.models.training.types import (
     TuningConfig,
 )
 from taxon_vision.models.training.visualizations import log_training_visualizations
+from taxon_vision.registry.dataset_lineage import (
+    log_calibrated_energy_threshold,
+    log_dataset_lineage,
+    log_mlflow_metrics,
+    log_training_hyperparameters,
+)
+from taxon_vision.registry.run_context import MLflowTracker, mlflow_run_scope
+from taxon_vision.registry.types import LoggedDatasets, PyTorchModelLogSpec
 from taxon_vision.service.inference import load_taxa_catalog
 from taxon_vision.uncertainty.ood_detector import EnergyOODDetector
 
@@ -454,7 +453,7 @@ def run_training_pipeline(
         if active_run:
             mlflow_run_id = active_run.info.run_id
             mlflow.set_tags(initial_tags)
-            logged_datasets = _log_dataset_lineage(data=data)
+            logged_datasets = log_dataset_lineage(data=data)
 
         hparams = _resolve_tier_hyperparameters(
             extractor=resolved.extractor,
@@ -483,7 +482,7 @@ def run_training_pipeline(
         )
 
         if active_run:
-            _log_training_hyperparameters(components.params)
+            log_training_hyperparameters(components.params)
 
         history = train_head_on_cached_embeddings(
             head=components.head,
@@ -499,10 +498,12 @@ def run_training_pipeline(
         if active_run:
             sample_val = data.val_embeddings[: min(5, data.val_embeddings.shape[0])].detach().cpu().numpy()
             model_info = MLflowTracker.log_model(
-                model=components.head,
-                model_name="taxon_vision_classifier",
-                params=components.params,
-                input_example=sample_val,
+                PyTorchModelLogSpec(
+                    model=components.head,
+                    model_name="taxon_vision_classifier",
+                    params=components.params,
+                    input_example=sample_val,
+                )
             )
             if model_info is not None:
                 try:
@@ -511,7 +512,7 @@ def run_training_pipeline(
                     mlflow_model_id = None
 
             val_dataset = logged_datasets.val if logged_datasets else None
-            _log_mlflow_metrics(
+            log_mlflow_metrics(
                 history,
                 duration,
                 model_id=mlflow_model_id,
@@ -523,7 +524,7 @@ def run_training_pipeline(
                 val_logits_np = components.head(data.val_embeddings).cpu().numpy()
 
             calibrated_threshold = EnergyOODDetector.calibrate_threshold_from_logits(val_logits_np, percentile=95.0)
-            _log_calibrated_energy_threshold(calibrated_threshold)
+            log_calibrated_energy_threshold(calibrated_threshold)
 
             log_training_visualizations(
                 val_logits=val_logits_np,

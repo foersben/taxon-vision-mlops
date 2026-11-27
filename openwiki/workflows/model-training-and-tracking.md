@@ -17,11 +17,11 @@ sources:
   - id: openwiki-source-e6a31393a2c56444d9f61713
     resource: repo://src/taxon_vision/models/training/embeddings.py
   - id: openwiki-source-eda873d85a5772df9776cff5
-    resource: repo://src/taxon_vision/models/training/promotion.py
+    resource: repo://src/taxon_vision/registry/promotion.py
   - id: openwiki-source-2adf091ac1972d98fc4ca4fb
     resource: repo://src/taxon_vision/models/training/runner.py
   - id: openwiki-source-a88159face5e03f82447df3c
-    resource: repo://src/taxon_vision/models/training/tracking.py
+    resource: repo://src/taxon_vision/registry/run_context.py
   - id: openwiki-source-d1f301f07a72e6096d67cc4b
     resource: repo://src/taxon_vision/models/training/tuning.py
   - id: openwiki-source-c05f29404711b017aa575cc1

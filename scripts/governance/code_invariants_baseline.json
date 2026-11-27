@@ -43,12 +43,6 @@
   },
   {
     "rule_id": "Rule 08",
-    "file_path": "src/taxon_vision/models/training/promotion.py",
-    "line_number": 211,
-    "message": "Function '_apply_model_version_metadata' accepts 5 positional parameters (limit is 4). Encapsulate arguments into a typed Pydantic model or dataclass."
-  },
-  {
-    "rule_id": "Rule 08",
     "file_path": "src/taxon_vision/models/training/runner.py",
     "line_number": 123,
     "message": "Function '_resolve_tier_hyperparameters' accepts 12 positional parameters (limit is 4). Encapsulate arguments into a typed Pydantic model or dataclass."
@@ -70,24 +64,6 @@
     "file_path": "src/taxon_vision/models/training/runner.py",
     "line_number": 336,
     "message": "Function 'run_training_pipeline' accepts 16 positional parameters (limit is 4). Encapsulate arguments into a typed Pydantic model or dataclass."
-  },
-  {
-    "rule_id": "Rule 08",
-    "file_path": "src/taxon_vision/models/training/tracking.py",
-    "line_number": 297,
-    "message": "Function '_log_pytorch_model_with_fallback' accepts 5 positional parameters (limit is 4). Encapsulate arguments into a typed Pydantic model or dataclass."
-  },
-  {
-    "rule_id": "Rule 08",
-    "file_path": "src/taxon_vision/models/training/tracking.py",
-    "line_number": 392,
-    "message": "Function 'log_model' accepts 8 positional parameters (limit is 4). Encapsulate arguments into a typed Pydantic model or dataclass."
-  },
-  {
-    "rule_id": "Rule 08",
-    "file_path": "src/taxon_vision/models/training/tracking.py",
-    "line_number": 437,
-    "message": "Function 'log_onnx_model' accepts 7 positional parameters (limit is 4). Encapsulate arguments into a typed Pydantic model or dataclass."
   },
   {
     "rule_id": "Rule 08",

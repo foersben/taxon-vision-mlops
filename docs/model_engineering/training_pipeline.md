@@ -10,8 +10,9 @@ generated: {by: "process:docs-librarian", at: "2026-11-08T17:25:00Z"}
 verified: {by: "process:docs-librarian", at: "2026-11-08T17:25:00Z"}
 sources:
   - resource: "src/taxon_vision/models/training/runner.py"
-  - resource: "src/taxon_vision/models/training/tracking.py"
-  - resource: "src/taxon_vision/models/training/promotion.py"
+  - resource: "src/taxon_vision/registry/run_context.py"
+  - resource: "src/taxon_vision/registry/dataset_lineage.py"
+  - resource: "src/taxon_vision/registry/promotion.py"
   - resource: "src/taxon_vision/models/training/checkpoint.py"
   - resource: "src/taxon_vision/models/training/embeddings.py"
   - resource: "src/taxon_vision/models/training/tuning.py"
@@ -38,7 +39,7 @@ The training module ([`src/taxon_vision/models/training/`](file:///home/benni/Do
 
 * **Multi-Head Hierarchical Taxonomic Loss:** Rather than relying solely on a flat classification head over terminal leaf species, the architecture supports projecting embeddings across taxonomic ranks (Class, Order, Family, Genus, Species) so that coarse-grained taxonomic misclassifications are penalised more heavily than sibling-species confusion.
 * **Macro PR-AUC Optimization & Four-Gate Promotion:** Within Stage 4 (`train`), early stopping and Optuna TPE/ASHA pruning optimise **Validation Macro PR-AUC**, which is invariant to decision thresholds and sensitive to minority-class precision. Authoritative registry promotion (`@Production` vs `@Challenger` vs `@Archived`) is subsequently decided in Stage 7 (`eval`) across all four governance gates (predictive viability + INT8 fidelity, conformal coverage, p95 latency, and live MMD² calibration exchangeability).
-* **DagsHub-Only MLflow 3.x Interlock:** All experiment tracking and model governance (`taxon-vision-head-training` & `taxon-vision-drift`) consolidate exclusively onto managed DagsHub MLflow (`https://dagshub.com/foersben/taxon-vision-mlops.mlflow`). When `DAGSHUB_TOKEN` is absent in air-gapped developer sandboxes or unit tests, `_resolve_reachable_tracking_uri()` returns an empty string so pipelines skip tracking cleanly without writing local SQLite databases or `mlruns/` directories, while DVC checkpoints synchronise to DagsHub S3 (`s3://dvc`).
+* **DagsHub-Only MLflow 3.x Interlock:** All experiment tracking and model governance (`taxon-vision-head-training` & `taxon-vision-drift`) consolidate exclusively onto managed DagsHub MLflow (`https://dagshub.com/foersben/taxon-vision-mlops.mlflow`). When `DAGSHUB_TOKEN` is absent in air-gapped developer sandboxes or unit tests, `resolve_reachable_tracking_uri()` returns an empty string so pipelines skip tracking cleanly without writing local SQLite databases or `mlruns/` directories, while DVC checkpoints synchronise to DagsHub S3 (`s3://dvc`).
 * **Git-Free DVC Versioning:** Dataset content hashes (`dvc_dataset_hash`) are extracted by parsing `dvc.lock` directly in [`dataset.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/dataset.py), ensuring deterministic lineage even inside minimal container build contexts.
 
 ---

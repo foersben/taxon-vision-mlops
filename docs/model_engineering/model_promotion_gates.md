@@ -9,7 +9,7 @@ tags: [promotion, governance, mlflow, conformal, latency, exchangeability, mmd, 
 generated: {by: "process:docs-librarian", at: "2026-11-08T17:22:00Z"}
 verified: {by: "process:docs-librarian", at: "2026-11-08T17:22:00Z"}
 sources:
-  - resource: "src/taxon_vision/models/training/promotion.py"
+  - resource: "src/taxon_vision/registry/promotion.py"
   - resource: "src/taxon_vision/pipelines/evaluate.py"
   - resource: "src/taxon_vision/service/passport.py"
   - resource: "src/taxon_vision/service/routes/views.py"
@@ -29,7 +29,7 @@ In an industrial computer vision system operating under strict latency budgets a
 3. **Physical Latency Regressions:** Switching to a heavier backbone or altering graph operators can push 95th-percentile inference latency beyond the physical CPU/GPU service-level objective (SLO), causing HTTP request queueing and timeout cascades in FastAPI.
 4. **Non-Exchangeable Calibration Under Live Covariate Shift:** Split Conformal Prediction's marginal coverage guarantee relies on the mathematical precondition of **exchangeability** between the calibration split and live production traffic. If recent field observations stored in the PostgreSQL `telemetry` database have drifted significantly away from `cal_embeddings.pt` (or if the system has not yet accumulated enough live traffic to verify exchangeability), promoting a candidate directly to `@Production` without human inspection violates statistical safety.
 
-To eliminate these failure modes, TaxonVision-MLOps relocates authoritative model promotion from Stage 4 (`train`) to Stage 7 (`evaluate`), enforcing the **Four-Gate Model Promotion Architecture** in [`src/taxon_vision/models/training/promotion.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/promotion.py).
+To eliminate these failure modes, TaxonVision-MLOps relocates authoritative model promotion from Stage 4 (`train`) to Stage 7 (`evaluate`), enforcing the **Four-Gate Model Promotion Architecture** in [`src/taxon_vision/registry/promotion.py`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/registry/promotion.py).
 
 ```mermaid
 flowchart TD
@@ -82,7 +82,7 @@ flowchart TD
 
 ## 2. Mathematical & Operational Specification of the Four Gates
 
-During Stage 7 (`evaluate`), [`evaluate_promotion_gates(criteria: PromotionCriteria, incumbent_pr_auc: float | None)`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/promotion.py#L395-L500) evaluates the candidate sequentially across four gates configured via `settings.promotion` ([`PromotionConfig`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/config/schemas.py#L324-L346)):
+During Stage 7 (`evaluate`), [`evaluate_promotion_gates(criteria: PromotionCriteria, incumbent_pr_auc: float | None)`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/registry/promotion.py) evaluates the candidate sequentially across four gates configured via `settings.promotion` ([`PromotionConfig`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/config/schemas.py#L324-L346)):
 
 | Gate | Evaluated Condition | Default Threshold (`config/default_config.yaml`) | Failure Verdict & Gate Tag | Mathematical & Systems Rationale |
 | :--- | :--- | :--- | :--- | :--- |
@@ -98,7 +98,7 @@ During Stage 7 (`evaluate`), [`evaluate_promotion_gates(criteria: PromotionCrite
 
 ## 3. Registry Alias Lifecycle & Provenance Tagging
 
-When [`promote_candidate_model(target: ModelPromotionTarget, criteria: PromotionCriteria)`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/models/training/promotion.py#L552-L636) completes evaluation, it executes two atomic governance actions in the MLflow Model Registry (applied to both `taxon_vision_classifier` and `taxon_vision_onnx`):
+When [`promote_candidate_model(target: ModelPromotionTarget, criteria: PromotionCriteria)`](file:///home/benni/Documents/antigravity_workspace/taxon-vision-mlops/src/taxon_vision/registry/promotion.py) completes evaluation, it executes two atomic governance actions in the MLflow Model Registry (applied to both `taxon_vision_classifier` and `taxon_vision_onnx`):
 
 ### 3.1 Champion/Challenger Alias Rotation (`_apply_promotion_aliases`)
 
