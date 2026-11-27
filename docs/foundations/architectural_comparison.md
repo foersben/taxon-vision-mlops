@@ -215,7 +215,7 @@ flowchart TD
 
 ##### Baseline Paradigm: Monolithic Airflow DAG & Docker-Compose
 
-* Monolithic Airflow DAG orchestrating ETL, model training, evaluation, and tagging on a scheduled basis (as illustrated in `docs/.archive/predict_pipeline.png`).
+* Monolithic Airflow DAG orchestrating ETL, model training, evaluation, and tagging on a scheduled basis.
 * Microservices packaged with `docker-compose` running Airflow Webserver, Scheduler, Postgres, Redis, Celery Worker, MLflow Server, and API.
 
 ##### TaxonVision Architecture: Asymmetric Dual-Pipeline Topology
