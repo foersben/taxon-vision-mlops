@@ -44,6 +44,12 @@ Read ONLY the files in your active task row:
 | **FastAPI & HTMX** | `service/{api,inference,schemas,storage}.py`, `service/routes/*.py` | `integration/test_api_endpoints.py`, `integration/test_views_and_routes.py` | `@09`, `02-latency`, `08-clean-code` |
 | **Hardware & Infra** | `deploy/`, `Justfile`, `docs/latex/` | `invariants/test_hardware_invariants.py` | `@11`, `07-hardware` |
 
+## Token-Optimal Discovery
+
+* Use `ctags -x --languages=Python <file_or_dir>` (or `serena` symbol tools when active) to inspect symbol indexes and line ranges before reading source files.
+* Use `/usr/bin/ast-grep` for structural Python AST queries rather than loading whole modules into context.
+* Never scan excluded heavy artefacts (`pixi.lock`, `dvc.lock`, `.pixi/`, `.dvc/`, `data/`, `site/`, `openwiki/.claims/`, `openwiki/.run.json`, generated HTML visualisers, PDFs, or `.pt`/`.onnx`/`.parquet` binaries).
+
 ## Token-Optimal Execution Protocol
 
 * **Read Scope Guardrail:** Read ONLY the files mapped to your active task row. Never scan `openwiki/.claims/`, `pixi.lock`, `dvc.lock`, or `*.pdf`.

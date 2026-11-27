@@ -1,5 +1,15 @@
 openwiki/.claims/
-docs/latex/**/*.pdf
+openwiki/.run.json
 pixi.lock
 dvc.lock
+.pixi/
+.dvc/
+data/
+site/
+docs/viz.html
+docs/architecture_visualizer.html
+docs/latex/**/*.pdf
 src/taxon_vision/service/static/js/htmx.min.js
+*.pt
+*.onnx
+*.parquet

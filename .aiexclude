@@ -1,0 +1,14 @@
+pixi.lock
+dvc.lock
+.pixi/
+.dvc/
+data/
+site/
+openwiki/.claims/
+openwiki/.run.json
+docs/viz.html
+docs/architecture_visualizer.html
+docs/latex/**/*.pdf
+*.pt
+*.onnx
+*.parquet
