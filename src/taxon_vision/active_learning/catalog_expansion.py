@@ -325,6 +325,43 @@ def _resolve_expansion_paths(
     )
 
 
+def _apply_writable_expansions(
+    unseen_specs: list[NewTaxonSpec],
+    catalog_path: Path,
+    resolved_options: FeedbackMergeOptions,
+) -> ExpansionPersistenceResult | None:
+    """Apply unseen taxon expansions directly to writable config files when possible.
+
+    Why:
+        Isolating the writable-filesystem branch and its `OSError` fallback from `_persist_catalog_expansions` keeps cognitive complexity well below the Rule 00 ceiling whilst preserving deterministic failover to external staging on read-only mounts.
+
+    How:
+        Verifies `_is_path_writable(catalog_path)`, atomically registers new taxa in `taxa_catalog.yaml` plus any writable companion `params.yaml` or Label Studio XML paths, and returns `None` if `catalog_path` is read-only or fails with `OSError`.
+
+    Args:
+        unseen_specs: Novel species specifications absent from the active catalogue.
+        catalog_path: Target `taxa_catalog.yaml` path.
+        resolved_options: Resolved companion target paths from `_resolve_expansion_paths`.
+
+    Returns:
+        `ExpansionPersistenceResult` on direct write success, or `None` when read-only staging is required.
+    """
+    if not _is_path_writable(catalog_path):
+        return None
+    try:
+        added_ids = _register_taxa_in_catalog(catalog_path, unseen_specs)
+        if resolved_options.params_path is not None and _is_path_writable(resolved_options.params_path):
+            _register_taxa_in_params(resolved_options.params_path, unseen_specs)
+        if resolved_options.label_studio_config_path is not None and _is_path_writable(
+            resolved_options.label_studio_config_path
+        ):
+            _register_taxa_in_label_studio(resolved_options.label_studio_config_path, unseen_specs)
+        return ExpansionPersistenceResult(catalog_expanded=bool(added_ids), new_taxon_ids=tuple(added_ids))
+    except OSError:
+        logger.info("Catalog path %s is read-only; staging expansions externally", catalog_path)
+        return None
+
+
 def _persist_catalog_expansions(
     specs: list[NewTaxonSpec],
     catalog_path: Path,
@@ -336,7 +373,7 @@ def _persist_catalog_expansions(
         Supports both local/Jenkins writable checkouts (direct update) and read-only Airflow pod mounts (external YAML staging) uniformly through a single contract.
 
     How:
-        Filters out taxon IDs already registered in `catalog_path`; if `catalog_path` is writable, updates catalog, params, and Label Studio XML directly, otherwise delegates to `_write_pending_expansions`.
+        Filters out taxon IDs already registered in `catalog_path`, attempts direct writes via `_apply_writable_expansions`, and falls back to `_write_pending_expansions` when config manifests are mounted read-only.
 
     Args:
         specs: Raw novel species specs collected from annotations.
@@ -355,18 +392,9 @@ def _persist_catalog_expansions(
     if not unseen_specs:
         return ExpansionPersistenceResult(catalog_expanded=False, new_taxon_ids=())
 
-    if _is_path_writable(catalog_path):
-        try:
-            added_ids = _register_taxa_in_catalog(catalog_path, unseen_specs)
-            if resolved_options.params_path is not None and _is_path_writable(resolved_options.params_path):
-                _register_taxa_in_params(resolved_options.params_path, unseen_specs)
-            if resolved_options.label_studio_config_path is not None and _is_path_writable(
-                resolved_options.label_studio_config_path
-            ):
-                _register_taxa_in_label_studio(resolved_options.label_studio_config_path, unseen_specs)
-            return ExpansionPersistenceResult(catalog_expanded=bool(added_ids), new_taxon_ids=tuple(added_ids))
-        except OSError:
-            logger.info("Catalog path %s is read-only; staging expansions externally", catalog_path)
+    direct_result = _apply_writable_expansions(unseen_specs, catalog_path, resolved_options)
+    if direct_result is not None:
+        return direct_result
 
     if resolved_options.pending_expansions_path is None:
         return ExpansionPersistenceResult(catalog_expanded=False, new_taxon_ids=())

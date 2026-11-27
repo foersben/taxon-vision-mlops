@@ -83,6 +83,19 @@ class CollectedFeedback:
     ood_count: int
 
 
+@dataclass(frozen=True)
+class _ResolvedTaxonChoice:
+    """Typed outcome of resolving either a novel or closed-set taxonomic label.
+
+    Attributes:
+        taxon_id: Resolved integer iNaturalist taxon identifier.
+        new_taxon: Validated `NewTaxonSpec` when Outcome B expansion was selected, else `None`.
+    """
+
+    taxon_id: int
+    new_taxon: NewTaxonSpec | None = None
+
+
 def load_taxa_mappings(
     catalog_path: Path | str = "config/taxa_catalog.yaml",
 ) -> TaxaMappings:
@@ -342,6 +355,82 @@ def _build_verified_record(
     }
 
 
+def _build_ood_annotation(
+    obs_uuid: str,
+    data: dict[str, Any],
+    license_code: str,
+) -> ParsedTaskAnnotation:
+    """Construct an Outcome C Out-of-Distribution annotation payload with preserved attribution.
+
+    Why:
+        Isolates OOD record construction from closed-set and novel-species resolution so `parse_single_task_annotation` stays cleanly readable below Rule 00 cognitive complexity thresholds.
+
+    How:
+        Logs OOD classification and packs observation UUID, image URL, energy score, photographer credit, and normalised upper-case licence code when an observation identifier is present.
+
+    Args:
+        obs_uuid: Normalised observation identifier string.
+        data: Raw Label Studio task ``data`` dictionary.
+        license_code: Lowercased Creative Commons licence string.
+
+    Returns:
+        `ParsedTaskAnnotation` flagged as Out-of-Distribution.
+    """
+    logger.info("Observation %s classified as OOD; routing away from species training head", obs_uuid)
+    ood_record = (
+        {
+            "observation_uuid": obs_uuid,
+            "image_url": str(data.get("image_url") or "").strip(),
+            "ood_energy_score": float(data.get("ood_energy_score", 0.0)),
+            "photographer_name": str(data.get("photographer_name") or "").strip() or "Anonymous",
+            "license_code": license_code.upper(),
+            "license_url": str(data.get("license_url") or "").strip(),
+            "verified_status": "ood",
+        }
+        if obs_uuid
+        else None
+    )
+    return ParsedTaskAnnotation(record=None, is_ood=True, ood_record=ood_record)
+
+
+def _resolve_annotation_taxon(
+    task: dict[str, Any],
+    selected_choice: str,
+    mappings: TaxaMappings,
+) -> _ResolvedTaxonChoice | None:
+    """Resolve an Outcome A closed-set taxon or Outcome B novel species from a task annotation.
+
+    Why:
+        Separating Outcome A/B taxon resolution from licence checking prevents nested control-flow inflation in `parse_single_task_annotation` whilst encapsulating composite return values in `_ResolvedTaxonChoice` (Rule 08).
+
+    How:
+        Detects `"novel_taxon"` / `"novel target taxon"` selections, validates `NewTaxonSpec`, updates `mappings` in-place so subsequent tasks in the same batch recognise newly introduced names, or resolves an existing catalogue taxon via `_resolve_taxon_id`.
+
+    Args:
+        task: Individual task dictionary from Label Studio JSON export.
+        selected_choice: Extracted raw choice label string.
+        mappings: TaxaMappings containing `name_to_id` and `valid_ids`.
+
+    Returns:
+        `_ResolvedTaxonChoice` on valid resolution, otherwise `None`.
+    """
+    choice_lower = selected_choice.lower()
+    if choice_lower == "novel_taxon" or "novel target taxon" in choice_lower:
+        novel_spec = _parse_novel_taxon_spec(task)
+        if novel_spec is None:
+            return None
+        resolved_novel_id = novel_spec.inat_taxon_id
+        mappings.valid_ids.add(resolved_novel_id)
+        mappings.name_to_id[novel_spec.scientific_name.strip().lower()] = resolved_novel_id
+        mappings.name_to_id[novel_spec.common_name.strip().lower()] = resolved_novel_id
+        return _ResolvedTaxonChoice(taxon_id=resolved_novel_id, new_taxon=novel_spec)
+
+    resolved = _resolve_taxon_id(selected_choice, mappings)
+    if resolved is None:
+        return None
+    return _ResolvedTaxonChoice(taxon_id=resolved, new_taxon=None)
+
+
 def parse_single_task_annotation(
     task: dict[str, Any],
     mappings: TaxaMappings,
@@ -352,7 +441,7 @@ def parse_single_task_annotation(
         Protects the training dataset from copyright infringement and invalid annotations by enforcing license whitelists and mandatory attribution across closed-set refinement, novel catalogue expansion, and confirmed OOD routing.
 
     How:
-        Extracts metadata and choices, routes Outcome C ('ood') into an isolated OOD record, parses Outcome B ('novel_taxon') metadata and updates mappings when valid, or resolves Outcome A closed-set taxon IDs before enforcing license and attribution compliance.
+        Extracts metadata and choices, delegates Outcome C (`ood`) to `_build_ood_annotation`, resolves Outcome A/B taxon identifiers via `_resolve_annotation_taxon`, and enforces license and attribution compliance before constructing a verified row.
 
     Args:
         task: Individual task dictionary from Label Studio JSON export.
@@ -366,7 +455,6 @@ def parse_single_task_annotation(
     image_url = str(data.get("image_url") or "").strip()
     photographer = str(data.get("photographer_name") or "").strip()
     license_code = str(data.get("license_code") or "").strip().lower()
-    license_url = str(data.get("license_url") or "").strip()
 
     selected_choice = _extract_task_choice(task)
     if not selected_choice:
@@ -374,47 +462,18 @@ def parse_single_task_annotation(
 
     choice_lower = selected_choice.lower()
     if "out of distribution" in choice_lower or choice_lower == "ood":
-        logger.info("Observation %s classified as OOD; routing away from species training head", obs_uuid)
-        ood_record = (
-            {
-                "observation_uuid": obs_uuid,
-                "image_url": image_url,
-                "ood_energy_score": float(data.get("ood_energy_score", 0.0)),
-                "photographer_name": photographer or "Anonymous",
-                "license_code": license_code.upper(),
-                "license_url": license_url,
-                "verified_status": "ood",
-            }
-            if obs_uuid
-            else None
-        )
-        return ParsedTaskAnnotation(record=None, is_ood=True, ood_record=ood_record)
+        return _build_ood_annotation(obs_uuid, data, license_code)
 
-    novel_spec: NewTaxonSpec | None = None
-    if choice_lower == "novel_taxon" or "novel target taxon" in choice_lower:
-        novel_spec = _parse_novel_taxon_spec(task)
-        if novel_spec is None:
-            logger.warning(
-                "Observation %s selected novel_taxon without valid integer taxon ID and scientific name", obs_uuid
-            )
-            return ParsedTaskAnnotation(record=None, is_ood=False)
-        resolved_novel_id = novel_spec.inat_taxon_id
-        taxon_id = resolved_novel_id
-        mappings.valid_ids.add(resolved_novel_id)
-        mappings.name_to_id[novel_spec.scientific_name.strip().lower()] = resolved_novel_id
-        mappings.name_to_id[novel_spec.common_name.strip().lower()] = resolved_novel_id
-    else:
-        resolved = _resolve_taxon_id(selected_choice, mappings)
-        if resolved is None:
-            logger.warning("Observation %s: Could not resolve taxonomy choice '%s'", obs_uuid, selected_choice)
-            return ParsedTaskAnnotation(record=None, is_ood=False)
-        taxon_id = resolved
+    resolved_choice = _resolve_annotation_taxon(task, selected_choice, mappings)
+    if resolved_choice is None:
+        logger.warning("Observation %s: Could not resolve taxonomy choice '%s'", obs_uuid, selected_choice)
+        return ParsedTaskAnnotation(record=None, is_ood=False)
 
     if not _validate_licensing_and_attribution(obs_uuid, image_url, photographer, license_code):
         return ParsedTaskAnnotation(record=None, is_ood=False)
 
-    record = _build_verified_record(obs_uuid, taxon_id, data, license_code)
-    return ParsedTaskAnnotation(record=record, is_ood=False, new_taxon=novel_spec)
+    record = _build_verified_record(obs_uuid, resolved_choice.taxon_id, data, license_code)
+    return ParsedTaskAnnotation(record=record, is_ood=False, new_taxon=resolved_choice.new_taxon)
 
 
 def _collect_feedback_items(task_list: list[dict[str, Any]], mappings: TaxaMappings) -> CollectedFeedback:
