@@ -38,7 +38,7 @@ import torch
 import yaml
 from scipy.stats import wasserstein_distance
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 
 logger = logging.getLogger(__name__)
 

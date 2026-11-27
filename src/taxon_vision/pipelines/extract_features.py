@@ -14,9 +14,8 @@ from typing import Any, NamedTuple
 import torch
 from torchvision import transforms
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 from taxon_vision.data.diamond_split import (
-    DEFAULT_INAT_TAXON_MAP,
     SplitAllocationSpec,
     build_taxon_index_map,
     get_catalog_inat_taxon_map,
@@ -38,6 +37,18 @@ class ExtractedRepresentations(NamedTuple):
 
     embeddings: torch.Tensor
     labels: torch.Tensor
+
+
+@dataclass(frozen=True)
+class StreamExtractionSpec:
+    """Typed parameter bundle configuring lazy S3 image streaming and forward feature extraction."""
+
+    backbone: torch.nn.Module
+    taxon_to_index: dict[int, int]
+    transform: transforms.Compose
+    batch_size: int
+    device: torch.device
+    limit: int | None = None
 
 
 @dataclass(frozen=True)
@@ -145,12 +156,7 @@ def extract_batch_representations(
 
 def stream_and_extract_representations(
     streamer: S3ImageStreamer | Any,
-    backbone: torch.nn.Module,
-    taxon_to_index: dict[int, int],
-    transform: transforms.Compose,
-    batch_size: int,
-    device: torch.device,
-    limit: int | None = None,
+    spec: StreamExtractionSpec,
 ) -> ExtractedRepresentations:
     r"""Lazily stream remote imagery, apply transformations, and extract representations in mini-batches."""
     collected_embeddings: list[torch.Tensor] = []
@@ -160,20 +166,20 @@ def stream_and_extract_representations(
     pending_labels: list[int] = []
 
     count = 0
-    for obs_uuid, taxon_id, pil_img in streamer.stream_images(limit=limit, shuffle=True, balanced=True):
-        if taxon_id not in taxon_to_index:
+    for obs_uuid, taxon_id, pil_img in streamer.stream_images(limit=spec.limit, shuffle=True, balanced=True):
+        if taxon_id not in spec.taxon_to_index:
             logger.debug("Skipping unmapped taxon ID %d for observation %s", taxon_id, obs_uuid)
             continue
 
-        label_idx = taxon_to_index[taxon_id]
-        tensor = transform(pil_img)
+        label_idx = spec.taxon_to_index[taxon_id]
+        tensor = spec.transform(pil_img)
 
         pending_tensors.append(tensor)
         pending_labels.append(label_idx)
         count += 1
 
-        if len(pending_tensors) >= batch_size:
-            feats = extract_batch_representations(backbone, pending_tensors, device=device)
+        if len(pending_tensors) >= spec.batch_size:
+            feats = extract_batch_representations(spec.backbone, pending_tensors, device=spec.device)
             collected_embeddings.append(feats)
             collected_labels.extend(pending_labels)
             pending_tensors.clear()
@@ -181,7 +187,7 @@ def stream_and_extract_representations(
             logger.info("Processed %d observation embeddings...", count)
 
     if pending_tensors:
-        feats = extract_batch_representations(backbone, pending_tensors, device=device)
+        feats = extract_batch_representations(spec.backbone, pending_tensors, device=spec.device)
         collected_embeddings.append(feats)
         collected_labels.extend(pending_labels)
         pending_tensors.clear()
@@ -202,22 +208,15 @@ def create_stratified_embedding_split(
     embeddings: torch.Tensor,
     labels: torch.Tensor,
     num_classes: int,
-    val_split: float = 0.10,
-    cal_split: float = 0.0,
-    test_split: float = 0.0,
-    random_seed: int = 42,
+    spec: SplitAllocationSpec | None = None,
 ) -> EmbeddingSplit:
     """Partition extracted representations into stratified training, validation, calibration, and test splits."""
+    resolved_spec = spec or SplitAllocationSpec()
     return partition_epistemic_diamond(
         embeddings=embeddings,
         labels=labels,
         num_classes=num_classes,
-        spec=SplitAllocationSpec(
-            val_split=val_split,
-            cal_split=cal_split,
-            test_split=test_split,
-            random_seed=random_seed,
-        ),
+        spec=resolved_spec,
     )
 
 
@@ -252,12 +251,14 @@ def run_feature_extraction(config: FeatureExtractionConfig) -> Path:
 
     embeddings, labels = stream_and_extract_representations(
         streamer=streamer,
-        backbone=backbone,
-        taxon_to_index=taxon_to_index,
-        transform=transform,
-        batch_size=config.batch_size,
-        device=target_device,
-        limit=config.limit,
+        spec=StreamExtractionSpec(
+            backbone=backbone,
+            taxon_to_index=taxon_to_index,
+            transform=transform,
+            batch_size=config.batch_size,
+            device=target_device,
+            limit=config.limit,
+        ),
     )
 
     manifest_total = min(len(streamer.df), config.limit) if config.limit is not None else len(streamer.df)
@@ -289,10 +290,12 @@ def run_feature_extraction(config: FeatureExtractionConfig) -> Path:
         embeddings=embeddings,
         labels=labels,
         num_classes=num_classes,
-        val_split=config.val_split,
-        cal_split=config.cal_split,
-        test_split=config.test_split,
-        random_seed=config.random_seed,
+        spec=SplitAllocationSpec(
+            val_split=config.val_split,
+            cal_split=config.cal_split,
+            test_split=config.test_split,
+            random_seed=config.random_seed,
+        ),
     )
 
     emb_dir = config.out_dir
@@ -411,9 +414,10 @@ def extract_features_cli(argv: list[str] | None = None) -> int:
 
 
 __all__ = [
-    "DEFAULT_INAT_TAXON_MAP",
     "ExtractedRepresentations",
     "FeatureExtractionConfig",
+    "SplitAllocationSpec",
+    "StreamExtractionSpec",
     "build_taxon_index_map",
     "create_stratified_embedding_split",
     "extract_batch_representations",

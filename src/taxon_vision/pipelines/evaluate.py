@@ -21,7 +21,7 @@ from typing import Any
 
 import pandas as pd
 
-from taxon_vision.inference.mlflow_model import _load_catalog_entries
+from taxon_vision.inference.mlflow_model import load_catalog_entries
 from taxon_vision.pipelines.eval_metrics import (
     ONNXLatencyProfile,
     build_per_taxon_audit_table,
@@ -169,7 +169,7 @@ def evaluate_cli(argv: list[str] | None = None) -> int:
         print(f"Evaluation metrics exported to {args.metrics_out}")
 
     if eval_result:
-        taxa_catalog = _load_catalog_entries(Path("config/taxa_catalog.yaml"))
+        taxa_catalog = load_catalog_entries(Path("config/taxa_catalog.yaml"))
         per_taxon_df: pd.DataFrame = build_per_taxon_audit_table(
             eval_result=eval_result,
             taxa_catalog=taxa_catalog,

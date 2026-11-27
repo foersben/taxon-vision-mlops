@@ -8,7 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from taxon_vision.config import Settings, get_settings
+from taxon_vision.config.loader import get_settings
+from taxon_vision.config.schemas import Settings
 
 
 def test_default_settings_loading(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -127,7 +128,7 @@ def test_mlflow_tracking_uri_env_override(monkeypatch: pytest.MonkeyPatch) -> No
 
 def test_drift_and_telemetry_direct_env_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ensure flattened K8s/deployment env vars override nested YAML drift and telemetry defaults."""
-    from taxon_vision.config import get_settings
+    from taxon_vision.config.loader import get_settings
 
     monkeypatch.setenv("TAXON_DRIFT_DB_URI", "postgresql+psycopg://tel:pw@pg:5432/telemetry")
     monkeypatch.setenv("TAXON_DRIFT__REFERENCE_EMBEDDINGS_PATH", "/app/data/embeddings/cal_embeddings.pt")

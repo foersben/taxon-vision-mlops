@@ -172,6 +172,7 @@ def quantize_onnx_static(
     input_onnx: Path,
     output_onnx: Path,
     calibration_reader: CalibrationDataReader,
+    *,
     per_channel: bool = True,
     nodes_to_exclude: list[str] | None = None,
 ) -> Path:
@@ -269,6 +270,7 @@ def quantize_onnx_dynamic(
 def quantize_onnx_model(
     input_onnx: Path,
     output_onnx: Path,
+    *,
     calibration_tensors: Iterable[Any] | None = None,
     mode: QuantMode = "auto",
     per_channel: bool = True,

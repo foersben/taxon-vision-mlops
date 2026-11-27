@@ -28,7 +28,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from taxon_vision.config import Settings, get_settings
+from taxon_vision.config.loader import get_settings
+from taxon_vision.config.schemas import Settings
 from taxon_vision.service.telemetry_store import get_telemetry_store
 
 logger = logging.getLogger(__name__)

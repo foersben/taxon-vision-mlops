@@ -18,7 +18,7 @@ import mlflow
 from mlflow.entities.model_registry import ModelVersion
 from mlflow.tracking import MlflowClient
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 
 logger = logging.getLogger("mlflow_registry_cleaner")
 

@@ -11,7 +11,8 @@ import anyio
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile, status
 from PIL import Image
 
-from taxon_vision.config import ConformalConfig, get_settings
+from taxon_vision.config.loader import get_settings
+from taxon_vision.config.schemas import ConformalConfig
 from taxon_vision.inference.cam import generate_cam_overlay
 from taxon_vision.monitoring.telemetry import PREDICTION_COUNTER
 from taxon_vision.service.inference import (

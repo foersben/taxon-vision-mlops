@@ -8,7 +8,7 @@ from typing import NamedTuple
 
 import numpy as np
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 
 
 class ConformalPredictionSet(NamedTuple):

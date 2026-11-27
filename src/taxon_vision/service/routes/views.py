@@ -26,7 +26,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Reque
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 from taxon_vision.monitoring.telemetry import PREDICTION_COUNTER
 from taxon_vision.service.inference import (
     InvalidImageError,

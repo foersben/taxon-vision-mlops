@@ -21,7 +21,8 @@ import timm
 import torch
 import torch.nn as nn
 
-from taxon_vision.config import ModelConfig, get_settings
+from taxon_vision.config.loader import get_settings
+from taxon_vision.config.schemas import ModelConfig
 
 BACKBONE_REGISTRY: dict[str, str] = get_settings().model.backbone_registry
 """dict[str, str]: Mapping of canonical model identifiers to timm/OpenCLIP Hugging Face model identifiers."""
@@ -48,6 +49,7 @@ class _OpenCLIPVisualIntermediatesProtocol(Protocol):
     def forward_intermediates(
         self,
         x: torch.Tensor,
+        *,
         indices: list[int] | None = None,
         stop_early: bool = False,
         normalize_intermediates: bool = False,

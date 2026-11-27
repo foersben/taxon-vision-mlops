@@ -16,8 +16,9 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 from taxon_vision.models.training import runner as training_runner
+from taxon_vision.models.training.types import TrainingRunConfig
 
 logger = logging.getLogger(__name__)
 
@@ -211,22 +212,24 @@ def train_cli(argv: list[str] | None = None) -> int:
     )
 
     result = training_runner.run_training_pipeline(
-        extractor=args.extractor,
-        epochs=args.epochs,
-        batch_size=args.batch_size,
-        learning_rate=args.lr,
-        checkpoint_path=args.checkpoint_path,
-        log_file=args.log_file,
-        cuda_memory_fraction=args.cuda_memory_fraction,
-        tune=should_tune,
-        n_trials=args.n_trials,
-        cache_path=args.cache_path,
-        train_embeddings=args.train_embeddings,
-        val_embeddings=args.val_embeddings,
-        require_cache=args.require_cache,
-        allow_synthetic=args.allow_synthetic,
-        study_name=args.study_name,
-        reset_study=args.reset_study,
+        TrainingRunConfig(
+            extractor=args.extractor,
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            learning_rate=args.lr,
+            checkpoint_path=args.checkpoint_path,
+            log_file=args.log_file,
+            cuda_memory_fraction=args.cuda_memory_fraction,
+            tune=should_tune,
+            n_trials=args.n_trials,
+            cache_path=args.cache_path,
+            train_embeddings=args.train_embeddings,
+            val_embeddings=args.val_embeddings,
+            require_cache=args.require_cache,
+            allow_synthetic=args.allow_synthetic,
+            study_name=args.study_name,
+            reset_study=args.reset_study,
+        )
     )
 
     logger.info("Training Completed Successfully")

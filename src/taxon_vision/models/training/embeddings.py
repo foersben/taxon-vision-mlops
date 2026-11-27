@@ -231,6 +231,7 @@ def train_head_on_cached_embeddings(
     data: EmbeddingSplit,
     optimizer: optim.Optimizer,
     criterion: nn.Module,
+    *,
     config: HeadTrainingConfig | None = None,
 ) -> dict[str, list[float]]:
     """Train a linear classification head directly on pre-computed feature embeddings.

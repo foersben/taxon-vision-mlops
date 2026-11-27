@@ -67,7 +67,7 @@ def test_export_classifier_cli_allow_untrained(tmp_path: Path) -> None:
 def test_export_classifier_cli_fails_when_checkpoint_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that CLI strictly fails (exit code 1) when checkpoint is missing and --allow-untrained is absent."""
     monkeypatch.setenv("TAXON_ALLOW_UNTRAINED_FALLBACK", "false")
-    from taxon_vision.config import get_settings
+    from taxon_vision.config.loader import get_settings
 
     get_settings.cache_clear()
 
@@ -91,7 +91,7 @@ def test_export_classifier_cli_fails_when_checkpoint_missing(tmp_path: Path, mon
 def test_export_classifier_cli_strict_failure_on_mismatch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that CLI strictly fails (exit code 1) when checkpoint is mismatched and --allow-untrained is absent."""
     monkeypatch.setenv("TAXON_ALLOW_UNTRAINED_FALLBACK", "false")
-    from taxon_vision.config import get_settings
+    from taxon_vision.config.loader import get_settings
 
     get_settings.cache_clear()
 

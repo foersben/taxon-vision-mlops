@@ -28,7 +28,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 from taxon_vision.inference.mlflow_model import TaxonVisionPyFuncModel
 from taxon_vision.models.training.types import PromotionAlias
 from taxon_vision.models.training.visualizations import (

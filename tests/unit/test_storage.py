@@ -223,7 +223,7 @@ def test_get_image_cache_with_redis(monkeypatch: pytest.MonkeyPatch) -> None:
     """get_image_cache instantiates RedisImageCache when redis_url is set and reachable."""
     import fakeredis
 
-    from taxon_vision.config import get_settings
+    from taxon_vision.config.loader import get_settings
 
     client = fakeredis.FakeRedis()
 
@@ -248,7 +248,7 @@ def test_get_image_cache_with_redis(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_get_image_cache_fallback_on_unreachable_redis(monkeypatch: pytest.MonkeyPatch) -> None:
     """get_image_cache falls back to MemoryImageCache when redis_url is unreachable."""
-    from taxon_vision.config import get_settings
+    from taxon_vision.config.loader import get_settings
 
     monkeypatch.setattr(RedisImageCache, "ping", lambda _self: False)
 

@@ -16,12 +16,14 @@ import torch
 from PIL import Image
 
 from taxon_vision.pipelines.extract_features import (
-    DEFAULT_INAT_TAXON_MAP,
     FeatureExtractionConfig,
+    SplitAllocationSpec,
+    StreamExtractionSpec,
     build_taxon_index_map,
     create_stratified_embedding_split,
     extract_batch_representations,
     extract_features_cli,
+    get_catalog_inat_taxon_map,
     get_evaluation_transform,
     run_feature_extraction,
     stream_and_extract_representations,
@@ -63,7 +65,7 @@ def test_build_taxon_index_map_catalog_mapping() -> None:
 
     # None catalog loads default catalog and defaults
     empty_mapping = build_taxon_index_map([], include_defaults=True)
-    assert empty_mapping == DEFAULT_INAT_TAXON_MAP
+    assert empty_mapping == get_catalog_inat_taxon_map()
 
 
 def test_create_stratified_embedding_split() -> None:
@@ -80,8 +82,7 @@ def test_create_stratified_embedding_split() -> None:
         embeddings=embeddings,
         labels=labels,
         num_classes=num_classes,
-        val_split=0.25,
-        random_seed=42,
+        spec=SplitAllocationSpec(val_split=0.25, random_seed=42),
     )
 
     assert split.feature_dim == dim
@@ -108,10 +109,7 @@ def test_create_stratified_embedding_split_4way() -> None:
         embeddings=embeddings,
         labels=labels,
         num_classes=num_classes,
-        val_split=0.10,
-        cal_split=0.10,
-        test_split=0.10,
-        random_seed=42,
+        spec=SplitAllocationSpec(val_split=0.10, cal_split=0.10, test_split=0.10, random_seed=42),
     )
 
     assert split.feature_dim == dim
@@ -137,7 +135,7 @@ def test_create_stratified_embedding_split_cardinality_guard() -> None:
             embeddings=embeddings,
             labels=labels,
             num_classes=5,
-            val_split=0.2,
+            spec=SplitAllocationSpec(val_split=0.2),
         )
 
 
@@ -194,11 +192,13 @@ def test_stream_and_extract_representations() -> None:
 
     embs, labels = stream_and_extract_representations(
         streamer=DummyStreamer(),
-        backbone=backbone,
-        taxon_to_index=taxon_to_index,
-        transform=dummy_transform,
-        batch_size=2,
-        device=torch.device("cpu"),
+        spec=StreamExtractionSpec(
+            backbone=backbone,
+            taxon_to_index=taxon_to_index,
+            transform=dummy_transform,
+            batch_size=2,
+            device=torch.device("cpu"),
+        ),
     )
 
     assert embs.shape == (2, 16)
@@ -223,11 +223,13 @@ def test_stream_and_extract_representations_empty_raises() -> None:
     with pytest.raises(ValueError, match="Feature extraction yielded zero samples"):
         stream_and_extract_representations(
             streamer=EmptyStreamer(),
-            backbone=DummyBackbone(),
-            taxon_to_index={1: 0},
-            transform=dummy_transform,
-            batch_size=2,
-            device=torch.device("cpu"),
+            spec=StreamExtractionSpec(
+                backbone=DummyBackbone(),
+                taxon_to_index={1: 0},
+                transform=dummy_transform,
+                batch_size=2,
+                device=torch.device("cpu"),
+            ),
         )
 
 
@@ -303,7 +305,7 @@ def test_extract_features_completeness_gate_raises(monkeypatch: pytest.MonkeyPat
         monkeypatch: Pytest monkeypatch fixture.
         tmp_path: Pytest temporary directory fixture.
     """
-    from taxon_vision.config import get_settings
+    from taxon_vision.config.loader import get_settings
 
     manifest_file = tmp_path / "manifest.parquet"
     df = pl.DataFrame(

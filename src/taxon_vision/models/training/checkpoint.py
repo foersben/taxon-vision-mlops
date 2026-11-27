@@ -10,7 +10,7 @@ from pathlib import Path
 import torch
 from torch import nn
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 from taxon_vision.service.inference import get_classifier
 
 

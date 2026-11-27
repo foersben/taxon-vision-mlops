@@ -12,7 +12,7 @@ import pytest
 import torch
 
 import taxon_vision.monitoring.drift_runner as drift_runner
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 from taxon_vision.monitoring.drift_runner import (
     DriftVerdict,
     evaluate_recent_drift,

@@ -29,6 +29,13 @@ from taxon_vision.service.inference import load_taxa_catalog
 logger = logging.getLogger(__name__)
 
 
+class CalTestCounts(NamedTuple):
+    """Target sample counts for calibration and holdout test partitions."""
+
+    n_cal: int
+    n_test: int
+
+
 class CalTestIndices(NamedTuple):
     """Disjoint calibration and holdout test index lists."""
 
@@ -81,9 +88,6 @@ def get_catalog_inat_taxon_map(catalog: list[dict[str, Any]] | None = None) -> d
     return mapping
 
 
-DEFAULT_INAT_TAXON_MAP: dict[int, int] = get_catalog_inat_taxon_map()
-
-
 def _resolve_raw_catalog(catalog: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
     """Resolve raw taxa catalog entries from provided list or disk configuration."""
     if catalog is not None:
@@ -110,7 +114,7 @@ def build_taxon_index_map(
     include_defaults: bool = True,
 ) -> dict[int, int]:
     r"""Construct an authoritative mapping from external iNaturalist taxon IDs to dense zero-indexed labels."""
-    mapping: dict[int, int] = dict(DEFAULT_INAT_TAXON_MAP) if include_defaults else {}
+    mapping: dict[int, int] = get_catalog_inat_taxon_map() if include_defaults else {}
     records = _resolve_raw_catalog(catalog)
 
     for idx, item in enumerate(records):
@@ -131,11 +135,11 @@ def _can_stratify(y_sub: np.ndarray, test_size: int) -> bool:
 def _split_cal_and_test(
     cal_test_idx: list[int],
     labels: np.ndarray,
-    counts: tuple[int, int],
+    counts: CalTestCounts,
     random_seed: int,
 ) -> CalTestIndices:
     """Partition candidate calibration and test indices into two disjoint subsets."""
-    n_cal, n_test = counts
+    n_cal, n_test = counts.n_cal, counts.n_test
     empty_list: list[int] = []
     if n_test == 0:
         return CalTestIndices(cal_idx=cal_test_idx, test_idx=empty_list)
@@ -193,7 +197,9 @@ def _partition_stratified_subsets(
             random_state=spec.random_seed,
         )
 
-    cal_idx, test_idx = _split_cal_and_test(cal_test_idx, labels, (n_cal, n_test), spec.random_seed)
+    cal_idx, test_idx = _split_cal_and_test(
+        cal_test_idx, labels, CalTestCounts(n_cal=n_cal, n_test=n_test), spec.random_seed
+    )
     return StratifiedSplitIndices(train_idx=train_idx, val_idx=val_idx, cal_idx=cal_idx, test_idx=test_idx)
 
 

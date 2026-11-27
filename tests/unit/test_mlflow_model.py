@@ -20,9 +20,9 @@ from PIL import Image
 from taxon_vision.inference.mlflow_model import (
     TaxonVisionPyFuncModel,
     _decode_image_payload,
-    _load_catalog_entries,
     _load_conformal_parameters,
     _preprocess_input_batch,
+    load_catalog_entries,
 )
 from taxon_vision.inference.onnx_engine import InferenceOutputs
 from taxon_vision.service.inference import get_image_transform
@@ -71,14 +71,14 @@ def test_load_catalog_entries_valid_and_corrupt(tmp_path: Path) -> None:
     with catalog_file.open("w", encoding="utf-8") as f:
         yaml.safe_dump(catalog_data, f)
 
-    entries = _load_catalog_entries(catalog_file)
+    entries = load_catalog_entries(catalog_file)
     assert len(entries) == 2
     assert entries[0]["scientific_name"] == "Turdus merula"
 
     # Corrupt YAML falls back gracefully
     corrupt_file = tmp_path / "corrupt.yaml"
     corrupt_file.write_text("invalid: [yaml: broken", encoding="utf-8")
-    fallback_entries = _load_catalog_entries(corrupt_file)
+    fallback_entries = load_catalog_entries(corrupt_file)
     assert isinstance(fallback_entries, list)
 
 

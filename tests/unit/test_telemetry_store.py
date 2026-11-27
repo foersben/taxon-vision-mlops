@@ -24,7 +24,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from psycopg_pool import ConnectionPool
 
-from taxon_vision.config import reset_settings
+from taxon_vision.config.loader import reset_settings
 from taxon_vision.monitoring.telemetry import TELEMETRY_WRITE_FAILURES
 from taxon_vision.service.api import app
 from taxon_vision.service.telemetry_store import (

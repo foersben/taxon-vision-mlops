@@ -22,7 +22,7 @@ from mlflow.tracking import MlflowClient
 from optuna.exceptions import ExperimentalWarning
 from torch import nn, optim
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 from taxon_vision.models.loss import ClassBalancedLoss
 from taxon_vision.models.training.dataset import get_dvc_dataset_hash
 from taxon_vision.models.training.embeddings import train_head_on_cached_embeddings
@@ -568,6 +568,7 @@ def tune_hyperparameters(
     data: EmbeddingSplit,
     num_classes: int,
     config: TuningConfig | None = None,
+    *,
     checkpoint_dir: Path | str = "models/checkpoints",
     reports_dir: Path | str = "reports",
 ) -> TuningResult:

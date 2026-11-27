@@ -42,7 +42,8 @@ from evidently.presets import DataDriftPreset
 from evidently.ui.workspace import Workspace
 from sklearn.decomposition import PCA
 
-from taxon_vision.config import Settings, get_settings
+from taxon_vision.config.loader import get_settings
+from taxon_vision.config.schemas import Settings
 from taxon_vision.monitoring.drift import compute_mmd2_permutation, compute_wasserstein_drift
 from taxon_vision.registry.run_context import mlflow_run_scope
 from taxon_vision.service.telemetry_store import (

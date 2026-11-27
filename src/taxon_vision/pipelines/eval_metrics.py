@@ -30,6 +30,7 @@ import torch
 import yaml
 from sklearn.metrics import average_precision_score, f1_score
 
+from taxon_vision.config.loader import get_settings
 from taxon_vision.inference.onnx_engine import ONNXInferenceEngine
 
 logger = logging.getLogger(__name__)
@@ -250,11 +251,12 @@ def load_conformal_params(conformal_config_path: Path) -> ConformalEvalParams:
             loaded_json = json.load(f)
         conf_data = loaded_json.get("calibration", loaded_json) if isinstance(loaded_json, dict) else {}
 
+    conformal_defaults = get_settings().conformal
     raw_q = conf_data.get("q_hat")
-    q_hat = float(raw_q) if raw_q is not None else 0.85
+    q_hat = float(raw_q) if raw_q is not None else float(conformal_defaults.q_hat)
 
     raw_alpha = conf_data.get("alpha")
-    alpha = float(raw_alpha) if raw_alpha is not None else 0.05
+    alpha = float(raw_alpha) if raw_alpha is not None else float(conformal_defaults.alpha)
 
     raw_cov = conf_data.get("nominal_coverage")
     nominal_cov = float(raw_cov) if raw_cov is not None else (1.0 - alpha)
@@ -262,8 +264,8 @@ def load_conformal_params(conformal_config_path: Path) -> ConformalEvalParams:
     raw_ood = conf_data.get("tau_ood", conf_data.get("ood_energy_threshold"))
     tau_ood = float(raw_ood) if raw_ood is not None else None
 
-    raw_k_max = conf_data.get("max_set_size_for_auto_accept", 5)
-    k_max = int(raw_k_max) if raw_k_max is not None else 5
+    raw_k_max = conf_data.get("max_set_size_for_auto_accept", conformal_defaults.k_max)
+    k_max = int(raw_k_max) if raw_k_max is not None else int(conformal_defaults.k_max)
 
     return ConformalEvalParams(
         q_hat=q_hat,
@@ -392,9 +394,10 @@ def profile_onnx_inference(onnx_path: Path) -> ONNXLatencyProfile:
         return ONNXLatencyProfile(p50_ms=9.5, p95_ms=12.0, throughput_fps=105.0)
 
     try:
+        model_cfg = get_settings().model
         session = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
         input_name = session.get_inputs()[0].name
-        dummy = np.random.randn(1, 3, 224, 224).astype(np.float32)
+        dummy = np.random.randn(1, model_cfg.channels, model_cfg.image_size, model_cfg.image_size).astype(np.float32)
 
         for _ in range(5):
             session.run(None, {input_name: dummy})

@@ -14,7 +14,7 @@ from pathlib import Path
 
 import mlflow
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 from taxon_vision.inference.onnx_exporter import (
     _build_and_restore_classifier,
     _finalize_export_artifacts,

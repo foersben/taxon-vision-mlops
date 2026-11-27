@@ -531,7 +531,7 @@ def test_resolve_reachable_tracking_uri_unauthenticated_skips_without_local_arte
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Verify unauthenticated DagsHub config skips tracking cleanly without creating mlruns or data/mlflow."""
-    from taxon_vision.config import get_settings
+    from taxon_vision.config.loader import get_settings
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
@@ -553,7 +553,7 @@ def test_resolve_reachable_tracking_uri_unauthenticated_skips_without_local_arte
 
 def test_resolve_reachable_tracking_uri_dagshub_authenticated(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify configured DagsHub tracking URI resolves directly when DAGSHUB_TOKEN is present."""
-    from taxon_vision.config import get_settings
+    from taxon_vision.config.loader import get_settings
 
     monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
     monkeypatch.delenv("TAXON_MLFLOW_TRACKING_URI", raising=False)

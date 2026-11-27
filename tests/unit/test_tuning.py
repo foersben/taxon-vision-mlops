@@ -281,10 +281,8 @@ def test_resolve_tier_hyperparameters(
     synthetic_split: EmbeddingSplit, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Verify 3-tier hyperparameter resolution: live study, persisted yaml, and defaults."""
-    from taxon_vision.config import get_settings
     from taxon_vision.models.training.runner import _resolve_tier_hyperparameters
-
-    settings = get_settings()
+    from taxon_vision.models.training.types import ResolvedTrainingParameters, TrainingRunConfig
 
     # Tier 1: tune=True -> optuna_live_study
     monkeypatch.setattr("taxon_vision.models.training.tuning._setup_mlflow", lambda _cfg=None: False)
@@ -292,18 +290,12 @@ def test_resolve_tier_hyperparameters(
     monkeypatch.setattr("taxon_vision.models.training.tuning.log_optuna_diagnostic_plots", MagicMock())
 
     tier1_res = _resolve_tier_hyperparameters(
-        extractor="tier1_extractor",
-        tune=True,
-        n_trials=1,
-        epochs=1,
-        batch_size=16,
-        learning_rate=0.001,
-        seed=42,
-        data=synthetic_split,
-        num_classes=2,
-        study_name=None,
-        reset_study=False,
-        settings=settings,
+        TrainingRunConfig(
+            extractor="tier1_extractor", tune=True, n_trials=1, epochs=1, batch_size=16, learning_rate=0.001
+        ),
+        ResolvedTrainingParameters("tier1_extractor", 1, 16, 0.001, "models/checkpoints/head.pt"),
+        synthetic_split,
+        2,
     )
     assert tier1_res.hyperparameter_source == "optuna_live_study"
     assert tier1_res.learning_rate > 0.0
@@ -324,18 +316,12 @@ def test_resolve_tier_hyperparameters(
     monkeypatch.setattr("taxon_vision.models.training.runner._load_persisted_best_params", _mock_loader)
 
     tier2_res = _resolve_tier_hyperparameters(
-        extractor="tier2_extractor",
-        tune=False,
-        n_trials=1,
-        epochs=1,
-        batch_size=16,
-        learning_rate=0.001,
-        seed=42,
-        data=synthetic_split,
-        num_classes=2,
-        study_name=None,
-        reset_study=False,
-        settings=settings,
+        TrainingRunConfig(
+            extractor="tier2_extractor", tune=False, n_trials=1, epochs=1, batch_size=16, learning_rate=0.001
+        ),
+        ResolvedTrainingParameters("tier2_extractor", 1, 16, 0.001, "models/checkpoints/head.pt"),
+        synthetic_split,
+        2,
     )
     assert tier2_res.hyperparameter_source == "persisted_best_params"
     assert tier2_res.learning_rate == 0.0042
@@ -343,18 +329,12 @@ def test_resolve_tier_hyperparameters(
 
     # Tier 3: tune=False, no persisted file -> params_yaml_default
     tier3_res = _resolve_tier_hyperparameters(
-        extractor="tier3_extractor",
-        tune=False,
-        n_trials=1,
-        epochs=1,
-        batch_size=16,
-        learning_rate=0.001,
-        seed=42,
-        data=synthetic_split,
-        num_classes=2,
-        study_name=None,
-        reset_study=False,
-        settings=settings,
+        TrainingRunConfig(
+            extractor="tier3_extractor", tune=False, n_trials=1, epochs=1, batch_size=16, learning_rate=0.001
+        ),
+        ResolvedTrainingParameters("tier3_extractor", 1, 16, 0.001, "models/checkpoints/head.pt"),
+        synthetic_split,
+        2,
     )
     assert tier3_res.hyperparameter_source == "params_yaml_default"
     assert tier3_res.learning_rate == 0.001

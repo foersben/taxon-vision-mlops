@@ -11,7 +11,7 @@ from typing import Any
 import torch
 import yaml
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 from taxon_vision.models.factory import create_feature_extractor, get_feature_dimension
 from taxon_vision.models.training.types import EmbeddingSplit
 
@@ -286,6 +286,7 @@ def resolve_synthetic_permission(
 def load_or_create_training_split(
     dim: int,
     num_classes: int,
+    *,
     cache_path: Path | str | None = None,
     train_embeddings_path: Path | str | None = None,
     val_embeddings_path: Path | str | None = None,

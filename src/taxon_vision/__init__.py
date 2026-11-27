@@ -4,9 +4,9 @@
 
 from __future__ import annotations
 
-from importlib.metadata import PackageNotFoundError, version
+import importlib.metadata
 
 try:
-    __version__: str = version("taxon-vision-mlops")
-except PackageNotFoundError:
+    __version__: str = importlib.metadata.version("taxon-vision-mlops")
+except importlib.metadata.PackageNotFoundError:
     __version__ = "0.2.0"

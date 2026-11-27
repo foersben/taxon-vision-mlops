@@ -22,7 +22,7 @@ import numpy as np
 import numpy.typing as npt
 from psycopg_pool import ConnectionPool
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 
 logger = logging.getLogger(__name__)
 

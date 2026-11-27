@@ -24,7 +24,7 @@ import numpy as np
 import torch
 import yaml
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 from taxon_vision.inference.onnx_engine import ONNXInferenceEngine
 from taxon_vision.registry.run_context import resume_parent_mlflow_run
 from taxon_vision.uncertainty.conformal import SplitConformalPredictor

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 
 
 class EnergyOODDetector:

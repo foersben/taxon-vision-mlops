@@ -23,7 +23,7 @@ import redis
 
 from taxon_vision.active_learning.query import margin_sampling
 from taxon_vision.active_learning.triage_queue import TriageItem, TriageQueue
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 
 logger = logging.getLogger(__name__)
 

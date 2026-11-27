@@ -16,7 +16,7 @@ from fastapi.templating import Jinja2Templates
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 from taxon_vision.inference.cam import (
     SaliencyExtractionError,
     encode_image_base64_png,

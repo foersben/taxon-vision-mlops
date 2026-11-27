@@ -37,7 +37,9 @@ def sample_img(tmp_path: Path) -> str:
 
 def test_run_training_pipeline_direct() -> None:
     """Verify programmatic execution of the training pipeline returns completed status."""
-    res = run_training_pipeline(extractor="mobilenetv4_conv_small", epochs=1, batch_size=8)
+    from taxon_vision.models.training.types import TrainingRunConfig
+
+    res = run_training_pipeline(TrainingRunConfig(extractor="mobilenetv4_conv_small", epochs=1, batch_size=8))
     assert res["status"] == "completed"
     assert res["epochs_trained"] == 1
     assert "checkpoint_path" in res
@@ -153,7 +155,7 @@ def test_train_pipeline_main_entrypoint() -> None:
 def test_build_training_components_typed() -> None:
     """Verify build_training_components typed container and sequence unpacking."""
     from taxon_vision.models.training.runner import build_training_components
-    from taxon_vision.models.training.types import TrainingComponents, TrainingHyperparameters
+    from taxon_vision.models.training.types import ComponentBuildSpec, TrainingComponents, TrainingHyperparameters
 
     hparams = TrainingHyperparameters(
         learning_rate=0.001,
@@ -167,12 +169,14 @@ def test_build_training_components_typed() -> None:
 
     # Test canonical build_training_components
     components = build_training_components(
-        dim=32,
-        num_classes=3,
-        samples=[10, 20, 30],
-        hparams=hparams,
-        epochs=2,
-        extractor="dinov3",
+        ComponentBuildSpec(
+            dim=32,
+            num_classes=3,
+            samples=[10, 20, 30],
+            hparams=hparams,
+            epochs=2,
+            extractor="dinov3",
+        )
     )
     assert isinstance(components, TrainingComponents)
     assert components.params["extractor"] == "dinov3"

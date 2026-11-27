@@ -34,7 +34,7 @@ import yaml
 from mlflow.pyfunc.model import PythonModel, PythonModelContext
 from PIL import Image, UnidentifiedImageError
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 from taxon_vision.inference.onnx_engine import ONNXInferenceEngine
 from taxon_vision.service.inference import get_image_transform, load_taxa_catalog
 from taxon_vision.uncertainty.conformal import ConformalPredictionEngine
@@ -126,7 +126,7 @@ def _load_conformal_parameters(
         return ConformalParameters(default_q, default_alpha, default_energy, default_min_conf, default_k_max)
 
 
-def _load_catalog_entries(catalog_path: Path | str | None) -> list[dict[str, Any]]:
+def load_catalog_entries(catalog_path: Path | str | None) -> list[dict[str, Any]]:
     r"""Load authoritative taxonomic catalogue entries from disk or cached package fallback.
 
     Why:
@@ -492,7 +492,7 @@ class TaxonVisionPyFuncModel(PythonModel):
         self.temperature = float(settings.model.temperature)
 
         conformal_params = _load_conformal_parameters(conformal_path)
-        self.taxa_catalog = _load_catalog_entries(catalog_path)
+        self.taxa_catalog = load_catalog_entries(catalog_path)
 
         self.engine = ONNXInferenceEngine(onnx_path)
         self.conformal_engine = ConformalPredictionEngine(

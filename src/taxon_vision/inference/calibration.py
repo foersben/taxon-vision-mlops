@@ -11,7 +11,7 @@ import numpy as np
 import numpy.typing as npt
 from PIL import Image
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 from taxon_vision.service.inference import get_image_transform
 
 logger = logging.getLogger(__name__)

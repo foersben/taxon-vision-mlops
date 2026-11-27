@@ -38,7 +38,8 @@ from typing import Any
 import mlflow
 import yaml
 
-from taxon_vision.config import Settings, get_settings
+from taxon_vision.config.loader import get_settings
+from taxon_vision.config.schemas import Settings
 from taxon_vision.monitoring.drift import compute_mmd2_permutation, compute_wasserstein_drift
 from taxon_vision.monitoring.drift_runner import (
     generate_evidently_drift_report,

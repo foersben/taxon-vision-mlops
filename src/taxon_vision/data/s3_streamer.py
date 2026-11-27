@@ -19,7 +19,7 @@ import httpx
 import polars as pl
 from PIL import Image
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -568,6 +568,7 @@ class S3ImageStreamer:
 
     def stream_images(
         self,
+        *,
         limit: int | None = None,
         shuffle: bool = False,
         balanced: bool = False,

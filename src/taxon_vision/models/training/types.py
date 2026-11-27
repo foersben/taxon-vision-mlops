@@ -312,6 +312,42 @@ class TuningConfig:
 
 
 @dataclass(frozen=True)
+class TrainingRunConfig:
+    """Typed parameter bundle configuring Stage 4 head training orchestration."""
+
+    extractor: str | None = None
+    epochs: int | None = None
+    batch_size: int | None = None
+    learning_rate: float | None = None
+    checkpoint_path: Path | str | None = None
+    log_file: Path | str | None = None
+    cuda_memory_fraction: float | None = None
+    tune: bool = False
+    n_trials: int = 15
+    cache_path: Path | str | None = None
+    train_embeddings: Path | str | None = None
+    val_embeddings: Path | str | None = None
+    require_cache: bool = False
+    allow_synthetic: bool | None = None
+    study_name: str | None = None
+    reset_study: bool = False
+
+
+@dataclass(frozen=True)
+class ComponentBuildSpec:
+    """Typed specification for wiring classification head, loss, optimiser, and configs."""
+
+    dim: int
+    num_classes: int
+    samples: Sequence[int]
+    hparams: TrainingHyperparameters
+    epochs: int
+    extractor: str
+    optuna_tuned: bool = False
+    applied_vram_fraction: float | None = None
+
+
+@dataclass(frozen=True)
 class TrainingComponents:
     """Encapsulates wired PyTorch model head, loss criterion, optimizer, and training configs.
 

@@ -39,7 +39,7 @@ def test_environment_isolation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("TAXON_VISION_TESTING", "1")
     monkeypatch.setenv("TAXON_TELEMETRY__ALLOW_IN_MEMORY_FALLBACK", "true")
 
-    from taxon_vision.config import get_settings
+    from taxon_vision.config.loader import get_settings
     from taxon_vision.service.inference import reset_model_caches
     from taxon_vision.service.storage import get_image_cache
     from taxon_vision.service.telemetry_store import (

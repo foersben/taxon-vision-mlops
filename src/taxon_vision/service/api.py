@@ -22,7 +22,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 from taxon_vision.service.inference import get_image_transform, load_taxa_catalog, reset_model_caches
 from taxon_vision.service.routes import drift, explain, health, predict, retrain, views
 from taxon_vision.service.storage import MemoryImageCache, get_image_cache

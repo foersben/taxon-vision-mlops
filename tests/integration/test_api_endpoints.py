@@ -13,7 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 from taxon_vision.service.api import app
 from taxon_vision.service.routes import health as health_mod, predict as predict_mod
 from taxon_vision.service.routes.predict import _build_live_prediction

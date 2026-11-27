@@ -21,7 +21,7 @@ from typing import Any
 
 from fastapi import BackgroundTasks, HTTPException, UploadFile, status
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 from taxon_vision.monitoring.telemetry import LATENCY_HISTOGRAM, PREDICTION_COUNTER, REFERRAL_RATE
 from taxon_vision.service.storage import (
     ContributorConsent,

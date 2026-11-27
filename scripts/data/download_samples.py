@@ -21,7 +21,7 @@ from typing import Any
 
 import httpx
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 from taxon_vision.service.inference import load_taxa_catalog
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")

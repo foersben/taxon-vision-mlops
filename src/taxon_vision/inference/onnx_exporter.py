@@ -18,7 +18,8 @@ import torch
 import torch.nn as nn
 from torch.jit._trace import TracerWarning
 
-from taxon_vision.config import Settings, get_settings
+from taxon_vision.config.loader import get_settings
+from taxon_vision.config.schemas import Settings
 from taxon_vision.inference.calibration import load_calibration_tensors
 from taxon_vision.models.factory import create_feature_extractor, get_feature_dimension
 from taxon_vision.models.head import ClassifierOutputs, TaxonClassifier, load_head_checkpoint

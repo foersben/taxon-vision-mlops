@@ -17,7 +17,7 @@ from typing import Any
 
 import polars as pl
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 from taxon_vision.data.inat_client import INatAPIClient
 from taxon_vision.service.inference import load_taxa_catalog
 

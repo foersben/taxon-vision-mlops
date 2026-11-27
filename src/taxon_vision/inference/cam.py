@@ -30,7 +30,7 @@ import yaml
 from PIL import Image
 from torchvision import transforms
 
-from taxon_vision.config import get_settings
+from taxon_vision.config.loader import get_settings
 from taxon_vision.models.factory import create_feature_extractor, get_feature_dimension
 from taxon_vision.models.head import TaxonClassifier, load_head_checkpoint
 
