@@ -174,23 +174,19 @@ class ConformalConfig(BaseModel):
         alpha (float): Conformal error rate bound (nominal coverage is $1 - \alpha$).
         q_hat (float): Calibrated non-conformity scalar quantile threshold.
         k_max (int): Maximum prediction set cardinality before routing to human expert triage.
-        quantile_threshold (float): Pre-calibrated non-conformity scalar quantile threshold (alias for q_hat).
         nominal_coverage (float): Target marginal coverage rate (1.0 - alpha).
         method (str): Conformal prediction method (e.g. 'split-conformal').
         empty_set_action (str): Action taken when conformal set is empty.
-        min_confidence (float): Minimum acceptable top-1 class confidence to bypass human review.
-        min_confidence_threshold (float): Alias for min_confidence.
+        min_confidence_threshold (float): Minimum acceptable top-1 class confidence to bypass human review.
         ood_tpr (float): Target true positive rate on in-distribution data for OOD energy thresholding.
     """
 
     alpha: float = Field(default=0.05, gt=0.0, lt=1.0)
     q_hat: float = Field(default=0.85, gt=0.0, lt=1.0)
     k_max: int = Field(default=3, gt=0)
-    quantile_threshold: float = Field(default=0.85, gt=0.0, lt=1.0)
     nominal_coverage: float = Field(default=0.95, gt=0.0, lt=1.0)
     method: str = "split-conformal"
     empty_set_action: str = "route_to_human_triage"
-    min_confidence: float = Field(default=0.60, ge=0.0, le=1.0)
     min_confidence_threshold: float = Field(default=0.60, ge=0.0, le=1.0)
     ood_tpr: float = Field(default=0.95, gt=0.0, le=1.0)
 
@@ -380,8 +376,3 @@ class Settings(BaseSettings):
     drift: DriftConfig = Field(default_factory=DriftConfig)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
     promotion: PromotionConfig = Field(default_factory=PromotionConfig)
-
-    @property
-    def data(self) -> StreamingConfig:
-        """Alias for streaming configuration to support data subsystem references."""
-        return self.streaming

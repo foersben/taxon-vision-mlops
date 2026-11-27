@@ -245,7 +245,7 @@ def get_conformal_engine() -> ConformalPredictionEngine:
     """
     settings = get_settings()
     return ConformalPredictionEngine(
-        q_hat=settings.conformal.quantile_threshold,
+        q_hat=settings.conformal.q_hat,
         alpha=settings.conformal.alpha,
         k_max=settings.conformal.k_max,
         min_confidence_threshold=settings.conformal.min_confidence_threshold,

@@ -32,7 +32,7 @@ This document provides a comprehensive inventory of all legacy shims, alias laye
 | **SH-04** | `pipelines/calibrate.py` (legacy args) | CLI Flag Shim | 9 | None (suppressed legacy flags) | **RETIRED** | Very Low | 10 mins |
 | **SH-05** | `pipelines/extract_features.py:cached_features.pt` | Storage Shim | 35 | `tests/unit/test_pipelines.py` | Active | Medium | 30 mins |
 | **SH-06** | `models/training/runner.py:_try_load_cached_split` | Storage Shim | 64 | `tests/unit/test_cli_and_training.py` (delegates to `dataset.py`) | Active | Medium | 30 mins |
-| **SH-07** | `config/schemas.py` (schema property aliases) | Config Alias | 15 | None directly (YAML and internal refs) | Active | Low | 15 mins |
+| **SH-07** | `config/schemas.py` & `config/loader.py` (schema aliases) | Config Alias | 15 | None directly (YAML and internal refs) | **RETIRED** | Low | 15 mins |
 | **SH-08** | `service/inference.py:tau_ood` | Config Alias | 4 | `config/conformal_config.yaml` legacy keys | **RETIRED** | Very Low | 5 mins |
 | **SH-09** | `service/routes/train.py` (`/training` alias) | API Route Alias | 19 | Retired (in-pod training incompatible with read-only K3s mounts) | **RETIRED** | Low | 15 mins |
 | **SH-10** | `uncertainty/ood_detector.py:compute_energy_score` | Function Alias | 7 | None (historical alias for `compute_energy`) | **RETIRED** | Very Low | 5 mins |
@@ -46,8 +46,8 @@ This document provides a comprehensive inventory of all legacy shims, alias laye
 | **SH-18** | `models/training/promotion.py` & `tracking.py:_get_dvc_dataset_hash` | Data Lineage Shims | 18 | Model promotion and MLflow tracking (delegates to `dataset.py`) | **RETIRED** | Very Low | 5 mins |
 | **SH-19** | `models/training/runner.py:_build_training_components` | Function Signature Shim | 55 | Legacy callers expecting 15-parameter signature returning untyped 5-tuple | **RETIRED** | Low | 15 mins |
 
-* **Total Retired Technical Debt:** 208 LOC across 13 shims eliminated cleanly.
-* **Remaining Backward-Compatibility Footprint:** ~266 LOC across 6 shims.
+* **Total Retired Technical Debt:** 223 LOC across 14 shims eliminated cleanly.
+* **Remaining Backward-Compatibility Footprint:** ~251 LOC across 5 shims.
 
 ---
 

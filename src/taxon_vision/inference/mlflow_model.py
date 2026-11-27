@@ -100,7 +100,7 @@ def _load_conformal_parameters(
         ConformalParameters container holding q_hat, alpha, tau_ood, min_confidence, and k_max.
     """
     settings = get_settings()
-    default_q = float(settings.conformal.quantile_threshold)
+    default_q = float(settings.conformal.q_hat)
     default_alpha = float(settings.conformal.alpha)
     default_energy = float(settings.model.ood_energy_threshold)
     default_min_conf = float(settings.conformal.min_confidence_threshold)

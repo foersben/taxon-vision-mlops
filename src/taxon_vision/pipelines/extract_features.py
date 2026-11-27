@@ -605,7 +605,7 @@ def run_feature_extraction(config: FeatureExtractionConfig) -> Path:
     success_ratio = extracted_total / max(manifest_total, 1)
 
     settings = get_settings()
-    min_success_ratio = settings.data.min_extraction_success_ratio
+    min_success_ratio = settings.streaming.min_extraction_success_ratio
     if success_ratio < min_success_ratio and not settings.model.allow_untrained_fallback:
         logger.error(
             "Extraction completeness gate failed: extracted %d/%d (%.2f%%) < required %.2f%%",

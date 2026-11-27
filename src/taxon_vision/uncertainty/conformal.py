@@ -117,13 +117,13 @@ class ConformalPredictionEngine:
         """Initialize the conformal prediction engine.
 
         Args:
-            q_hat: Pre-calibrated non-conformity quantile cutoff. Defaults to settings.conformal.quantile_threshold.
+            q_hat: Pre-calibrated non-conformity quantile cutoff. Defaults to settings.conformal.q_hat.
             alpha: Desired nominal error rate (e.g. 0.05 for 95% coverage guarantee). Defaults to settings.conformal.alpha.
             k_max: Maximum acceptable set cardinality before flagging for human referral. Defaults to settings.conformal.k_max.
             min_confidence_threshold: Minimum top-1 confidence threshold below which triage is mandated. Defaults to settings.conformal.min_confidence_threshold.
         """
         settings = get_settings()
-        self.q_hat = q_hat if q_hat is not None else settings.conformal.quantile_threshold
+        self.q_hat = q_hat if q_hat is not None else settings.conformal.q_hat
         self.alpha = alpha if alpha is not None else settings.conformal.alpha
         self.k_max = k_max if k_max is not None else settings.conformal.k_max
         self.min_confidence_threshold = (

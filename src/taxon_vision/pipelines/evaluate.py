@@ -305,7 +305,7 @@ def _load_conformal_params(conformal_config_path: Path) -> ConformalEvalParams:
             loaded_json = json.load(f)
         conf_data = loaded_json.get("calibration", loaded_json) if isinstance(loaded_json, dict) else {}
 
-    raw_q = conf_data.get("q_hat", conf_data.get("quantile_threshold"))
+    raw_q = conf_data.get("q_hat")
     q_hat = float(raw_q) if raw_q is not None else 0.85
 
     raw_alpha = conf_data.get("alpha")

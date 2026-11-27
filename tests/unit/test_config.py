@@ -25,10 +25,10 @@ def test_default_settings_loading(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.model.default_extractor == "dinov3"
     assert settings.mlflow.experiment_name == "taxon-vision-head-training"
     assert settings.conformal.alpha == 0.05
+    assert 0.0 < settings.conformal.q_hat < 1.0
     assert settings.conformal.k_max == 3
     assert settings.conformal.nominal_coverage == 0.95
     assert settings.conformal.min_confidence_threshold == 0.60
-    assert settings.conformal.min_confidence == 0.60
     assert settings.conformal.ood_tpr == 0.95
     assert settings.evaluation.latency_sla_ms == 350.0
     assert settings.promotion.quantization_drop_tol == 0.03

@@ -68,7 +68,7 @@ def _load_conformal_override(path: Path) -> dict[str, Any]:
         Preserves alignment between offline Stage 6 calibration outputs and runtime inference serving, preventing split-brain discrepancies where the service defaults to uncalibrated non-conformity quantiles.
 
     How:
-        Reads calibration parameters from the specified path, translates legacy and alias keys into canonical schema identifiers, and wraps the resulting dictionary under the top-level conformal key.
+        Reads canonical calibration parameters from the specified path and wraps the resulting dictionary under the top-level conformal key.
 
     Args:
         path: Path to conformal_config.yaml.
@@ -86,20 +86,10 @@ def _load_conformal_override(path: Path) -> dict[str, Any]:
         "nominal_coverage": "nominal_coverage",
         "method": "method",
         "empty_set_action": "empty_set_action",
-        "min_confidence": "min_confidence",
         "min_confidence_threshold": "min_confidence_threshold",
         "ood_tpr": "ood_tpr",
     }
     override = {target_k: calib[yaml_k] for yaml_k, target_k in mapping.items() if yaml_k in calib}
-    if "min_confidence" in override and "min_confidence_threshold" not in override:
-        override["min_confidence_threshold"] = override["min_confidence"]
-    elif "min_confidence_threshold" in override and "min_confidence" not in override:
-        override["min_confidence"] = override["min_confidence_threshold"]
-    if "q_hat" in override:
-        override["quantile_threshold"] = override["q_hat"]
-    elif "quantile_threshold" in calib:
-        override["quantile_threshold"] = calib["quantile_threshold"]
-        override["q_hat"] = calib["quantile_threshold"]
     return {"conformal": override} if override else {}
 
 
@@ -164,14 +154,12 @@ def _extract_service_env_overrides() -> dict[str, Any]:
         Distributed serving pods in Kubernetes clusters connect to shared ephemeral cache instances (Redis) to decouple multipart file uploads from asynchronous Class Activation Map (CAM) explanation routes across replica pods.
 
     How:
-        Evaluates TAXON_SERVICE__REDIS_URL, TAXON_SERVICE_REDIS_URL, and legacy TAXON_REDIS_URL, returning a service override dictionary containing the resolved Redis connection URL if declared.
+        Evaluates TAXON_SERVICE__REDIS_URL, returning a service override dictionary containing the resolved Redis connection URL if declared.
 
     Returns:
         Mapping containing service configuration overrides, or an empty dictionary if no variables are set.
     """
-    env_redis = (
-        os.getenv("TAXON_SERVICE__REDIS_URL") or os.getenv("TAXON_SERVICE_REDIS_URL") or os.getenv("TAXON_REDIS_URL")
-    )
+    env_redis = os.getenv("TAXON_SERVICE__REDIS_URL")
     return {"redis_url": env_redis} if env_redis is not None else {}
 
 
