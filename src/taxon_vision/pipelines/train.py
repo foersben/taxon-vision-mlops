@@ -19,6 +19,7 @@ from typing import Any
 from taxon_vision.config.loader import get_settings
 from taxon_vision.models.training import runner as training_runner
 from taxon_vision.models.training.types import TrainingRunConfig
+from taxon_vision.pipelines._logging import configure_pipeline_logging
 
 logger = logging.getLogger(__name__)
 
@@ -30,24 +31,7 @@ def setup_logging(level: int = logging.INFO, log_file: Path | str | None = None)
         level: Base logging severity level (default: logging.INFO).
         log_file: Optional path to a file destination for persistent log storage.
     """
-    root = logging.getLogger()
-    root.setLevel(level)
-    root.handlers.clear()
-
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(level)
-    console_handler.setFormatter(
-        logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%H:%M:%S")
-    )
-    root.addHandler(console_handler)
-
-    if log_file:
-        file_path = Path(log_file)
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_handler = logging.FileHandler(file_path, encoding="utf-8")
-        file_handler.setLevel(logging.DEBUG)
-        file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s:%(lineno)d: %(message)s"))
-        root.addHandler(file_handler)
+    configure_pipeline_logging(level=level, log_file=log_file)
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:

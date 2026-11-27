@@ -22,6 +22,7 @@ from typing import Any
 import pandas as pd
 
 from taxon_vision.inference.mlflow_model import load_catalog_entries
+from taxon_vision.pipelines._logging import configure_pipeline_logging
 from taxon_vision.pipelines.eval_metrics import (
     ONNXLatencyProfile,
     build_per_taxon_audit_table,
@@ -33,6 +34,8 @@ from taxon_vision.pipelines.eval_reporting import (
     MLflowHoldoutLoggingPayload,
     log_holdout_audit_to_mlflow,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
@@ -89,26 +92,29 @@ def evaluate_cli(argv: list[str] | None = None) -> int:
     Returns:
         0 if successful, 1 otherwise.
     """
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s", force=True)
+    configure_pipeline_logging()
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
 
     results = get_canonical_pareto_profiles()
-    print("=" * 100)
-    print("TAXONVISION BACKBONE PARETO EVALUATION")
-    print("=" * 100)
-    print(f"{'Extractor':<25} {'Architecture':<28} {'Params':<8} {'Dim':<6} {'p95 Lat (ms)':<14} {'Target Profile'}")
-    print("-" * 100)
-    for r in results:
-        print(
+    table_lines = [
+        "=" * 100,
+        "TAXONVISION BACKBONE PARETO EVALUATION",
+        "=" * 100,
+        f"{'Extractor':<25} {'Architecture':<28} {'Params':<8} {'Dim':<6} {'p95 Lat (ms)':<14} {'Target Profile'}",
+        "-" * 100,
+        *[
             f"{r.extractor:<25} {r.architecture:<28} {r.parameters_m:<8.1f} {r.feature_dim:<6} {r.p95_latency_ms:<14.1f} {r.target_profile}"
-        )
-    print("=" * 100)
+            for r in results
+        ],
+        "=" * 100,
+    ]
+    logger.info("Backbone Pareto evaluation table:\n%s", "\n".join(table_lines))
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("w", encoding="utf-8") as f:
         json.dump([asdict(r) for r in results], f, indent=2)
-    print(f"Pareto profiles exported to {args.out}")
+    logger.info("Pareto profiles exported to %s", args.out)
 
     eval_result = evaluate_onnx_holdout(
         onnx_path=args.onnx_model,
@@ -135,24 +141,32 @@ def evaluate_cli(argv: list[str] | None = None) -> int:
             "q_hat": round(eval_result.q_hat, 4),
             "alpha": round(eval_result.alpha, 4),
         }
-        print("\nHOLDOUT TEST SET CONFORMAL EVALUATION:")
-        print(f"  Samples:            {test_metrics['test_sample_count']}")
-        print(f"  Top-1 Accuracy:     {test_metrics['test_accuracy']:.2%}")
-        print(f"  Nominal Coverage:   {test_metrics['nominal_coverage']:.2%}")
-        print(f"  Empirical Coverage: {test_metrics['test_empirical_coverage']:.2%}")
-        print(f"  Mean Set Size:      {test_metrics['mean_set_size']:.2f}")
-        print(f"  Referral Rate:      {test_metrics['referral_rate']:.2%}")
-        print(f"  Worst-Class AP:     {test_metrics['test_worst_class_ap']:.4f}")
-        print(f"  Median-Class AP:    {test_metrics['test_median_class_ap']:.4f}")
-        print(f"  10-bin ECE:         {test_metrics['ece']:.4f}")
-        print(f"  Guarantee Met:      {test_metrics['coverage_guarantee_satisfied']}")
+        logger.info(
+            "Holdout test set conformal evaluation: samples=%s, top1_acc=%.2f%%, nominal_cov=%.2f%%, "
+            "empirical_cov=%.2f%%, mean_set_size=%.2f, referral_rate=%.2f%%, worst_ap=%.4f, "
+            "median_ap=%.4f, ece_10bin=%.4f, guarantee_met=%s",
+            test_metrics["test_sample_count"],
+            test_metrics["test_accuracy"] * 100.0,
+            test_metrics["nominal_coverage"] * 100.0,
+            test_metrics["test_empirical_coverage"] * 100.0,
+            test_metrics["mean_set_size"],
+            test_metrics["referral_rate"] * 100.0,
+            test_metrics["test_worst_class_ap"],
+            test_metrics["test_median_class_ap"],
+            test_metrics["ece"],
+            test_metrics["coverage_guarantee_satisfied"],
+        )
 
     p50, p95, fps = profile_onnx_inference(args.onnx_model)
     sla_met = p95 <= args.latency_sla_ms
-    print(f"\nONNX RUNTIME LATENCY PROFILING (Target SLO: {args.latency_sla_ms} ms):")
-    print(f"  p50 Latency:        {p50:.2f} ms")
-    print(f"  p95 Latency:        {p95:.2f} ms (SLO Satisfied: {sla_met})")
-    print(f"  Throughput:         {fps:.1f} FPS")
+    logger.info(
+        "ONNX runtime latency profiling (target SLO %.1f ms): p50=%.2f ms, p95=%.2f ms, slo_satisfied=%s, throughput=%.1f FPS",
+        args.latency_sla_ms,
+        p50,
+        p95,
+        sla_met,
+        fps,
+    )
 
     if args.metrics_out is not None:
         args.metrics_out.parent.mkdir(parents=True, exist_ok=True)
@@ -166,7 +180,7 @@ def evaluate_cli(argv: list[str] | None = None) -> int:
         }
         with args.metrics_out.open("w", encoding="utf-8") as f:
             json.dump(export_payload, f, indent=2)
-        print(f"Evaluation metrics exported to {args.metrics_out}")
+        logger.info("Evaluation metrics exported to %s", args.metrics_out)
 
     if eval_result:
         taxa_catalog = load_catalog_entries(Path("config/taxa_catalog.yaml"))

@@ -45,6 +45,7 @@ from taxon_vision.monitoring.drift_runner import (
     generate_evidently_drift_report,
     load_embeddings_array,
 )
+from taxon_vision.pipelines._logging import configure_pipeline_logging
 from taxon_vision.registry.run_context import mlflow_run_scope
 
 logger = logging.getLogger(__name__)
@@ -392,12 +393,7 @@ def main(argv: list[str] | None = None) -> int:
     Returns:
         Exit code: 0 on successful evaluation, 1 on unhandled exception.
     """
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-        force=True,
-    )
+    configure_pipeline_logging()
     parser = build_parser()
     args = parser.parse_args(argv)
 

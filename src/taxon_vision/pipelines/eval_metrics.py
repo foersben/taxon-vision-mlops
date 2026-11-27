@@ -14,7 +14,6 @@ How (Algorithmic Mechanism & Invariants):
 
 from __future__ import annotations
 
-import contextlib
 import itertools
 import json
 import logging
@@ -303,7 +302,8 @@ def resolve_fp32_accuracy(train_metrics_path: Path | str = "reports/train_metric
         for key in ("final_val_accuracy", "val_accuracy", "best_val_accuracy"):
             if key in data and isinstance(data[key], (int, float)):
                 return float(data[key])
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to resolve FP32 baseline accuracy from %s: %s", p, exc)
         return None
     return None
 
@@ -390,11 +390,14 @@ def evaluate_onnx_holdout(
 
 def profile_onnx_inference(onnx_path: Path) -> ONNXLatencyProfile:
     """Profile ONNX Runtime inference latency and throughput on CPU."""
+    model_cfg = get_settings().model
     if not onnx_path.exists():
+        if not model_cfg.allow_untrained_fallback:
+            raise FileNotFoundError(f"ONNX model not found at {onnx_path}")
+        logger.warning("ONNX model absent at %s; returning test fallback latency profile", onnx_path)
         return ONNXLatencyProfile(p50_ms=9.5, p95_ms=12.0, throughput_fps=105.0)
 
     try:
-        model_cfg = get_settings().model
         session = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
         input_name = session.get_inputs()[0].name
         dummy = np.random.randn(1, model_cfg.channels, model_cfg.image_size, model_cfg.image_size).astype(np.float32)
@@ -414,7 +417,9 @@ def profile_onnx_inference(onnx_path: Path) -> ONNXLatencyProfile:
         fps = 1000.0 / mean_dur if mean_dur > 0 else 0.0
         return ONNXLatencyProfile(p50_ms=round(p50, 2), p95_ms=round(p95, 2), throughput_fps=round(fps, 1))
     except Exception as exc:
-        logger.warning("ONNX profiling failed (%s); using baseline estimates", exc)
+        if not model_cfg.allow_untrained_fallback:
+            raise RuntimeError(f"ONNX inference profiling failed for {onnx_path}: {exc}") from exc
+        logger.warning("ONNX profiling failed (%s); returning test fallback latency profile", exc)
         return ONNXLatencyProfile(p50_ms=9.5, p95_ms=12.0, throughput_fps=105.0)
 
 
@@ -426,10 +431,12 @@ def build_per_taxon_audit_table(
     """Assemble per-taxon holdout verification statistics into a structured audit DataFrame."""
     train_counts: dict[int, int] = {}
     if train_embeddings_path and train_embeddings_path.exists():
-        with contextlib.suppress(Exception):
+        try:
             train_data = load_embeddings_and_labels(train_embeddings_path)
             unique_t, counts_t = np.unique(train_data.labels, return_counts=True)
             train_counts = dict(zip(unique_t.tolist(), counts_t.tolist(), strict=False))
+        except Exception as exc:
+            logger.warning("Could not read train sample counts from %s: %s", train_embeddings_path, exc)
 
     rows: list[dict[str, Any]] = []
     num_classes = eval_result.probs.shape[1]

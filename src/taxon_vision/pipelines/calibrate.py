@@ -26,6 +26,7 @@ import yaml
 
 from taxon_vision.config.loader import get_settings
 from taxon_vision.inference.onnx_engine import ONNXInferenceEngine
+from taxon_vision.pipelines._logging import configure_pipeline_logging
 from taxon_vision.registry.run_context import resume_parent_mlflow_run
 from taxon_vision.uncertainty.conformal import SplitConformalPredictor
 from taxon_vision.uncertainty.ood_detector import EnergyOODDetector
@@ -218,7 +219,7 @@ def calibrate_cli(argv: list[str] | None = None) -> int:
     Returns:
         Integer exit code (0 on success).
     """
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s", force=True)
+    configure_pipeline_logging()
     settings = get_settings()
     parser = _build_arg_parser(settings.conformal.alpha)
     args = parser.parse_args(argv)
@@ -263,11 +264,18 @@ def calibrate_cli(argv: list[str] | None = None) -> int:
     q_hat = SplitConformalPredictor.compute_quantile(filtered_scores, args.alpha)
     empirical_coverage = float(np.mean(filtered_scores <= q_hat))
 
-    print(f"Calibrated Split Conformal Quantile for alpha={args.alpha} (Nominal Coverage {1 - args.alpha:.0%}):")
-    print(f"  q_hat = {q_hat:.4f}")
-    print(f"  Empirical Calibration Coverage = {empirical_coverage:.2%}")
-    print(f"  Calibrated OOD Energy Threshold ({percentile:.1f}th pctl) = {tau_ood:.4f}")
-    print(f"  In-Distribution Calibration Samples = {cal_sample_size}/{sample_size}")
+    logger.info(
+        "Calibrated Split Conformal Quantile for alpha=%.4f (nominal coverage %.0f%%): q_hat=%.4f, "
+        "empirical_coverage=%.2f%%, tau_ood (%.1fth pctl)=%.4f, in_dist_samples=%d/%d",
+        args.alpha,
+        (1 - args.alpha) * 100.0,
+        q_hat,
+        empirical_coverage * 100.0,
+        percentile,
+        tau_ood,
+        cal_sample_size,
+        sample_size,
+    )
 
     summary = _CalibrationSummary(
         alpha=args.alpha,

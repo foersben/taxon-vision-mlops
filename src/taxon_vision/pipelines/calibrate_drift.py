@@ -39,6 +39,7 @@ import yaml
 from scipy.stats import wasserstein_distance
 
 from taxon_vision.config.loader import get_settings
+from taxon_vision.pipelines._logging import configure_pipeline_logging
 
 logger = logging.getLogger(__name__)
 
@@ -246,7 +247,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     args = parser.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", force=True)
+    configure_pipeline_logging()
 
     settings = get_settings()
     window_size = args.window_size if args.window_size is not None else settings.drift.window_size

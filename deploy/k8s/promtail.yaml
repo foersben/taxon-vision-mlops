@@ -31,6 +31,8 @@ scrape_configs:
       - match:
           selector: '{container="api-service"}'
           stages:
+            - drop:
+                expression: '.*(GET|HEAD) /(health(/ready)?|metrics) HTTP/.*'
             - json:
                 expressions:
                   level: level

@@ -25,6 +25,7 @@ from taxon_vision.data.diamond_split import (
 from taxon_vision.data.s3_streamer import S3ImageStreamer
 from taxon_vision.models.factory import create_feature_extractor, extract_features
 from taxon_vision.models.training.types import EmbeddingSplit
+from taxon_vision.pipelines._logging import configure_pipeline_logging
 from taxon_vision.service.inference import load_taxa_catalog
 
 logger = logging.getLogger(__name__)
@@ -378,13 +379,7 @@ def extract_features_cli(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-        stream=sys.stdout,
-        force=True,
-    )
+    configure_pipeline_logging()
 
     out_dir_path = Path(args.out_dir) if args.out_dir else Path("data/embeddings")
     output_path = Path(args.out) if args.out else None

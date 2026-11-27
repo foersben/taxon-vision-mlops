@@ -23,6 +23,7 @@ from taxon_vision.inference.onnx_exporter import (
     export_to_onnx,
 )
 from taxon_vision.models.head import TaxonClassifier
+from taxon_vision.pipelines._logging import configure_pipeline_logging
 from taxon_vision.registry.run_context import MLflowTracker, resume_parent_mlflow_run
 from taxon_vision.registry.types import ONNXModelLogSpec
 
@@ -186,13 +187,7 @@ def export_onnx_cli(argv: list[str] | None = None) -> int:
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-        stream=sys.stdout,
-        force=True,
-    )
+    configure_pipeline_logging()
 
     output_file, temp_fp32_path = _resolve_export_output(args.output, args.quantize_int8)
 

@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from taxon_vision.data.license_filter import LicenseFilter
+from taxon_vision.pipelines._logging import configure_pipeline_logging
 
 logger = logging.getLogger(__name__)
 
@@ -240,10 +241,7 @@ def _run_gatekeeper_mode(
     """
     verified_records, errors = _filter_observations_gate(observations)
     if not verified_records:
-        print(
-            "License Gatekeeper FAILED: Zero observations passed license and attribution filtering.",
-            file=sys.stderr,
-        )
+        logger.error("License Gatekeeper FAILED: Zero observations passed license and attribution filtering.")
         return 1
 
     _write_verified_manifest(verified_records, out_manifest)
@@ -258,7 +256,9 @@ def _run_gatekeeper_mode(
                 is_gatekeeper=True,
             ),
         )
-    print(f"License Gatekeeper PASSED: {len(verified_records)}/{len(observations)} compliant observations verified.")
+    logger.info(
+        "License Gatekeeper PASSED: %d/%d compliant observations verified.", len(verified_records), len(observations)
+    )
     return 0
 
 
@@ -293,15 +293,16 @@ def _run_audit_mode(
         )
 
     if total_errors:
-        print(f"License Compliance Audit FAILED with {len(total_errors)} violations:", file=sys.stderr)
+        logger.error("License Compliance Audit FAILED with %d violations:", len(total_errors))
         for err in total_errors[:10]:
-            print(f"  - {err}", file=sys.stderr)
+            logger.error("  - %s", err)
         if len(total_errors) > 10:
-            print(f"  ... and {len(total_errors) - 10} more violations.", file=sys.stderr)
+            logger.error("  ... and %d more violations.", len(total_errors) - 10)
         return 1
 
-    print(
-        f"License Compliance Audit PASSED: {len(observations)} observations verified for open licensing & attribution."
+    logger.info(
+        "License Compliance Audit PASSED: %d observations verified for open licensing & attribution.",
+        len(observations),
     )
     return 0
 
@@ -315,6 +316,7 @@ def audit_license_cli(argv: list[str] | None = None) -> int:
     Returns:
         Exit code: 0 for success, non-zero for failure.
     """
+    configure_pipeline_logging()
     parser = argparse.ArgumentParser(description="Audit iNaturalist open license compliance & attribution.")
     parser.add_argument("--manifest", type=str, default=None, help="Path to input parquet manifest or JSON fixture")
     parser.add_argument(
@@ -331,18 +333,15 @@ def audit_license_cli(argv: list[str] | None = None) -> int:
 
     if target_path is None or not target_path.exists():
         if is_gate:
-            print(
-                f"Error: Required input manifest '{target_path}' not found for gatekeeper execution.",
-                file=sys.stderr,
-            )
+            logger.error("Required input manifest '%s' not found for gatekeeper execution.", target_path)
             return 1
-        print("Warning: Neither sample metadata fixture nor dataset manifest found. Creating placeholder pass.")
+        logger.warning("Neither sample metadata fixture nor dataset manifest found. Creating placeholder pass.")
         return 0
 
     try:
         observations = _load_observations(target_path)
     except Exception as exc:
-        print(f"Error reading {target_path}: {exc}", file=sys.stderr)
+        logger.error("Error reading %s: %s", target_path, exc)
         return 1
 
     if is_gate:

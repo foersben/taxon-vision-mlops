@@ -19,6 +19,7 @@ import polars as pl
 
 from taxon_vision.config.loader import get_settings
 from taxon_vision.data.inat_client import INatAPIClient
+from taxon_vision.pipelines._logging import configure_pipeline_logging
 from taxon_vision.service.inference import load_taxa_catalog
 
 logger = logging.getLogger(__name__)
@@ -181,7 +182,7 @@ def ingest_cli(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s", force=True)
+    configure_pipeline_logging()
     asyncio.run(run_ingestion(taxa=args.taxa, per_page=args.per_page, out_path=args.out))
     return 0
 

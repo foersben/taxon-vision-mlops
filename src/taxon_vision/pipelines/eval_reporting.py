@@ -14,7 +14,6 @@ How (Algorithmic Mechanism & Invariants):
 
 from __future__ import annotations
 
-import contextlib
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,7 +42,7 @@ from taxon_vision.pipelines.eval_metrics import (
 )
 from taxon_vision.registry.promotion import promote_candidate_model
 from taxon_vision.registry.run_context import resume_parent_mlflow_run
-from taxon_vision.registry.types import ModelPromotionTarget, PromotionCriteria
+from taxon_vision.registry.types import ModelPromotionTarget, PromotionCriteria, safe_mlflow_call
 from taxon_vision.service.telemetry_store import get_telemetry_store
 
 logger = logging.getLogger(__name__)
@@ -83,7 +82,8 @@ def load_reference_calibration_embeddings(cal_path: Path) -> np.ndarray | None:
         if isinstance(cal_data, dict):
             raw = cal_data.get("embeddings", cal_data.get("cal_embeddings"))
             return raw.numpy() if isinstance(raw, torch.Tensor) else np.asarray(raw)
-    except Exception:
+    except Exception as exc:
+        logger.warning("Could not load reference calibration embeddings from %s: %s", cal_path, exc)
         return None
     return None
 
@@ -94,13 +94,13 @@ def resolve_model_version(client: Any, model_name: str, run_id: str, artifact_pa
         versions = client.search_model_versions(f"name='{model_name}' and run_id='{run_id}'")
         if versions:
             return str(versions[0].version)
-    except Exception:
-        pass
+    except Exception as search_err:
+        logger.debug("search_model_versions lookup skipped for %s: %s", model_name, search_err)
     try:
         reg = mlflow.register_model(model_uri=f"runs:/{run_id}/{artifact_path}", name=model_name)
         return str(reg.version)
     except Exception as err:
-        logger.debug("Model version registration fallback failed for %s: %s", model_name, err)
+        logger.warning("Model version registration fallback failed for %s: %s", model_name, err)
         return None
 
 
@@ -185,7 +185,8 @@ def execute_stage7_promotion(payload: MLflowHoldoutLoggingPayload, run_id: str, 
 
 def _log_pyfunc_and_promotion(payload: MLflowHoldoutLoggingPayload, ctx: Any) -> None:
     """Log the PyFunc bundle and execute Stage 7 promotion gating inside an active MLflow run."""
-    with contextlib.suppress(Exception):
+
+    def _log_pyfunc() -> None:
         artifacts: dict[str, str] = {
             "onnx_model": str(payload.onnx_path),
             "conformal_config": str(payload.conformal_config_path),
@@ -200,16 +201,20 @@ def _log_pyfunc_and_promotion(payload: MLflowHoldoutLoggingPayload, ctx: Any) ->
             artifacts=artifacts,
         )
 
+    safe_mlflow_call("log_pyfunc_model", _log_pyfunc)
+
     promoted = False
     try:
         promoted = execute_stage7_promotion(payload, ctx.run_id, ctx.extractor)
     except Exception:
         logger.exception("Stage 7 promotion gate execution failed")
     status_label = "Production" if promoted else "Rejected"
-    with contextlib.suppress(Exception):
+
+    def _log_status() -> None:
         mlflow.log_metric("eval.promoted", 1.0 if promoted else 0.0)
-        mlflow.set_tag("registry.status", status_label)
-        mlflow.set_tag("promotion.verdict", status_label)
+        mlflow.set_tags({"registry.status": status_label, "promotion.verdict": status_label})
+
+    safe_mlflow_call("log_stage7_promotion_status", _log_status)
 
 
 def log_holdout_audit_to_mlflow(payload: MLflowHoldoutLoggingPayload) -> None:
@@ -218,29 +223,33 @@ def log_holdout_audit_to_mlflow(payload: MLflowHoldoutLoggingPayload) -> None:
         if ctx is None:
             return
 
-        test_ds = None
-        with contextlib.suppress(Exception):
-            test_ds = mlflow.data.from_numpy(  # type: ignore[attr-defined]
+        def _register_test_dataset() -> Any | None:
+            ds = mlflow.data.from_numpy(  # type: ignore[attr-defined]
                 features=payload.eval_result.logits,
                 targets=payload.eval_result.labels,
                 name="test_embeddings",
             )
-            mlflow.log_input(test_ds, context="testing")
+            mlflow.log_input(ds, context="testing")
+            return ds
 
-        with contextlib.suppress(Exception):
+        test_ds = safe_mlflow_call("log_test_dataset_lineage", _register_test_dataset)
+
+        if test_ds is not None:
 
             def _predict_fn(x: Any) -> np.ndarray:
                 arr = x.to_numpy() if isinstance(x, pd.DataFrame) else np.asarray(x)
                 return np.argmax(arr, axis=1)
 
-            if test_ds is not None:
-                mlflow.models.evaluate(  # type: ignore[no-untyped-call]
+            safe_mlflow_call(
+                "mlflow_models_evaluate",
+                lambda: mlflow.models.evaluate(  # type: ignore[no-untyped-call]
                     model=_predict_fn,
                     data=test_ds,
                     model_type="classifier",
                     evaluators=["default"],
                     evaluator_config={"default": {"log_explainer": False, "metric_prefix": "test_"}},
-                )
+                ),
+            )
 
         eval_res = payload.eval_result
         lat = payload.latency_profile
@@ -267,37 +276,36 @@ def log_holdout_audit_to_mlflow(payload: MLflowHoldoutLoggingPayload) -> None:
         if ctx.model_id and test_ds is not None:
             try:
                 mlflow.log_metrics(metrics, model_id=ctx.model_id, dataset=test_ds)
-            except Exception:
-                with contextlib.suppress(Exception):
-                    mlflow.log_metrics(metrics, model_id=ctx.model_id)
+            except Exception as err:
+                logger.warning("Failed to log bound test metrics with dataset; retrying without dataset: %s", err)
+                safe_mlflow_call("log_metrics_model_id", lambda: mlflow.log_metrics(metrics, model_id=ctx.model_id))
         elif ctx.model_id:
-            with contextlib.suppress(Exception):
-                mlflow.log_metrics(metrics, model_id=ctx.model_id)
+            safe_mlflow_call("log_metrics_model_id", lambda: mlflow.log_metrics(metrics, model_id=ctx.model_id))
         else:
-            with contextlib.suppress(Exception):
-                mlflow.log_metrics(metrics)
+            safe_mlflow_call("log_metrics", lambda: mlflow.log_metrics(metrics))
 
-        with contextlib.suppress(Exception):
-            mlflow.log_table(data=payload.per_taxon_df, artifact_file="reports/per_taxon_holdout_audit.json")
+        safe_mlflow_call(
+            "log_per_taxon_audit_table",
+            lambda: mlflow.log_table(data=payload.per_taxon_df, artifact_file="reports/per_taxon_holdout_audit.json"),
+        )
 
         _log_pyfunc_and_promotion(payload, ctx)
 
-        with contextlib.suppress(Exception):
-            vis_payload = HoldoutVisualizationPayload(
-                test_labels=eval_res.labels,
-                test_probs=eval_res.probs,
-                test_logits=eval_res.logits,
-                set_sizes=eval_res.set_sizes,
-                q_hat=eval_res.q_hat,
-                nominal_coverage=eval_res.nominal_coverage,
-                empirical_coverage=eval_res.empirical_coverage,
-                calibrated_energy_threshold=eval_res.tau_ood,
-                k_max=eval_res.k_max,
-                taxa_catalog=payload.taxa_catalog,
-                pareto_profiles=payload.pareto_profiles,
-                latency_slo_ms=payload.latency_slo_ms,
-            )
-            log_holdout_visualizations(vis_payload)
+        vis_payload = HoldoutVisualizationPayload(
+            test_labels=eval_res.labels,
+            test_probs=eval_res.probs,
+            test_logits=eval_res.logits,
+            set_sizes=eval_res.set_sizes,
+            q_hat=eval_res.q_hat,
+            nominal_coverage=eval_res.nominal_coverage,
+            empirical_coverage=eval_res.empirical_coverage,
+            calibrated_energy_threshold=eval_res.tau_ood,
+            k_max=eval_res.k_max,
+            taxa_catalog=payload.taxa_catalog,
+            pareto_profiles=payload.pareto_profiles,
+            latency_slo_ms=payload.latency_slo_ms,
+        )
+        safe_mlflow_call("log_holdout_visualizations", lambda: log_holdout_visualizations(vis_payload))
 
         for artefact_path in (
             Path("reports/train_metrics.json"),
@@ -306,5 +314,7 @@ def log_holdout_audit_to_mlflow(payload: MLflowHoldoutLoggingPayload) -> None:
             Path("docs/assets/pareto_results.json"),
         ):
             if artefact_path.is_file():
-                with contextlib.suppress(Exception):
-                    mlflow.log_artifact(str(artefact_path))
+                safe_mlflow_call(
+                    f"log_artifact({artefact_path})",
+                    lambda p=artefact_path: mlflow.log_artifact(str(p)),
+                )

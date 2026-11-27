@@ -198,7 +198,7 @@
         {
           "datasource": { "type": "loki", "uid": "Loki" },
           "editorMode": "code",
-          "expr": "{job=\"taxon-vision\"}",
+          "expr": "{job=\"taxon-vision\", container=\"api-service\"}",
           "queryType": "range",
           "refId": "A"
         }

@@ -70,7 +70,7 @@ extend-exclude = [".pixi", "scratch", "scripts/scratch", "notebooks", "site", "o
 cache-dir = ".cache/ruff_cache"
 
 [tool.ruff.lint]
-select = ["E", "W", "F", "I", "B", "UP", "ARG", "TCH", "FA", "N", "RUF", "D"]
+select = ["E", "W", "F", "I", "B", "UP", "ARG", "TCH", "FA", "N", "RUF", "D", "T20"]
 ignore = [
     # "D100", # Missing docstring in public module
     # "D101", # Missing docstring in public class
@@ -198,5 +198,7 @@ mlflow = { cmd = "mlflow server --backend-store-uri sqlite:///mlflow.db --defaul
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["D"]
-"scripts/**/*.py" = ["D"]
+"scripts/**/*.py" = ["D", "T201"]
+".agents/verifiers/**/*.py" = ["T201"]
+"src/taxon_vision/inference/cli.py" = ["T201"]
 "*.ipynb" = ["ALL"]
