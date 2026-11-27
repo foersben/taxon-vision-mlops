@@ -688,7 +688,7 @@ def test_evaluate_cli_with_mlflow_logging(tmp_path: Path, monkeypatch: pytest.Mo
         status="completed",
     )
     monkeypatch.setattr(
-        "taxon_vision.pipelines.evaluate.resume_parent_mlflow_run",
+        "taxon_vision.pipelines.eval_reporting.resume_parent_mlflow_run",
         lambda: contextlib.nullcontext(mock_ctx),
     )
 
@@ -700,7 +700,7 @@ def test_evaluate_cli_with_mlflow_logging(tmp_path: Path, monkeypatch: pytest.Mo
     monkeypatch.setattr(mlflow, "log_metrics", mock_log_metrics)
     monkeypatch.setattr(mlflow, "log_table", mock_log_table)
     monkeypatch.setattr(mlflow.pyfunc, "log_model", mock_log_model)
-    monkeypatch.setattr("taxon_vision.pipelines.evaluate.log_holdout_visualizations", mock_vis)
+    monkeypatch.setattr("taxon_vision.pipelines.eval_reporting.log_holdout_visualizations", mock_vis)
 
     pareto_json = tmp_path / "pareto_results.json"
     eval_metrics = tmp_path / "pareto_evaluation.json"

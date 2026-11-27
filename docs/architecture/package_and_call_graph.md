@@ -115,8 +115,10 @@ Orchestrates batch workflows invoked via `dvc repro`.
 | `calibrate_drift.py` | `calibrate_drift_thresholds` | `calibrate_drift_thresholds(reference_embeddings: np.ndarray, ...) -> dict[str, float]` | Bootstraps 99th-percentile empirical null distributions ($B=1000$) to write `config/drift_config.yaml`. |
 | `train.py` | `run_training` | `run_training(config_path: Path \| None = None) -> None` | Trains linear probe classifier head using Class-Balanced Loss and starts parent MLflow run. |
 | `export_onnx.py` | `run_export` | `run_export(config_path: Path \| None = None) -> None` | Exports dual-output classifier (`logits`, `embeddings`) to ONNX, performs INT8 PTQ, and logs `TaxonVisionPyFuncModel`. |
-| `calibrate.py` | `run_calibration` | `run_calibration(config_path: Path \| None = None) -> None` | Calculates conformal quantile $\hat{q}$ and energy threshold $\tau_{\text{ood}}$, resuming parent MLflow run. |
-| `evaluate.py` | `run_evaluation` | `run_evaluation(config_path: Path \| None = None) -> None` | Validates empirical test coverage ($1 - \alpha$), logs 6 holdout plots, and executes Four-Gate Model Promotion. |
+| `calibrate.py` | `calibrate_cli` | `calibrate_cli(argv: list[str] \| None = None) -> int` | Calculates conformal quantile $\hat{q}$ and energy threshold $\tau_{\text{ood}}$, resuming parent MLflow run. |
+| `evaluate.py` | `evaluate_cli` | `evaluate_cli(argv: list[str] \| None = None) -> int` | Thin Stage 7 CLI wrapper coordinating holdout evaluation and MLflow promotion reporting. |
+| `eval_metrics.py` | `evaluate_onnx_holdout`, `profile_onnx_inference` | `evaluate_onnx_holdout(onnx_path: Path, ...) -> HoldoutEvaluationResult \| None` | Executes quantised ONNX holdout metrics, ECE, per-class AP, CPU latency profiling, and Pareto profiles. |
+| `eval_reporting.py` | `log_holdout_audit_to_mlflow`, `execute_stage7_promotion` | `log_holdout_audit_to_mlflow(payload: MLflowHoldoutLoggingPayload) -> None` | Resumes parent MLflow run, packages PyFunc model, checks MMD² exchangeability, and executes Stage 8 promotion. |
 
 ### Subpackage 2: Service (`taxon_vision.service`)
 
@@ -213,6 +215,7 @@ Citizen science API client, license audit, and S3 streaming.
 | `inat_client.py` | `INatAPIClient` | `fetch_observations(taxon_id: int, per_page: int) -> list[dict]` | Queries iNaturalist v1 REST API for research-grade biological records. |
 | `license_filter.py` | `LicenseFilter` | `filter_compliant_records(records: list[dict]) -> tuple[list[dict], dict]` | Audits Creative Commons licenses (rejecting un-licensed media). |
 | `s3_streamer.py` | `S3ImageStreamer` | `fetch_image_bytes(photo_id: int \| str) -> bytes` | Streams raw JPEG bytes from AWS Open Data iNaturalist S3 buckets. |
+| `diamond_split.py` | `partition_epistemic_diamond`, `save_split_artifacts` | `partition_epistemic_diamond(embeddings, labels, num_classes, spec) -> EmbeddingSplit` | Maps taxon IDs from `taxa_catalog.yaml`, runs stratified 4-way partitioning, and persists discrete `.pt` splits. |
 
 ### Subpackage 9: Domain Models (`taxon_vision.domain`)
 
