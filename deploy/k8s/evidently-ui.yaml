@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: evidently-ui
-          image: docker.io/evidently/evidently-service:latest
+          image: docker.io/evidently/evidently-service:0.7.23
           args:
             - "--workspace"
             - "/workspace"

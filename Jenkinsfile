@@ -14,7 +14,7 @@ spec:
   serviceAccountName: jenkins-agent
   containers:
   - name: ml-runner
-    image: ghcr.io/prefix-dev/pixi:latest
+    image: ghcr.io/prefix-dev/pixi:0.84.2
     imagePullPolicy: IfNotPresent
     command: ["sleep"]
     args: ["99d"]

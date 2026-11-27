@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
       - name: seaweedfs
-        image: docker.io/chrislusf/seaweedfs:latest
+        image: docker.io/chrislusf/seaweedfs:4.55
         args:
         - "server"
         - "-dir=/data"
@@ -103,7 +103,7 @@ spec:
     spec:
       containers:
       - name: optuna-dashboard
-        image: ghcr.io/optuna/optuna-dashboard:latest
+        image: ghcr.io/optuna/optuna-dashboard:v0.21.0
         env:
         - name: OPTUNA_DASHBOARD_STORAGE_URI
           valueFrom:
