@@ -1,0 +1,3 @@
+# Ignore private helper modules so Airflow DagBag only parses DAG entrypoints.
+^_.*\.py$
+(^|/)__pycache__/

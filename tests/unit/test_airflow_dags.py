@@ -224,3 +224,13 @@ def test_jenkins_skip_code_gates_wired_for_airflow_retrains() -> None:
     assert jenkinsfile.count("expression { params.SKIP_CODE_GATES == true }") == 4
     assert jenkinsfile.count("triggeredBy 'TimerTrigger'") >= 5
     assert "SKIP_CODE_GATES=true" in retrain_dag
+
+
+def test_airflow_private_helper_ignored_by_dagbag_and_synced_to_k8s() -> None:
+    """Verify _jenkins_mlflow_client.py is excluded by .airflowignore whilst explicitly synced to K3s ConfigMaps."""
+    airflowignore = Path("airflow/dags/.airflowignore").read_text(encoding="utf-8")
+    sync_script = Path("scripts/ci/sync_airflow_configmaps.sh").read_text(encoding="utf-8")
+
+    assert "^_.*\\.py$" in airflowignore
+    assert ".airflowignore" in sync_script
+    assert Path("airflow/dags/_jenkins_mlflow_client.py").is_file()
