@@ -115,3 +115,6 @@ openwiki/.run.json
 
 # Kubernetes local secrets
 deploy/k8s/secrets.yaml
+
+# Serena local symbol index
+.serena/

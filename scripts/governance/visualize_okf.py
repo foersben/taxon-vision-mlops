@@ -13,6 +13,7 @@ semantic incoming/outgoing link navigation, and verified code claim inspection.
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import re
 import sys
@@ -28,10 +29,15 @@ if str(_REPO_ROOT) not in sys.path:
 
 try:
     from scripts.governance.validate_okf import resolve_ast_node_lines as _resolve_ast_node_lines
-    from scripts.governance.visualize_okf_template import HTML_TEMPLATE
 except ModuleNotFoundError:
     from validate_okf import resolve_ast_node_lines as _resolve_ast_node_lines  # type: ignore[no-redef]
-    from visualize_okf_template import HTML_TEMPLATE  # type: ignore[no-redef]
+
+try:
+    from scripts.governance.visualize_okf_template import HTML_TEMPLATE as _HTML_TEMPLATE
+except ModuleNotFoundError:
+    _HTML_TEMPLATE = str(importlib.import_module("visualize_okf_template").HTML_TEMPLATE)
+
+HTML_TEMPLATE: str = _HTML_TEMPLATE
 
 # Claim files whose claims are shown on a doc node regardless of evidence files.
 DOC_CLAIMS_MAPPING: dict[str, list[str]] = {

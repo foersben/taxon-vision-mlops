@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-HTML_TEMPLATE = """<!DOCTYPE html>
+HTML_TEMPLATE: str = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">

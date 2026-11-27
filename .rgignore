@@ -13,3 +13,7 @@ src/taxon_vision/service/static/js/htmx.min.js
 *.pt
 *.onnx
 *.parquet
+.serena/
+.cache/
+htmlcov/
+coverage.xml
